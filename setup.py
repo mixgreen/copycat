@@ -12,7 +12,6 @@ if sys.version_info[:3] < (3, 5, 3):
 requirements = [
     "artiq",
     "h5py",
-    "itertools",
     "numpy",
     # "ok", # required, but needs to be installed manually (OpalKelly FrontPanel)
     "pyqtgraph",
