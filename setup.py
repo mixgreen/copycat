@@ -11,10 +11,8 @@ if sys.version_info[:3] < (3, 5, 3):
 # Depends on PyQt5, but setuptools cannot check for it.
 requirements = [
     # "artiq", # needs to be installed manually (see ARTIQ installation instructions)
-    "h5py",
     "numpy",
     # "ok", # required, but needs to be installed manually (OpalKelly FrontPanel)
-    "pyqtgraph",
     "pyvisa",
     "pyvisa-py",
     "scipy"
