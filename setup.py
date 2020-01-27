@@ -3,10 +3,8 @@
 from setuptools import setup, find_packages
 import sys
 
-
 if sys.version_info[:3] < (3, 5, 3):
     raise Exception("You need Python 3.5.3+")
-
 
 # Depends on PyQt5, but setuptools cannot check for it.
 requirements = [
@@ -15,7 +13,8 @@ requirements = [
     # "ok", # required, but needs to be installed manually (OpalKelly FrontPanel)
     "pyvisa",
     "pyvisa-py",
-    "scipy"
+    "scipy",
+    "pyvcd",
 ]
 
 setup(
