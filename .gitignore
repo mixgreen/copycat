@@ -1,0 +1,10 @@
+__pycache__/
+/.idea/
+
+/results/
+/*.pyon
+/*.elf
+/tmp*
+/*.vcd
+/*.dump
+/*.dmp

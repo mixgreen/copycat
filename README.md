@@ -1,3 +1,4 @@
-# dax
+# DAX
 
 Duke ARTIQ Extensions (DAX)
+
