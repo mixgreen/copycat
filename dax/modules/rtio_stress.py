@@ -81,6 +81,11 @@ class RtioStressModule(DaxModule):
     """Calibrate throughput"""
 
     def calibrate_throughput(self, period_scan, num_samples, num_events, no_underflow_cutoff):
+        # Convert types of arguments
+        num_samples = np.int32(num_samples)
+        num_events = np.int32(num_events)
+        no_underflow_cutoff = np.int32(no_underflow_cutoff)
+
         # Check arguments
         if not num_samples > 0:
             msg = 'Number of samples must be larger than 0'
@@ -116,12 +121,15 @@ class RtioStressModule(DaxModule):
         if no_underflow_count == 0:
             # Last data point was an underflow, assuming all data points raised an underflow
             self.logger.warning('Could not determine throughput: All data points raised an underflow exception')
+            return False
         elif not underflow_flag:
             # No underflow occurred
             self.logger.warning('Could not determine throughput: No data points raised an underflow exception')
+            return False
         else:
             # Store result in system dataset
             self.set_dataset_sys(self.THROUGHPUT_PERIOD_KEY, last_period)
+            return True
 
     @kernel
     def _calibrate_throughput(self, period_scan, num_samples, num_events, no_underflow_cutoff):
@@ -184,12 +192,26 @@ class RtioStressModule(DaxModule):
 
     """Calibrate throughput burst"""
 
-    def calibrate_throughput_burst(self, num_events_scan, num_samples, period_step, no_underflow_cutoff,
-                                   num_step_cutoff):
-        # Get current period
-        current_period = self.get_dataset_sys(self.THROUGHPUT_PERIOD_KEY)
+    def calibrate_throughput_burst(self, num_events_min, num_events_max, num_events_step, num_samples, period_step,
+                                   no_underflow_cutoff, num_step_cutoff):
+        # Convert types of arguments
+        num_events_min = np.int32(num_events_min)
+        num_events_max = np.int32(num_events_max)
+        num_events_step = np.int32(num_events_step)
+        num_samples = np.int32(num_samples)
+        period_step = float(period_step)
+        no_underflow_cutoff = np.int32(no_underflow_cutoff)
+        num_step_cutoff = np.int32(num_step_cutoff)
 
         # Check arguments
+        if num_events_min > num_events_max:
+            msg = 'Minimum number of events must be smaller than maximum number of events'
+            self.logger.error(msg)
+            raise ValueError(msg)
+        if not num_events_step > 0:
+            msg = 'Number of events step must be larger then 0'
+            self.logger.error(msg)
+            raise ValueError(msg)
         if not num_samples > 0:
             msg = 'Number of samples must be larger than 0'
             self.logger.error(msg)
@@ -203,11 +225,13 @@ class RtioStressModule(DaxModule):
             self.logger.error(msg)
             raise ValueError(msg)
 
-        # Sort scan descending (in-place)
-        num_events_scan.sort(reverse=True)
+        # Get current period
+        current_period = self.get_dataset_sys(self.THROUGHPUT_PERIOD_KEY)
 
         # Store input values in dataset
-        self.set_dataset('num_events_scan', num_events_scan)
+        self.set_dataset('num_events_min', num_events_min)
+        self.set_dataset('num_events_max', num_events_max)
+        self.set_dataset('num_events_step', num_events_step)
         self.set_dataset('num_samples', num_samples)
         self.set_dataset('period_step', period_step)
         self.set_dataset('no_underflow_cutoff', no_underflow_cutoff)
@@ -217,8 +241,8 @@ class RtioStressModule(DaxModule):
         self._message_current_period(current_period)
 
         # Run kernel
-        self._calibrate_throughput_burst(num_events_scan, num_samples, current_period, period_step,
-                                         no_underflow_cutoff, num_step_cutoff)
+        self._calibrate_throughput_burst(num_events_min, num_events_max, num_events_step, num_samples, current_period,
+                                         period_step, no_underflow_cutoff, num_step_cutoff)
 
         # Get results
         no_underflow_count = self.get_dataset('no_underflow_count')
@@ -228,11 +252,14 @@ class RtioStressModule(DaxModule):
         # Process results directly (next experiment might need these values)
         if no_underflow_count == 0:
             self.logger.warning('Could not determine throughput burst: All data points raised an underflow exception')
+            return False
         elif not underflow_flag:
             self.logger.warning('Could not determine throughput burst: No data points raised an underflow exception')
+            return False
         else:
             # Store result in system dataset
             self.set_dataset_sys(self.THROUGHPUT_BURST_KEY, last_num_events)
+            return True
 
     @rpc(flags={"async"})
     def _message_current_period(self, current_period):
@@ -240,8 +267,8 @@ class RtioStressModule(DaxModule):
         self.logger.info('Using period {:s}'.format(dax.util.units.time_to_str(current_period)))
 
     @kernel
-    def _calibrate_throughput_burst(self, num_events_scan, num_samples, current_period, period_step,
-                                    no_underflow_cutoff, num_step_cutoff):
+    def _calibrate_throughput_burst(self, num_events_min, num_events_max, num_events_step, num_samples, current_period,
+                                    period_step, no_underflow_cutoff, num_step_cutoff):
         # Storage for last number of events
         last_num_events = 0
         # Count of last number of events without underflow
@@ -249,14 +276,15 @@ class RtioStressModule(DaxModule):
         # A flag to mark if at least one underflow happened
         underflow_flag = False
 
-        while True:
+        while num_step_cutoff > 0:
             # Reset variables
             last_num_events = 0
             underflow_flag = False
             no_underflow_count = 0
 
-            # Iterate over scan
-            for num_events in num_events_scan:
+            # Iterate over range from max to min (manual iteration for better performance on large range)
+            num_events = num_events_max
+            while num_events > num_events_min:
                 try:
                     # Spawn events
                     self._spawn_events(current_period, num_samples, num_events)
@@ -277,8 +305,9 @@ class RtioStressModule(DaxModule):
                         # No underflow detected and cutoff reached, stop testing
                         break
 
-            if num_step_cutoff == 0:
-                break  # Max number of steps has been reached, stop testing in any case
+                # Manual update of iteration values
+                num_events -= num_events_step
+
             if not underflow_flag:
                 # No underflow events occurred, reducing period
                 current_period -= period_step

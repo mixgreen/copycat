@@ -32,14 +32,16 @@ class CalibrateRtioThroughput(DaxCalibration, EnvExperiment):
         self.update_kernel_invariants('period_scan')
 
     def run(self):
-        self.module.calibrate_throughput(self.period_scan, self.num_samples, self.num_events, self.no_underflow_cutoff)
+        self.success = self.module.calibrate_throughput(self.period_scan, self.num_samples, self.num_events,
+                                                        self.no_underflow_cutoff)
 
     def analyze(self):
-        # Report result
-        last_period = self.module.get_dataset_sys(self.module.THROUGHPUT_PERIOD_KEY)
-        throughput = dax.util.units.freq_to_str(1.0 / last_period)
-        period = '{:s} period'.format(dax.util.units.time_to_str(last_period))
-        self.logger.info('RTIO event throughput is {:s} ({:s})'.format(throughput, period))
+        if self.success:
+            # Report result
+            last_period = self.module.get_dataset_sys(self.module.THROUGHPUT_PERIOD_KEY)
+            throughput = dax.util.units.freq_to_str(1.0 / last_period)
+            period = '{:s} period'.format(dax.util.units.time_to_str(last_period))
+            self.logger.info('RTIO event throughput is {:s} ({:s})'.format(throughput, period))
 
 
 @dax_calibration_factory(RtioStressModule)
@@ -59,26 +61,19 @@ class CalibrateRtioThroughputBurst(DaxCalibration, EnvExperiment):
         self.setattr_argument('num_step_cutoff', NumberValue(5, min=0, **number_kwargs))
 
     def prepare(self):
-        # Additional check if arguments are valid
-        if self.num_events_min > self.num_events_max:
-            msg = 'Minimum number of events must be smaller than maximum number of events'
-            self.logger.error(msg)
-            raise ValueError(msg)
-
         # Scale period step
         self.period_step *= ns
-        # Number of events scan
-        self.num_event_scan = list(range(self.num_events_max, self.num_events_min, -self.num_events_step))
-        self.update_kernel_invariants('num_event_scan')
 
     def run(self):
-        self.module.calibrate_throughput_burst(self.num_event_scan, self.num_samples, self.period_step,
-                                               self.no_underflow_cutoff, self.num_step_cutoff)
+        self.success = self.module.calibrate_throughput_burst(self.num_events_min, self.num_events_max,
+                                                              self.num_events_step, self.num_samples, self.period_step,
+                                                              self.no_underflow_cutoff, self.num_step_cutoff)
 
     def analyze(self):
-        # Report result
-        last_num_events = self.module.get_dataset_sys(self.module.THROUGHPUT_BURST_KEY)
-        self.logger.info('RTIO event burst size is {:d}'.format(last_num_events))
+        if self.success:
+            # Report result
+            last_num_events = self.module.get_dataset_sys(self.module.THROUGHPUT_BURST_KEY)
+            self.logger.info('RTIO event burst size is {:d}'.format(last_num_events))
 
 
 @dax_calibration_factory(RtioStressModule)
