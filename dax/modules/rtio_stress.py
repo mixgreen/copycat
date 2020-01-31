@@ -25,6 +25,7 @@ class RtioStressModule(DaxModule):
         # Load throughput parameters
         self.setattr_dataset_sys(self.THROUGHPUT_PERIOD_KEY)
         self.setattr_dataset_sys(self.THROUGHPUT_BURST_KEY)
+        self.setattr_dataset_sys(self.LATENCY_CORE_RTIO)
 
         # Cap burst size to prevent too long DMA recordings, resulting in a connection timeout
         self.max_burst = min(self.max_burst, 40000)
@@ -293,7 +294,7 @@ class RtioStressModule(DaxModule):
             underflow_flag = False
             no_underflow_count = 0
 
-            # Iterate over range from max to min (manual iteration for better performance on large range)
+            # Iterate over scan from max to min (manual iteration for better performance on large range)
             num_events = num_events_max
             while num_events > num_events_min:
                 try:
@@ -416,7 +417,7 @@ class RtioStressModule(DaxModule):
         # Reset core
         self.core.reset()
 
-        # Iterate over scan
+        # Iterate over range from max to min (manual iteration for better performance on large range)
         current_latency = latency_min
         while current_latency < latency_max:
             # Convert current latency to machine units
@@ -479,7 +480,6 @@ class RtioLoopStressModule(RtioStressModule):
 
         # Load latency parameters
         self.setattr_dataset_sys(self.LATENCY_RTIO_RTIO)
-        self.setattr_dataset_sys(self.LATENCY_CORE_RTIO)
         self.setattr_dataset_sys(self.LATENCY_RTIO_CORE)
         self.setattr_dataset_sys(self.LATENCY_RTT)
 
@@ -497,6 +497,20 @@ class RtioLoopStressModule(RtioStressModule):
     """Calibrate latency RTIO-core"""
 
     def calibrate_latency_rtio_core(self, num_samples, detection_window):
+        # Convert types of arguments
+        num_samples = np.int32(num_samples)
+        detection_window = float(detection_window)
+
+        # Check arguments
+        if not num_samples > 0:
+            msg = 'Number of samples must be larger than 0'
+            self.logger.error(msg)
+            raise ValueError(msg)
+        if not detection_window > 0.0:
+            msg = 'Detection window must be larger than 0.0'
+            self.logger.error(msg)
+            raise ValueError(msg)
+
         # Store input values in dataset
         self.set_dataset('num_samples', num_samples)
         self.set_dataset('detection_window', detection_window)
@@ -514,18 +528,25 @@ class RtioLoopStressModule(RtioStressModule):
         t_rtio = np.array(self.get_dataset('t_rtio'))
         t_return = np.array(self.get_dataset('t_return'))
 
-        # Process results directly (next experiment might need these values)
-        rtio_rtio = (t_rtio - t_zero).mean()
-        rtio_core = (t_return - t_zero).mean()
-        self.set_dataset_sys(self.LATENCY_RTIO_RTIO, rtio_rtio)
-        self.set_dataset_sys(self.LATENCY_RTIO_CORE, rtio_core)
+        if any(t == -1 for t in t_rtio):
+            # One or more tests did not return a timestamp, test failed
+            self.logger.warning(
+                'Could not determine RTIO-core latency: One or more tests did not return a valid timestamp')
+            return False
+        else:
+            # Process results directly (next experiment might need these values)
+            rtio_rtio = (t_rtio - t_zero).mean()
+            rtio_core = (t_return - t_zero).mean()
+            self.set_dataset_sys(self.LATENCY_RTIO_RTIO, rtio_rtio)
+            self.set_dataset_sys(self.LATENCY_RTIO_CORE, rtio_core)
+            return True
 
     @kernel
     def _calibrate_latency_rtio_core(self, num_samples, detection_window):
         # Reset core
         self.core.reset()
 
-        for i in range(num_samples):
+        for _ in range(num_samples):
             # Turn output off
             self.core.break_realtime()  # Break realtime to prevent underflow exceptions
             self.ttl_out.off()
@@ -544,11 +565,146 @@ class RtioLoopStressModule(RtioStressModule):
             t_return = self.core.get_rtio_counter_mu()  # Returns a lower bound
 
             # Store values at a non-critical time
-            self.append_to_dataset_sys('t_zero', t_zero)
-            self.append_to_dataset_sys('t_rtio', t_rtio)
-            self.append_to_dataset_sys('t_return', t_return)
+            self.append_to_dataset('t_zero', t_zero)
+            self.append_to_dataset('t_rtio', t_rtio)
+            self.append_to_dataset('t_return', t_return)
 
     """Calibrate RTT RTIO-core-RTIO"""
 
-    def calibrate_latency_rtt(self, num_samples):
-        pass  # TODO
+    def calibrate_latency_rtt(self, latency_min, latency_max, latency_step, num_samples, detection_window,
+                              no_underflow_cutoff):
+        # Convert types of arguments
+        latency_min = float(latency_min)
+        latency_max = float(latency_max)
+        latency_step = float(latency_step)
+        num_samples = np.int32(num_samples)
+        detection_window = float(detection_window)
+        no_underflow_cutoff = np.int32(no_underflow_cutoff)
+
+        # Check arguments
+        if not latency_min > 0.0:
+            msg = 'Minimum latency must be larger than 0.0'
+            self.logger.error(msg)
+            raise ValueError(msg)
+        if not latency_max > 0.0:
+            msg = 'Maximum latency must be larger than 0.0'
+            self.logger.error(msg)
+            raise ValueError(msg)
+        if not latency_step > 0.0:
+            msg = 'Latency step must be larger than 0.0'
+            self.logger.error(msg)
+            raise ValueError(msg)
+        if latency_min > latency_max:
+            msg = 'Minimum latency must be smaller than maximum latency'
+            self.logger.error(msg)
+            raise ValueError(msg)
+        if not num_samples > 0:
+            msg = 'Number of samples must be larger than 0'
+            self.logger.error(msg)
+            raise ValueError(msg)
+        if not detection_window > 0.0:
+            msg = 'Detection window must be larger than 0.0'
+            self.logger.error(msg)
+            raise ValueError(msg)
+        if not no_underflow_cutoff > 0:
+            msg = 'No underflow cutoff must be larger than 0'
+            self.logger.error(msg)
+            raise ValueError(msg)
+
+        # Store input values in dataset
+        self.set_dataset('latency_min', latency_min)
+        self.set_dataset('latency_max', latency_max)
+        self.set_dataset('latency_step', latency_step)
+        self.set_dataset('num_samples', num_samples)
+        self.set_dataset('detection_window', detection_window)
+        self.set_dataset('no_underflow_cutoff', no_underflow_cutoff)
+
+        # Run kernel
+        self._calibrate_latency_rtt(latency_min, latency_max, latency_step, num_samples, detection_window,
+                                    no_underflow_cutoff)
+
+        # Get results
+        no_underflow_count = self.get_dataset('no_underflow_count')
+        underflow_flag = self.get_dataset('underflow_flag')
+        last_latency = self.get_dataset('last_latency')
+
+        # Process results directly (next experiment might need these values)
+        if no_underflow_count == 0:
+            # Last data point was an underflow, assuming all data points raised an underflow
+            self.logger.warning('Could not determine RTT: All data points raised an underflow exception')
+            return False
+        elif not underflow_flag:
+            # No underflow occurred
+            self.logger.warning('Could not determine RTT: No data points raised an underflow exception')
+            return False
+        else:
+            # Store result in system dataset
+            self.set_dataset_sys(self.LATENCY_RTT, last_latency)
+            return True
+
+    @kernel
+    def _calibrate_latency_rtt(self, latency_min, latency_max, latency_step, num_samples, detection_window,
+                               no_underflow_cutoff):
+        # Storage for last latency
+        last_latency = 0.0
+        # Count of last latency without underflow
+        no_underflow_count = 0
+        # A flag to mark if at least one underflow happened
+        underflow_flag = False
+
+        # Reset core
+        self.core.reset()
+
+        # Iterate over scan from min to max (manual iteration for better performance on large range)
+        current_latency = latency_min
+        while current_latency < latency_max:
+            # Convert current latency to machine units
+            current_latency_mu = self.core.seconds_to_mu(current_latency)
+
+            try:
+                for _ in range(num_samples):
+                    # Turn output off
+                    self.core.break_realtime()  # Break realtime to prevent underflow exceptions
+                    self.ttl_out.off()
+                    delay(1 * us)  # Guarantee a delay between off and on
+
+                    # Guarantee a healthy amount of slack to start the measurement
+                    self.core.break_realtime()
+
+                    # Save time zero
+                    t_zero = now_mu()
+                    # Turn output on (schedule event to respond on)
+                    self.ttl_out.on()
+                    # Order the RTIO core to detect a rising edge (moves cursor to end of detection window)
+                    t_window = self.ttl_in.gate_rising(detection_window)
+                    # Set the cursor at time zero + current latency (prepare for scheduling feedback event)
+                    at_mu(t_zero + current_latency_mu)
+                    # Wait for the timestamp when the RTIO core detects the input event
+                    self.ttl_in.timestamp_mu(t_window)
+                    # Schedule the event at time zero + current latency
+                    self.ttl_out.off()
+
+            except RTIOUnderflow:
+                # Set underflow flag
+                underflow_flag = True
+                # Reset counter
+                no_underflow_count = 0
+
+            else:
+                if no_underflow_count == 0:
+                    # Store the latency that works
+                    last_latency = current_latency
+
+                # Increment counter
+                no_underflow_count += 1
+
+                if no_underflow_count >= no_underflow_cutoff:
+                    # Cutoff reached, stop testing
+                    break
+
+            current_latency += latency_step
+
+        # Store results
+        self.set_dataset('no_underflow_count', no_underflow_count)
+        self.set_dataset('underflow_flag', underflow_flag)
+        self.set_dataset('last_latency', last_latency)

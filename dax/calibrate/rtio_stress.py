@@ -10,11 +10,11 @@ class CalibrateRtioThroughput(DaxCalibration, EnvExperiment):
 
     def build(self):
         # Arguments
-        period_kwargs = {'unit': 'ns', 'scale': 1, 'step': 1, 'ndecimals': 0}
+        time_kwargs = {'unit': 'ns', 'scale': 1, 'step': 1, 'ndecimals': 0}
         number_kwargs = {'scale': 1, 'step': 1, 'ndecimals': 0}
-        self.setattr_argument('period_min', NumberValue(200, min=1, **period_kwargs))
-        self.setattr_argument('period_max', NumberValue(1000, min=1, **period_kwargs))
-        self.setattr_argument('period_step', NumberValue(1, min=1, **period_kwargs))
+        self.setattr_argument('period_min', NumberValue(200, min=1, **time_kwargs))
+        self.setattr_argument('period_max', NumberValue(1000, min=1, **time_kwargs))
+        self.setattr_argument('period_step', NumberValue(1, min=1, **time_kwargs))
         self.setattr_argument('num_samples', NumberValue(5, min=1, **number_kwargs))
         self.setattr_argument('num_events', NumberValue(500000, min=1000, **number_kwargs))
         self.setattr_argument('no_underflow_cutoff', NumberValue(5, min=1, **number_kwargs))
@@ -51,12 +51,12 @@ class CalibrateRtioThroughputBurst(DaxCalibration, EnvExperiment):
     def build(self):
         # Arguments
         number_kwargs = {'scale': 1, 'step': 1, 'ndecimals': 0}
-        period_kwargs = {'unit': 'ns', 'scale': 1, 'step': 1, 'ndecimals': 0}
+        time_kwargs = {'unit': 'ns', 'scale': 1, 'step': 1, 'ndecimals': 0}
         self.setattr_argument('num_events_min', NumberValue(1000, min=1, **number_kwargs))
         self.setattr_argument('num_events_max', NumberValue(500000, min=1, **number_kwargs))
         self.setattr_argument('num_events_step', NumberValue(1000, min=1, **number_kwargs))
         self.setattr_argument('num_samples', NumberValue(5, min=1, **number_kwargs))
-        self.setattr_argument('period_step', NumberValue(1, min=1, **period_kwargs))
+        self.setattr_argument('period_step', NumberValue(1, min=1, **time_kwargs))
         self.setattr_argument('no_underflow_cutoff', NumberValue(5, min=1, **number_kwargs))
         self.setattr_argument('num_step_cutoff', NumberValue(5, min=0, **number_kwargs))
 
@@ -82,11 +82,11 @@ class CalibrateRtioLatencyCoreRtio(DaxCalibration, EnvExperiment):
 
     def build(self):
         # Arguments
-        latency_kwargs = {'unit': 'ns', 'scale': 1, 'step': 1, 'ndecimals': 0}
+        time_kwargs = {'unit': 'ns', 'scale': 1, 'step': 1, 'ndecimals': 0}
         number_kwargs = {'scale': 1, 'step': 1, 'ndecimals': 0}
-        self.setattr_argument('latency_min', NumberValue(600, min=1, **latency_kwargs))
-        self.setattr_argument('latency_max', NumberValue(1300, min=1, **latency_kwargs))
-        self.setattr_argument('latency_step', NumberValue(1, min=1, **latency_kwargs))
+        self.setattr_argument('latency_min', NumberValue(600, min=1, **time_kwargs))
+        self.setattr_argument('latency_max', NumberValue(1300, min=1, **time_kwargs))
+        self.setattr_argument('latency_step', NumberValue(1, min=1, **time_kwargs))
         self.setattr_argument('num_samples', NumberValue(5, min=1, **number_kwargs))
         self.setattr_argument('no_underflow_cutoff', NumberValue(5, min=1, **number_kwargs))
 
@@ -107,9 +107,9 @@ class CalibrateRtioLatencyCoreRtio(DaxCalibration, EnvExperiment):
             self.logger.info('Core-RTIO latency is {:s}'.format(core_rtio))
 
 
-@dax_calibration_factory(RtioStressModule)
+@dax_calibration_factory(RtioLoopStressModule)
 class CalibrateRtioLatencyRtioCore(DaxCalibration, EnvExperiment):
-    """RTIO-core latency calibration (benchmark)."""
+    """RTIO-core and RTIO-RTIO latency calibration (benchmark)."""
 
     def build(self):
         # Arguments
@@ -123,11 +123,47 @@ class CalibrateRtioLatencyRtioCore(DaxCalibration, EnvExperiment):
         self.detection_window *= ns
 
     def run(self):
-        self.module.calibrate_latency_rtio_core(self.num_samples, self.detection_window)
+        self.success = self.module.calibrate_latency_rtio_core(self.num_samples, self.detection_window)
 
     def analyze(self):
-        # Report result
-        rtio_rtio = dax.util.units.time_to_str(self.module.get_dataset_sys(self.module.LATENCY_RTIO_RTIO))
-        rtio_core = dax.util.units.time_to_str(self.module.get_dataset_sys(self.module.LATENCY_RTIO_CORE))
-        self.logger.info('RTIO-RTIO latency is {:s}'.format(rtio_rtio))
-        self.logger.info('RTIO-core latency is {:s}'.format(rtio_core))
+        if self.success:
+            # Report result
+            rtio_core = dax.util.units.time_to_str(self.module.get_dataset_sys(self.module.LATENCY_RTIO_CORE))
+            rtio_rtio = dax.util.units.time_to_str(self.module.get_dataset_sys(self.module.LATENCY_RTIO_RTIO))
+            self.logger.info('RTIO-core latency is {:s}'.format(rtio_core))
+            self.logger.info('RTIO-RTIO latency is {:s}'.format(rtio_rtio))
+
+
+@dax_calibration_factory(RtioLoopStressModule)
+class CalibrateRtioLatencyRtt(DaxCalibration, EnvExperiment):
+    """RTT RTIO-core-RTIO latency calibration (benchmark)."""
+
+    def build(self):
+        # Arguments
+        time_kwargs = {'unit': 'ns', 'scale': 1, 'step': 1, 'ndecimals': 0}
+        number_kwargs = {'scale': 1, 'step': 1, 'ndecimals': 0}
+        self.setattr_argument('latency_min', NumberValue(600, min=1, **time_kwargs))
+        self.setattr_argument('latency_max', NumberValue(1300, min=1, **time_kwargs))
+        self.setattr_argument('latency_step', NumberValue(1, min=1, **time_kwargs))
+        self.setattr_argument('num_samples', NumberValue(5, min=1, **number_kwargs))
+        self.setattr_argument('detection_window', NumberValue(1000, min=1, **time_kwargs))
+        self.setattr_argument('no_underflow_cutoff', NumberValue(5, min=1, **number_kwargs))
+
+    def prepare(self):
+        # Scale latencies
+        self.latency_min *= ns
+        self.latency_max *= ns
+        self.latency_step *= ns
+        # Scale detection window
+        self.detection_window *= ns
+
+    def run(self):
+        self.success = self.module.calibrate_latency_rtt(self.latency_min, self.latency_max, self.latency_step,
+                                                         self.num_samples, self.detection_window,
+                                                         self.no_underflow_cutoff)
+
+    def analyze(self):
+        if self.success:
+            # Report result
+            rtt = dax.util.units.time_to_str(self.module.get_dataset_sys(self.module.LATENCY_RTT))
+            self.logger.info('RTIO RTT is {:s}'.format(rtt))
