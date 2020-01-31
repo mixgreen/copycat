@@ -2,6 +2,7 @@ import abc
 import logging
 import functools
 
+from artiq.master.worker_db import DummyDevice
 from artiq.experiment import *
 
 
@@ -131,7 +132,7 @@ class DaxModuleBase(DaxBase, abc.ABC):
         device = self.get_device(key)
 
         # Check type
-        if not isinstance(device, type_):
+        if not isinstance(device, DummyDevice) and not isinstance(device, type_):
             msg = 'Device "{:s}" does not match the expected type'.format(key)
             self.logger.error(msg)
             raise TypeError(msg)

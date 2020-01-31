@@ -1,5 +1,8 @@
 import numpy as np
 
+import artiq.coredevice.ttl
+import artiq.coredevice.edge_counter
+
 from dax.base import *
 
 
@@ -16,6 +19,10 @@ class DetectionModule(DaxModule):
     DETECT_AOM_ATT_KEY = 'detect_aom_att'
 
     def build(self, aom, pmt_array, pmt_array_size):
+        assert isinstance(aom, str)
+        assert isinstance(pmt_array, str)
+        assert isinstance(pmt_array_size, int)
+
         # Detection AOM
         self.setattr_device(aom, 'detect_aom')
 
@@ -23,6 +30,28 @@ class DetectionModule(DaxModule):
         self.pmt_array_size = pmt_array_size
         self.pmt_array = [self.get_device('{:s}_{:d}'.format(pmt_array, i)) for i in range(self.pmt_array_size)]
         self.update_kernel_invariants('pmt_array', 'pmt_array_size')
+
+        # Check if all PMT array devices have the same type
+        pmt_device_types = {type(d) for d in self.pmt_array}
+        if len(pmt_device_types) != 1:
+            msg = 'All devices in the PMT array should have the same type'
+            self.logger.error(msg)
+            raise TypeError(msg)
+
+        # Set parameters based on PMT array device type
+        pmt_device_type = pmt_device_types.pop()
+        if pmt_device_type == DummyDevice:
+            pass
+        elif pmt_device_type == artiq.coredevice.ttl.TTLInOut:
+            self.edge_counter = False
+        elif pmt_device_type == artiq.coredevice.edge_counter.EdgeCounter:
+            self.edge_counter = True
+        else:
+            # Unsupported device type
+            msg = 'PMT array has an unsupported device type'
+            self.logger.error(msg)
+            raise TypeError(msg)
+        self.update_kernel_invariants('edge_counter')
 
     def load_module(self):
         # Duration of detection
@@ -49,23 +78,24 @@ class DetectionModule(DaxModule):
         self.detect_aom.set(self.detect_aom_freq, phase=self.detect_aom_phase)
         self.detect_aom.set_att(self.detect_aom_att)
 
-        # Configure the PMT channels
-        self._config_pmt_channels()
+        if not self.edge_counter:
+            # Configure the TTLInOut devices
+            for p in self.pmt_array:
+                # Set as input
+                p.input()
 
     def post_init_module(self):
         pass
 
     @kernel
-    def _config_pmt_channels(self):
-        # Configure the TTLInOut devices
-        for p in self.pmt_array:
-            # Set as input
-            p.input()
-
-    @kernel
     def _pmt_array_count(self, index, detection_window_mu):
         # Get the count of a single PMT
-        return self.pmt_array[index].count(detection_window_mu)
+        if self.edge_counter:
+            # EdgeCounter
+            return self.pmt_array[index].fetch_count(detection_window_mu)
+        else:
+            # TTLInOut
+            return self.pmt_array[index].count(detection_window_mu)
 
     @kernel
     def detect_all(self):
@@ -126,17 +156,3 @@ class DetectionModule(DaxModule):
     def set_active_channels(self, active_pmt_channels):
         # Set a new list of active channels
         self.set_dataset_sys(self.ACTIVE_PMT_CHANNELS_KEY, active_pmt_channels)
-
-
-class DetectionModuleEc(DetectionModule):
-    """Module for ion state detection. (For EdgeCounter devices)"""
-
-    @kernel
-    def _config_pmt_channels(self):
-        # EdgeCounter devices do not require any configuration
-        pass
-
-    @kernel
-    def _pmt_array_count(self, index, detection_window_mu):
-        # Get the count of a single PMT
-        return self.pmt_array[index].fetch_count(detection_window_mu)
