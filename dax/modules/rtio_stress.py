@@ -1,5 +1,7 @@
 import numpy as np
 
+import artiq.coredevice.ttl
+
 from dax.base import *
 import dax.util.units
 
@@ -10,13 +12,14 @@ class RtioStressModule(DaxModule):
     # System keys
     THROUGHPUT_PERIOD_KEY = 'min_period'
     THROUGHPUT_BURST_KEY = 'max_burst'
+    LATENCY_CORE_RTIO = 'latency_core_rtio'
 
     # Unique DMA tags
     DMA_BURST = 'rtio_stress_burst'
 
     def build(self, ttl_out):
         # TTL output device
-        self.setattr_device(ttl_out, 'ttl_out')
+        self.setattr_device(ttl_out, 'ttl_out', (artiq.coredevice.ttl.TTLOut, artiq.coredevice.ttl.TTLInOut))
 
     def load_module(self):
         # Load throughput parameters
@@ -204,12 +207,20 @@ class RtioStressModule(DaxModule):
         num_step_cutoff = np.int32(num_step_cutoff)
 
         # Check arguments
-        if num_events_min > num_events_max:
-            msg = 'Minimum number of events must be smaller than maximum number of events'
+        if not num_events_min > 0:
+            msg = 'Minimum number of events must be larger then 0'
+            self.logger.error(msg)
+            raise ValueError(msg)
+        if not num_events_max > 0:
+            msg = 'Minimum number of events must be larger then 0'
             self.logger.error(msg)
             raise ValueError(msg)
         if not num_events_step > 0:
             msg = 'Number of events step must be larger then 0'
+            self.logger.error(msg)
+            raise ValueError(msg)
+        if num_events_min > num_events_max:
+            msg = 'Minimum number of events must be smaller than maximum number of events'
             self.logger.error(msg)
             raise ValueError(msg)
         if not num_samples > 0:
@@ -328,13 +339,131 @@ class RtioStressModule(DaxModule):
         self.set_dataset('last_period', current_period)
         self.set_dataset('last_num_step_cutoff', num_step_cutoff)
 
+    """Calibrate latency core-RTIO"""
+
+    def calibrate_latency_core_rtio(self, latency_min, latency_max, latency_step, num_samples, no_underflow_cutoff):
+        # Convert types of arguments
+        latency_min = float(latency_min)
+        latency_max = float(latency_max)
+        latency_step = float(latency_step)
+        num_samples = np.int32(num_samples)
+        no_underflow_cutoff = np.int32(no_underflow_cutoff)
+
+        # Check arguments
+        if not latency_min > 0.0:
+            msg = 'Minimum latency must be larger than 0.0'
+            self.logger.error(msg)
+            raise ValueError(msg)
+        if not latency_max > 0.0:
+            msg = 'Maximum latency must be larger than 0.0'
+            self.logger.error(msg)
+            raise ValueError(msg)
+        if not latency_step > 0.0:
+            msg = 'Latency step must be larger than 0.0'
+            self.logger.error(msg)
+            raise ValueError(msg)
+        if latency_min > latency_max:
+            msg = 'Minimum latency must be smaller than maximum latency'
+            self.logger.error(msg)
+            raise ValueError(msg)
+        if not num_samples > 0:
+            msg = 'Number of samples must be larger than 0'
+            self.logger.error(msg)
+            raise ValueError(msg)
+        if not no_underflow_cutoff > 0:
+            msg = 'No underflow cutoff must be larger than 0'
+            self.logger.error(msg)
+            raise ValueError(msg)
+
+        # Store input values in dataset
+        self.set_dataset('latency_min', latency_min)
+        self.set_dataset('latency_max', latency_max)
+        self.set_dataset('latency_step', latency_step)
+        self.set_dataset('num_samples', num_samples)
+        self.set_dataset('no_underflow_cutoff', no_underflow_cutoff)
+
+        # Run kernel
+        self._calibrate_latency_core_rtio(latency_min, latency_max, latency_step, num_samples, no_underflow_cutoff)
+
+        # Get results
+        no_underflow_count = self.get_dataset('no_underflow_count')
+        underflow_flag = self.get_dataset('underflow_flag')
+        last_latency = self.get_dataset('last_latency')
+
+        # Process results directly (next experiment might need these values)
+        if no_underflow_count == 0:
+            # Last data point was an underflow, assuming all data points raised an underflow
+            self.logger.warning('Could not determine core-RTIO latency: All data points raised an underflow exception')
+            return False
+        elif not underflow_flag:
+            # No underflow occurred
+            self.logger.warning('Could not determine core-RTIO latency: No data points raised an underflow exception')
+            return False
+        else:
+            # Store result in system dataset
+            self.set_dataset_sys(self.LATENCY_CORE_RTIO, last_latency)
+            return True
+
+    @kernel
+    def _calibrate_latency_core_rtio(self, latency_min, latency_max, latency_step, num_samples, no_underflow_cutoff):
+        # Storage for last latency
+        last_latency = 0.0
+        # Count of last latency without underflow
+        no_underflow_count = 0
+        # A flag to mark if at least one underflow happened
+        underflow_flag = False
+
+        # Reset core
+        self.core.reset()
+
+        # Iterate over scan
+        current_latency = latency_min
+        while current_latency < latency_max:
+            # Convert current latency to machine units
+            current_latency_mu = self.core.seconds_to_mu(current_latency)
+
+            try:
+                for _ in range(num_samples):
+                    # Break realtime to get some slack
+                    self.core.break_realtime()
+                    # Reduce the slack to zero by waiting
+                    self.core.wait_until_mu(now_mu())
+
+                    # Insert latency and try to schedule an event
+                    delay_mu(current_latency_mu)
+                    self.ttl_out.off()
+
+            except RTIOUnderflow:
+                # Set underflow flag
+                underflow_flag = True
+                # Reset counter
+                no_underflow_count = 0
+
+            else:
+                if no_underflow_count == 0:
+                    # Store the latency that works
+                    last_latency = current_latency
+
+                # Increment counter
+                no_underflow_count += 1
+
+                if no_underflow_count >= no_underflow_cutoff:
+                    # Cutoff reached, stop testing
+                    break
+
+            current_latency += latency_step
+
+        # Store results
+        self.set_dataset('no_underflow_count', no_underflow_count)
+        self.set_dataset('underflow_flag', underflow_flag)
+        self.set_dataset('last_latency', last_latency)
+
 
 class RtioLoopStressModule(RtioStressModule):
     """Module to stress the RTIO system with a looped connection."""
 
     # System keys
     LATENCY_RTIO_RTIO = 'latency_rtio_rtio'
-    LATENCY_CORE_RTIO = 'latency_core_rtio'
     LATENCY_RTIO_CORE = 'latency_rtio_core'
     LATENCY_RTT = 'latency_rtt'  # Round-trip-time from RTIO input to RTIO output
 
@@ -342,7 +471,7 @@ class RtioLoopStressModule(RtioStressModule):
         # Call super
         super(RtioLoopStressModule, self).build(ttl_out)
         # TTL input device
-        self.setattr_device(ttl_in, 'ttl_in')
+        self.setattr_device(ttl_in, 'ttl_in', artiq.coredevice.ttl.TTLInOut)
 
     def load_module(self):
         # Call super
@@ -364,11 +493,6 @@ class RtioLoopStressModule(RtioStressModule):
 
         # Set TTL direction
         self.ttl_in.input()
-
-    """Calibrate latency core-RTIO"""
-
-    def calibrate_latency_core_rtio(self, num_samples):
-        pass  # TODO
 
     """Calibrate latency RTIO-core"""
 

@@ -77,6 +77,37 @@ class CalibrateRtioThroughputBurst(DaxCalibration, EnvExperiment):
 
 
 @dax_calibration_factory(RtioStressModule)
+class CalibrateRtioLatencyCoreRtio(DaxCalibration, EnvExperiment):
+    """Core-RTIO latency calibration (benchmark)."""
+
+    def build(self):
+        # Arguments
+        latency_kwargs = {'unit': 'ns', 'scale': 1, 'step': 1, 'ndecimals': 0}
+        number_kwargs = {'scale': 1, 'step': 1, 'ndecimals': 0}
+        self.setattr_argument('latency_min', NumberValue(600, min=1, **latency_kwargs))
+        self.setattr_argument('latency_max', NumberValue(1300, min=1, **latency_kwargs))
+        self.setattr_argument('latency_step', NumberValue(1, min=1, **latency_kwargs))
+        self.setattr_argument('num_samples', NumberValue(5, min=1, **number_kwargs))
+        self.setattr_argument('no_underflow_cutoff', NumberValue(5, min=1, **number_kwargs))
+
+    def prepare(self):
+        # Scale latencies
+        self.latency_min *= ns
+        self.latency_max *= ns
+        self.latency_step *= ns
+
+    def run(self):
+        self.success = self.module.calibrate_latency_core_rtio(self.latency_min, self.latency_max, self.latency_step,
+                                                               self.num_samples, self.no_underflow_cutoff)
+
+    def analyze(self):
+        if self.success:
+            # Report result
+            core_rtio = dax.util.units.time_to_str(self.module.get_dataset_sys(self.module.LATENCY_CORE_RTIO))
+            self.logger.info('Core-RTIO latency is {:s}'.format(core_rtio))
+
+
+@dax_calibration_factory(RtioStressModule)
 class CalibrateRtioLatencyRtioCore(DaxCalibration, EnvExperiment):
     """RTIO-core latency calibration (benchmark)."""
 
