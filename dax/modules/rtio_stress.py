@@ -46,7 +46,7 @@ class RtioStressModule(DaxModule):
                 delay(self.min_period / 2)
                 self.ttl_out.off()
 
-    def post_init_module(self):
+    def config_module(self):
         # Obtain DMA handle
         self.burst_dma_handle = self.core_dma.get_handle(self.DMA_BURST)
         self.update_kernel_invariants('burst_dma_handle')
@@ -468,11 +468,17 @@ class RtioLoopStressModule(RtioStressModule):
     LATENCY_RTIO_CORE = 'latency_rtio_core'
     LATENCY_RTT = 'latency_rtt'  # Round-trip-time from RTIO input to RTIO output
 
+    # Fixed edge delay time
+    EDGE_DELAY = 1 * us
+
     def build(self, ttl_out, ttl_in):
         # Call super
         super(RtioLoopStressModule, self).build(ttl_out)
         # TTL input device
         self.setattr_device(ttl_in, 'ttl_in', artiq.coredevice.ttl.TTLInOut)
+
+        # Add edge delay to kernel invariants
+        self.update_kernel_invariants('EDGE_DELAY')
 
     def load_module(self):
         # Call super
@@ -515,6 +521,11 @@ class RtioLoopStressModule(RtioStressModule):
         self.set_dataset('num_samples', num_samples)
         self.set_dataset('detection_window', detection_window)
 
+        # Test loop connection
+        if not self._test_loop_connection(detection_window):
+            self.logger.error('Could not determine RTIO-core latency: Loop not connected')
+            return False
+
         # Prepare datasets for results
         self.set_dataset('t_zero', [])
         self.set_dataset('t_rtio', [])
@@ -542,18 +553,43 @@ class RtioLoopStressModule(RtioStressModule):
             return True
 
     @kernel
+    def _test_loop_connection(self, detection_window, retry=1):
+        # Reset core
+        self.core.reset()
+
+        # Test if we can confirm the loop connection
+        for _ in range(retry):
+            # Guarantee a healthy amount of slack
+            self.core.break_realtime()
+
+            # Turn output off
+            self.ttl_out.off()
+            delay(self.EDGE_DELAY)  # Guarantee a delay between off and on
+
+            # Turn output on
+            self.ttl_out.on()
+            # Get the timestamp when the RTIO core detects the input event
+            t_rtio = self.ttl_in.timestamp_mu(self.ttl_in.gate_rising(detection_window))
+
+            if t_rtio != -1:
+                # Loop connection was confirmed
+                return True
+
+        # No connection was detected
+        return False
+
+    @kernel
     def _calibrate_latency_rtio_core(self, num_samples, detection_window):
         # Reset core
         self.core.reset()
 
         for _ in range(num_samples):
-            # Turn output off
-            self.core.break_realtime()  # Break realtime to prevent underflow exceptions
-            self.ttl_out.off()
-            delay(1 * us)  # Guarantee a delay between off and on
-
             # Guarantee a healthy amount of slack to start the measurement
             self.core.break_realtime()
+
+            # Turn output off
+            self.ttl_out.off()
+            delay(self.EDGE_DELAY)  # Guarantee a delay between off and on
 
             # Save time zero
             t_zero = now_mu()
@@ -619,6 +655,11 @@ class RtioLoopStressModule(RtioStressModule):
         self.set_dataset('detection_window', detection_window)
         self.set_dataset('no_underflow_cutoff', no_underflow_cutoff)
 
+        # Test loop connection
+        if not self._test_loop_connection(detection_window):
+            self.logger.error('Could not determine RTT: Loop not connected')
+            return False
+
         # Run kernel
         self._calibrate_latency_rtt(latency_min, latency_max, latency_step, num_samples, detection_window,
                                     no_underflow_cutoff)
@@ -663,13 +704,12 @@ class RtioLoopStressModule(RtioStressModule):
 
             try:
                 for _ in range(num_samples):
-                    # Turn output off
-                    self.core.break_realtime()  # Break realtime to prevent underflow exceptions
-                    self.ttl_out.off()
-                    delay(1 * us)  # Guarantee a delay between off and on
-
                     # Guarantee a healthy amount of slack to start the measurement
                     self.core.break_realtime()
+
+                    # Turn output off
+                    self.ttl_out.off()
+                    delay(self.EDGE_DELAY)  # Guarantee a delay between off and on
 
                     # Save time zero
                     t_zero = now_mu()

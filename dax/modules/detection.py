@@ -18,13 +18,11 @@ class DetectionModule(DaxModule):
     DETECT_AOM_PHASE_KEY = 'detect_aom_phase'
     DETECT_AOM_ATT_KEY = 'detect_aom_att'
 
-    def build(self, aom, pmt_array, pmt_array_size):
-        assert isinstance(aom, str)
-        assert isinstance(pmt_array, str)
+    def build(self, detect_aom, pmt_array, pmt_array_size):
         assert isinstance(pmt_array_size, int)
 
         # Detection AOM
-        self.setattr_device(aom, 'detect_aom')
+        self.setattr_device(detect_aom, 'detect_aom')
 
         # Array of PMT channels
         self.pmt_array_size = pmt_array_size
@@ -43,15 +41,17 @@ class DetectionModule(DaxModule):
         if pmt_device_type == DummyDevice:
             pass
         elif pmt_device_type == artiq.coredevice.ttl.TTLInOut:
-            self.edge_counter = False
+            self.EDGE_COUNTER = False
         elif pmt_device_type == artiq.coredevice.edge_counter.EdgeCounter:
-            self.edge_counter = True
+            self.EDGE_COUNTER = True
         else:
             # Unsupported device type
             msg = 'PMT array has an unsupported device type'
             self.logger.error(msg)
             raise TypeError(msg)
-        self.update_kernel_invariants('edge_counter')
+
+        # Make flags kernel invariant
+        self.update_kernel_invariants('EDGE_COUNTER')
 
     def load_module(self):
         # Duration of detection
@@ -60,7 +60,7 @@ class DetectionModule(DaxModule):
         self.setattr_dataset_sys(self.THRESHOLD_KEY, 1)
 
         # List of active PMT channels, also the mapping of ion to PMT channel (ions are ordered)
-        self.setattr_dataset_sys(self.ACTIVE_PMT_CHANNELS_KEY, np.arange(self.pmt_array_size, dtype=np.int32))
+        self.setattr_dataset_sys(self.ACTIVE_PMT_CHANNELS_KEY, list(np.int32(i) for i in range(self.pmt_array_size)))
 
         # Detection AOM frequency, phase, and attenuation
         self.setattr_dataset_sys(self.DETECT_AOM_FREQ_KEY, 100 * MHz)
@@ -72,25 +72,29 @@ class DetectionModule(DaxModule):
         # Break realtime to get some slack
         self.core.break_realtime()
 
-        # Initialize and set detection AOM
+        # Initialize AOM
         self.detect_aom.init()
-        self.detect_aom.cfg_sw(0)
-        self.detect_aom.set(self.detect_aom_freq, phase=self.detect_aom_phase)
-        self.detect_aom.set_att(self.detect_aom_att)
 
-        if not self.edge_counter:
+        if not self.EDGE_COUNTER:
             # Configure the TTLInOut devices
             for p in self.pmt_array:
                 # Set as input
                 p.input()
 
-    def post_init_module(self):
-        pass
+    @kernel
+    def config_module(self):
+        # Break realtime to get some slack
+        self.core.break_realtime()
+
+        # Set AOM
+        self.detect_aom.cfg_sw(False)
+        self.detect_aom.set(self.detect_aom_freq, phase=self.detect_aom_phase)
+        self.detect_aom.set_att(self.detect_aom_att)
 
     @kernel
     def _pmt_array_count(self, index, detection_window_mu):
         # Get the count of a single PMT
-        if self.edge_counter:
+        if self.EDGE_COUNTER:
             # EdgeCounter
             return self.pmt_array[index].fetch_count(detection_window_mu)
         else:
@@ -100,7 +104,7 @@ class DetectionModule(DaxModule):
     @kernel
     def detect_all(self):
         # Enable detection AOM
-        self.detect_aom.cfg_sw(1)
+        self.detect_aom.cfg_sw(True)
 
         # Detect events on all channels
         with parallel:
@@ -108,7 +112,7 @@ class DetectionModule(DaxModule):
                 self.pmt_array[i].gate_rising(self.duration)
 
         # Disable detection AOM
-        self.detect_aom.cfg_sw(0)
+        self.detect_aom.cfg_sw(False)
 
         # Return the cursor at the end of the detection window
         return now_mu()
@@ -116,7 +120,7 @@ class DetectionModule(DaxModule):
     @kernel
     def detect_active(self):
         # Enable detection AOM
-        self.detect_aom.cfg_sw(1)
+        self.detect_aom.cfg_sw(True)
 
         # Detect events on active channels
         with parallel:
@@ -124,7 +128,7 @@ class DetectionModule(DaxModule):
                 self.pmt_array[i].gate_rising(self.duration)
 
         # Disable detection AOM
-        self.detect_aom.cfg_sw(0)
+        self.detect_aom.cfg_sw(False)
 
         # Return the cursor at the end of the detection window
         return now_mu()

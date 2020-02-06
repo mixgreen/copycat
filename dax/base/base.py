@@ -87,15 +87,15 @@ class DaxModuleBase(DaxBase, abc.ABC):
         self.logger.debug('Module initialization finished')
 
     @host_only
-    def post_init_system(self):
-        """Post-initialize the DAX system, for obtaining DMA handles."""
+    def config_system(self):
+        """Configure the DAX system, for configuring devices and obtaining DMA handles."""
 
-        self.logger.debug('Post-initializing module...')
-        # Post-initialize all sub-modules (also called children)
-        self.call_child_method('post_init_system')
-        # Post-initialize this module
-        self.post_init_module()
-        self.logger.debug('Module post-initialization finished')
+        self.logger.debug('Configuring module...')
+        # Configure all sub-modules (also called children)
+        self.call_child_method('config_system')
+        # Configure this module
+        self.config_module()
+        self.logger.debug('Module configuration finished')
 
     @abc.abstractmethod
     def load_module(self):
@@ -108,8 +108,8 @@ class DaxModuleBase(DaxBase, abc.ABC):
         pass
 
     @abc.abstractmethod
-    def post_init_module(self):
-        """Override this method to obtain DMA handles."""
+    def config_module(self):
+        """Override this method to configure devices and obtain DMA handles."""
         pass
 
     @host_only
@@ -266,26 +266,23 @@ class DaxSystem(DaxModuleBase):
         super(DaxSystem, self).build()
 
     def dax_load(self):
-        """Prepare the DAX system for usage by loading and post-initializing the system."""
+        """Prepare the DAX system for usage by loading and configuring the system."""
         self.load_system()
-        self.post_init_system()
+        self.config_system()
 
     def dax_init(self):
-        """Prepare the DAX system for usage by loading, initializing, and post-initializing the system."""
+        """Prepare the DAX system for usage by loading, initializing, and configuring the system."""
         self.load_system()
         self.init_system()
-        self.post_init_system()
+        self.config_system()
 
     def load_module(self):
-        """Override this method to load dataset parameters for your module (no calls to the core device allowed)."""
         pass
 
     def init_module(self):
-        """Override this method to initialize devices and record DMA traces for your module."""
         pass
 
-    def post_init_module(self):
-        """Override this method to obtain DMA handles."""
+    def config_module(self):
         pass
 
 
