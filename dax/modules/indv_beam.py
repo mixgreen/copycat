@@ -23,7 +23,8 @@ class IndvBeamMemsModule(DaxModule):
     INDV_AOM_1_PHASE_KEY = 'indv_aom_1_phase'
     INDV_AOM_1_ATT_KEY = 'indv_aom_1_att'
 
-    INDV_AOM_RESP_TIME = 'indv_aom_response_time'
+    INDV_AOM_RESP_TIME_KEY = 'indv_aom_resp_time'
+    INDV_AOM_RESP_COMP_KEY = 'indv_aom_resp_comp'
 
     PID_ENABLE_KEY = 'pid_enable'
 
@@ -61,8 +62,9 @@ class IndvBeamMemsModule(DaxModule):
         self.setattr_dataset_sys(self.INDV_AOM_1_PHASE_KEY, 0.0)
         self.setattr_dataset_sys(self.INDV_AOM_1_ATT_KEY, 0.0 * dB)
 
-        # Individual AOM response time
-        self.setattr_dataset_sys(self.INDV_AOM_RESP_TIME, 10 * us)
+        # Individual AOM response time and compensation flag
+        self.setattr_dataset_sys(self.INDV_AOM_RESP_TIME_KEY, 10 * us)
+        self.setattr_dataset_sys(self.INDV_AOM_RESP_COMP_KEY, True)
 
         # PID enable flag
         self.setattr_dataset_sys(self.PID_ENABLE_KEY, True)
@@ -96,7 +98,10 @@ class IndvBeamMemsModule(DaxModule):
         self.dpass_aom_1.cfg_sw(True)
 
         # Indv AOMs and PID switches are initially off
-        self.off()
+        self.indv_aom_0.cfg_sw(False)
+        self.indv_aom_1.cfg_sw(False)
+        self.pid_sw_0.set_o(False)
+        self.pid_sw_0.set_o(False)
 
         # Set default configuration for indv AOMs
         self.indv_aom_0.set(self.indv_aom_0_freq, phase=self.indv_aom_0_phase)
@@ -105,22 +110,42 @@ class IndvBeamMemsModule(DaxModule):
         self.indv_aom_1.set_att(self.indv_aom_1_att)
 
     @kernel
-    def set_o(self, state):
-        # Set switches of indv AOMs
-        self.indv_aom_0.cfg_sw(state)
-        self.indv_aom_1.cfg_sw(state)
-
-        # Set PIDs
-        self.pid_sw_0.set_o(state & self.pid_enable)
-        self.pid_sw_0.set_o(state & self.pid_enable)
-
-    @kernel
     def on(self):
-        self.set_o(True)
+        if self.indv_aom_resp_comp:
+            # Move cursor to compensate for response time
+            delay(-self.indv_aom_resp_time)
+
+        # Set switches of indv AOMs
+        self.indv_aom_0.cfg_sw(True)
+        self.indv_aom_1.cfg_sw(True)
+
+        if self.indv_aom_resp_comp:
+            # Move cursor to compensate for response time
+            delay(self.indv_aom_resp_time)
+
+        if self.pid_enable:
+            # Set PIDs
+            self.pid_sw_0.set_o(True)
+            self.pid_sw_0.set_o(True)
 
     @kernel
     def off(self):
-        self.set_o(False)
+        if self.pid_enable:
+            # Set PIDs
+            self.pid_sw_0.set_o(False)
+            self.pid_sw_0.set_o(False)
+
+        if self.indv_aom_resp_comp:
+            # Move cursor to compensate for response time
+            delay(self.indv_aom_resp_time)
+
+        # Set switches of indv AOMs
+        self.indv_aom_0.cfg_sw(False)
+        self.indv_aom_1.cfg_sw(False)
+
+        if self.indv_aom_resp_comp:
+            # Move cursor to compensate for response time
+            delay(-self.indv_aom_resp_time)
 
     @kernel
     def pulse(self, duration):
