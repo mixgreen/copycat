@@ -17,10 +17,16 @@ class MemsMirrorModule(DaxModule):
 
     @kernel
     def init_module(self):
+        # Break realtime to get some slack
+        self.core.break_realtime()
+
         # Set direction of trigger signal
         self.mems_trig.output()
 
     @kernel
     def config_module(self):
+        # Break realtime to get some slack
+        self.core.break_realtime()
+
         # Guarantee trigger is off
         self.mems_trig.off()

@@ -6,6 +6,77 @@ from artiq.master.worker_db import DummyDevice
 from artiq.experiment import *
 
 
+class _DaxNameRegister:
+    """A class to register module and device names."""
+
+    class NonUniqueDeviceRegistrationError(Exception):
+        """Exception when a device is registered more then once."""
+        pass
+
+    class NonUniqueModuleRegistrationError(Exception):
+        """Exception when a module key is registered more then once."""
+        pass
+
+    def __init__(self):
+        # A dict containing registered modules
+        self._registered_modules = dict()
+        # A dict containing registered devices and the modules that registered them
+        self._registered_devices = dict()
+
+    def register_module(self, module, key):
+        """Register a module."""
+
+        assert isinstance(module, DaxBase), 'Module is not a DAX base'
+        assert isinstance(key, str), 'Key must be a string'
+
+        # Get the module that registered the module key (None if the key is available)
+        reg_module = self._registered_modules.get(key)
+        if reg_module:
+            msg = 'Module key {:s} was already registered by module {:s}'.format(key, reg_module.get_identifier())
+            module.logger.error(msg)
+            raise self.NonUniqueModuleRegistrationError(msg)
+
+        # Add module key to the dict of registered modules
+        self._registered_modules[key] = module
+
+    def register_device(self, module, key):
+        """Register a device."""
+
+        assert isinstance(module, DaxBase), 'Module is not a DAX base'
+        assert isinstance(key, str), 'Key must be a string'
+
+        try:
+            # Get the unique key
+            unique = self._get_unique_device_key(module.get_device_db(), key)
+        except KeyError as e:
+            msg = 'Device {:s} could not be found'.format(key)
+            module.logger.error(msg)
+            raise KeyError(msg) from e
+
+        # Get the module that registered the device (None if the device was not registered before)
+        reg_module = self._registered_devices.get(unique)
+        if reg_module:
+            # Device was already registered
+            device_name = '"{:s}"'.format(key) if key == unique else '"{:s}" ({:s})'.format(key, unique)
+            msg = 'Device {:s}, was already registered by module {:s}'.format(device_name, reg_module.get_identifier())
+            module.logger.error(msg)
+            raise self.NonUniqueDeviceRegistrationError(msg)
+
+        # Add unique device key to the dict of registered devices
+        self._registered_devices[unique] = module
+
+    def _get_unique_device_key(self, d, key):
+        assert isinstance(d, dict), 'First argument must be a dict to search in'
+        assert isinstance(key, str), 'Key must be a string'
+
+        v = d[key]
+        return self._get_unique_device_key(d, v) if isinstance(v, str) else key
+
+
+# Central name register (only one instance)
+_dax_name_reg = _DaxNameRegister()
+
+
 class DaxBase(HasEnvironment, abc.ABC):
     """Base class for all DAX core classes."""
 
@@ -60,6 +131,9 @@ class DaxModuleBase(DaxBase, abc.ABC):
         # Store module name and key
         self.module_name = module_name
         self.module_key = module_key
+
+        # Register module key
+        _dax_name_reg.register_module(self, module_key)
 
         # Call super
         super(DaxModuleBase, self).__init__(managers_or_parent, *args, **kwargs)
@@ -118,6 +192,13 @@ class DaxModuleBase(DaxBase, abc.ABC):
         assert isinstance(key, str)
         return self._KEY_SEPARATOR.join([self.module_key, key])
 
+    def get_device(self, key):
+        # Register the requested device
+        _dax_name_reg.register_device(self, key)
+
+        # Get the actual device and return it
+        return super(DaxBase, self).get_device(key)
+
     def setattr_device(self, key, attr_name='', type_=object):
         """Sets a device driver as attribute."""
 
@@ -128,7 +209,7 @@ class DaxModuleBase(DaxBase, abc.ABC):
             # Set attribute name to key if no attribute name was given
             attr_name = key
 
-        # Get device
+        # Get the device
         device = self.get_device(key)
 
         # Check type

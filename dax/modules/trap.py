@@ -17,10 +17,16 @@ class TrapModule(DaxModule):
 
     @kernel
     def init_module(self):
+        # Break realtime to get some slack
+        self.core.break_realtime()
+
         # Set direction of trigger signal
         self.sdac_trig.output()
 
     @kernel
     def config_module(self):
+        # Break realtime to get some slack
+        self.core.break_realtime()
+
         # Guarantee trigger is off
         self.sdac_trig.off()
