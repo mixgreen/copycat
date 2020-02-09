@@ -5,6 +5,10 @@ import functools
 from artiq.master.worker_db import DummyDevice
 from artiq.experiment import *
 
+import artiq.coredevice.core
+import artiq.coredevice.dma
+import artiq.coredevice.cache
+
 
 class DaxBase(HasEnvironment, abc.ABC):
     """Base class for all DAX core classes."""
@@ -322,7 +326,8 @@ class DaxModule(DaxModuleBase, abc.ABC):
             # Use core devices from parent and make them kernel invariants
             self.core = managers_or_parent.core
             self.core_dma = managers_or_parent.core_dma
-            self.update_kernel_invariants('core', 'core_dma')
+            self.core_cache = managers_or_parent.core_cache
+            self.update_kernel_invariants('core', 'core_dma', 'core_cache')
         except AttributeError:
             managers_or_parent.logger.error('Missing core devices (super.build() was probably not called)')
             raise
@@ -330,6 +335,10 @@ class DaxModule(DaxModuleBase, abc.ABC):
         # Call super, use parent to assemble arguments
         super(DaxModule, self).__init__(managers_or_parent, module_name, managers_or_parent.get_system_key(module_name),
                                         managers_or_parent.registry, *args, **kwargs)
+
+
+class DaxModuleInterface(abc.ABC):
+    pass
 
 
 class DaxSystem(DaxModuleBase):
@@ -341,6 +350,7 @@ class DaxSystem(DaxModuleBase):
     # Keys of core devices
     CORE_KEY = 'core'
     CORE_DMA_KEY = 'core_dma'
+    CORE_CACHE_KEY = 'core_cache'
 
     def __init__(self, managers_or_parent, *args, **kwargs):
         # Call super, add names and a new registry
@@ -351,9 +361,10 @@ class DaxSystem(DaxModuleBase):
         """Override this method to build your DAX system. (Do not forget to call super.build() first!)"""
 
         # Core devices
-        self.core = self.get_device(self.CORE_KEY)
-        self.core_dma = self.get_device(self.CORE_DMA_KEY)
-        self.update_kernel_invariants('core', 'core_dma')
+        self.core = self.get_device(self.CORE_KEY, artiq.coredevice.core.Core)
+        self.core_dma = self.get_device(self.CORE_DMA_KEY, artiq.coredevice.dma.CoreDMA)
+        self.core_cache = self.get_device(self.CORE_CACHE_KEY, artiq.coredevice.cache.CoreCache)
+        self.update_kernel_invariants('core', 'core_dma', 'core_cache')
 
         # Call super
         super(DaxSystem, self).build()
