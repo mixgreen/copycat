@@ -6,77 +6,6 @@ from artiq.master.worker_db import DummyDevice
 from artiq.experiment import *
 
 
-class _DaxNameRegister:
-    """A class to register module and device names."""
-
-    class NonUniqueDeviceRegistrationError(Exception):
-        """Exception when a device is registered more then once."""
-        pass
-
-    class NonUniqueModuleRegistrationError(Exception):
-        """Exception when a module key is registered more then once."""
-        pass
-
-    def __init__(self):
-        # A dict containing registered modules
-        self._registered_modules = dict()
-        # A dict containing registered devices and the modules that registered them
-        self._registered_devices = dict()
-
-    def register_module(self, module, key):
-        """Register a module."""
-
-        assert isinstance(module, DaxBase), 'Module is not a DAX base'
-        assert isinstance(key, str), 'Key must be a string'
-
-        # Get the module that registered the module key (None if the key is available)
-        reg_module = self._registered_modules.get(key)
-        if reg_module:
-            msg = 'Module key {:s} was already registered by module {:s}'.format(key, reg_module.get_identifier())
-            module.logger.error(msg)
-            raise self.NonUniqueModuleRegistrationError(msg)
-
-        # Add module key to the dict of registered modules
-        self._registered_modules[key] = module
-
-    def register_device(self, module, key):
-        """Register a device."""
-
-        assert isinstance(module, DaxBase), 'Module is not a DAX base'
-        assert isinstance(key, str), 'Key must be a string'
-
-        try:
-            # Get the unique key
-            unique = self._get_unique_device_key(module.get_device_db(), key)
-        except KeyError as e:
-            msg = 'Device {:s} could not be found'.format(key)
-            module.logger.error(msg)
-            raise KeyError(msg) from e
-
-        # Get the module that registered the device (None if the device was not registered before)
-        reg_module = self._registered_devices.get(unique)
-        if reg_module:
-            # Device was already registered
-            device_name = '"{:s}"'.format(key) if key == unique else '"{:s}" ({:s})'.format(key, unique)
-            msg = 'Device {:s}, was already registered by module {:s}'.format(device_name, reg_module.get_identifier())
-            module.logger.error(msg)
-            raise self.NonUniqueDeviceRegistrationError(msg)
-
-        # Add unique device key to the dict of registered devices
-        self._registered_devices[unique] = module
-
-    def _get_unique_device_key(self, d, key):
-        assert isinstance(d, dict), 'First argument must be a dict to search in'
-        assert isinstance(key, str), 'Key must be a string'
-
-        v = d[key]
-        return self._get_unique_device_key(d, v) if isinstance(v, str) else key
-
-
-# Central name register (only one instance)
-_dax_name_reg = _DaxNameRegister()
-
-
 class DaxBase(HasEnvironment, abc.ABC):
     """Base class for all DAX core classes."""
 
@@ -112,15 +41,81 @@ class DaxBase(HasEnvironment, abc.ABC):
         pass
 
 
+class _DaxNameRegistry:
+    """A class for unique name registration."""
+
+    class _NonUniqueRegistrationError(ValueError):
+        """Exception when a name is registered more then once."""
+        pass
+
+    def __init__(self):
+        # A dict containing registered modules
+        self._modules = dict()
+        # A dict containing registered devices and the modules that registered them
+        self._devices = dict()
+
+    def add_module(self, module):
+        """Register a module."""
+
+        assert isinstance(module, DaxModuleBase), 'Module is not a DAX module base'
+
+        # Get the module key
+        key = module.get_key()
+
+        # Get the module that registered the module key (None if the key is available)
+        reg_module = self._modules.get(key)
+        if reg_module:
+            msg = 'Module key "{:s}" was already registered by module {:s}'.format(key, reg_module.get_identifier())
+            module.logger.error(msg)
+            raise self._NonUniqueRegistrationError(msg)
+
+        # Add module key to the dict of registered modules
+        self._modules[key] = module
+
+    def add_device(self, module, key):
+        """Register a device."""
+
+        assert isinstance(module, DaxModuleBase), 'Module is not a DAX module base'
+        assert isinstance(key, str), 'Device key must be a string'
+
+        try:
+            # Get the unique key
+            unique = self._get_unique_device_key(module.get_device_db(), key)
+        except KeyError as e:
+            msg = 'Device "{:s}" could not be found'.format(key)
+            module.logger.error(msg)
+            raise KeyError(msg) from e
+
+        # Get the module that registered the device (None if the device was not registered before)
+        reg_module = self._devices.get(unique)
+        if reg_module:
+            # Device was already registered
+            device_name = '"{:s}"'.format(key) if key == unique else '"{:s}" ({:s})'.format(key, unique)
+            msg = 'Device {:s}, was already registered by module {:s}'.format(device_name, reg_module.get_identifier())
+            module.logger.error(msg)
+            raise self._NonUniqueRegistrationError(msg)
+
+        # Add unique device key to the dict of registered devices
+        self._devices[unique] = module
+
+    def _get_unique_device_key(self, d, key):
+        assert isinstance(d, dict), 'First argument must be a dict to search in'
+        assert isinstance(key, str), 'Key must be a string'
+
+        v = d[key]
+        return self._get_unique_device_key(d, v) if isinstance(v, str) else key
+
+
 class DaxModuleBase(DaxBase, abc.ABC):
     """Base class for all DAX modules and systems."""
 
-    def __init__(self, managers_or_parent, module_name, module_key, *args, **kwargs):
+    def __init__(self, managers_or_parent, module_name, module_key, registry, *args, **kwargs):
         """Initialize the DAX module base."""
 
         # Check types
         assert isinstance(module_name, str), 'Module name must be a string'
         assert isinstance(module_key, str), 'Module key must be a string'
+        assert isinstance(registry, _DaxNameRegistry), 'Register must be DAX name registry'
 
         # Check module name and key
         if not module_name.isalpha():
@@ -129,14 +124,17 @@ class DaxModuleBase(DaxBase, abc.ABC):
             raise ValueError('Invalid module key "{}" for class {:s}'.format(module_key, self.__class__.__name__))
 
         # Store module name and key
-        self.module_name = module_name
-        self.module_key = module_key
+        self._module_name = module_name
+        self._module_key = module_key
 
-        # Register module key
-        _dax_name_reg.register_module(self, module_key)
+        # Store name registry
+        self.registry = registry
 
         # Call super
         super(DaxModuleBase, self).__init__(managers_or_parent, *args, **kwargs)
+
+        # Register this module
+        self.registry.add_module(self)
 
     @host_only
     def load_system(self):
@@ -187,17 +185,31 @@ class DaxModuleBase(DaxBase, abc.ABC):
         pass
 
     @host_only
+    def get_key(self):
+        """Return the unique key of this module."""
+        return self._module_key
+
+    @host_only
     def get_system_key(self, key):
         """Get the full system key based on the module parents."""
         assert isinstance(key, str)
-        return self._KEY_SEPARATOR.join([self.module_key, key])
+        return self._KEY_SEPARATOR.join([self._module_key, key])
 
-    def get_device(self, key):
+    def get_device(self, key, type_=object):
         # Register the requested device
-        _dax_name_reg.register_device(self, key)
+        self.registry.add_device(self, key)
 
-        # Get the actual device and return it
-        return super(DaxBase, self).get_device(key)
+        # Get the device
+        device = super(DaxBase, self).get_device(key)
+
+        # Check device type
+        if not isinstance(device, DummyDevice) and not isinstance(device, type_):
+            msg = 'Device "{:s}" does not match the expected type'.format(key)
+            self.logger.error(msg)
+            raise TypeError(msg)
+
+        # Return the device
+        return device
 
     def setattr_device(self, key, attr_name='', type_=object):
         """Sets a device driver as attribute."""
@@ -210,13 +222,7 @@ class DaxModuleBase(DaxBase, abc.ABC):
             attr_name = key
 
         # Get the device
-        device = self.get_device(key)
-
-        # Check type
-        if not isinstance(device, DummyDevice) and not isinstance(device, type_):
-            msg = 'Device "{:s}" does not match the expected type'.format(key)
-            self.logger.error(msg)
-            raise TypeError(msg)
+        device = self.get_device(key, type_)
 
         # Set the device key to the attribute
         setattr(self, attr_name, device)
@@ -298,7 +304,7 @@ class DaxModuleBase(DaxBase, abc.ABC):
     @host_only
     def get_identifier(self):
         """Return the module key with the class name."""
-        return '[{:s}]({:s})'.format(self.module_key, self.__class__.__name__)
+        return '[{:s}]({:s})'.format(self._module_key, self.__class__.__name__)
 
 
 class DaxModule(DaxModuleBase, abc.ABC):
@@ -321,9 +327,9 @@ class DaxModule(DaxModuleBase, abc.ABC):
             managers_or_parent.logger.error('Missing core devices (super.build() was probably not called)')
             raise
 
-        # Call super
+        # Call super, use parent to assemble arguments
         super(DaxModule, self).__init__(managers_or_parent, module_name, managers_or_parent.get_system_key(module_name),
-                                        *args, **kwargs)
+                                        managers_or_parent.registry, *args, **kwargs)
 
 
 class DaxSystem(DaxModuleBase):
@@ -332,16 +338,22 @@ class DaxSystem(DaxModuleBase):
     # System name, used as top key
     SYS_NAME: str = 'sys'
 
+    # Keys of core devices
+    CORE_KEY = 'core'
+    CORE_DMA_KEY = 'core_dma'
+
     def __init__(self, managers_or_parent, *args, **kwargs):
-        # Call super
-        super(DaxSystem, self).__init__(managers_or_parent, self.SYS_NAME, self.SYS_NAME, *args, **kwargs)
+        # Call super, add names and a new registry
+        super(DaxSystem, self).__init__(managers_or_parent, self.SYS_NAME, self.SYS_NAME, _DaxNameRegistry(),
+                                        *args, **kwargs)
 
     def build(self):
         """Override this method to build your DAX system. (Do not forget to call super.build() first!)"""
 
         # Core devices
-        self.setattr_device('core')
-        self.setattr_device('core_dma')
+        self.core = self.get_device(self.CORE_KEY)
+        self.core_dma = self.get_device(self.CORE_DMA_KEY)
+        self.update_kernel_invariants('core', 'core_dma')
 
         # Call super
         super(DaxSystem, self).build()
