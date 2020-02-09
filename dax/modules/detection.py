@@ -4,9 +4,10 @@ import artiq.coredevice.ttl
 import artiq.coredevice.edge_counter
 
 from dax.base import *
+from dax.base.detection_if import *
 
 
-class DetectionModule(DaxModule):
+class DetectionModule(DaxModule, DetectionInterface):
     """Module for ion state detection."""
 
     DURATION_KEY = 'duration'
@@ -144,18 +145,28 @@ class DetectionModule(DaxModule):
         return [self._pmt_array_count(i, detection_window_mu) for i in self.active_pmt_channels]
 
     @kernel
+    def measure_all(self, detection_window_mu):
+        # Get the counts of all channels
+        counts = self.count_all(detection_window_mu)
+        # Discriminate the counts based on the threshold and return the binary results
+        return [c > self.threshold for c in counts]
+
+    @kernel
+    def measure_active(self, detection_window_mu):
+        # Get the counts of the active channels
+        counts = self.count_active(detection_window_mu)
+        # Discriminate the counts based on the threshold and return the binary results
+        return [c > self.threshold for c in counts]
+
+    @kernel
     def detect(self):
         """Convenient alias of detect_active() to use with measure()."""
         return self.detect_active()
 
     @kernel
     def measure(self, detection_window_mu):
-        """Get measurement results after a call to detect()."""
-
-        # Get the counts of the active channels
-        counts = self.count_active(detection_window_mu)
-        # Discriminate the counts based on the threshold and return the binary results
-        return [c > self.threshold for c in counts]
+        """Convenience alias of measure_active() to use with detect()."""
+        return self.measure_active(detection_window_mu)
 
     def set_active_channels(self, active_pmt_channels):
         # Set a new list of active channels

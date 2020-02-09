@@ -1,9 +1,10 @@
 import artiq.coredevice.ttl
 
 from dax.base import *
+from dax.base.global_beam_if import *
 
 
-class GlobalBeamModule(DaxModule):
+class GlobalBeamModule(DaxModule, GlobalBeamInterface):
     """Module for global beam control."""
 
     B_AOM_FREQ_KEY = 'b_aom_freq'

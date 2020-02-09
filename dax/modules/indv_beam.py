@@ -1,10 +1,39 @@
 import artiq.coredevice.ttl
 
 from dax.base import *
-import dax.modules.mems_mirror
+from dax.base.indv_beam_if import *
 
 
-class IndvBeamMemsModule(DaxModule):
+class _MemsMirrorModule(DaxModule):
+    """Module to control a MEMS mirrors."""
+
+    def build(self, mems_trig, mems_sw, mems_dac):
+        # Devices for the MEMS mirror board
+        self.setattr_device(mems_trig, 'mems_trig', (artiq.coredevice.ttl.TTLOut, artiq.coredevice.ttl.TTLInOut))
+        self.setattr_device(mems_sw, 'mems_sw')
+        self.setattr_device(mems_dac, 'mems_dac')
+
+    def load_module(self):
+        pass
+
+    @kernel
+    def init_module(self):
+        # Break realtime to get some slack
+        self.core.break_realtime()
+
+        # Set direction of trigger signal
+        self.mems_trig.output()
+
+    @kernel
+    def config_module(self):
+        # Break realtime to get some slack
+        self.core.break_realtime()
+
+        # Guarantee trigger is off
+        self.mems_trig.off()
+
+
+class IndvBeamMemsModule(DaxModule, IndvBeamInterface):
     """Module for individual beam path controlled with MEMS mirrors."""
 
     DPASS_AOM_0_FREQ_KEY = 'dpass_aom_0_freq'
@@ -108,6 +137,13 @@ class IndvBeamMemsModule(DaxModule):
         self.indv_aom_0.set_att(self.indv_aom_0_att)
         self.indv_aom_1.set(self.indv_aom_1_freq, phase=self.indv_aom_1_phase)
         self.indv_aom_1.set_att(self.indv_aom_1_att)
+
+    @kernel
+    def set_o(self, state):
+        if state:
+            self.on()
+        else:
+            self.off()
 
     @kernel
     def on(self):
