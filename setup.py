@@ -15,6 +15,7 @@ requirements = [
     "pyvisa-py",
     "scipy",
     "pyvcd",
+    "natsort",
 ]
 
 setup(

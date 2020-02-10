@@ -2,6 +2,7 @@ import abc
 import logging
 import functools
 import re
+import natsort
 
 from artiq.master.worker_db import DummyDevice
 from artiq.experiment import *
@@ -69,6 +70,10 @@ class _DaxNameRegistry:
         """Exception when a name is registered more then once."""
         pass
 
+    class _NonUniqueSearchError(ValueError):
+        """Exception when a search could not find a unique result."""
+        pass
+
     def __init__(self, sys_services_key):
         assert isinstance(sys_services_key, str), 'System services key must be a string'
 
@@ -104,9 +109,39 @@ class _DaxNameRegistry:
         # Add module key to the dict of registered modules
         self._modules[key] = module
 
+    def get_module(self, key):
+        """Return the requested module by key."""
+
+        assert isinstance(key, str), 'Key must be a string'
+
+        try:
+            return self._modules[key]
+        except KeyError as e:
+            msg = 'Module "{:s}" could not be found'.format(key)
+            raise KeyError(msg) from e
+
+    def search_module(self, type_):
+        """Search for a module that matches the requested type."""
+
+        assert issubclass(type_, (DaxModuleInterface, DaxModuleBase)), \
+            'Provided type must be a DAX module base or interface'
+
+        # Search for all modules matching the type
+        results = [m for m in self._modules.values() if isinstance(m, type_)]
+
+        if not results:
+            # No modules were found
+            raise KeyError('Could not find module with type "{:s}"'.format(type_.__name__))
+        elif len(results) > 1:
+            # More than one module was found
+            raise self._NonUniqueSearchError('Could not find a unique module with type "{:s}"'.format(type_.__name__))
+        else:
+            # Return the only result
+            return results[0]
+
     def get_module_list(self):
         """Return a list of registered modules."""
-        return list(self._modules.keys())
+        return natsort.natsorted(self._modules.keys())
 
     def add_device(self, module, key):
         """Register a device."""
@@ -143,10 +178,10 @@ class _DaxNameRegistry:
 
     def get_device_list(self):
         """Return a list of registered devices."""
-        return list(self._devices.keys())
+        return natsort.natsorted(self._devices.keys())
 
-    def get_service_key(self, service_name):
-        """Return a system key for a service."""
+    def make_service_key(self, service_name):
+        """Return the system key for a service name."""
 
         # Check the given name
         assert isinstance(service_name, str), 'Service name must be a string'
@@ -166,8 +201,8 @@ class _DaxNameRegistry:
 
         # Get the service that registered with the service name
         if key in self._services:
-            msg = 'Service {:s}, was already registered'.format(service.get_name())
-            module.logger.error(msg)
+            msg = 'Service "{:s}" was already registered'.format(service.get_name())
+            service.logger.error(msg)
             raise self._NonUniqueRegistrationError(msg)
 
         # Add service to the registry
@@ -196,11 +231,13 @@ class _DaxNameRegistry:
 
     def get_service_list(self):
         """Return a list of registered services."""
-        return list(self._services.keys())
+        return natsort.natsorted(self._services.keys())
 
 
 class _DaxHasSystem(DaxBase, abc.ABC):
     """Intermediate base class for DAX classes that are dependent on a DAX system."""
+
+    _CORE_DEVICES = ['core', 'core_dma', 'core_cache']
 
     def __init__(self, managers_or_parent, name, system_key, registry, *args, **kwargs):
         assert isinstance(name, str), 'Name must be a string'
@@ -218,8 +255,17 @@ class _DaxHasSystem(DaxBase, abc.ABC):
         self._system_key = system_key
         self.registry = registry
 
-        # Call super
+        # Call super, which will result in a call to build()
         super(_DaxHasSystem, self).__init__(managers_or_parent, *args, **kwargs)
+
+        # Verify that all core devices are available
+        if not all(hasattr(self, n) for n in self._CORE_DEVICES):
+            msg = 'Missing core devices (super.build() was probably not called)'
+            self.logger.error(msg)
+            raise AttributeError(msg)
+
+        # Make core devices kernel invariants
+        self.update_kernel_invariants(*self._CORE_DEVICES)
 
     @host_only
     def get_name(self):
@@ -238,6 +284,11 @@ class _DaxHasSystem(DaxBase, abc.ABC):
                 self.logger.error(msg)
                 raise ValueError(msg)
             return _KEY_SEPARATOR.join([self._system_key, key])
+
+    @host_only
+    def get_registry(self):
+        """Return the current registry."""
+        return self.registry
 
     @host_only
     def load_system(self):
@@ -287,11 +338,6 @@ class _DaxHasSystem(DaxBase, abc.ABC):
         """Override this method to configure devices and obtain DMA handles (calls to core device allowed)."""
         pass
 
-    @host_only
-    def get_registry(self):
-        """Return the current registry."""
-        return self.registry
-
     @rpc(flags={'async'})
     def set_dataset_sys(self, key, value):
         """Sets the contents of a system dataset."""
@@ -331,10 +377,11 @@ class _DaxHasSystem(DaxBase, abc.ABC):
         try:
             # Get value from system dataset with extra flags
             value = self.get_dataset(self.get_system_key(key), default, archive=True)
-        except KeyError:
-            # In case of a key error, still print a debug message for the user
-            self.logger.debug('System dataset key "{:s}" get value'.format(key))
-            raise
+        except KeyError as e:
+            # The key was not found
+            msg = 'System dataset key "{:s}" not found'.format(key)
+            self.logger.error(msg)
+            raise KeyError(msg) from e
         else:
             self.logger.debug('System dataset key "{:s}" returned value "{}"'.format(key, value))
 
@@ -366,7 +413,7 @@ class _DaxHasSystem(DaxBase, abc.ABC):
 
     @host_only
     def get_identifier(self):
-        """Return the module key with the class name."""
+        """Return the system key with the class name."""
         return '[{:s}]({:s})'.format(self.get_system_key(), self.__class__.__name__)
 
 
@@ -376,11 +423,6 @@ class DaxModuleBase(_DaxHasSystem, abc.ABC):
     def __init__(self, managers_or_parent, module_name, module_key, registry, *args, **kwargs):
         """Initialize the DAX module base."""
 
-        # Check types
-        assert isinstance(module_name, str), 'Module name must be a string'
-        assert isinstance(module_key, str), 'Module key must be a string'
-        assert isinstance(registry, _DaxNameRegistry), 'Register must be DAX name registry'
-
         # Call super
         super(DaxModuleBase, self).__init__(managers_or_parent, module_name, module_key, registry, *args, **kwargs)
 
@@ -388,6 +430,13 @@ class DaxModuleBase(_DaxHasSystem, abc.ABC):
         self.registry.add_module(self)
 
     def get_device(self, key, type_=object):
+        """Get a device driver."""
+
+        assert isinstance(key, str) and key, 'Key must be of type str and not empty'
+
+        # Debug message
+        self.logger.debug('Requesting device "{:s}"'.format(key))
+
         # Register the requested device
         self.registry.add_device(self, key)
 
@@ -406,7 +455,6 @@ class DaxModuleBase(_DaxHasSystem, abc.ABC):
     def setattr_device(self, key, attr_name='', type_=object):
         """Sets a device driver as attribute."""
 
-        assert isinstance(key, str) and key, 'Key must be of type str and not empty'
         assert isinstance(attr_name, str), 'Attribute name must be of type str'
 
         if not attr_name:
@@ -428,17 +476,16 @@ class DaxModule(DaxModuleBase, abc.ABC):
     def __init__(self, managers_or_parent, module_name, *args, **kwargs):
         """Initialize the DAX module."""
 
-        # Check parent
+        # Check parent type
         if not isinstance(managers_or_parent, DaxModuleBase):
             raise TypeError('Parent of module {:s} is not a DAX module base'.format(module_name))
 
         # Take core devices from parent
         try:
-            # Use core devices from parent and make them kernel invariants
+            # Use core devices from parent
             self.core = managers_or_parent.core
             self.core_dma = managers_or_parent.core_dma
             self.core_cache = managers_or_parent.core_cache
-            self.update_kernel_invariants('core', 'core_dma', 'core_cache')
         except AttributeError:
             managers_or_parent.logger.error('Missing core devices (super.build() was probably not called)')
             raise
@@ -478,18 +525,19 @@ class DaxSystem(DaxModuleBase):
         self.core = self.get_device(self.CORE_KEY, artiq.coredevice.core.Core)
         self.core_dma = self.get_device(self.CORE_DMA_KEY, artiq.coredevice.dma.CoreDMA)
         self.core_cache = self.get_device(self.CORE_CACHE_KEY, artiq.coredevice.cache.CoreCache)
-        self.update_kernel_invariants('core', 'core_dma', 'core_cache')
 
         # Call super
         super(DaxSystem, self).build()
 
     def dax_load(self):
         """Prepare the DAX system for usage by loading and configuring the system."""
+        self.logger.debug('Requested DAX system loading')
         self.load_system()
         self.config_system()
 
     def dax_init(self):
         """Prepare the DAX system for usage by loading, initializing, and configuring the system."""
+        self.logger.debug('Requested DAX system initialization')
         self.load_system()
         self.init_system()
         self.config_system()
@@ -532,18 +580,17 @@ class DaxService(_DaxHasSystem, abc.ABC):
 
         # Take core devices from parent
         try:
-            # Use core devices from parent and make them kernel invariants
+            # Use core devices from parent
             self.core = managers_or_parent.core
             self.core_dma = managers_or_parent.core_dma
             self.core_cache = managers_or_parent.core_cache
-            self.update_kernel_invariants('core', 'core_dma', 'core_cache')
         except AttributeError:
             managers_or_parent.logger.error('Missing core devices (super.build() was probably not called)')
             raise
 
-        # Take name registry from parent and generate a system key
+        # Take name registry from parent and obtain a system key
         registry = managers_or_parent.get_registry()
-        system_key = registry.get_service_key(self.SERVICE_NAME)
+        system_key = registry.make_service_key(self.SERVICE_NAME)
 
         # Call super
         super(DaxService, self).__init__(managers_or_parent, self.SERVICE_NAME, system_key, registry, *args, **kwargs)
@@ -552,12 +599,14 @@ class DaxService(_DaxHasSystem, abc.ABC):
         self.registry.add_service(self)
 
     def get_device(self, key):
-        """Services should not request devices."""
-        raise self._IllegalOperationError('get_device()')
+        """Services are not allowed to request devices."""
+        msg = 'Services are not allowed to request devices'
+        self.logger.error(msg)
+        raise self._IllegalOperationError(msg)
 
     def setattr_device(self, key):
-        """Services should not request devices."""
-        raise self._IllegalOperationError('setattr_device()')
+        """Services are not allowed to request devices."""
+        self.get_device(key)
 
 
 class DaxCalibration(DaxBase):
