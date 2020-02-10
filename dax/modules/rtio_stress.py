@@ -21,7 +21,7 @@ class RtioStressModule(DaxModule):
         # TTL output device
         self.setattr_device(ttl_out, 'ttl_out', (artiq.coredevice.ttl.TTLOut, artiq.coredevice.ttl.TTLInOut))
 
-    def load_module(self):
+    def load(self):
         # Load throughput parameters
         self.setattr_dataset_sys(self.THROUGHPUT_PERIOD_KEY)
         self.setattr_dataset_sys(self.THROUGHPUT_BURST_KEY)
@@ -31,7 +31,7 @@ class RtioStressModule(DaxModule):
         self.max_burst = min(self.max_burst, 40000)
 
     @kernel
-    def init_module(self):
+    def init(self):
         # Break realtime to get some slack
         self.core.break_realtime()
 
@@ -46,7 +46,7 @@ class RtioStressModule(DaxModule):
                 delay(self.min_period / 2)
                 self.ttl_out.off()
 
-    def config_module(self):
+    def config(self):
         # Obtain DMA handle
         self.burst_dma_handle = self.core_dma.get_handle(self.DMA_BURST)
         self.update_kernel_invariants('burst_dma_handle')
@@ -480,9 +480,9 @@ class RtioLoopStressModule(RtioStressModule):
         # Add edge delay to kernel invariants
         self.update_kernel_invariants('EDGE_DELAY')
 
-    def load_module(self):
+    def load(self):
         # Call super
-        super(RtioLoopStressModule, self).load_module()
+        super(RtioLoopStressModule, self).load()
 
         # Load latency parameters
         self.setattr_dataset_sys(self.LATENCY_RTIO_RTIO)
@@ -490,9 +490,9 @@ class RtioLoopStressModule(RtioStressModule):
         self.setattr_dataset_sys(self.LATENCY_RTT)
 
     @kernel
-    def init_module(self):
+    def init(self):
         # Call super (not using MRO/super because it is incompatible with the compiler, call parent function directly)
-        RtioStressModule.init_module(self)
+        RtioStressModule.init(self)
 
         # Break realtime to get some slack
         self.core.break_realtime()

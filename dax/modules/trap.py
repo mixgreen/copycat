@@ -38,7 +38,7 @@ class TrapModule(DaxModule, TrapInterface):
         self.setattr_device(sdac_config, 'sdac_config')
         self.setattr_device(sdac_data, 'sdac_data')
 
-    def load_module(self):
+    def load(self):
         # For all AOMs: frequency, phase, and attenuation
         self.setattr_dataset_sys(self.COOL_AOM_FREQ_KEY, 100 * MHz)
         self.setattr_dataset_sys(self.COOL_AOM_PHASE_KEY, 0.0)
@@ -57,7 +57,7 @@ class TrapModule(DaxModule, TrapInterface):
         self.setattr_dataset_sys(self.REPUMP_AOM_ATT_KEY, 0.0 * dB)
 
     @kernel
-    def init_module(self):
+    def init(self):
         # Break realtime to get some slack
         self.core.break_realtime()
 
@@ -74,7 +74,7 @@ class TrapModule(DaxModule, TrapInterface):
         self.sdac_trig.output()
 
     @kernel
-    def config_module(self):
+    def config(self):
         # Break realtime to get some slack
         self.core.break_realtime()
 

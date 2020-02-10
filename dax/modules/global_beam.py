@@ -40,7 +40,7 @@ class GlobalBeamModule(DaxModule, GlobalBeamInterface):
         # Make switch configurations kernel invariant
         self.update_kernel_invariants('SW_BRC', 'SW_Z')
 
-    def load_module(self):
+    def load(self):
         # For all AOMs: frequency, phase, and attenuation
         self.setattr_dataset_sys(self.B_AOM_FREQ_KEY, 100 * MHz)
         self.setattr_dataset_sys(self.B_AOM_PHASE_KEY, 0.0)
@@ -59,7 +59,7 @@ class GlobalBeamModule(DaxModule, GlobalBeamInterface):
         self.setattr_dataset_sys(self.Z_AOM_ATT_KEY, 0.0 * dB)
 
     @kernel
-    def init_module(self):
+    def init(self):
         # Break realtime to get some slack
         self.core.break_realtime()
 
@@ -73,7 +73,7 @@ class GlobalBeamModule(DaxModule, GlobalBeamInterface):
         self.z_aom.init()
 
     @kernel
-    def config_module(self):
+    def config(self):
         # Break realtime to get some slack
         self.core.break_realtime()
 

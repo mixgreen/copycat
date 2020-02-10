@@ -1,6 +1,7 @@
 import abc
 import logging
 import functools
+import re
 
 from artiq.master.worker_db import DummyDevice
 from artiq.experiment import *
@@ -11,6 +12,22 @@ import artiq.coredevice.cache
 
 # Key separator
 _KEY_SEPARATOR: str = '.'
+# Regex for matching valid names
+_NAME_RE = re.compile(r'\w+')
+# Regex for matching valid keys
+_KEY_RE = re.compile(r'\w+(\.\w+)*')
+
+
+def _is_valid_name(name):
+    """Return true if the given name is valid."""
+    assert isinstance(name, str), 'The given name should be a string'
+    return _NAME_RE.fullmatch(name)
+
+
+def _is_valid_key(key):
+    """Return true if the given key is valid."""
+    assert isinstance(key, str), 'The given key should be a string'
+    return _KEY_RE.fullmatch(key)
 
 
 class DaxBase(HasEnvironment, abc.ABC):
@@ -56,7 +73,7 @@ class _DaxNameRegistry:
         assert isinstance(sys_services_key, str), 'System services key must be a string'
 
         # Check system services key
-        if not sys_services_key.isalpha():
+        if not _is_valid_key(sys_services_key):
             raise ValueError('Invalid system services key "{:s}"'.format(sys_services_key))
 
         # Store system services key
@@ -75,7 +92,7 @@ class _DaxNameRegistry:
         assert isinstance(module, DaxModuleBase), 'Module is not a DAX module base'
 
         # Get the module key
-        key = module.get_key()
+        key = module.get_system_key()
 
         # Get the module that registered the module key (None if the key is available)
         reg_module = self._modules.get(key)
@@ -128,12 +145,23 @@ class _DaxNameRegistry:
         """Return a list of registered devices."""
         return list(self._devices.keys())
 
+    def get_service_key(self, service_name):
+        """Return a system key for a service."""
+
+        # Check the given name
+        assert isinstance(service_name, str), 'Service name must be a string'
+        if not _is_valid_name(service_name):
+            raise ValueError('Invalid service name "{:s}"'.format(service_name))
+
+        # Return assigned system key
+        return _KEY_SEPARATOR.join([self._sys_services_key, service_name])
+
     def add_service(self, service):
-        """Register a service, returns a service key."""
+        """Register a service."""
 
         assert isinstance(service, DaxService), 'Service must be a DAX service'
 
-        # Key for services
+        # Services get indexed by name, not by system key
         key = service.get_name()
 
         # Get the service that registered with the service name
@@ -144,9 +172,6 @@ class _DaxNameRegistry:
 
         # Add service to the registry
         self._services[key] = service
-
-        # Return assigned service key
-        return _KEY_SEPARATOR.join([self._sys_services_key, key])
 
     def has_service(self, key, default=None):
         """Return service if available, otherwise return the default value."""
@@ -174,133 +199,98 @@ class _DaxNameRegistry:
         return list(self._services.keys())
 
 
-class DaxModuleBase(DaxBase, abc.ABC):
-    """Base class for all DAX modules and systems."""
+class _DaxHasSystem(DaxBase, abc.ABC):
+    """Intermediate base class for DAX classes that are dependent on a DAX system."""
 
-    def __init__(self, managers_or_parent, module_name, module_key, registry, *args, **kwargs):
-        """Initialize the DAX module base."""
+    def __init__(self, managers_or_parent, name, system_key, registry, *args, **kwargs):
+        assert isinstance(name, str), 'Name must be a string'
+        assert isinstance(system_key, str), 'System key must be a string'
+        assert isinstance(registry, _DaxNameRegistry), 'Registry must be a DAX name registry'
 
-        # Check types
-        assert isinstance(module_name, str), 'Module name must be a string'
-        assert isinstance(module_key, str), 'Module key must be a string'
-        assert isinstance(registry, _DaxNameRegistry), 'Register must be DAX name registry'
+        # Check name and system key
+        if not _is_valid_name(name):
+            raise ValueError('Invalid name "{:s}" for class {:s}'.format(name, self.__class__.__name__))
+        if not _is_valid_key(system_key) or not system_key.endswith(name):
+            raise ValueError('Invalid system_key "{:s}" for class {:s}'.format(system_key, self.__class__.__name__))
 
-        # Check module name and key
-        if not module_name.isalpha():
-            raise ValueError('Invalid module name "{:s}" for class {:s}'.format(module_name, self.__class__.__name__))
-        if not module_key.endswith(module_name):
-            raise ValueError('Invalid module key "{:s}" for class {:s}'.format(module_key, self.__class__.__name__))
-
-        # Store module name and key
-        self._module_name = module_name
-        self._module_key = module_key
-
-        # Store name registry
+        # Store attributes
+        self._name = name
+        self._system_key = system_key
         self.registry = registry
 
         # Call super
-        super(DaxModuleBase, self).__init__(managers_or_parent, *args, **kwargs)
+        super(_DaxHasSystem, self).__init__(managers_or_parent, *args, **kwargs)
 
-        # Register this module
-        self.registry.add_module(self)
+    @host_only
+    def get_name(self):
+        """Get the name."""
+        return self._name
+
+    @host_only
+    def get_system_key(self, key=None):
+        """Get the full key based on the system key."""
+        if key is None:
+            return self._system_key
+        else:
+            assert isinstance(key, str)
+            if not _is_valid_key(key):
+                msg = 'Invalid key "{:s}"'.format(key)
+                self.logger.error(msg)
+                raise ValueError(msg)
+            return _KEY_SEPARATOR.join([self._system_key, key])
 
     @host_only
     def load_system(self):
         """Load the DAX system, for loading values from the dataset."""
 
-        self.logger.debug('Loading module...')
-        # Load all sub-modules (also called children)
+        self.logger.debug('Loading...')
+        # Load all children
         self.call_child_method('load_system')
-        # Load this module
-        self.load_module()
-        self.logger.debug('Module loading finished')
+        # Load this object
+        self.load()
+        self.logger.debug('Loading finished')
 
     @host_only
     def init_system(self):
         """Initialize the DAX system, for device initialization and recording DMA traces."""
 
-        self.logger.debug('Initializing module...')
-        # Initialize all sub-modules (also called children)
+        self.logger.debug('Initializing...')
+        # Initialize all children
         self.call_child_method('init_system')
-        # Initialize this module
-        self.init_module()
-        self.logger.debug('Module initialization finished')
+        # Initialize this object
+        self.init()
+        self.logger.debug('Initialization finished')
 
     @host_only
     def config_system(self):
         """Configure the DAX system, for configuring devices and obtaining DMA handles."""
 
-        self.logger.debug('Configuring module...')
-        # Configure all sub-modules (also called children)
+        self.logger.debug('Configuring...')
+        # Configure all children
         self.call_child_method('config_system')
-        # Configure this module
-        self.config_module()
-        self.logger.debug('Module configuration finished')
+        # Configure this object
+        self.config()
+        self.logger.debug('Configuration finished')
 
     @abc.abstractmethod
-    def load_module(self):
-        """Override this method to load dataset parameters for your module (no calls to the core device allowed)."""
+    def load(self):
+        """Override this method to load dataset parameters (no calls to the core device allowed)."""
         pass
 
     @abc.abstractmethod
-    def init_module(self):
-        """Override this method to initialize devices and record DMA traces for your module."""
+    def init(self):
+        """Override this method to initialize devices and record DMA traces (calls to core device allowed)."""
         pass
 
     @abc.abstractmethod
-    def config_module(self):
-        """Override this method to configure devices and obtain DMA handles."""
+    def config(self):
+        """Override this method to configure devices and obtain DMA handles (calls to core device allowed)."""
         pass
 
     @host_only
-    def get_key(self):
-        """Return the unique key of this module."""
-        return self._module_key
-
-    @host_only
-    def get_name(self):
-        """Return the name of this module."""
-        return self._module_name
-
-    @host_only
-    def get_system_key(self, key):
-        """Get the full system key based on the module parents."""
-        assert isinstance(key, str)
-        return _KEY_SEPARATOR.join([self._module_key, key])
-
-    def get_device(self, key, type_=object):
-        # Register the requested device
-        self.registry.add_device(self, key)
-
-        # Get the device
-        device = super(DaxBase, self).get_device(key)
-
-        # Check device type
-        if not isinstance(device, DummyDevice) and not isinstance(device, type_):
-            msg = 'Device "{:s}" does not match the expected type'.format(key)
-            self.logger.error(msg)
-            raise TypeError(msg)
-
-        # Return the device
-        return device
-
-    def setattr_device(self, key, attr_name='', type_=object):
-        """Sets a device driver as attribute."""
-
-        assert isinstance(key, str) and key, 'Key must be of type str and not empty'
-        assert isinstance(attr_name, str), 'Attribute name must be of type str'
-
-        if not attr_name:
-            # Set attribute name to key if no attribute name was given
-            attr_name = key
-
-        # Get the device
-        device = self.get_device(key, type_)
-
-        # Set the device key to the attribute
-        setattr(self, attr_name, device)
-        # Add attribute to kernel invariants
-        self.update_kernel_invariants(attr_name)
+    def get_registry(self):
+        """Return the current registry."""
+        return self.registry
 
     @rpc(flags={'async'})
     def set_dataset_sys(self, key, value):
@@ -377,7 +367,59 @@ class DaxModuleBase(DaxBase, abc.ABC):
     @host_only
     def get_identifier(self):
         """Return the module key with the class name."""
-        return '[{:s}]({:s})'.format(self._module_key, self.__class__.__name__)
+        return '[{:s}]({:s})'.format(self.get_system_key(), self.__class__.__name__)
+
+
+class DaxModuleBase(_DaxHasSystem, abc.ABC):
+    """Base class for all DAX modules and systems."""
+
+    def __init__(self, managers_or_parent, module_name, module_key, registry, *args, **kwargs):
+        """Initialize the DAX module base."""
+
+        # Check types
+        assert isinstance(module_name, str), 'Module name must be a string'
+        assert isinstance(module_key, str), 'Module key must be a string'
+        assert isinstance(registry, _DaxNameRegistry), 'Register must be DAX name registry'
+
+        # Call super
+        super(DaxModuleBase, self).__init__(managers_or_parent, module_name, module_key, registry, *args, **kwargs)
+
+        # Register this module
+        self.registry.add_module(self)
+
+    def get_device(self, key, type_=object):
+        # Register the requested device
+        self.registry.add_device(self, key)
+
+        # Get the device
+        device = super(DaxBase, self).get_device(key)
+
+        # Check device type
+        if not isinstance(device, DummyDevice) and not isinstance(device, type_):
+            msg = 'Device "{:s}" does not match the expected type'.format(key)
+            self.logger.error(msg)
+            raise TypeError(msg)
+
+        # Return the device
+        return device
+
+    def setattr_device(self, key, attr_name='', type_=object):
+        """Sets a device driver as attribute."""
+
+        assert isinstance(key, str) and key, 'Key must be of type str and not empty'
+        assert isinstance(attr_name, str), 'Attribute name must be of type str'
+
+        if not attr_name:
+            # Set attribute name to key if no attribute name was given
+            attr_name = key
+
+        # Get the device
+        device = self.get_device(key, type_)
+
+        # Set the device key to the attribute
+        setattr(self, attr_name, device)
+        # Add attribute to kernel invariants
+        self.update_kernel_invariants(attr_name)
 
 
 class DaxModule(DaxModuleBase, abc.ABC):
@@ -403,7 +445,7 @@ class DaxModule(DaxModuleBase, abc.ABC):
 
         # Call super, use parent to assemble arguments
         super(DaxModule, self).__init__(managers_or_parent, module_name, managers_or_parent.get_system_key(module_name),
-                                        managers_or_parent.registry, *args, **kwargs)
+                                        managers_or_parent.get_registry(), *args, **kwargs)
 
 
 class DaxModuleInterface(abc.ABC):
@@ -452,17 +494,17 @@ class DaxSystem(DaxModuleBase):
         self.init_system()
         self.config_system()
 
-    def load_module(self):
+    def load(self):
         pass
 
-    def init_module(self):
+    def init(self):
         pass
 
-    def config_module(self):
+    def config(self):
         pass
 
 
-class DaxService(DaxBase):
+class DaxService(_DaxHasSystem, abc.ABC):
     """Base class for system services."""
 
     # The unique name of this service
@@ -480,12 +522,9 @@ class DaxService(DaxBase):
     def __init__(self, managers_or_parent, *args, **kwargs):
         """Initialize the DAX service base class."""
 
-        # Check service name
+        # Check if service name was overridden
         assert hasattr(self, 'SERVICE_NAME'), 'Every DAX service class must have a SERVICE_NAME class attribute'
         assert isinstance(self.SERVICE_NAME, str), 'Service name must be of type str'
-        if not self.SERVICE_NAME.isalpha():
-            raise ValueError(
-                'Invalid service name "{:s}" for class {:s}'.format(self.SERVICE_NAME, self.__class__.__name__))
 
         # Check parent type
         if not isinstance(managers_or_parent, (DaxSystem, DaxService)):
@@ -502,35 +541,15 @@ class DaxService(DaxBase):
             managers_or_parent.logger.error('Missing core devices (super.build() was probably not called)')
             raise
 
-        # Take name registry from parent
-        self.registry = managers_or_parent.registry
+        # Take name registry from parent and generate a system key
+        registry = managers_or_parent.get_registry()
+        system_key = registry.get_service_key(self.SERVICE_NAME)
 
         # Call super
-        super(DaxService, self).__init__(managers_or_parent, *args, **kwargs)
+        super(DaxService, self).__init__(managers_or_parent, self.SERVICE_NAME, system_key, registry, *args, **kwargs)
 
-        # Register this service and store the assigned key (used for the dataset)
-        self._service_key = self.registry.add_service(self)
-
-    @host_only
-    def load_system(self):
-        """Load the DAX service, for loading values from the dataset."""
-
-        self.logger.debug('Loading service...')
-        # Load all sub-services (also called children)
-        self.call_child_method('load_system')
-        # Load this module
-        self.load_service()
-        self.logger.debug('Service loading finished')
-
-    @abc.abstractmethod
-    def load_service(self):
-        """Override this method to load dataset parameters for your service (no calls to the core device allowed)."""
-        pass
-
-    @host_only
-    def get_name(self):
-        """Returns the name of this service."""
-        return self.SERVICE_NAME
+        # Register this service
+        self.registry.add_service(self)
 
     def get_device(self, key):
         """Services should not request devices."""
@@ -539,11 +558,6 @@ class DaxService(DaxBase):
     def setattr_device(self, key):
         """Services should not request devices."""
         raise self._IllegalOperationError('setattr_device()')
-
-    @host_only
-    def get_identifier(self):
-        """Return the service name with the class name."""
-        return '[{:s}]({:s})'.format(self.get_name(), self.__class__.__name__)
 
 
 class DaxCalibration(DaxBase):

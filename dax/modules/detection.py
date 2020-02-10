@@ -54,7 +54,7 @@ class DetectionModule(DaxModule, DetectionInterface):
         # Make flags kernel invariant
         self.update_kernel_invariants('EDGE_COUNTER')
 
-    def load_module(self):
+    def load(self):
         # Duration of detection
         self.setattr_dataset_sys(self.DURATION_KEY, 150 * us)
         # Threshold for state discrimination
@@ -69,7 +69,7 @@ class DetectionModule(DaxModule, DetectionInterface):
         self.setattr_dataset_sys(self.DETECT_AOM_ATT_KEY, 0.0 * dB)
 
     @kernel
-    def init_module(self):
+    def init(self):
         # Break realtime to get some slack
         self.core.break_realtime()
 
@@ -83,7 +83,7 @@ class DetectionModule(DaxModule, DetectionInterface):
                 p.input()
 
     @kernel
-    def config_module(self):
+    def config(self):
         # Break realtime to get some slack
         self.core.break_realtime()
 

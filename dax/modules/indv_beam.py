@@ -13,11 +13,11 @@ class _MemsMirrorModule(DaxModule):
         self.setattr_device(mems_sw, 'mems_sw')
         self.setattr_device(mems_dac, 'mems_dac')
 
-    def load_module(self):
+    def load(self):
         pass
 
     @kernel
-    def init_module(self):
+    def init(self):
         # Break realtime to get some slack
         self.core.break_realtime()
 
@@ -25,7 +25,7 @@ class _MemsMirrorModule(DaxModule):
         self.mems_trig.output()
 
     @kernel
-    def config_module(self):
+    def config(self):
         # Break realtime to get some slack
         self.core.break_realtime()
 
@@ -73,7 +73,7 @@ class IndvBeamMemsModule(DaxModule, IndvBeamInterface):
         # MEMS mirror module
         self.mems_mirror = dax.modules.mems_mirror.MemsMirrorModule(self, 'mems_mirror', **kwargs)
 
-    def load_module(self):
+    def load(self):
         # For all AOMs: frequency, phase, and attenuation
         self.setattr_dataset_sys(self.DPASS_AOM_0_FREQ_KEY, 100 * MHz)
         self.setattr_dataset_sys(self.DPASS_AOM_0_PHASE_KEY, 0.0)
@@ -99,7 +99,7 @@ class IndvBeamMemsModule(DaxModule, IndvBeamInterface):
         self.setattr_dataset_sys(self.PID_ENABLE_KEY, True)
 
     @kernel
-    def init_module(self):
+    def init(self):
         # Break realtime to get some slack
         self.core.break_realtime()
 
@@ -114,7 +114,7 @@ class IndvBeamMemsModule(DaxModule, IndvBeamInterface):
         self.indv_aom_1.init()
 
     @kernel
-    def config_module(self):
+    def config(self):
         # Break realtime to get some slack
         self.core.break_realtime()
 
