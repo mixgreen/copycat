@@ -121,7 +121,20 @@ class _DaxNameRegistry:
             raise KeyError(msg) from e
 
     def search_module(self, type_):
-        """Search for a module that matches the requested type."""
+        """Search for a unique module that matches the requested type."""
+
+        # Search for all modules matching the type
+        results = self.search_module_list(type_)
+
+        if len(results) > 1:
+            # More than one module was found
+            raise self._NonUniqueSearchError('Could not find a unique module with type "{:s}"'.format(type_.__name__))
+        else:
+            # Return the only result
+            return results[0]
+
+    def search_module_list(self, type_):
+        """Search for modules that match the requested type."""
 
         assert issubclass(type_, (DaxModuleInterface, DaxModuleBase)), \
             'Provided type must be a DAX module base or interface'
@@ -131,13 +144,10 @@ class _DaxNameRegistry:
 
         if not results:
             # No modules were found
-            raise KeyError('Could not find module with type "{:s}"'.format(type_.__name__))
-        elif len(results) > 1:
-            # More than one module was found
-            raise self._NonUniqueSearchError('Could not find a unique module with type "{:s}"'.format(type_.__name__))
+            raise KeyError('Could not find modules with type "{:s}"'.format(type_.__name__))
         else:
-            # Return the only result
-            return results[0]
+            # Return the list with results
+            return results
 
     def get_module_list(self):
         """Return a list of registered modules."""
@@ -631,8 +641,8 @@ class DaxCalibration(DaxBase):
             try:
                 # Get the next module (next level of nesting)
                 module = getattr(module, key[0])
-            except KeyError:
-                self.logger.error('Module {:s} could not be found'.format(self._MODULE_KEY))
+            except AttributeError:
+                self.logger.error('Module "{:s}" could not be found'.format(self._MODULE_KEY))
                 raise
 
             if len(key) == 1:
