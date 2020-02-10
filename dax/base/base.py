@@ -124,23 +124,24 @@ class _DaxNameRegistry:
         """Search for a unique module that matches the requested type."""
 
         # Search for all modules matching the type
-        results = self.search_module_list(type_)
+        results = self.search_module_dict(type_)
 
         if len(results) > 1:
             # More than one module was found
             raise self._NonUniqueSearchError('Could not find a unique module with type "{:s}"'.format(type_.__name__))
         else:
             # Return the only result
-            return results[0]
+            _, module = results.popitem()
+            return module
 
-    def search_module_list(self, type_):
-        """Search for modules that match the requested type."""
+    def search_module_dict(self, type_):
+        """Search for modules that match the requested type and return results as a dict."""
 
         assert issubclass(type_, (DaxModuleInterface, DaxModuleBase)), \
             'Provided type must be a DAX module base or interface'
 
         # Search for all modules matching the type
-        results = [m for m in self._modules.values() if isinstance(m, type_)]
+        results = {k: m for k, m in self._modules.items() if isinstance(m, type_)}
 
         if not results:
             # No modules were found
@@ -465,7 +466,7 @@ class DaxModuleBase(_DaxHasSystem, abc.ABC):
     def setattr_device(self, key, attr_name='', type_=object):
         """Sets a device driver as attribute."""
 
-        assert isinstance(attr_name, str), 'Attribute name must be of type str'
+        assert isinstance(attr_name, str) and attr_name, 'Attribute name must be of type str and not empty'
 
         if not attr_name:
             # Set attribute name to key if no attribute name was given
@@ -519,9 +520,9 @@ class DaxSystem(DaxModuleBase):
     SYS_SERVICES: str = 'services'
 
     # Keys of core devices
-    CORE_KEY = 'core'
-    CORE_DMA_KEY = 'core_dma'
-    CORE_CACHE_KEY = 'core_cache'
+    CORE_KEY: str = 'core'
+    CORE_DMA_KEY: str = 'core_dma'
+    CORE_CACHE_KEY: str = 'core_cache'
 
     def __init__(self, managers_or_parent, *args, **kwargs):
         # Call super, add names and a new registry
@@ -619,95 +620,62 @@ class DaxService(_DaxHasSystem, abc.ABC):
         self.get_device(key)
 
 
-class DaxCalibration(DaxBase):
-    """Base class for calibrations."""
+class DaxClient(DaxBase, abc.ABC):
+    """Base class for DAX clients."""
 
     # System type
     _SYSTEM_TYPE: type
-    # Module key
-    _MODULE_KEY: str
-    # Module type (for verification purposes)
-    _MODULE_TYPE: type
 
     def __init__(self, managers_or_parent, *args, **kwargs):
+        # Check attributes
+        assert hasattr(self, '_SYSTEM_TYPE'), 'Missing system type attribute'
+        assert issubclass(self._SYSTEM_TYPE, DaxSystem), 'System type must be a subclass of DaxSystem'
+
         # Call super
-        super(DaxCalibration, self).__init__(managers_or_parent, *args, **kwargs)
+        super(DaxClient, self).__init__(managers_or_parent, *args, **kwargs)
 
         # Create the system
-        self.system = self._SYSTEM_TYPE(self)
+        system = self._SYSTEM_TYPE(self)
 
-        # Recursive function to obtain the module
-        def _get_module(key, module):
-            try:
-                # Get the next module (next level of nesting)
-                module = getattr(module, key[0])
-            except AttributeError:
-                self.logger.error('Module "{:s}" could not be found'.format(self._MODULE_KEY))
-                raise
+        # Perform client post-build while passing the system registry
+        self.post_build(system.get_registry())
 
-            if len(key) == 1:
-                return module
-            else:
-                return _get_module(key[1:], module)
-
-        # Create a reference to the module to calibrate
-        self.module = _get_module(self._MODULE_KEY.split(_KEY_SEPARATOR), self.system)
-
-        # Check module type
-        if not isinstance(self.module, self._MODULE_TYPE):
-            msg = 'Module is not compatible with this calibration class'
-            self.logger.error(msg)
-            raise TypeError(msg)
-
-    def get_module(self):
-        """Return the module to calibrate."""
-        return self.module
+    @abc.abstractmethod
+    def post_build(self, registry: _DaxNameRegistry):
+        """During the post-build phase it is possible to access the fully populated system registry."""
+        pass
 
     @host_only
     def get_identifier(self):
-        """Return the module key of the calibrated module and the calibration class name."""
-        return '[{:s}]({:s})'.format(_KEY_SEPARATOR.join([self._SYSTEM_TYPE.SYS_NAME, self._MODULE_KEY]),
-                                     self.__class__.__name__)
+        """Return the system name and the client class name."""
+        return '[{:s}]({:s})'.format(self._SYSTEM_TYPE.SYS_NAME, self.__class__.__name__)
 
 
-def dax_calibration_factory(module_type):
-    """Decorator to convert a DaxCalibration class to a factory function of that class."""
+def dax_client_factory(c):
+    """Decorator to convert a DaxClient class to a factory function of that class."""
 
-    assert issubclass(module_type, DaxModule), 'The module type for a calibration factory must be a DaxModule'
+    assert isinstance(c, type), 'The decorated object must be a class'
+    assert issubclass(c, DaxClient), 'The decorated class must be a subclass of DaxClient'
+    assert issubclass(c, EnvExperiment), 'The decorated DaxClient class must be a subclass of EnvExperiment'
 
-    def decorator(c):
-        """The actual decorator function takes a DaxCalibration class and returns a factory function."""
+    # Use the wraps decorator, but do not inherit the docstring
+    @functools.wraps(c, assigned=[e for e in functools.WRAPPER_ASSIGNMENTS if e != '__doc__'])
+    def wrapper(system_type):
+        """Create a new DAX client class.
 
-        assert isinstance(c, type), 'The decorated object must be a class'
-        assert issubclass(c, DaxCalibration), 'The decorated class must be a subclass of DaxCalibration'
-        assert issubclass(c, EnvExperiment), 'The decorated class must be a subclass of EnvExperiment'
+        This factory function will create a new client class for a given system type.
 
-        # Use the wraps decorator, but do not inherit the docstring
-        @functools.wraps(c, assigned=[e for e in functools.WRAPPER_ASSIGNMENTS if e != '__doc__'])
-        def wrapper(system_type, module_key):
-            """Create a new calibration class.
+        :param system_type: The system type used by the client.
+        """
 
-            This factory function will create a new calibration class for a specific module of a given system type.
+        # Check the system type
+        if not issubclass(system_type, DaxSystem):
+            raise TypeError('System type must be a subclass of DaxSystem')
 
-            :param system_type: The system type which contains the module to calibrate.
-            :param module_key: The key to the module to calibrate, must match with the calibration class.
-            """
+        class WrapperClass(c):
+            """The wrapper class that finalizes the client class."""
+            _SYSTEM_TYPE = system_type
 
-            # Check the system type
-            if not issubclass(system_type, DaxSystem):
-                raise TypeError('System type must be a subclass of DaxSystem')
-            # Check module key
-            if not isinstance(module_key, str):
-                raise TypeError('Module key must be a string')
+        return WrapperClass
 
-            class WrapperClass(c):
-                """The wrapper class that fills in the required attributes"""
-                _SYSTEM_TYPE = system_type
-                _MODULE_KEY = module_key
-                _MODULE_TYPE = module_type
-
-            return WrapperClass
-
-        return wrapper
-
-    return decorator
+    return wrapper
