@@ -1,6 +1,6 @@
 import abc
 
-from .base import DaxModuleInterface
+from dax.base import DaxModuleInterface
 
 
 class TrapInterface(DaxModuleInterface):
@@ -9,7 +9,7 @@ class TrapInterface(DaxModuleInterface):
     """Abstract module functionality"""
 
     @abc.abstractmethod
-    def set_oven_sw(self, state):
+    def set_oven_o(self, state):
         pass
 
     @abc.abstractmethod
@@ -21,7 +21,7 @@ class TrapInterface(DaxModuleInterface):
         pass
 
     @abc.abstractmethod
-    def set_cool_sw(self, state):
+    def set_cool_o(self, state):
         pass
 
     @abc.abstractmethod
@@ -43,7 +43,7 @@ class TrapInterface(DaxModuleInterface):
         pass
 
     @abc.abstractmethod
-    def set_pump_sw(self, state):
+    def set_pump_o(self, state):
         pass
 
     @abc.abstractmethod
@@ -55,7 +55,7 @@ class TrapInterface(DaxModuleInterface):
         pass
 
     @abc.abstractmethod
-    def set_ion_sw(self, state):
+    def set_ion_o(self, state):
         pass
 
     @abc.abstractmethod
@@ -64,6 +64,18 @@ class TrapInterface(DaxModuleInterface):
 
     @abc.abstractmethod
     def ion_off(self):
+        pass
+
+    @abc.abstractmethod
+    def set_repump_o(self, state):
+        pass
+
+    @abc.abstractmethod
+    def repump_on(self):
+        pass
+
+    @abc.abstractmethod
+    def repump_off(self):
         pass
 
     """Abstract module configuration"""

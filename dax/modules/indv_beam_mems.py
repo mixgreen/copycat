@@ -1,7 +1,7 @@
 import artiq.coredevice.ttl
 
 from dax.base import *
-from dax.base.indv_beam_if import *
+from dax.modules.interfaces.indv_beam_if import *
 
 
 class _MemsMirrorModule(DaxModule):

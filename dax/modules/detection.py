@@ -4,7 +4,7 @@ import artiq.coredevice.ttl
 import artiq.coredevice.edge_counter
 
 from dax.base import *
-from dax.base.detection_if import *
+from dax.modules.interfaces.detection_if import *
 
 
 class DetectionModule(DaxModule, DetectionInterface):
@@ -15,15 +15,11 @@ class DetectionModule(DaxModule, DetectionInterface):
 
     ACTIVE_PMT_CHANNELS_KEY = 'active_pmt_channels'
 
-    DETECT_AOM_FREQ_KEY = 'detect_aom_freq'
-    DETECT_AOM_PHASE_KEY = 'detect_aom_phase'
-    DETECT_AOM_ATT_KEY = 'detect_aom_att'
-
-    def build(self, detect_aom, pmt_array, pmt_array_size):
+    def build(self, detect_sw, pmt_array, pmt_array_size):
         assert isinstance(pmt_array_size, int)
 
-        # Detection AOM
-        self.setattr_device(detect_aom, 'detect_aom')
+        # Detection laser switch
+        self.setattr_device(detect_sw, 'detect_sw', (artiq.coredevice.ttl.TTLOut, artiq.coredevice.ttl.TTLInOut))
 
         # Array of PMT channels
         self.pmt_array_size = pmt_array_size
@@ -63,18 +59,13 @@ class DetectionModule(DaxModule, DetectionInterface):
         # List of active PMT channels, also the mapping of ion to PMT channel (ions are ordered)
         self.setattr_dataset_sys(self.ACTIVE_PMT_CHANNELS_KEY, list(np.int32(i) for i in range(self.pmt_array_size)))
 
-        # Detection AOM frequency, phase, and attenuation
-        self.setattr_dataset_sys(self.DETECT_AOM_FREQ_KEY, 100 * MHz)
-        self.setattr_dataset_sys(self.DETECT_AOM_PHASE_KEY, 0.0)
-        self.setattr_dataset_sys(self.DETECT_AOM_ATT_KEY, 0.0 * dB)
-
     @kernel
     def init(self):
         # Break realtime to get some slack
         self.core.break_realtime()
 
-        # Initialize AOM
-        self.detect_aom.init()
+        # Initialize detection laser switch
+        self.detect_sw.output()
 
         if not self.EDGE_COUNTER:
             # Configure the TTLInOut devices
@@ -87,10 +78,52 @@ class DetectionModule(DaxModule, DetectionInterface):
         # Break realtime to get some slack
         self.core.break_realtime()
 
-        # Set AOM
-        self.detect_aom.cfg_sw(False)
-        self.detect_aom.set(self.detect_aom_freq, phase=self.detect_aom_phase)
-        self.detect_aom.set_att(self.detect_aom_att)
+        # Set detection laser switch to off
+        self.set_detection_laser_o(False)
+
+    @kernel
+    def set_detection_laser_o(self, state):
+        self.detect_sw.set_o(state)
+
+    @kernel
+    def detection_laser_on(self):
+        self.set_detection_laser_o(True)
+
+    @kernel
+    def detection_laser_off(self):
+        self.set_detection_laser_o(False)
+
+    @kernel
+    def detect_all(self):
+        # Enable detection laser
+        self.set_detection_laser_o(True)
+
+        # Detect events on all channels
+        with parallel:
+            for i in range(self.pmt_array_size):
+                self.pmt_array[i].gate_rising(self.duration)
+
+        # Disable detection laser
+        self.set_detection_laser_o(False)
+
+        # Return the cursor at the end of the detection window
+        return now_mu()
+
+    @kernel
+    def detect_active(self):
+        # Enable detection laser
+        self.set_detection_laser_o(True)
+
+        # Detect events on active channels
+        with parallel:
+            for i in self.active_pmt_channels:
+                self.pmt_array[i].gate_rising(self.duration)
+
+        # Disable detection laser
+        self.set_detection_laser_o(False)
+
+        # Return the cursor at the end of the detection window
+        return now_mu()
 
     @kernel
     def _pmt_array_count(self, index, detection_window_mu):
@@ -101,38 +134,6 @@ class DetectionModule(DaxModule, DetectionInterface):
         else:
             # TTLInOut
             return self.pmt_array[index].count(detection_window_mu)
-
-    @kernel
-    def detect_all(self):
-        # Enable detection AOM
-        self.detect_aom.cfg_sw(True)
-
-        # Detect events on all channels
-        with parallel:
-            for i in range(self.pmt_array_size):
-                self.pmt_array[i].gate_rising(self.duration)
-
-        # Disable detection AOM
-        self.detect_aom.cfg_sw(False)
-
-        # Return the cursor at the end of the detection window
-        return now_mu()
-
-    @kernel
-    def detect_active(self):
-        # Enable detection AOM
-        self.detect_aom.cfg_sw(True)
-
-        # Detect events on active channels
-        with parallel:
-            for i in self.active_pmt_channels:
-                self.pmt_array[i].gate_rising(self.duration)
-
-        # Disable detection AOM
-        self.detect_aom.cfg_sw(False)
-
-        # Return the cursor at the end of the detection window
-        return now_mu()
 
     @kernel
     def count_all(self, detection_window_mu):

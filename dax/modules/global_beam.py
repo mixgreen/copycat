@@ -1,7 +1,7 @@
 import artiq.coredevice.ttl
 
 from dax.base import *
-from dax.base.global_beam_if import *
+from dax.modules.interfaces.global_beam_if import *
 
 
 class GlobalBeamModule(DaxModule, GlobalBeamInterface):

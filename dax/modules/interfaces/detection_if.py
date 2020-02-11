@@ -1,12 +1,27 @@
 import abc
 
-from .base import DaxModuleInterface
+from dax.base import DaxModuleInterface
 
 
 class DetectionInterface(DaxModuleInterface):
     """Interface for a detection module."""
 
     """Abstract module functionality"""
+
+    @abc.abstractmethod
+    def set_detection_laser_o(self, state):
+        """Set the output state of the detection laser."""
+        pass
+
+    @abc.abstractmethod
+    def detection_laser_on(self):
+        """Switch detection laser on."""
+        pass
+
+    @abc.abstractmethod
+    def detection_laser_off(self):
+        """Switch detection laser off."""
+        pass
 
     @abc.abstractmethod
     def detect_all(self):

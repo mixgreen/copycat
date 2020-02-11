@@ -1,6 +1,6 @@
 import abc
 
-from .base import DaxModuleInterface
+from dax.base import DaxModuleInterface
 
 
 class IndvBeamInterface(DaxModuleInterface):

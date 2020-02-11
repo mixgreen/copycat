@@ -1,60 +1,31 @@
 import artiq.coredevice.ttl
 
 from dax.base import *
-from dax.base.trap_if import *
+from dax.modules.interfaces.trap_if import *
+
+# Alias for TTLOut and TTLInOut type as a tuple
+_TTL_OUT_TYPE = (artiq.coredevice.ttl.TTLOut, artiq.coredevice.ttl.TTLInOut)
 
 
 class TrapModule(DaxModule, TrapInterface):
     """Module for a trap controlled by a Sandia DAC board."""
 
-    COOL_AOM_FREQ_KEY = 'cool_aom_freq'
-    COOL_AOM_PHASE_KEY = 'cool_aom_phase'
-    COOL_AOM_ATT_KEY = 'cool_aom_att'
-
-    PUMP_AOM_FREQ_KEY = 'pump_aom_freq'
-    PUMP_AOM_PHASE_KEY = 'pump_aom_phase'
-    PUMP_AOM_ATT_KEY = 'pump_aom_att'
-
-    ION_AOM_FREQ_KEY = 'ion_aom_freq'
-    ION_AOM_PHASE_KEY = 'ion_aom_phase'
-    ION_AOM_ATT_KEY = 'ion_aom_att'
-
-    REPUMP_AOM_FREQ_KEY = 'repump_aom_freq'
-    REPUMP_AOM_PHASE_KEY = 'repump_aom_phase'
-    REPUMP_AOM_ATT_KEY = 'repump_aom_att'
-
-    def build(self, oven_sw, cool_aom, pump_aom, ion_aom, repump_aom, sdac_trig, sdac_config, sdac_data):
+    def build(self, oven_sw, cool_pump_sw, ion_repump_sw, sdac_trig, sdac_config, sdac_data):
         # Switch device for oven
-        self.setattr_device(oven_sw, 'oven_sw', (artiq.coredevice.ttl.TTLOut, artiq.coredevice.ttl.TTLInOut))
+        self.setattr_device(oven_sw, 'oven_sw', _TTL_OUT_TYPE)
 
-        # Various AOMs
-        self.setattr_device(cool_aom, 'cool_aom')
-        self.setattr_device(pump_aom, 'pump_aom')
-        self.setattr_device(ion_aom, 'ion_aom')
-        self.setattr_device(repump_aom, 'repump_aom')
+        # Switch device for cool and pump laser
+        self.setattr_device(cool_pump_sw, 'cool_pump_sw', _TTL_OUT_TYPE)
+        # Switch device for ion and repump laser
+        self.setattr_device(ion_repump_sw, 'ion_repump_sw', _TTL_OUT_TYPE)
 
         # Devices for Sandia DAC board
-        self.setattr_device(sdac_trig, 'sdac_trig', (artiq.coredevice.ttl.TTLOut, artiq.coredevice.ttl.TTLInOut))
+        self.setattr_device(sdac_trig, 'sdac_trig', _TTL_OUT_TYPE)
         self.setattr_device(sdac_config, 'sdac_config')
         self.setattr_device(sdac_data, 'sdac_data')
 
     def load(self):
-        # For all AOMs: frequency, phase, and attenuation
-        self.setattr_dataset_sys(self.COOL_AOM_FREQ_KEY, 100 * MHz)
-        self.setattr_dataset_sys(self.COOL_AOM_PHASE_KEY, 0.0)
-        self.setattr_dataset_sys(self.COOL_AOM_ATT_KEY, 0.0 * dB)
-
-        self.setattr_dataset_sys(self.PUMP_AOM_FREQ_KEY, 100 * MHz)
-        self.setattr_dataset_sys(self.PUMP_AOM_PHASE_KEY, 0.0)
-        self.setattr_dataset_sys(self.PUMP_AOM_ATT_KEY, 0.0 * dB)
-
-        self.setattr_dataset_sys(self.ION_AOM_FREQ_KEY, 100 * MHz)
-        self.setattr_dataset_sys(self.ION_AOM_PHASE_KEY, 0.0)
-        self.setattr_dataset_sys(self.ION_AOM_ATT_KEY, 0.0 * dB)
-
-        self.setattr_dataset_sys(self.REPUMP_AOM_FREQ_KEY, 100 * MHz)
-        self.setattr_dataset_sys(self.REPUMP_AOM_PHASE_KEY, 0.0)
-        self.setattr_dataset_sys(self.REPUMP_AOM_ATT_KEY, 0.0 * dB)
+        pass
 
     @kernel
     def init(self):
@@ -64,11 +35,9 @@ class TrapModule(DaxModule, TrapInterface):
         # Configure oven switch as output
         self.oven_sw.output()
 
-        # Initialize all AOMs
-        self.cool_aom.init()
-        self.pump_aom.init()
-        self.ion_aom.init()
-        self.repump_aom.init()
+        # Configure optical switches as outputs
+        self.cool_pump_sw.output()
+        self.ion_repump_sw.output()
 
         # Set direction of trigger signal
         self.sdac_trig.output()
@@ -81,50 +50,37 @@ class TrapModule(DaxModule, TrapInterface):
         # Oven off
         self.oven_off()
 
-        # Configure repump AOM and switch on by default
-        self.repump_aom.set(self.repump_aom_freq, phase=self.repump_aom_phase)
-        self.repump_aom.set_att(self.repump_aom_att)
-        self.repump_aom.cfg_sw(True)
+        # Ion off by default
+        self.ion_on()
+        # Repump on by default
+        self.repump_on()
 
-        # Switch other AOMs off
-        self.cool_off()
-        self.pump_off()
-        self.ion_off()
-
-        # Configure other AOMs
-        self.cool_aom.set(self.cool_aom_freq, phase=self.cool_aom_phase)
-        self.cool_aom.set_att(self.cool_aom_att)
-        self.pump_aom.set(self.pump_aom_freq, phase=self.pump_aom_phase)
-        self.pump_aom.set_att(self.pump_aom_att)
-        self.ion_aom.set(self.ion_aom_freq, phase=self.ion_aom_phase)
-        self.ion_aom.set_att(self.ion_aom_att)
-
-        # Guarantee trigger is off
+        # Guarantee Sandia DAC trigger is off
         self.sdac_trig.off()
 
     @kernel
-    def set_oven_sw(self, state):
+    def set_oven_o(self, state):
         self.oven_sw.set_o(state)
 
     @kernel
     def oven_on(self):
-        self.set_oven_sw(True)
+        self.set_oven_o(True)
 
     @kernel
     def oven_off(self):
-        self.set_oven_sw(False)
+        self.set_oven_o(False)
 
     @kernel
-    def set_cool_sw(self, state):
-        self.cool_aom.cfg_sw(state)
+    def set_cool_o(self, state):
+        self.cool_pump_sw.set_o(state)
 
     @kernel
     def cool_on(self):
-        self.set_cool_sw(True)
+        self.set_cool_o(True)
 
     @kernel
     def cool_off(self):
-        self.set_cool_sw(False)
+        self.set_cool_o(False)
 
     @kernel
     def cool(self, duration):
@@ -141,25 +97,39 @@ class TrapModule(DaxModule, TrapInterface):
         self.cool_off()
 
     @kernel
-    def set_pump_sw(self, state):
-        self.pump_aom.cfg_sw(state)
+    def set_pump_o(self, state):
+        # Cool and pump share the same switch
+        self.set_cool_o(state)
 
     @kernel
     def pump_on(self):
-        self.set_pump_sw(True)
+        self.set_pump_o(True)
 
     @kernel
     def pump_off(self):
-        self.set_pump_sw(False)
+        self.set_pump_o(False)
 
     @kernel
-    def set_ion_sw(self, state):
-        self.ion_aom.cfg_sw(state)
+    def set_ion_o(self, state):
+        self.ion_repump_sw.set_o(state)
 
     @kernel
     def ion_on(self):
-        self.set_ion_sw(True)
+        self.set_ion_o(True)
 
     @kernel
     def ion_off(self):
-        self.set_ion_sw(False)
+        self.set_ion_o(False)
+
+    @kernel
+    def set_repump_o(self, state):
+        # Ion and repump share the same switch
+        self.set_ion_o(state)
+
+    @kernel
+    def repump_on(self):
+        self.set_repump_o(True)
+
+    @kernel
+    def repump_off(self):
+        self.set_repump_o(False)
