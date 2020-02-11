@@ -31,11 +31,15 @@ def _is_valid_key(key):
     return _KEY_RE.fullmatch(key)
 
 
-class DaxBase(HasEnvironment, abc.ABC):
+class _DaxBase(HasEnvironment, abc.ABC):
     """Base class for all DAX core classes."""
 
     class _BuildArgumentError(Exception):
-        """Exception for build arguments not matching the expected signature"""
+        """Exception for build arguments not matching the expected signature."""
+        pass
+
+    class _IllegalOperationError(Exception):
+        """Exception when user calls a disabled/illegal function."""
         pass
 
     def __init__(self, managers_or_parent, *args, **kwargs):
@@ -45,7 +49,7 @@ class DaxBase(HasEnvironment, abc.ABC):
         try:
             # Call super, which will result in the module being build
             self.logger.debug('Starting build...')
-            super(DaxBase, self).__init__(managers_or_parent, *args, **kwargs)
+            super(_DaxBase, self).__init__(managers_or_parent, *args, **kwargs)
             self.logger.debug('Build finished')
         except TypeError as e:
             self.logger.error('Build arguments do not match the expected signature')
@@ -245,10 +249,10 @@ class _DaxNameRegistry:
         return natsort.natsorted(self._services.keys())
 
 
-class _DaxHasSystem(DaxBase, abc.ABC):
+class _DaxHasSystem(_DaxBase, abc.ABC):
     """Intermediate base class for DAX classes that are dependent on a DAX system."""
 
-    _CORE_DEVICES = ['core', 'core_dma', 'core_cache']
+    __CORE_DEVICES = ['core', 'core_dma', 'core_cache']
 
     def __init__(self, managers_or_parent, name, system_key, registry, *args, **kwargs):
         assert isinstance(name, str), 'Name must be a string'
@@ -270,13 +274,13 @@ class _DaxHasSystem(DaxBase, abc.ABC):
         super(_DaxHasSystem, self).__init__(managers_or_parent, *args, **kwargs)
 
         # Verify that all core devices are available
-        if not all(hasattr(self, n) for n in self._CORE_DEVICES):
+        if not all(hasattr(self, n) for n in self.__CORE_DEVICES):
             msg = 'Missing core devices (super.build() was probably not called)'
             self.logger.error(msg)
             raise AttributeError(msg)
 
         # Make core devices kernel invariants
-        self.update_kernel_invariants(*self._CORE_DEVICES)
+        self.update_kernel_invariants(*self.__CORE_DEVICES)
 
     @host_only
     def get_name(self):
@@ -348,6 +352,46 @@ class _DaxHasSystem(DaxBase, abc.ABC):
     def config(self):
         """Override this method to configure devices and obtain DMA handles (calls to core device allowed)."""
         pass
+
+    def get_device(self, key, type_=object):
+        """Get a device driver."""
+
+        assert isinstance(key, str) and key, 'Key must be of type str and not empty'
+
+        # Debug message
+        self.logger.debug('Requesting device "{:s}"'.format(key))
+
+        # Register the requested device
+        self.registry.add_device(self, key)
+
+        # Get the device
+        device = super(_DaxHasSystem, self).get_device(key)
+
+        # Check device type
+        if not isinstance(device, DummyDevice) and not isinstance(device, type_):
+            msg = 'Device "{:s}" does not match the expected type'.format(key)
+            self.logger.error(msg)
+            raise TypeError(msg)
+
+        # Return the device
+        return device
+
+    def setattr_device(self, key, attr_name='', type_=object):
+        """Sets a device driver as attribute."""
+
+        assert isinstance(attr_name, str) and attr_name, 'Attribute name must be of type str and not empty'
+
+        if not attr_name:
+            # Set attribute name to key if no attribute name was given
+            attr_name = key
+
+        # Get the device
+        device = self.get_device(key, type_)
+
+        # Set the device key to the attribute
+        setattr(self, attr_name, device)
+        # Add attribute to kernel invariants
+        self.update_kernel_invariants(attr_name)
 
     @rpc(flags={'async'})
     def set_dataset_sys(self, key, value):
@@ -440,46 +484,6 @@ class DaxModuleBase(_DaxHasSystem, abc.ABC):
         # Register this module
         self.registry.add_module(self)
 
-    def get_device(self, key, type_=object):
-        """Get a device driver."""
-
-        assert isinstance(key, str) and key, 'Key must be of type str and not empty'
-
-        # Debug message
-        self.logger.debug('Requesting device "{:s}"'.format(key))
-
-        # Register the requested device
-        self.registry.add_device(self, key)
-
-        # Get the device
-        device = super(DaxBase, self).get_device(key)
-
-        # Check device type
-        if not isinstance(device, DummyDevice) and not isinstance(device, type_):
-            msg = 'Device "{:s}" does not match the expected type'.format(key)
-            self.logger.error(msg)
-            raise TypeError(msg)
-
-        # Return the device
-        return device
-
-    def setattr_device(self, key, attr_name='', type_=object):
-        """Sets a device driver as attribute."""
-
-        assert isinstance(attr_name, str) and attr_name, 'Attribute name must be of type str and not empty'
-
-        if not attr_name:
-            # Set attribute name to key if no attribute name was given
-            attr_name = key
-
-        # Get the device
-        device = self.get_device(key, type_)
-
-        # Set the device key to the attribute
-        setattr(self, attr_name, device)
-        # Add attribute to kernel invariants
-        self.update_kernel_invariants(attr_name)
-
 
 class DaxModule(DaxModuleBase, abc.ABC):
     """Base class for DAX modules."""
@@ -525,7 +529,7 @@ class DaxSystem(DaxModuleBase):
     CORE_CACHE_KEY: str = 'core_cache'
 
     def __init__(self, managers_or_parent, *args, **kwargs):
-        # Call super, add names and a new registry
+        # Call super, add names, add a new registry
         super(DaxSystem, self).__init__(managers_or_parent, self.SYS_NAME, self.SYS_NAME,
                                         _DaxNameRegistry(self.SYS_SERVICES), *args, **kwargs)
 
@@ -537,21 +541,20 @@ class DaxSystem(DaxModuleBase):
         self.core_dma = self.get_device(self.CORE_DMA_KEY, artiq.coredevice.dma.CoreDMA)
         self.core_cache = self.get_device(self.CORE_CACHE_KEY, artiq.coredevice.cache.CoreCache)
 
-        # Call super
-        super(DaxSystem, self).build()
-
     def dax_load(self):
         """Prepare the DAX system for usage by loading and configuring the system."""
-        self.logger.debug('Requested DAX system loading')
+        self.logger.debug('Starting DAX system loading...')
         self.load_system()
         self.config_system()
+        self.logger.debug('Finished DAX system loading')
 
     def dax_init(self):
         """Prepare the DAX system for usage by loading, initializing, and configuring the system."""
-        self.logger.debug('Requested DAX system initialization')
+        self.logger.debug('Starting DAX system initialization...')
         self.load_system()
         self.init_system()
         self.config_system()
+        self.logger.debug('Finished DAX system initialization')
 
     def load(self):
         pass
@@ -568,15 +571,6 @@ class DaxService(_DaxHasSystem, abc.ABC):
 
     # The unique name of this service
     SERVICE_NAME: str
-
-    class _IllegalOperationError(Exception):
-        """Thrown when calling an illegal operation for a DAX service."""
-
-        def __init__(self, function_name):
-            # Call super with a predefined message
-            assert isinstance(function_name, str)
-            super(_IllegalOperationError, self).__init__(
-                'Function "{:s}" can not be used by a DAX service'.format(function_name))
 
     def __init__(self, managers_or_parent, *args, **kwargs):
         """Initialize the DAX service base class."""
@@ -609,54 +603,47 @@ class DaxService(_DaxHasSystem, abc.ABC):
         # Register this service
         self.registry.add_service(self)
 
-    def get_device(self, key):
+    def get_device(self, *args, **kwargs):
         """Services are not allowed to request devices."""
         msg = 'Services are not allowed to request devices'
         self.logger.error(msg)
         raise self._IllegalOperationError(msg)
 
-    def setattr_device(self, key):
-        """Services are not allowed to request devices."""
-        self.get_device(key)
 
-
-class DaxClient(DaxBase, abc.ABC):
+class DaxClient(_DaxHasSystem, abc.ABC):
     """Base class for DAX clients."""
 
-    # System type
-    _SYSTEM_TYPE: type
-
     def __init__(self, managers_or_parent, *args, **kwargs):
-        # Check attributes
-        assert hasattr(self, '_SYSTEM_TYPE'), 'Missing system type attribute'
-        assert issubclass(self._SYSTEM_TYPE, DaxSystem), 'System type must be a subclass of DaxSystem'
-
+        # Check if the decorator was used
+        assert isinstance(self, DaxSystem), \
+            'DAX client class {:s} must be decorated using @dax_client_factory'.format(self.__class__.__name__)
         # Call super
         super(DaxClient, self).__init__(managers_or_parent, *args, **kwargs)
 
-        # Create the system
-        system = self._SYSTEM_TYPE(self)
+    def get_device(self, *args, **kwargs):
+        """Clients are not allowed to request devices."""
+        msg = 'Clients are not allowed to request devices'
+        self.logger.error(msg)
+        raise self._IllegalOperationError(msg)
 
-        # Perform client post-build while passing the system registry
-        self.post_build(system.get_registry())
+    def load(self):
+        # Call super (which will be the DAX system)
+        super(DaxClient, self).load()
 
-    @abc.abstractmethod
-    def post_build(self, registry: _DaxNameRegistry):
-        """During the post-build phase it is possible to access the fully populated system registry."""
-        pass
+    def init(self):
+        # Call super (which will be the DAX system)
+        super(DaxClient, self).init()
 
-    @host_only
-    def get_identifier(self):
-        """Return the system name and the client class name."""
-        return '[{:s}]({:s})'.format(self._SYSTEM_TYPE.SYS_NAME, self.__class__.__name__)
+    def config(self):
+        # Call super (which will be the DAX system)
+        super(DaxClient, self).config()
 
 
 def dax_client_factory(c):
-    """Decorator to convert a DaxClient class to a factory function of that class."""
+    """Decorator to convert a DaxClient class to a factory function for that class."""
 
     assert isinstance(c, type), 'The decorated object must be a class'
     assert issubclass(c, DaxClient), 'The decorated class must be a subclass of DaxClient'
-    assert issubclass(c, EnvExperiment), 'The decorated DaxClient class must be a subclass of EnvExperiment'
 
     # Use the wraps decorator, but do not inherit the docstring
     @functools.wraps(c, assigned=[e for e in functools.WRAPPER_ASSIGNMENTS if e != '__doc__'])
@@ -672,10 +659,41 @@ def dax_client_factory(c):
         if not issubclass(system_type, DaxSystem):
             raise TypeError('System type must be a subclass of DaxSystem')
 
-        class WrapperClass(c):
-            """The wrapper class that finalizes the client class."""
-            _SYSTEM_TYPE = system_type
+        class WrapperClass(c, system_type):
+            """The wrapper class that finalizes the client class.
 
+            The wrapper class first inherits from the client and then the system,
+            as if the client class was an extension of the system, just as a
+            custom experiment.
+            """
+
+            def __init__(self, *args, **kwargs):
+                # Flag to allow devices to be requested
+                self.__allow_get_devices = True
+
+                # Call super
+                super(WrapperClass, self).__init__(*args, **kwargs)
+
+            def build(self, *args, **kwargs):
+                # First build the system (not using MRO) to fill the registry
+                system_type.build(self)
+
+                # Disable device requests
+                self.__allow_get_devices = False
+
+                # Then build the client which can use the registry
+                c.build(self, *args, **kwargs)
+
+            def get_device(self, *args, **kwargs):
+                if self.__allow_get_devices:
+                    # When allowed, use get_device() from the system
+                    system_type.get_device(self, *args, **kwargs)
+                else:
+                    # Otherwise use get_device() from the client, which raises an error
+                    c.get_device(self, *args, **kwargs)
+
+        # The factory function returns the newly constructed wrapper class
         return WrapperClass
 
+    # Return the factory function
     return wrapper

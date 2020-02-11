@@ -19,9 +19,8 @@ class CalibrateRtioThroughput(DaxClient, EnvExperiment):
         self.setattr_argument('num_events', NumberValue(500000, min=1000, **number_kwargs))
         self.setattr_argument('no_underflow_cutoff', NumberValue(5, min=1, **number_kwargs))
 
-    def post_build(self, registry):
         # Obtain RTIO stress module
-        self.rtio_stress = registry.search_module(RtioStressModule)
+        self.rtio_stress = self.registry.search_module(RtioStressModule)
 
     def prepare(self):
         # Additional check if arguments are valid
@@ -64,9 +63,8 @@ class CalibrateRtioThroughputBurst(DaxClient, EnvExperiment):
         self.setattr_argument('no_underflow_cutoff', NumberValue(5, min=1, **number_kwargs))
         self.setattr_argument('num_step_cutoff', NumberValue(5, min=0, **number_kwargs))
 
-    def post_build(self, registry):
         # Obtain RTIO stress module
-        self.rtio_stress = registry.search_module(RtioStressModule)
+        self.rtio_stress = self.registry.search_module(RtioStressModule)
 
     def prepare(self):
         # Scale period step
@@ -99,9 +97,8 @@ class CalibrateRtioLatencyCoreRtio(DaxClient, EnvExperiment):
         self.setattr_argument('num_samples', NumberValue(5, min=1, **number_kwargs))
         self.setattr_argument('no_underflow_cutoff', NumberValue(5, min=1, **number_kwargs))
 
-    def post_build(self, registry):
         # Obtain RTIO stress module
-        self.rtio_stress = registry.search_module(RtioStressModule)
+        self.rtio_stress = self.registry.search_module(RtioStressModule)
 
     def prepare(self):
         # Scale latencies
@@ -132,9 +129,8 @@ class CalibrateRtioLatencyRtioCore(DaxClient, EnvExperiment):
         self.setattr_argument('num_samples', NumberValue(100, min=1, **number_kwargs))
         self.setattr_argument('detection_window', NumberValue(1000, min=1, **time_kwargs))
 
-    def post_build(self, registry):
         # Obtain RTIO stress module
-        self.rtio_stress = registry.search_module(RtioStressModule)
+        self.rtio_stress = self.registry.search_module(RtioStressModule)
 
     def prepare(self):
         # Scale detection window
@@ -167,9 +163,8 @@ class CalibrateRtioLatencyRtt(DaxClient, EnvExperiment):
         self.setattr_argument('detection_window', NumberValue(1000, min=1, **time_kwargs))
         self.setattr_argument('no_underflow_cutoff', NumberValue(5, min=1, **number_kwargs))
 
-    def post_build(self, registry):
         # Obtain RTIO stress module
-        self.rtio_stress = registry.search_module(RtioStressModule)
+        self.rtio_stress = self.registry.search_module(RtioStressModule)
 
     def prepare(self):
         # Scale latencies
