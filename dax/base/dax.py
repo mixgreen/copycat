@@ -171,8 +171,8 @@ class _DaxNameRegistry:
         # Return the list with results
         return results
 
-    def get_module_list(self):
-        """Return a list of registered modules."""
+    def get_module_key_list(self):
+        """Return a list of registered module keys."""
         return natsort.natsorted(self._modules.keys())
 
     def add_device(self, module, key):
@@ -184,7 +184,7 @@ class _DaxNameRegistry:
         try:
             # Get the unique key
             unique = self._get_unique_device_key(module.get_device_db(), key)
-        except KeyError as e:
+        except (KeyError, ValueError, TypeError) as e:
             msg = 'Device "{:s}" could not be found'.format(key)
             module.logger.error(msg)
             raise KeyError(msg) from e
@@ -202,17 +202,36 @@ class _DaxNameRegistry:
         # Add unique device key to the dict of registered devices
         self._devices[unique] = module
 
-    def _get_unique_device_key(self, d, key):
+    def _get_unique_device_key(self, d, key, trace=None):
+        if trace is None:
+            # If no trace was given, start with an empty set
+            trace = set()
+
         assert isinstance(d, dict), 'First argument must be a dict to search in'
         assert isinstance(key, str), 'Key must be a string'
+        assert isinstance(trace, set), 'Trace must be a set'
 
-        # Get value (could raise exception when key not found)
+        # Check if we are not stuck in a loop
+        if key in trace:
+            raise ValueError('Key {:s} causes an alias loop'.format(key))
+        # Add key to the trace
+        trace.add(key)
+
+        # Get value (could raise KeyError)
         v = d[key]
-        # Recurse if we are still dealing with an alias, else return the unique key
-        return self._get_unique_device_key(d, v) if isinstance(v, str) else key
 
-    def get_device_list(self):
-        """Return a list of registered devices."""
+        if isinstance(v, str):
+            # Recurse if we are still dealing with an alias
+            return self._get_unique_device_key(d, v, trace)
+        elif isinstance(v, dict):
+            # We reached a dict, key must be the unique key
+            return key
+        else:
+            # We ended up with an unexpected type
+            raise TypeError('Key {:s} returned an unexpected type'.format(key))
+
+    def get_device_key_list(self):
+        """Return a list of registered device keys."""
         return natsort.natsorted(self._devices.keys())  # Natural sort the list
 
     def make_service_key(self, service_name):
@@ -232,12 +251,15 @@ class _DaxNameRegistry:
 
         assert isinstance(service, DaxService), 'Service must be a DAX service'
 
-        # Services get indexed by name, not by system key
+        # Services get indexed by name
         key = service.get_name()
 
-        # Get the service that registered with the service name
-        if key in self._services:
-            msg = 'Service "{:s}" was already registered'.format(service.get_name())
+        # Get the service that registered with the service name (None if key is available)
+        reg_service = self._services.get(key)
+
+        if reg_service:
+            # Service name was already registered
+            msg = 'Service with name "{:s}" was already registered'.format(key)
             service.logger.error(msg)
             raise self._NonUniqueRegistrationError(msg)
 
@@ -257,7 +279,7 @@ class _DaxNameRegistry:
         assert isinstance(key, str) or issubclass(key, DaxService)
 
         # Figure the right key
-        key = key if isinstance(key, str) else key.get_name()
+        key = key if isinstance(key, str) else key.SERVICE_NAME
 
         # Try to return the requested service
         try:
@@ -265,8 +287,8 @@ class _DaxNameRegistry:
         except KeyError as e:
             raise KeyError('Service "{:s}" is not available') from e
 
-    def get_service_list(self):
-        """Return a list of registered services."""
+    def get_service_key_list(self):
+        """Return a list of registered service keys."""
         return natsort.natsorted(self._services.keys())  # Natural sort the list
 
 
