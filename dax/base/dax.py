@@ -46,20 +46,27 @@ class _DaxBase(HasEnvironment, abc.ABC):
         # Logger object
         self.logger = logging.getLogger(self.get_identifier())
 
+        # Build
+        self.logger.debug('Starting build...')
         try:
-            # Call super, which will result in the module being build
-            self.logger.debug('Starting build...')
+            # Call super, which will call build()
             super(_DaxBase, self).__init__(managers_or_parent, *args, **kwargs)
-            self.logger.debug('Build finished')
         except TypeError as e:
-            self.logger.error('Build arguments do not match the expected signature')
-            raise self._BuildArgumentError(e) from e
+            msg = 'Build arguments do not match the expected signature'
+            self.logger.error(msg)
+            raise self._BuildArgumentError(msg) from e
+        else:
+            self.logger.debug('Build finished')
 
     @host_only
     def update_kernel_invariants(self, *keys):
         """Add one or more keys to the kernel invariants set."""
-        assert all(isinstance(k, str) for k in keys)
+
+        assert all(isinstance(k, str) for k in keys), 'All keys must be of type str'
+
+        # Get kernel invariants using getattr() such that we do not overwrite a user-defined variable
         kernel_invariants = getattr(self, "kernel_invariants", set())
+        # Update the set with the given keys
         self.kernel_invariants = kernel_invariants | {*keys}
 
     @abc.abstractmethod
@@ -105,7 +112,9 @@ class _DaxNameRegistry:
 
         # Get the module that registered the module key (None if the key is available)
         reg_module = self._modules.get(key)
+
         if reg_module:
+            # Key already in use by an other module
             msg = 'Module key "{:s}" was already registered by module {:s}'.format(key, reg_module.get_identifier())
             module.logger.error(msg)
             raise self._NonUniqueRegistrationError(msg)
@@ -113,16 +122,24 @@ class _DaxNameRegistry:
         # Add module key to the dict of registered modules
         self._modules[key] = module
 
-    def get_module(self, key):
+    def get_module(self, key, type_=object):
         """Return the requested module by key."""
 
         assert isinstance(key, str), 'Key must be a string'
 
         try:
-            return self._modules[key]
+            # Get the module
+            module = self._modules[key]
         except KeyError as e:
-            msg = 'Module "{:s}" could not be found'.format(key)
-            raise KeyError(msg) from e
+            # The key was not present
+            raise KeyError('Module "{:s}" could not be found'.format(key)) from e
+
+        if not isinstance(module, type_):
+            # Module does not have the correct type
+            raise TypeError('Module "{:s}" does not match the expected type'.format(key))
+
+        # Return the module
+        return module
 
     def search_module(self, type_):
         """Search for a unique module that matches the requested type."""
@@ -133,10 +150,10 @@ class _DaxNameRegistry:
         if len(results) > 1:
             # More than one module was found
             raise self._NonUniqueSearchError('Could not find a unique module with type "{:s}"'.format(type_.__name__))
-        else:
-            # Return the only result
-            _, module = results.popitem()
-            return module
+
+        # Return the only result
+        _, module = results.popitem()
+        return module
 
     def search_module_dict(self, type_):
         """Search for modules that match the requested type and return results as a dict."""
@@ -150,9 +167,9 @@ class _DaxNameRegistry:
         if not results:
             # No modules were found
             raise KeyError('Could not find modules with type "{:s}"'.format(type_.__name__))
-        else:
-            # Return the list with results
-            return results
+
+        # Return the list with results
+        return results
 
     def get_module_list(self):
         """Return a list of registered modules."""
@@ -174,6 +191,7 @@ class _DaxNameRegistry:
 
         # Get the module that registered the device (None if the device was not registered before)
         reg_module = self._devices.get(unique)
+
         if reg_module:
             # Device was already registered
             device_name = '"{:s}"'.format(key) if key == unique else '"{:s}" ({:s})'.format(key, unique)
@@ -188,12 +206,14 @@ class _DaxNameRegistry:
         assert isinstance(d, dict), 'First argument must be a dict to search in'
         assert isinstance(key, str), 'Key must be a string'
 
+        # Get value (could raise exception when key not found)
         v = d[key]
+        # Recurse if we are still dealing with an alias, else return the unique key
         return self._get_unique_device_key(d, v) if isinstance(v, str) else key
 
     def get_device_list(self):
         """Return a list of registered devices."""
-        return natsort.natsorted(self._devices.keys())
+        return natsort.natsorted(self._devices.keys())  # Natural sort the list
 
     def make_service_key(self, service_name):
         """Return the system key for a service name."""
@@ -201,9 +221,10 @@ class _DaxNameRegistry:
         # Check the given name
         assert isinstance(service_name, str), 'Service name must be a string'
         if not _is_valid_name(service_name):
+            # Service name not valid
             raise ValueError('Invalid service name "{:s}"'.format(service_name))
 
-        # Return assigned system key
+        # Return assigned key
         return _KEY_SEPARATOR.join([self._sys_services_key, service_name])
 
     def add_service(self, service):
@@ -246,7 +267,7 @@ class _DaxNameRegistry:
 
     def get_service_list(self):
         """Return a list of registered services."""
-        return natsort.natsorted(self._services.keys())
+        return natsort.natsorted(self._services.keys())  # Natural sort the list
 
 
 class _DaxHasSystem(_DaxBase, abc.ABC):
@@ -290,14 +311,21 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
     @host_only
     def get_system_key(self, key=None):
         """Get the full key based on the system key."""
+
         if key is None:
+            # No key provided, just return the system key
             return self._system_key
+
         else:
-            assert isinstance(key, str)
+            assert isinstance(key, str), 'Key must be a string'
+
+            # Check if the given key is valid
             if not _is_valid_key(key):
                 msg = 'Invalid key "{:s}"'.format(key)
                 self.logger.error(msg)
                 raise ValueError(msg)
+
+            # Return the assigned key
             return _KEY_SEPARATOR.join([self._system_key, key])
 
     @host_only
@@ -376,20 +404,20 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
         # Return the device
         return device
 
-    def setattr_device(self, key, attr_name='', type_=object):
+    def setattr_device(self, key, attr_name=None, type_=object):
         """Sets a device driver as attribute."""
-
-        assert isinstance(attr_name, str) and attr_name, 'Attribute name must be of type str and not empty'
-
-        if not attr_name:
-            # Set attribute name to key if no attribute name was given
-            attr_name = key
 
         # Get the device
         device = self.get_device(key, type_)
 
+        if attr_name is None:
+            # Set attribute name to key if no attribute name was given
+            attr_name = key
+
         # Set the device key to the attribute
+        assert isinstance(attr_name, str) and attr_name, 'Attribute name must be of type str and not empty'
         setattr(self, attr_name, device)
+
         # Add attribute to kernel invariants
         self.update_kernel_invariants(attr_name)
 
@@ -620,12 +648,6 @@ class DaxClient(_DaxHasSystem, abc.ABC):
         # Call super
         super(DaxClient, self).__init__(managers_or_parent, *args, **kwargs)
 
-    def get_device(self, *args, **kwargs):
-        """Clients are not allowed to request devices."""
-        msg = 'Clients are not allowed to request devices'
-        self.logger.error(msg)
-        raise self._IllegalOperationError(msg)
-
     def load(self):
         # Call super (which will be the DAX system)
         super(DaxClient, self).load()
@@ -667,30 +689,12 @@ def dax_client_factory(c):
             custom experiment.
             """
 
-            def __init__(self, *args, **kwargs):
-                # Flag to allow devices to be requested
-                self.__allow_get_devices = True
-
-                # Call super
-                super(WrapperClass, self).__init__(*args, **kwargs)
-
             def build(self, *args, **kwargs):
                 # First build the system (not using MRO) to fill the registry
                 system_type.build(self)
 
-                # Disable device requests
-                self.__allow_get_devices = False
-
                 # Then build the client which can use the registry
                 c.build(self, *args, **kwargs)
-
-            def get_device(self, *args, **kwargs):
-                if self.__allow_get_devices:
-                    # When allowed, use get_device() from the system
-                    system_type.get_device(self, *args, **kwargs)
-                else:
-                    # Otherwise use get_device() from the client, which raises an error
-                    c.get_device(self, *args, **kwargs)
 
         # The factory function returns the newly constructed wrapper class
         return WrapperClass
