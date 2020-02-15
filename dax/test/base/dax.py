@@ -66,19 +66,50 @@ class TestServiceChild(TestService):
     SERVICE_NAME = 'test_service_child'
 
 
-class DaxNameRegistryTestCase(unittest.TestCase):
+class DaxStaticTyping(unittest.TestCase):
 
-    def test_init(self):
-        from dax.base.dax import _DaxNameRegistry
+    def test_static_typing(self):
+        from mypy import api
 
-        for key in ['foo', '_foo', 'FOO_', '0_foo', 'foo0._bar']:
+        # Get path to the module
+        import dax.base.dax as dax_module
+        path = os.path.abspath(dax_module.__file__)
+
+        # Run MyPy static typing
+        report, err_report, exit_status = api.run([path])
+
+        # Assert
+        err_report = '\nError report:\n{:s}\n'.format(err_report) if err_report else err_report
+        msg = '\n\nType checking report:\n{:s}{:s}'.format(report, err_report)
+        self.assertEqual(exit_status, 0, msg)
+
+
+class DaxHelpersTestCase(unittest.TestCase):
+
+    def test_valid_name(self):
+        from dax.base.dax import _is_valid_name
+
+        for n in ['foo', '_0foo', '_', '0', '_foo', 'FOO_', '0_foo']:
             # Test valid names
-            self.assertTrue(_DaxNameRegistry(key), 'Valid system services key was not accepted')
+            self.assertTrue(_is_valid_name(n))
 
-        for key in ['foo*', 'foo,', 'FOO+', 'foo-bar', 'foo/bar']:
+        for n in ['', 'foo()', 'foo.bar', 'foo/', 'foo*', 'foo,', 'FOO+', 'foo-bar', 'foo/bar']:
             # Test illegal names
-            with self.assertRaises(ValueError, msg='Illegal system services key did not raise'):
-                _DaxNameRegistry(key)
+            self.assertFalse(_is_valid_name(n))
+
+    def test_valid_key(self):
+        from dax.base.dax import _is_valid_key
+
+        for k in ['foo', '_0foo', '_', '0', 'foo.bar', 'foo.bar.baz', '_.0.A', 'foo0._bar']:
+            # Test valid keys
+            self.assertTrue(_is_valid_key(k))
+
+        for k in ['', 'foo()', 'foo,bar', 'foo/', '.foo', 'bar.', 'foo.bar.baz.']:
+            # Test illegal keys
+            self.assertFalse(_is_valid_key(k))
+
+
+class DaxNameRegistryTestCase(unittest.TestCase):
 
     def test_module(self):
         from dax.base.dax import _DaxNameRegistry
@@ -164,10 +195,10 @@ class DaxNameRegistryTestCase(unittest.TestCase):
             r.add_service(s0)
 
         # Test with one service
-        self.assertIsNone(r.has_service('foo'), 'Non-existing service did not returned None')
-        self.assertIsNone(r.has_service(TestServiceChild), 'Non-existing service did not returned None')
-        self.assertEqual(r.has_service(TestService.SERVICE_NAME), s0, 'Did not returned expected service')
-        self.assertEqual(r.has_service(TestService), s0, 'Did not returned expected service')
+        self.assertFalse(r.has_service('foo'), 'Non-existing service did not returned false')
+        self.assertFalse(r.has_service(TestServiceChild), 'Non-existing service did not returned false')
+        self.assertTrue(r.has_service(TestService.SERVICE_NAME), 'Did not returned true for existing service')
+        self.assertTrue(r.has_service(TestService), 'Did not returned true for existing service')
         self.assertEqual(r.get_service(s0.get_name()), s0, 'Did not returned expected service')
         self.assertEqual(r.get_service(TestService), s0, 'Did not returned expected service')
         with self.assertRaises(KeyError, msg='Retrieving non-existing service did not raise'):
@@ -177,8 +208,8 @@ class DaxNameRegistryTestCase(unittest.TestCase):
 
         # Test with a second service
         s1 = TestServiceChild(s)
-        self.assertEqual(r.has_service(TestServiceChild), s1, 'Did not returned expected service')
-        self.assertEqual(r.has_service(TestServiceChild.SERVICE_NAME), s1, 'Did not returned expected service')
+        self.assertTrue(r.has_service(TestServiceChild), 'Did not returned true for existing service')
+        self.assertTrue(r.has_service(TestServiceChild.SERVICE_NAME), 'Did not returned true for existing service')
         self.assertListEqual(r.get_service_key_list(), [s.get_name() for s in [s0, s1]],
                              'List of registered service keys incorrect')
 
@@ -235,7 +266,7 @@ class DaxModuleBaseTestCase(unittest.TestCase):
         with self.assertRaises(ValueError, msg='Creating bad system key did not raise'):
             s.get_system_key('bad,key')
         with self.assertRaises(AssertionError, msg='Creating system key with wrong key input did not raise'):
-            s.get_system_key(t)
+            s.get_system_key(1)
 
     def test_devices(self):
         s = DaxSystem(_get_manager_or_parent())

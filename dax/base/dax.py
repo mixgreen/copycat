@@ -133,11 +133,11 @@ class _DaxNameRegistry:
         self._modules[key] = module
 
     @typing.overload
-    def get_module(self, key: str, type_: typing.Type[__M_T]) -> __M_T:
+    def get_module(self, key: str) -> _DaxModuleBase:
         ...
 
     @typing.overload
-    def get_module(self, key: str) -> _DaxModuleBase:
+    def get_module(self, key: str, type_: typing.Type[__M_T]) -> __M_T:
         ...
 
     def get_module(self, key: str, type_=object) -> object:
@@ -434,11 +434,11 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
         pass
 
     @typing.overload
-    def get_device(self, key: str, type_: typing.Type[__D_T]) -> __D_T:
+    def get_device(self, key: str) -> object:
         ...
 
     @typing.overload
-    def get_device(self, key: str) -> object:
+    def get_device(self, key: str, type_: typing.Type[__D_T]) -> __D_T:
         ...
 
     def get_device(self, key: str, type_=object) -> object:
@@ -465,11 +465,12 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
         return device
 
     @typing.overload
-    def setattr_device(self, key: str, attr_name: typing.Optional[str], type_: typing.Type[__D_T]) -> None:
+    def setattr_device(self, key: str, attr_name: typing.Optional[str] = None) -> None:
         ...
 
     @typing.overload
-    def setattr_device(self, key: str, attr_name: typing.Optional[str]) -> None:
+    def setattr_device(self, key: str, attr_name: typing.Optional[str] = None,
+                       type_: typing.Type[__D_T] = typing.Type[__D_T]) -> None:
         ...
 
     def setattr_device(self, key: str, attr_name: typing.Optional[str] = None, type_=object) -> None:
