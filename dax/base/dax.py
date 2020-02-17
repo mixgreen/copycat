@@ -107,7 +107,7 @@ class _DaxNameRegistry:
 
         # A dict containing registered modules
         self._modules: dict = dict()
-        # A dict containing registered devices and the modules that registered them
+        # A dict containing registered devices and the parents that registered them
         self._devices: dict = dict()
         # A dict containing registered services
         self._services: dict = dict()
@@ -207,13 +207,13 @@ class _DaxNameRegistry:
             parent.logger.error(msg)
             raise KeyError(msg) from e
 
-        # Get the module that registered the device (None if the device was not registered before)
-        reg_module = self._devices.get(unique)
+        # Get the parent that registered the device (None if the device was not registered before)
+        reg_parent = self._devices.get(unique)
 
-        if reg_module:
+        if reg_parent:
             # Device was already registered
             device_name = '"{:s}"'.format(key) if key == unique else '"{:s}" ({:s})'.format(key, unique)
-            msg = 'Device {:s}, was already registered by module {:s}'.format(device_name, reg_module.get_identifier())
+            msg = 'Device {:s}, was already registered by parent {:s}'.format(device_name, reg_parent.get_identifier())
             parent.logger.error(msg)
             raise self._NonUniqueRegistrationError(msg)
 
@@ -711,6 +711,18 @@ class DaxClient(_DaxHasSystem, abc.ABC):
             'DAX client class {:s} must be decorated using @dax_client_factory'.format(self.__class__.__name__)
         # Call super
         super(DaxClient, self).__init__(managers_or_parent, *args, **kwargs)
+
+    def load(self) -> None:
+        # Call super (will be the user DAX system after the MRO lookup of the client wrapper class)
+        super(DaxClient, self).load()
+
+    def init(self) -> None:
+        # Call super (will be the user DAX system after the MRO lookup of the client wrapper class)
+        super(DaxClient, self).init()
+
+    def config(self) -> None:
+        # Call super (will be the user DAX system after the MRO lookup of the client wrapper class)
+        super(DaxClient, self).config()
 
 
 def dax_client_factory(c: type):

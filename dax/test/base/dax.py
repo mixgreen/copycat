@@ -125,11 +125,11 @@ class DaxNameRegistryTestCase(unittest.TestCase):
 
         # Test with one module
         t0 = TestModule(s, 'test_module')
-        self.assertEqual(r.get_module(t0.get_system_key()), t0, 'Returned module does not match expected module')
+        self.assertIs(r.get_module(t0.get_system_key()), t0, 'Returned module does not match expected module')
         with self.assertRaises(TypeError, msg='Type check in get_module() did not raise'):
             r.get_module(t0.get_system_key(), TestModuleChild)
-        self.assertEqual(r.search_module(TestModule), t0, 'Did not find the expected module')
-        self.assertEqual(r.search_module(DaxModule), t0, 'Did not find the expected module')
+        self.assertIs(r.search_module(TestModule), t0, 'Did not find the expected module')
+        self.assertIs(r.search_module(DaxModule), t0, 'Did not find the expected module')
         with self.assertRaises(KeyError, msg='Search non-existing module did not raise'):
             r.search_module(TestModuleChild)
         self.assertListEqual(r.get_module_key_list(), [m.get_system_key() for m in [s, t0]],
@@ -139,10 +139,10 @@ class DaxNameRegistryTestCase(unittest.TestCase):
 
         # Test with two modules
         t1 = TestModuleChild(s, 'test_module_child')
-        self.assertEqual(r.get_module(t1.get_system_key()), t1, 'Returned module does not match expected module')
-        self.assertEqual(r.get_module(t1.get_system_key(), TestModuleChild), t1,
-                         'Type check in get_module() raised unexpectedly')
-        self.assertEqual(r.search_module(TestModuleChild), t1, 'Did not find expected module')
+        self.assertIs(r.get_module(t1.get_system_key()), t1, 'Returned module does not match expected module')
+        self.assertIs(r.get_module(t1.get_system_key(), TestModuleChild), t1,
+                      'Type check in get_module() raised unexpectedly')
+        self.assertIs(r.search_module(TestModuleChild), t1, 'Did not find expected module')
         with self.assertRaises(_DaxNameRegistry._NonUniqueSearchError, msg='Non-unique search did not raise'):
             r.search_module(TestModule)
         self.assertListEqual(r.get_module_key_list(), [m.get_system_key() for m in [s, t0, t1]],
@@ -199,8 +199,8 @@ class DaxNameRegistryTestCase(unittest.TestCase):
         self.assertFalse(r.has_service(TestServiceChild), 'Non-existing service did not returned false')
         self.assertTrue(r.has_service(TestService.SERVICE_NAME), 'Did not returned true for existing service')
         self.assertTrue(r.has_service(TestService), 'Did not returned true for existing service')
-        self.assertEqual(r.get_service(s0.get_name()), s0, 'Did not returned expected service')
-        self.assertEqual(r.get_service(TestService), s0, 'Did not returned expected service')
+        self.assertIs(r.get_service(s0.get_name()), s0, 'Did not returned expected service')
+        self.assertIs(r.get_service(TestService), s0, 'Did not returned expected service')
         with self.assertRaises(KeyError, msg='Retrieving non-existing service did not raise'):
             r.get_service(TestServiceChild)
         self.assertListEqual(r.get_service_key_list(), [s.get_name() for s in [s0]],
@@ -335,6 +335,83 @@ class DaxModuleBaseTestCase(unittest.TestCase):
     def test_identifier(self):
         s = DaxSystem(_get_manager_or_parent())
         self.assertTrue(isinstance(s.get_identifier(), str), 'get_identifier() did not returned a string')
+
+
+class DaxServiceTestCase(unittest.TestCase):
+
+    def test_init(self):
+        from dax.base.dax import _DaxNameRegistry
+
+        s = DaxSystem(_get_manager_or_parent())
+
+        class NoNameService(DaxService):
+            def load(self) -> None:
+                pass
+
+            def init(self) -> None:
+                pass
+
+            def config(self) -> None:
+                pass
+
+        with self.assertRaises(AssertionError, msg='Lack of class service name did not raise'):
+            NoNameService(s)
+
+        class WrongNameService(NoNameService):
+            SERVICE_NAME = 3
+
+        with self.assertRaises(AssertionError, msg='Wrong type service name did not raise'):
+            WrongNameService(s)
+
+        class GoodNameService(NoNameService):
+            SERVICE_NAME = 'service_name'
+
+        service = GoodNameService(s)
+        self.assertIs(s.registry.get_service(GoodNameService), service,
+                      'get_service() did not returned expected object')
+        self.assertIn(GoodNameService.SERVICE_NAME, s.registry.get_service_key_list(),
+                      'Could not find service name key in registry')
+
+        class DuplicateNameService(NoNameService):
+            SERVICE_NAME = 'service_name'
+
+        with self.assertRaises(_DaxNameRegistry._NonUniqueRegistrationError,
+                               msg='Duplicate service name registration did not raise'):
+            DuplicateNameService(s)
+
+        class GoodNameService2(NoNameService):
+            SERVICE_NAME = 'service_name_2'
+
+        self.assertTrue(GoodNameService2(service), 'Could not create new service with other service as parent')
+
+
+class DaxClientTestCase(unittest.TestCase):
+
+    def test_not_decorated(self):
+        s = DaxSystem(_get_manager_or_parent())
+
+        class Client(DaxClient):
+            pass
+
+        with self.assertRaises(AssertionError, msg='Using client without client factory decorator did not raise'):
+            Client(s)
+
+    def test_load_super(self):
+        class System(DaxSystem):
+            def load(self) -> None:
+                self.is_loaded = True
+
+        @dax_client_factory
+        class Client(DaxClient):
+            pass
+
+        class ImplementableClient(Client(System)):
+            pass
+
+        c = ImplementableClient(_get_manager_or_parent())
+        c.load()  # Is supposed to call the load() function of the system
+
+        self.assertTrue(hasattr(c, 'is_loaded'), 'DAX system parent of client was not loaded correctly')
 
 
 if __name__ == '__main__':
