@@ -16,6 +16,7 @@ requirements = [
     "scipy",
     "pyvcd",
     "natsort",
+    "mypy",
 ]
 
 setup(
