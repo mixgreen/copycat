@@ -6,16 +6,16 @@ from dax.base import *
 import dax.util.units
 
 
-class RtioStressModule(DaxModule):
-    """Module to stress the RTIO output system."""
+class RtioBenchmarkModule(DaxModule):
+    """Module to benchmark the RTIO output system."""
 
     # System keys
-    THROUGHPUT_PERIOD_KEY = 'min_period'
-    THROUGHPUT_BURST_KEY = 'max_burst'
+    EVENT_PERIOD_KEY = 'event_period'
+    EVENT_BURST_KEY = 'event_burst'
     LATENCY_CORE_RTIO = 'latency_core_rtio'
 
     # Unique DMA tags
-    DMA_BURST = 'rtio_stress_burst'
+    DMA_BURST = 'rtio_benchmark_burst'
 
     def build(self, ttl_out):
         # TTL output device
@@ -23,12 +23,12 @@ class RtioStressModule(DaxModule):
 
     def load(self):
         # Load throughput parameters
-        self.setattr_dataset_sys(self.THROUGHPUT_PERIOD_KEY)
-        self.setattr_dataset_sys(self.THROUGHPUT_BURST_KEY)
+        self.setattr_dataset_sys(self.EVENT_PERIOD_KEY)
+        self.setattr_dataset_sys(self.EVENT_BURST_KEY)
         self.setattr_dataset_sys(self.LATENCY_CORE_RTIO)
 
         # Cap burst size to prevent too long DMA recordings, resulting in a connection timeout
-        self.max_burst = min(self.max_burst, 40000)
+        self.event_burst = min(self.event_burst, 40000)
 
     @kernel
     def init(self):
@@ -40,10 +40,10 @@ class RtioStressModule(DaxModule):
 
         with self.core_dma.record(self.DMA_BURST):
             # Record the DMA burst trace
-            for _ in range(self.max_burst // 2):
-                delay(self.min_period / 2)
+            for _ in range(self.event_burst // 2):
+                delay(self.event_period / 2)
                 self.ttl_out.on()
-                delay(self.min_period / 2)
+                delay(self.event_period / 2)
                 self.ttl_out.off()
 
     def config(self):
@@ -71,10 +71,10 @@ class RtioStressModule(DaxModule):
 
     @kernel
     def burst(self):
-        for _ in range(self.max_burst * 16):
-            delay(self.min_period * 2)
+        for _ in range(self.event_burst * 16):
+            delay(self.event_period * 2)
             self.ttl_out.on()
-            delay(self.min_period * 2)
+            delay(self.event_period * 2)
             self.ttl_out.off()
 
     @kernel
@@ -82,9 +82,9 @@ class RtioStressModule(DaxModule):
         for _ in range(128):
             self.core_dma.playback_handle(self.burst_dma_handle)
 
-    """Calibrate throughput"""
+    """Benchmark throughput"""
 
-    def calibrate_throughput(self, period_scan, num_samples, num_events, no_underflow_cutoff):
+    def benchmark_throughput(self, period_scan, num_samples, num_events, no_underflow_cutoff):
         # Convert types of arguments
         num_samples = np.int32(num_samples)
         num_events = np.int32(num_events)
@@ -114,7 +114,7 @@ class RtioStressModule(DaxModule):
         self.set_dataset('no_underflow_cutoff', no_underflow_cutoff)
 
         # Run kernel
-        self._calibrate_throughput(period_scan, num_samples, num_events, no_underflow_cutoff)
+        self._benchmark_throughput(period_scan, num_samples, num_events, no_underflow_cutoff)
 
         # Get results
         no_underflow_count = self.get_dataset('no_underflow_count')
@@ -132,11 +132,11 @@ class RtioStressModule(DaxModule):
             return False
         else:
             # Store result in system dataset
-            self.set_dataset_sys(self.THROUGHPUT_PERIOD_KEY, last_period)
+            self.set_dataset_sys(self.EVENT_PERIOD_KEY, last_period)
             return True
 
     @kernel
-    def _calibrate_throughput(self, period_scan, num_samples, num_events, no_underflow_cutoff):
+    def _benchmark_throughput(self, period_scan, num_samples, num_events, no_underflow_cutoff):
         # Storage for last period
         last_period = 0.0
         # Count of last period without underflow
@@ -194,9 +194,9 @@ class RtioStressModule(DaxModule):
             # RTIO sync
             self.core.wait_until_mu(now_mu())
 
-    """Calibrate throughput burst"""
+    """Benchmark throughput burst"""
 
-    def calibrate_throughput_burst(self, num_events_min, num_events_max, num_events_step, num_samples, period_step,
+    def benchmark_throughput_burst(self, num_events_min, num_events_max, num_events_step, num_samples, period_step,
                                    no_underflow_cutoff, num_step_cutoff):
         # Convert types of arguments
         num_events_min = np.int32(num_events_min)
@@ -229,7 +229,7 @@ class RtioStressModule(DaxModule):
             self.logger.error(msg)
             raise ValueError(msg)
         if not period_step > 0.0:
-            msg = 'Period step for throughput burst calibration must be larger than 0'
+            msg = 'Period step must be larger than 0'
             self.logger.error(msg)
             raise ValueError(msg)
         if not no_underflow_cutoff > 0:
@@ -238,7 +238,7 @@ class RtioStressModule(DaxModule):
             raise ValueError(msg)
 
         # Get current period
-        current_period = self.get_dataset_sys(self.THROUGHPUT_PERIOD_KEY)
+        current_period = self.get_dataset_sys(self.EVENT_PERIOD_KEY)
 
         # Store input values in dataset
         self.set_dataset('num_events_min', num_events_min)
@@ -253,7 +253,7 @@ class RtioStressModule(DaxModule):
         self._message_current_period(current_period)
 
         # Run kernel
-        self._calibrate_throughput_burst(num_events_min, num_events_max, num_events_step, num_samples, current_period,
+        self._benchmark_throughput_burst(num_events_min, num_events_max, num_events_step, num_samples, current_period,
                                          period_step, no_underflow_cutoff, num_step_cutoff)
 
         # Get results
@@ -270,7 +270,7 @@ class RtioStressModule(DaxModule):
             return False
         else:
             # Store result in system dataset
-            self.set_dataset_sys(self.THROUGHPUT_BURST_KEY, last_num_events)
+            self.set_dataset_sys(self.EVENT_BURST_KEY, last_num_events)
             return True
 
     @rpc(flags={"async"})
@@ -279,7 +279,7 @@ class RtioStressModule(DaxModule):
         self.logger.info('Using period {:s}'.format(dax.util.units.time_to_str(current_period)))
 
     @kernel
-    def _calibrate_throughput_burst(self, num_events_min, num_events_max, num_events_step, num_samples, current_period,
+    def _benchmark_throughput_burst(self, num_events_min, num_events_max, num_events_step, num_samples, current_period,
                                     period_step, no_underflow_cutoff, num_step_cutoff):
         # Storage for last number of events
         last_num_events = 0
@@ -340,9 +340,9 @@ class RtioStressModule(DaxModule):
         self.set_dataset('last_period', current_period)
         self.set_dataset('last_num_step_cutoff', num_step_cutoff)
 
-    """Calibrate latency core-RTIO"""
+    """Benchmark latency core-RTIO"""
 
-    def calibrate_latency_core_rtio(self, latency_min, latency_max, latency_step, num_samples, no_underflow_cutoff):
+    def benchmark_latency_core_rtio(self, latency_min, latency_max, latency_step, num_samples, no_underflow_cutoff):
         # Convert types of arguments
         latency_min = float(latency_min)
         latency_max = float(latency_max)
@@ -384,7 +384,7 @@ class RtioStressModule(DaxModule):
         self.set_dataset('no_underflow_cutoff', no_underflow_cutoff)
 
         # Run kernel
-        self._calibrate_latency_core_rtio(latency_min, latency_max, latency_step, num_samples, no_underflow_cutoff)
+        self._benchmark_latency_core_rtio(latency_min, latency_max, latency_step, num_samples, no_underflow_cutoff)
 
         # Get results
         no_underflow_count = self.get_dataset('no_underflow_count')
@@ -406,7 +406,7 @@ class RtioStressModule(DaxModule):
             return True
 
     @kernel
-    def _calibrate_latency_core_rtio(self, latency_min, latency_max, latency_step, num_samples, no_underflow_cutoff):
+    def _benchmark_latency_core_rtio(self, latency_min, latency_max, latency_step, num_samples, no_underflow_cutoff):
         # Storage for last latency
         last_latency = 0.0
         # Count of last latency without underflow
@@ -460,8 +460,8 @@ class RtioStressModule(DaxModule):
         self.set_dataset('last_latency', last_latency)
 
 
-class RtioLoopStressModule(RtioStressModule):
-    """Module to stress the RTIO system with a looped connection."""
+class RtioLoopBenchmarkModule(RtioBenchmarkModule):
+    """Module to benchmark the RTIO system with a looped connection."""
 
     # System keys
     LATENCY_RTIO_RTIO = 'latency_rtio_rtio'
@@ -473,7 +473,7 @@ class RtioLoopStressModule(RtioStressModule):
 
     def build(self, ttl_out, ttl_in):
         # Call super
-        super(RtioLoopStressModule, self).build(ttl_out)
+        super(RtioLoopBenchmarkModule, self).build(ttl_out)
         # TTL input device
         self.setattr_device(ttl_in, 'ttl_in', artiq.coredevice.ttl.TTLInOut)
 
@@ -482,7 +482,7 @@ class RtioLoopStressModule(RtioStressModule):
 
     def load(self):
         # Call super
-        super(RtioLoopStressModule, self).load()
+        super(RtioLoopBenchmarkModule, self).load()
 
         # Load latency parameters
         self.setattr_dataset_sys(self.LATENCY_RTIO_RTIO)
@@ -492,7 +492,7 @@ class RtioLoopStressModule(RtioStressModule):
     @kernel
     def init(self):
         # Call super (not using MRO/super because it is incompatible with the compiler, call parent function directly)
-        RtioStressModule.init(self)
+        RtioBenchmarkModule.init(self)
 
         # Break realtime to get some slack
         self.core.break_realtime()
@@ -500,9 +500,9 @@ class RtioLoopStressModule(RtioStressModule):
         # Set TTL direction
         self.ttl_in.input()
 
-    """Calibrate latency RTIO-core"""
+    """Benchmark latency RTIO-core"""
 
-    def calibrate_latency_rtio_core(self, num_samples, detection_window):
+    def benchmark_latency_rtio_core(self, num_samples, detection_window):
         # Convert types of arguments
         num_samples = np.int32(num_samples)
         detection_window = float(detection_window)
@@ -532,7 +532,7 @@ class RtioLoopStressModule(RtioStressModule):
         self.set_dataset('t_return', [])
 
         # Call the kernel
-        self._calibrate_latency_rtio_core(num_samples, detection_window)
+        self._benchmark_latency_rtio_core(num_samples, detection_window)
 
         # Get results
         t_zero = np.array(self.get_dataset('t_zero'))
@@ -579,7 +579,7 @@ class RtioLoopStressModule(RtioStressModule):
         return False
 
     @kernel
-    def _calibrate_latency_rtio_core(self, num_samples, detection_window):
+    def _benchmark_latency_rtio_core(self, num_samples, detection_window):
         # Reset core
         self.core.reset()
 
@@ -605,9 +605,9 @@ class RtioLoopStressModule(RtioStressModule):
             self.append_to_dataset('t_rtio', t_rtio)
             self.append_to_dataset('t_return', t_return)
 
-    """Calibrate RTT RTIO-core-RTIO"""
+    """Benchmark RTT RTIO-core-RTIO"""
 
-    def calibrate_latency_rtt(self, latency_min, latency_max, latency_step, num_samples, detection_window,
+    def benchmark_latency_rtt(self, latency_min, latency_max, latency_step, num_samples, detection_window,
                               no_underflow_cutoff):
         # Convert types of arguments
         latency_min = float(latency_min)
@@ -661,7 +661,7 @@ class RtioLoopStressModule(RtioStressModule):
             return False
 
         # Run kernel
-        self._calibrate_latency_rtt(latency_min, latency_max, latency_step, num_samples, detection_window,
+        self._benchmark_latency_rtt(latency_min, latency_max, latency_step, num_samples, detection_window,
                                     no_underflow_cutoff)
 
         # Get results
@@ -684,7 +684,7 @@ class RtioLoopStressModule(RtioStressModule):
             return True
 
     @kernel
-    def _calibrate_latency_rtt(self, latency_min, latency_max, latency_step, num_samples, detection_window,
+    def _benchmark_latency_rtt(self, latency_min, latency_max, latency_step, num_samples, detection_window,
                                no_underflow_cutoff):
         # Storage for last latency
         last_latency = 0.0
