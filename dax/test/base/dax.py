@@ -32,6 +32,11 @@ def _get_manager_or_parent():
     return device_mgr, dataset_mgr, None, {}
 
 
+class TestSystem(DaxSystem):
+    SYS_ID = 'unittest_system'
+    SYS_VER = 0
+
+
 class TestModule(DaxModule):
     """Testing module."""
 
@@ -115,7 +120,7 @@ class DaxNameRegistryTestCase(unittest.TestCase):
         from dax.base.dax import _DaxNameRegistry
 
         # Test system
-        s = DaxSystem(_get_manager_or_parent())
+        s = TestSystem(_get_manager_or_parent())
         # Registry
         r = s.registry
 
@@ -154,7 +159,7 @@ class DaxNameRegistryTestCase(unittest.TestCase):
         from dax.base.dax import _DaxNameRegistry
 
         # Test system
-        s = DaxSystem(_get_manager_or_parent())
+        s = TestSystem(_get_manager_or_parent())
         t0 = TestModule(s, 'test_module')
         # List of core devices
         core_devices = ['core', 'core_cache', 'core_dma']
@@ -184,7 +189,7 @@ class DaxNameRegistryTestCase(unittest.TestCase):
         from dax.base.dax import _DaxNameRegistry
 
         # Test system
-        s = DaxSystem(_get_manager_or_parent())
+        s = TestSystem(_get_manager_or_parent())
         s0 = TestService(s)
         # Registry
         r = s.registry
@@ -221,9 +226,80 @@ class DaxModuleBaseTestCase(unittest.TestCase):
     Therefore they are all tested mutually.
     """
 
+    def test_system_build(self):
+        # A system that does not call super() in build()
+        class BadTestSystem(TestSystem):
+            def build(self):
+                pass  # No call to super(), which is bad
+
+        # Test if an error occurs when super() is not called in build()
+        with self.assertRaises(AttributeError, msg='Not calling super.build() in user system did not raise'):
+            BadTestSystem(_get_manager_or_parent())
+
+    def test_system_id(self):
+        # Test if an error is raised when no ID is given to a system
+        with self.assertRaises(AssertionError, msg='Not providing system id did not raise'):
+            DaxSystem(_get_manager_or_parent())
+
+        # Systems with bad ID
+        class TestSystemBadId1(DaxSystem):
+            SYS_ID = 'wrong.name'
+            SYS_VER = 0
+
+        # Systems with bad ID
+        class TestSystemBadId2(DaxSystem):
+            SYS_ID = ''
+            SYS_VER = 0
+
+        # Systems with bad ID
+        class TestSystemBadId3(DaxSystem):
+            SYS_ID = '+wrong'
+            SYS_VER = 0
+
+        for BadSystem in [TestSystemBadId1, TestSystemBadId2, TestSystemBadId3]:
+            # Test if an error is raised when a bad ID is given to a system
+            with self.assertRaises(AssertionError, msg='Providing bad system id did not raise'):
+                BadSystem(_get_manager_or_parent())
+
+    def test_system_ver(self):
+        class TestSystemNoVer(DaxSystem):
+            SYS_ID = 'unittest_system'
+
+        # Test if an error is raised when no version is given to a system
+        with self.assertRaises(AssertionError, msg='Not providing system version did not raise'):
+            TestSystemNoVer(_get_manager_or_parent())
+
+        # System with bad version
+        class TestSystemBadVer1(DaxSystem):
+            SYS_ID = 'unittest_system'
+            SYS_VER = '1'
+
+        # System with bad version
+        class TestSystemBadVer2(DaxSystem):
+            SYS_ID = 'unittest_system'
+            SYS_VER = -1
+
+        # System with bad version
+        class TestSystemBadVer3(DaxSystem):
+            SYS_ID = 'unittest_system'
+            SYS_VER = 1.1
+
+        for BadSystem in [TestSystemBadVer1, TestSystemBadVer2, TestSystemBadVer3]:
+            # Test if an error is raised when a bad version is given to a system
+            with self.assertRaises(AssertionError, msg='Providing bad system version did not raise'):
+                BadSystem(_get_manager_or_parent())
+
+        # System with version 0, which is fine
+        class TestSystemVerZero(DaxSystem):
+            SYS_ID = 'unittest_system'
+            SYS_VER = 0
+
+        # Test if it is possible to create a system with version 0
+        TestSystemVerZero(_get_manager_or_parent())
+
     def test_init(self):
         manager_or_parent = _get_manager_or_parent()
-        s = DaxSystem(_get_manager_or_parent())
+        s = TestSystem(_get_manager_or_parent())
 
         # Check constructor
         self.assertIsNotNone(s, 'Could not create DaxSystem')
@@ -236,32 +312,23 @@ class DaxModuleBaseTestCase(unittest.TestCase):
             TestModule(manager_or_parent, 'module_name')
 
         # Check register
-        s = DaxSystem(_get_manager_or_parent())
+        s = TestSystem(_get_manager_or_parent())
         t = TestModule(s, 'module_name')
         self.assertDictEqual(s.registry._modules, {m.get_system_key(): m for m in [s, t]},
                              'Dict with registered modules does not match expected content')
 
-        # A system that does not call super() in build()
-        class BadTestSystem(DaxSystem):
-            def build(self):
-                pass  # No call to super(), which is bad
-
-        # Test if an error occurs when super() is not called in build()
-        with self.assertRaises(AttributeError, msg='Not calling super.build() in user system did not raise'):
-            BadTestSystem(manager_or_parent)
-
     def test_names_keys(self):
-        s = DaxSystem(_get_manager_or_parent())
+        s = TestSystem(_get_manager_or_parent())
 
-        self.assertEqual(s.get_name(), DaxSystem.SYS_NAME, 'Returned name did not match expected name')
-        self.assertEqual(s.get_system_key(), DaxSystem.SYS_NAME, 'Returned key did not match expected key')
+        self.assertEqual(s.get_name(), TestSystem.SYS_NAME, 'Returned name did not match expected name')
+        self.assertEqual(s.get_system_key(), TestSystem.SYS_NAME, 'Returned key did not match expected key')
 
         n = 'test_module_name'
         t = TestModule(s, n)
-        self.assertEqual(t.get_system_key(), '.'.join([DaxSystem.SYS_NAME, n]),
+        self.assertEqual(t.get_system_key(), '.'.join([TestSystem.SYS_NAME, n]),
                          'Key created for nested module did not match expected key')
         some_key = 'some_key'
-        self.assertEqual(t.get_system_key(some_key), '.'.join([DaxSystem.SYS_NAME, n, some_key]),
+        self.assertEqual(t.get_system_key(some_key), '.'.join([TestSystem.SYS_NAME, n, some_key]),
                          'System key creation derived from current module key failed')
         with self.assertRaises(ValueError, msg='Creating bad system key did not raise'):
             s.get_system_key('bad,key')
@@ -269,19 +336,19 @@ class DaxModuleBaseTestCase(unittest.TestCase):
             s.get_system_key(1)
 
     def test_devices(self):
-        s = DaxSystem(_get_manager_or_parent())
+        s = TestSystem(_get_manager_or_parent())
 
         self.assertIsNone(s.setattr_device('ttl0'), 'setattr_device() did not return None')
         self.assertTrue(hasattr(s, 'ttl0'), 'setattr_device() did not set the attribute correctly')
         self.assertIsNone(s.setattr_device('alias_2', 'foo'), 'setattr_device() with attribute name failed')
         self.assertTrue(hasattr(s, 'foo'), 'setattr_device() with attribute name did not set attribute correctly')
 
-        s = DaxSystem(_get_manager_or_parent())
+        s = TestSystem(_get_manager_or_parent())
         with self.assertRaises(TypeError, msg='get_device() type check did not raise'):
             s.get_device('ttl1', EdgeCounter)  # EdgeCounter does not match the device type of ttl1
 
     def test_dataset(self):
-        s = DaxSystem(_get_manager_or_parent())
+        s = TestSystem(_get_manager_or_parent())
 
         key = 'key1'
         self.assertListEqual(s.get_dataset_sys(key, default=[11, 12, 13]), [11, 12, 13],
@@ -298,7 +365,7 @@ class DaxModuleBaseTestCase(unittest.TestCase):
                       'setattr_dataset_sys() did not added the attribute to kernel_invariants by default')
 
     def test_dataset_append(self):
-        s = DaxSystem(_get_manager_or_parent())
+        s = TestSystem(_get_manager_or_parent())
 
         key = 'key2'
         self.assertIsNone(s.set_dataset_sys(key, []), 'Setting new system dataset failed')
@@ -322,7 +389,7 @@ class DaxModuleBaseTestCase(unittest.TestCase):
                              'Appending to dataset has incorrect behavior')
 
     def test_dataset_mutate(self):
-        s = DaxSystem(_get_manager_or_parent())
+        s = TestSystem(_get_manager_or_parent())
 
         key = 'key2'
         self.assertIsNone(s.set_dataset_sys(key, [0, 0, 0, 0]), 'Setting new system dataset failed')
@@ -333,7 +400,7 @@ class DaxModuleBaseTestCase(unittest.TestCase):
         self.assertListEqual(s.get_dataset_sys(key), [0, 9, 0, 99], 'Mutating system dataset has incorrect behavior')
 
     def test_identifier(self):
-        s = DaxSystem(_get_manager_or_parent())
+        s = TestSystem(_get_manager_or_parent())
         self.assertTrue(isinstance(s.get_identifier(), str), 'get_identifier() did not returned a string')
 
 
@@ -342,7 +409,7 @@ class DaxServiceTestCase(unittest.TestCase):
     def test_init(self):
         from dax.base.dax import _DaxNameRegistry
 
-        s = DaxSystem(_get_manager_or_parent())
+        s = TestSystem(_get_manager_or_parent())
 
         class NoNameService(DaxService):
             def load(self) -> None:
@@ -388,7 +455,7 @@ class DaxServiceTestCase(unittest.TestCase):
 class DaxClientTestCase(unittest.TestCase):
 
     def test_not_decorated(self):
-        s = DaxSystem(_get_manager_or_parent())
+        s = TestSystem(_get_manager_or_parent())
 
         class Client(DaxClient):
             pass
@@ -397,7 +464,7 @@ class DaxClientTestCase(unittest.TestCase):
             Client(s)
 
     def test_load_super(self):
-        class System(DaxSystem):
+        class System(TestSystem):
             def load(self) -> None:
                 self.is_loaded = True
 

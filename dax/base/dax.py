@@ -616,6 +616,11 @@ class DaxModuleInterface(abc.ABC):
 class DaxSystem(_DaxModuleBase):
     """Base class for DAX systems, which is a top-level module."""
 
+    # Identifier of the system
+    SYS_ID: str
+    # Version of the system
+    SYS_VER: int
+
     # System name, used as top key for modules
     SYS_NAME: str = 'system'
     # System services, used as top key for services
@@ -627,6 +632,16 @@ class DaxSystem(_DaxModuleBase):
     CORE_CACHE_KEY: str = 'core_cache'
 
     def __init__(self, managers_or_parent, *args, **kwargs):
+        # Check if system ID was overridden
+        assert hasattr(self, 'SYS_ID'), 'Every DAX system class must have a SYS_ID class attribute'
+        assert isinstance(self.SYS_ID, str), 'System ID must be of type str'
+        assert _is_valid_name(self.SYS_ID), 'Invalid system ID "{:s}"'.format(self.SYS_ID)
+
+        # Check if system version was overridden
+        assert hasattr(self, 'SYS_VER'), 'Every DAX system class must have a SYS_VER class attribute'
+        assert isinstance(self.SYS_VER, int), 'System version must be of type int'
+        assert self.SYS_VER >= 0, 'Invalid system version, version number must be positive'
+
         # Call super, add names, add a new registry
         super(DaxSystem, self).__init__(managers_or_parent, self.SYS_NAME, self.SYS_NAME, _DaxNameRegistry(self),
                                         *args, **kwargs)
