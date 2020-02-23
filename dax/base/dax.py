@@ -748,10 +748,11 @@ def dax_client_factory(c: type):
 
     # Use the wraps decorator, but do not inherit the docstring
     @functools.wraps(c, assigned=[e for e in functools.WRAPPER_ASSIGNMENTS if e != '__doc__'])
-    def wrapper(system_type: type):
+    def wrapper(system_type: type, *system_args, **system_kwargs):
         """Create a new DAX client class.
 
         This factory function will create a new client class for a given system type.
+        Args and kwargs will be forwarded to the build function of the system.
 
         :param system_type: The system type used by the client.
         """
@@ -771,7 +772,7 @@ def dax_client_factory(c: type):
 
             def build(self, *args, **kwargs):
                 # First build the system (not using MRO) to fill the registry
-                system_type.build(self)
+                system_type.build(self, *system_args, **system_kwargs)
 
                 # Then build the client which can use the registry
                 c.build(self, *args, **kwargs)
