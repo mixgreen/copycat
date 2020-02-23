@@ -39,22 +39,26 @@ class SamplerService(DaxService):
         pass
 
     @portable
-    def prepare_result_dataset(self, key='y'):
+    def prepare_sampler(self, key='y'):
         """Prepare the dataset to write results to, can be called more than once."""
 
         # Prepare an empty list to append to
         self.set_dataset(key, [])
         # Store key
         self.result_dataset_key = key
+        # Debug message
+        self.logger.debug('Prepared key "{:s}" as result dataset'.format(key))
 
     @portable
-    def finalize_result_dataset(self, x_data, key='x'):
-        """Store x values in dataset along with one or multiple sets of results."""
+    def finalize_sampler(self, x_data, key='x'):
+        """Store x-values in dataset along with one or multiple sets of results."""
 
         # Store x-axis data
         self.set_dataset(key, x_data)
         # Reset key
         self.result_dataset_key = ''
+        # Debug message
+        self.logger.debug('Stored x-values with key "{:s}" and finalized sampling'.format(key))
 
     @kernel
     def sample_active(self, duration, num_samples=1):

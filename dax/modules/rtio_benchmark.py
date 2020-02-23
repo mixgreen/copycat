@@ -23,7 +23,7 @@ class RtioBenchmarkModule(DaxModule):
         self.setattr_device(ttl_out, 'ttl_out', (artiq.coredevice.ttl.TTLOut, artiq.coredevice.ttl.TTLInOut))
 
     def load(self):
-        # Load throughput parameters
+        # Load parameters
         self.setattr_dataset_sys(self.EVENT_PERIOD_KEY)
         self.setattr_dataset_sys(self.EVENT_BURST_KEY)
         self.setattr_dataset_sys(self.DMA_EVENT_PERIOD_KEY)
@@ -615,7 +615,7 @@ class RtioLoopBenchmarkModule(RtioBenchmarkModule):
         # Call super
         super(RtioLoopBenchmarkModule, self).load()
 
-        # Load latency parameters
+        # Load parameters
         self.setattr_dataset_sys(self.INPUT_BUFFER_SIZE_KEY)
         self.setattr_dataset_sys(self.LATENCY_RTIO_RTIO_KEY)
         self.setattr_dataset_sys(self.LATENCY_RTIO_CORE_KEY)
@@ -731,7 +731,7 @@ class RtioLoopBenchmarkModule(RtioBenchmarkModule):
 
         # Store values at a non-critical time
         self.append_to_dataset('num_events', num_events)
-        self.append_to_dataset('buffer_overflow', buffer_overflowo)
+        self.append_to_dataset('buffer_overflow', buffer_overflow)
 
     """Benchmark latency RTIO-core"""
 
