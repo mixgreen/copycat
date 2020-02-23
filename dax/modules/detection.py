@@ -22,9 +22,10 @@ class DetectionModule(DaxModule, DetectionInterface):
         self.setattr_device(detect_sw, 'detect_sw', (artiq.coredevice.ttl.TTLOut, artiq.coredevice.ttl.TTLInOut))
 
         # Array of PMT channels
-        self.pmt_array_size = pmt_array_size
+        self.pmt_array_size = np.int32(pmt_array_size)
         self.pmt_array = [self.get_device('{:s}_{:d}'.format(pmt_array, i)) for i in range(self.pmt_array_size)]
         self.update_kernel_invariants('pmt_array', 'pmt_array_size')
+        # TODO, request both TTLInOut and EC devices?
 
         # Check if all PMT array devices have the same type
         pmt_device_types = {type(d) for d in self.pmt_array}
@@ -54,10 +55,10 @@ class DetectionModule(DaxModule, DetectionInterface):
         # Duration of detection
         self.setattr_dataset_sys(self.DURATION_KEY, 150 * us)
         # Threshold for state discrimination
-        self.setattr_dataset_sys(self.THRESHOLD_KEY, 1)
+        self.setattr_dataset_sys(self.THRESHOLD_KEY, np.int32(1))
 
         # List of active PMT channels, also the mapping of ion to PMT channel (ions are ordered)
-        self.setattr_dataset_sys(self.ACTIVE_PMT_CHANNELS_KEY, list(np.int32(i) for i in range(self.pmt_array_size)))
+        self.setattr_dataset_sys(self.ACTIVE_PMT_CHANNELS_KEY, [np.int32(i) for i in range(self.pmt_array_size)])
 
     @kernel
     def init(self):
@@ -78,8 +79,8 @@ class DetectionModule(DaxModule, DetectionInterface):
         # Break realtime to get some slack
         self.core.break_realtime()
 
-        # Set detection laser switch to off
-        self.set_detection_laser_o(False)
+        # Switch detection laser off
+        self.detection_laser_off()
 
     @kernel
     def set_detection_laser_o(self, state):
@@ -94,81 +95,131 @@ class DetectionModule(DaxModule, DetectionInterface):
         self.set_detection_laser_o(False)
 
     @kernel
-    def detect_all(self):
-        # Enable detection laser
-        self.set_detection_laser_o(True)
+    def detection_laser_pulse(self, duration):
+        self.detection_laser_pulse_mu(self.core.seconds_to_mu(duration))
 
-        # Detect events on all channels
+    @kernel
+    def detection_laser_pulse_mu(self, duration):
+        self.detection_laser_on()
+        delay_mu(duration)
+        self.detection_laser_off()
+
+    @kernel
+    def _detect_mu(self, duration, pmt_channels, pulse_laser):
         with parallel:
-            for i in range(self.pmt_array_size):
-                self.pmt_array[i].gate_rising(self.duration)
+            # Pulse detection laser if requested
+            if pulse_laser:
+                self.detection_laser_pulse_mu(duration)
 
-        # Disable detection laser
-        self.set_detection_laser_o(False)
+            # Detect events on channels
+            for c in pmt_channels:
+                self.pmt_array[c].gate_rising_mu(duration)
 
         # Return the cursor at the end of the detection window
         return now_mu()
 
     @kernel
-    def detect_active(self):
-        # Enable detection laser
-        self.set_detection_laser_o(True)
-
-        # Detect events on active channels
-        with parallel:
-            for i in self.active_pmt_channels:
-                self.pmt_array[i].gate_rising(self.duration)
-
-        # Disable detection laser
-        self.set_detection_laser_o(False)
-
-        # Return the cursor at the end of the detection window
-        return now_mu()
+    def detect_all(self, duration, pulse_laser):
+        return self.detect_all_mu(self.core.seconds_to_mu(duration), pulse_laser)
 
     @kernel
-    def _pmt_array_count(self, index, detection_window_mu):
+    def detect_all_mu(self, duration, pulse_laser):
+        return self._detect_mu(duration, [np.int32(i) for i in range(self.pmt_array_size)], pulse_laser)
+
+    @kernel
+    def detect_active(self, duration):
+        return self.detect_active_mu(self.core.seconds_to_mu(duration))
+
+    @kernel
+    def detect_active_mu(self, duration):
+        return self._detect_mu(duration, self.active_pmt_channels, True)
+
+    @portable
+    def _targets_to_channels(self, targets):
+        # Convert logical targets (ion numbers) to PMT channels
+        return [self.active_pmt_channels[t] for t in targets]
+
+    @kernel
+    def detect_targets(self, duration, targets):
+        return self.detect_targets_mu(self.core.seconds_to_mu(duration), targets)
+
+    @kernel
+    def detect_targets_mu(self, duration, targets):
+        return self._detect_mu(duration, self._targets_to_channels(targets), True)
+
+    @kernel
+    def _pmt_array_count(self, pmt_channel, detection_window_mu):
         # Get the count of a single PMT
         if self.EDGE_COUNTER:
             # EdgeCounter
-            return self.pmt_array[index].fetch_count(detection_window_mu)
+            return self.pmt_array[pmt_channel].fetch_count(detection_window_mu)
         else:
             # TTLInOut
-            return self.pmt_array[index].count(detection_window_mu)
+            return self.pmt_array[pmt_channel].count(detection_window_mu)
 
     @kernel
-    def count_all(self, detection_window_mu):
+    def count_all(self, up_to_timestamp_mu):
         # Return a list of counts for all channels
         return [self._pmt_array_count(i, detection_window_mu) for i in range(self.pmt_array_size)]
 
     @kernel
-    def count_active(self, detection_window_mu):
+    def count_active(self, up_to_timestamp_mu):
         # Return a list of counts for active channels
         return [self._pmt_array_count(i, detection_window_mu) for i in self.active_pmt_channels]
 
     @kernel
-    def measure_all(self, detection_window_mu):
+    def count_targets(self, up_to_timestamp_mu, targets):
+        # Return a list of counts for specific active channels
+        return [self._pmt_array_count(i, detection_window_mu) for i in self._targets_to_channels(targets)]
+
+    @kernel
+    def measure_all(self, up_to_timestamp_mu):
         # Get the counts of all channels
         counts = self.count_all(detection_window_mu)
         # Discriminate the counts based on the threshold and return the binary results
         return [c > self.threshold for c in counts]
 
     @kernel
-    def measure_active(self, detection_window_mu):
+    def measure_active(self, up_to_timestamp_mu):
         # Get the counts of the active channels
         counts = self.count_active(detection_window_mu)
         # Discriminate the counts based on the threshold and return the binary results
         return [c > self.threshold for c in counts]
 
     @kernel
-    def detect(self):
-        """Convenient alias of detect_active() to use with measure()."""
-        return self.detect_active()
+    def measure_targets(self, up_to_timestamp_mu, targets):
+        # Get the counts of the specific active channels
+        counts = self.count_targets(detection_window_mu)
+        # Discriminate the counts based on the threshold and return the binary results
+        return [c > self.threshold for c in counts]
 
     @kernel
-    def measure(self, detection_window_mu):
+    def detect(self):
+        """Convenient alias of detect_active() with default time and laser pulse, to use with measure()."""
+        with parallel:
+            self.detect_active(self.duration)
+            self.detection_laser_pulse(self.duration)
+        return now_mu()
+
+    @kernel
+    def measure(self, up_to_timestamp_mu):
         """Convenience alias of measure_active() to use with detect()."""
         return self.measure_active(detection_window_mu)
 
+    @portable
+    def num_channels(self):
+        return self.pmt_array_size
+
+    @portable
+    def num_active_channels(self):
+        return len(self.active_pmt_channels)
+
+    @portable
+    def get_active_channels(self):
+        return self.active_pmt_channels
+
+    @host_only
     def set_active_channels(self, active_pmt_channels):
         # Set a new list of active channels
-        self.set_dataset_sys(self.ACTIVE_PMT_CHANNELS_KEY, active_pmt_channels)
+        self.active_pmt_channels = [np.int32(c) for c in active_pmt_channels]
+        self.set_dataset_sys(self.ACTIVE_PMT_CHANNELS_KEY, self.active_pmt_channels)

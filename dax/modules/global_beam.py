@@ -7,21 +7,10 @@ from dax.modules.interfaces.global_beam_if import *
 class GlobalBeamModule(DaxModule, GlobalBeamInterface):
     """Module for global beam control."""
 
-    B_AOM_FREQ_KEY = 'b_aom_freq'
-    B_AOM_PHASE_KEY = 'b_aom_phase'
-    B_AOM_ATT_KEY = 'b_aom_att'
-
-    R_AOM_FREQ_KEY = 'r_aom_freq'
-    R_AOM_PHASE_KEY = 'r_aom_phase'
-    R_AOM_ATT_KEY = 'r_aom_att'
-
-    C_AOM_FREQ_KEY = 'c_aom_freq'
-    C_AOM_PHASE_KEY = 'c_aom_phase'
-    C_AOM_ATT_KEY = 'c_aom_att'
-
-    Z_AOM_FREQ_KEY = 'z_aom_freq'
-    Z_AOM_PHASE_KEY = 'z_aom_phase'
-    Z_AOM_ATT_KEY = 'z_aom_att'
+    AOM_NAMES = 'brcz'
+    AOM_FREQ_KEY = '{name:s}_aom_freq'
+    AOM_PHASE_KEY = '{name:s}_aom_phase'
+    AOM_ATT_KEY = '{name:s}_aom_att'
 
     # Configuration of switch (which configuration refers to which state)
     SW_BRC = False
@@ -29,10 +18,8 @@ class GlobalBeamModule(DaxModule, GlobalBeamInterface):
 
     def build(self, b_aom, r_aom, c_aom, z_aom, sw):
         # Global beam AOMs
-        self.setattr_device(b_aom, 'b_aom')
-        self.setattr_device(r_aom, 'r_aom')
-        self.setattr_device(c_aom, 'c_aom')
-        self.setattr_device(z_aom, 'z_aom')
+        for k, n in zip((b_aom, r_aom, c_aom, z_aom), self.AOM_NAMES):
+            self.setattr_device(k, '{name:s}_aom'.format(name=n))
 
         # Switch between BRC and Z
         self.setattr_device(sw, 'sw', (artiq.coredevice.ttl.TTLOut, artiq.coredevice.ttl.TTLInOut))
@@ -41,22 +28,11 @@ class GlobalBeamModule(DaxModule, GlobalBeamInterface):
         self.update_kernel_invariants('SW_BRC', 'SW_Z')
 
     def load(self):
-        # For all AOMs: frequency, phase, and attenuation
-        self.setattr_dataset_sys(self.B_AOM_FREQ_KEY, 100 * MHz)
-        self.setattr_dataset_sys(self.B_AOM_PHASE_KEY, 0.0)
-        self.setattr_dataset_sys(self.B_AOM_ATT_KEY, 0.0 * dB)
-
-        self.setattr_dataset_sys(self.R_AOM_FREQ_KEY, 100 * MHz)
-        self.setattr_dataset_sys(self.R_AOM_PHASE_KEY, 0.0)
-        self.setattr_dataset_sys(self.R_AOM_ATT_KEY, 0.0 * dB)
-
-        self.setattr_dataset_sys(self.C_AOM_FREQ_KEY, 100 * MHz)
-        self.setattr_dataset_sys(self.C_AOM_PHASE_KEY, 0.0)
-        self.setattr_dataset_sys(self.C_AOM_ATT_KEY, 0.0 * dB)
-
-        self.setattr_dataset_sys(self.Z_AOM_FREQ_KEY, 100 * MHz)
-        self.setattr_dataset_sys(self.Z_AOM_PHASE_KEY, 0.0)
-        self.setattr_dataset_sys(self.Z_AOM_ATT_KEY, 0.0 * dB)
+        for n in self.AOM_NAMES:
+            # Set AOM frequency, phase, and attenuation
+            self.setattr_dataset_sys(self.AOM_FREQ_KEY.format(name=n), 100 * MHz)
+            self.setattr_dataset_sys(self.AOM_PHASE_KEY.format(name=n), 0.0)
+            self.setattr_dataset_sys(self.AOM_ATT_KEY.format(name=n), 0.0 * dB)
 
     @kernel
     def init(self):

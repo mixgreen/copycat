@@ -43,6 +43,11 @@ class TrapInterface(DaxModuleInterface):
         pass
 
     @abc.abstractmethod
+    def cool_default(self):
+        """Cool for the default duration."""
+        pass
+
+    @abc.abstractmethod
     def set_pump_o(self, state):
         pass
 
@@ -52,6 +57,21 @@ class TrapInterface(DaxModuleInterface):
 
     @abc.abstractmethod
     def pump_off(self):
+        pass
+
+    @abc.abstractmethod
+    def pump(self, duration):
+        """Pump for a specified duration."""
+        pass
+
+    @abc.abstractmethod
+    def pump_mu(self, duration):
+        """Pump for a specified duration in machine units."""
+        pass
+
+    @abc.abstractmethod
+    def pump_default(self):
+        """Pump for the default duration."""
         pass
 
     @abc.abstractmethod
@@ -79,3 +99,16 @@ class TrapInterface(DaxModuleInterface):
         pass
 
     """Abstract module configuration"""
+
+    @abc.abstractmethod
+    def num_loaded_ions(self):
+        pass
+
+    @abc.abstractmethod
+    def set_loaded_ions(self, num_ions):
+        pass
+
+    @abc.abstractmethod
+    def get_targets(self):
+        """Returns a list with targets corresponding to the loaded ions."""
+        pass
