@@ -251,9 +251,6 @@ class RtioBenchmarkModule(DaxModule):
         self.set_dataset('no_underflow_cutoff', no_underflow_cutoff)
         self.set_dataset('num_step_cutoff', num_step_cutoff)
 
-        # Message starting period
-        self._message_current_period(current_period)
-
         # Run kernel
         self._benchmark_throughput_burst(num_events_min, num_events_max, num_events_step, num_samples, current_period,
                                          period_step, no_underflow_cutoff, num_step_cutoff)
@@ -296,6 +293,9 @@ class RtioBenchmarkModule(DaxModule):
             underflow_flag = False
             no_underflow_count = np.int32(0)
 
+            # Message current period
+            self._message_current_period(current_period)
+
             # Iterate over scan from max to min (manual iteration for better performance on large range)
             num_events = num_events_max
             while num_events > num_events_min:
@@ -326,12 +326,10 @@ class RtioBenchmarkModule(DaxModule):
                 # No underflow events occurred, reducing period
                 current_period -= period_step
                 num_step_cutoff -= 1
-                self._message_current_period(current_period)
             elif no_underflow_count == 0:
                 # All points had an underflow event, increasing period
                 current_period += period_step
                 num_step_cutoff -= 1
-                self._message_current_period(current_period)
             else:
                 break  # Underflow events happened and threshold was found, stop testing
 
@@ -670,8 +668,12 @@ class RtioLoopBenchmarkModule(RtioBenchmarkModule):
             self.logger.error(msg)
             raise ValueError(msg)
 
+        # Calculate detection window
+        detection_window = self.EDGE_DELAY * (max_events + 2)
+
         # Store input values in dataset
         self.set_dataset('max_events', max_events)
+        self.set_dataset('detection_window', detection_window)
 
         # Test loop connection
         if not self._test_loop_connection(detection_window):
@@ -679,7 +681,7 @@ class RtioLoopBenchmarkModule(RtioBenchmarkModule):
             return False
 
         # Call the kernel
-        self._benchmark_input_buffer_size(max_events)
+        self._benchmark_input_buffer_size(max_events, detection_window)
 
         # Get results
         num_events = self.get_dataset('num_events')
@@ -695,10 +697,7 @@ class RtioLoopBenchmarkModule(RtioBenchmarkModule):
             return True
 
     @kernel
-    def _benchmark_input_buffer_size(self, max_events):
-        # Calculate detection window
-        detection_window = self.EDGE_DELAY * (max_events + 2)
-
+    def _benchmark_input_buffer_size(self, max_events, detection_window):
         # Counter for number of events posted
         num_events = np.int32(0)
         # Flag for overflow

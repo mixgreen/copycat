@@ -57,7 +57,7 @@ class RpcBenchmarkModule(DaxModule):
         time_mu = self._benchmark_core_host_core_async(num_samples)
         # Convert total time and store average time per call
         time = self.core.mu_to_seconds(time_mu)
-        self.set_dataset_sys(self.LATENCY_CORE_HOST_CORE_KEY, time / num_samples)
+        self.set_dataset_sys(self.LATENCY_CORE_HOST_CORE_ASYNC_KEY, time / num_samples)
 
         # Always return true (errors should not occur)
         return True
@@ -105,7 +105,7 @@ class RpcBenchmarkModule(DaxModule):
             # Accumulate execution time
             t_total += t_end - t_start
 
-            if (i & 0x3) == 0x3:  # TODO, should check how fast async calls accumulate
+            if (i & 0xF) == 0xF:
                 # Sync call to other function just to make sure we do not accumulate too much async calls
                 self._empty_host_function()
 

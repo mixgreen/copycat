@@ -630,6 +630,8 @@ class DaxSystem(_DaxModuleBase):
     CORE_KEY: str = 'core'
     CORE_DMA_KEY: str = 'core_dma'
     CORE_CACHE_KEY: str = 'core_cache'
+    # Key of core log controller
+    CORE_LOG_KEY: str = 'core_log'
 
     def __init__(self, managers_or_parent, *args, **kwargs):
         # Check if system ID was overridden
@@ -653,6 +655,10 @@ class DaxSystem(_DaxModuleBase):
         self.core = self.get_device(self.CORE_KEY, artiq.coredevice.core.Core)
         self.core_dma = self.get_device(self.CORE_DMA_KEY, artiq.coredevice.dma.CoreDMA)
         self.core_cache = self.get_device(self.CORE_CACHE_KEY, artiq.coredevice.cache.CoreCache)
+
+        # Verify existence of core log controller
+        if self.CORE_LOG_KEY not in self.get_device_db():
+            self.logger.warning('Core log controller "{:s}" not found in device DB'.format(self.CORE_LOG_KEY))
 
     def dax_load(self) -> None:
         """Prepare the DAX system for usage by loading and configuring the system."""
