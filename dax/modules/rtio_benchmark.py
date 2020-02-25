@@ -84,9 +84,9 @@ class RtioBenchmarkModule(DaxModule):
         for _ in range(128):
             self.core_dma.playback_handle(self.burst_dma_handle)
 
-    """Benchmark throughput"""
+    """Benchmark event throughput"""
 
-    def benchmark_throughput(self, period_scan, num_samples, num_events, no_underflow_cutoff):
+    def benchmark_event_throughput(self, period_scan, num_samples, num_events, no_underflow_cutoff):
         # Convert types of arguments
         num_samples = np.int32(num_samples)
         num_events = np.int32(num_events)
@@ -116,7 +116,7 @@ class RtioBenchmarkModule(DaxModule):
         self.set_dataset('no_underflow_cutoff', no_underflow_cutoff)
 
         # Run kernel
-        self._benchmark_throughput(period_scan, num_samples, num_events, no_underflow_cutoff)
+        self._benchmark_event_throughput(period_scan, num_samples, num_events, no_underflow_cutoff)
 
         # Get results
         no_underflow_count = self.get_dataset('no_underflow_count')
@@ -126,11 +126,11 @@ class RtioBenchmarkModule(DaxModule):
         # Process results directly (next experiment might need these values)
         if no_underflow_count == 0:
             # Last data point was an underflow, assuming all data points raised an underflow
-            self.logger.warning('Could not determine throughput: All data points raised an underflow exception')
+            self.logger.warning('Could not determine event throughput: All data points raised an underflow exception')
             return False
         elif not underflow_flag:
             # No underflow occurred
-            self.logger.warning('Could not determine throughput: No data points raised an underflow exception')
+            self.logger.warning('Could not determine event throughput: No data points raised an underflow exception')
             return False
         else:
             # Store result in system dataset
@@ -138,7 +138,7 @@ class RtioBenchmarkModule(DaxModule):
             return True
 
     @kernel
-    def _benchmark_throughput(self, period_scan, num_samples, num_events, no_underflow_cutoff):
+    def _benchmark_event_throughput(self, period_scan, num_samples, num_events, no_underflow_cutoff):
         # Storage for last period
         last_period = 0.0
         # Count of last period without underflow
@@ -178,7 +178,7 @@ class RtioBenchmarkModule(DaxModule):
         # Convert period to machine units
         period_mu = self.core.seconds_to_mu(period)
         # Scale number of events
-        num_events //= 2
+        num_events >>= 1
 
         # Iterate over number of samples
         for _ in range(num_samples):
@@ -196,10 +196,10 @@ class RtioBenchmarkModule(DaxModule):
             # RTIO sync
             self.core.wait_until_mu(now_mu())
 
-    """Benchmark throughput burst"""
+    """Benchmark event burst"""
 
-    def benchmark_throughput_burst(self, num_events_min, num_events_max, num_events_step, num_samples, period_step,
-                                   no_underflow_cutoff, num_step_cutoff):
+    def benchmark_event_burst(self, num_events_min, num_events_max, num_events_step, num_samples, period_step,
+                              no_underflow_cutoff, num_step_cutoff):
         # Convert types of arguments
         num_events_min = np.int32(num_events_min)
         num_events_max = np.int32(num_events_max)
@@ -252,8 +252,8 @@ class RtioBenchmarkModule(DaxModule):
         self.set_dataset('num_step_cutoff', num_step_cutoff)
 
         # Run kernel
-        self._benchmark_throughput_burst(num_events_min, num_events_max, num_events_step, num_samples, current_period,
-                                         period_step, no_underflow_cutoff, num_step_cutoff)
+        self._benchmark_event_burst(num_events_min, num_events_max, num_events_step, num_samples, current_period,
+                                    period_step, no_underflow_cutoff, num_step_cutoff)
 
         # Get results
         no_underflow_count = self.get_dataset('no_underflow_count')
@@ -262,10 +262,10 @@ class RtioBenchmarkModule(DaxModule):
 
         # Process results directly (next experiment might need these values)
         if no_underflow_count == 0:
-            self.logger.warning('Could not determine throughput burst: All data points raised an underflow exception')
+            self.logger.warning('Could not determine event burst size: All data points raised an underflow exception')
             return False
         elif not underflow_flag:
-            self.logger.warning('Could not determine throughput burst: No data points raised an underflow exception')
+            self.logger.warning('Could not determine event burst size: No data points raised an underflow exception')
             return False
         else:
             # Store result in system dataset
@@ -278,8 +278,8 @@ class RtioBenchmarkModule(DaxModule):
         self.logger.info('Using period {:s}'.format(dax.util.units.time_to_str(current_period)))
 
     @kernel
-    def _benchmark_throughput_burst(self, num_events_min, num_events_max, num_events_step, num_samples, current_period,
-                                    period_step, no_underflow_cutoff, num_step_cutoff):
+    def _benchmark_event_burst(self, num_events_min, num_events_max, num_events_step, num_samples, current_period,
+                               period_step, no_underflow_cutoff, num_step_cutoff):
         # Storage for last number of events
         last_num_events = np.int32(0)
         # Count of last number of events without underflow

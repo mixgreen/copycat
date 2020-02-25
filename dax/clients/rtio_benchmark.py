@@ -5,8 +5,8 @@ import dax.util.units
 
 
 @dax_client_factory
-class RtioBenchmarkThroughput(DaxClient, EnvExperiment):
-    """RTIO throughput benchmark."""
+class RtioBenchmarkEventThroughput(DaxClient, EnvExperiment):
+    """RTIO event throughput benchmark."""
 
     def build(self):
         # Arguments
@@ -35,8 +35,8 @@ class RtioBenchmarkThroughput(DaxClient, EnvExperiment):
         self.update_kernel_invariants('period_scan')
 
     def run(self):
-        self.success = self.rtio_bench.benchmark_throughput(self.period_scan, self.num_samples, self.num_events,
-                                                            self.no_underflow_cutoff)
+        self.success = self.rtio_bench.benchmark_event_throughput(self.period_scan, self.num_samples, self.num_events,
+                                                                  self.no_underflow_cutoff)
 
     def analyze(self):
         if self.success:
@@ -48,8 +48,8 @@ class RtioBenchmarkThroughput(DaxClient, EnvExperiment):
 
 
 @dax_client_factory
-class RtioBenchmarkThroughputBurst(DaxClient, EnvExperiment):
-    """RTIO throughput burst benchmark."""
+class RtioBenchmarkEventBurst(DaxClient, EnvExperiment):
+    """RTIO event burst benchmark."""
 
     def build(self):
         # Arguments
@@ -71,10 +71,10 @@ class RtioBenchmarkThroughputBurst(DaxClient, EnvExperiment):
         self.period_step *= ns
 
     def run(self):
-        self.success = self.rtio_bench.benchmark_throughput_burst(self.num_events_min, self.num_events_max,
-                                                                  self.num_events_step, self.num_samples,
-                                                                  self.period_step,
-                                                                  self.no_underflow_cutoff, self.num_step_cutoff)
+        self.success = self.rtio_bench.benchmark_event_burst(self.num_events_min, self.num_events_max,
+                                                             self.num_events_step, self.num_samples,
+                                                             self.period_step,
+                                                             self.no_underflow_cutoff, self.num_step_cutoff)
 
     def analyze(self):
         if self.success:
