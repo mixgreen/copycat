@@ -16,7 +16,7 @@ class RtioBenchmarkEventThroughput(DaxClient, EnvExperiment):
         self.setattr_argument('period_max', NumberValue(1000, min=1, **time_kwargs))
         self.setattr_argument('period_step', NumberValue(1, min=1, **time_kwargs))
         self.setattr_argument('num_samples', NumberValue(5, min=1, **number_kwargs))
-        self.setattr_argument('num_events', NumberValue(500000, min=1000, **number_kwargs))
+        self.setattr_argument('num_events', NumberValue(100000, min=1000, **number_kwargs))
         self.setattr_argument('no_underflow_cutoff', NumberValue(5, min=1, **number_kwargs))
 
         # Obtain RTIO benchmark module
@@ -55,9 +55,9 @@ class RtioBenchmarkEventBurst(DaxClient, EnvExperiment):
         # Arguments
         number_kwargs = {'scale': 1, 'step': 1, 'ndecimals': 0}
         time_kwargs = {'unit': 'ns', 'scale': 1, 'step': 1, 'ndecimals': 0}
-        self.setattr_argument('num_events_min', NumberValue(1000, min=1, **number_kwargs))
-        self.setattr_argument('num_events_max', NumberValue(500000, min=1, **number_kwargs))
-        self.setattr_argument('num_events_step', NumberValue(1000, min=1, **number_kwargs))
+        self.setattr_argument('num_events_min', NumberValue(10, min=1, **number_kwargs))
+        self.setattr_argument('num_events_max', NumberValue(10000, min=1, **number_kwargs))
+        self.setattr_argument('num_events_step', NumberValue(10, min=1, **number_kwargs))
         self.setattr_argument('num_samples', NumberValue(5, min=1, **number_kwargs))
         self.setattr_argument('period_step', NumberValue(1, min=1, **time_kwargs))
         self.setattr_argument('no_underflow_cutoff', NumberValue(5, min=1, **number_kwargs))
@@ -91,11 +91,11 @@ class RtioBenchmarkDmaThroughput(DaxClient, EnvExperiment):
         # Arguments
         time_kwargs = {'unit': 'ns', 'scale': 1, 'step': 1, 'ndecimals': 0}
         number_kwargs = {'scale': 1, 'step': 1, 'ndecimals': 0}
-        self.setattr_argument('period_min', NumberValue(200, min=1, **time_kwargs))
-        self.setattr_argument('period_max', NumberValue(1000, min=1, **time_kwargs))
-        self.setattr_argument('period_step', NumberValue(1, min=1, **time_kwargs))
+        self.setattr_argument('period_min', NumberValue(1000, min=1, **time_kwargs))
+        self.setattr_argument('period_max', NumberValue(5000, min=1, **time_kwargs))
+        self.setattr_argument('period_step', NumberValue(100, min=1, **time_kwargs))
         self.setattr_argument('num_samples', NumberValue(5, min=1, **number_kwargs))
-        self.setattr_argument('num_events', NumberValue(500000, min=1000, **number_kwargs))
+        self.setattr_argument('num_events', NumberValue(100000, min=1000, **number_kwargs))
         self.setattr_argument('no_underflow_cutoff', NumberValue(5, min=1, **number_kwargs))
 
         # Obtain RTIO benchmark module

@@ -26,6 +26,6 @@ class RpcBenchmarkLatency(DaxClient, EnvExperiment):
             chc = dax.util.units.time_to_str(self.rpc_bench.get_dataset_sys(self.rpc_bench.LATENCY_CORE_HOST_CORE_KEY))
             chc_async = dax.util.units.time_to_str(
                 self.rpc_bench.get_dataset_sys(self.rpc_bench.LATENCY_CORE_HOST_CORE_ASYNC_KEY))
-            self.logger.info('Host-core-host latency (including runtime compilation) is {:s}'.format(hch))
+            self.logger.info('Host-core-host latency (includes runtime compilation) is {:s}'.format(hch))
             self.logger.info('Core-host-core latency is {:s}'.format(chc))
             self.logger.info('Core-host-core async latency is {:s}'.format(chc_async))

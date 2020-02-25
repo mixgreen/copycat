@@ -69,6 +69,9 @@ class RpcBenchmarkModule(DaxModule):
 
     @kernel
     def _benchmark_core_host_core(self, num_samples):
+        # Reset core
+        self.core.reset()
+
         # Accumulated execution time
         t_total = np.int64(0)
 
@@ -91,6 +94,9 @@ class RpcBenchmarkModule(DaxModule):
 
     @kernel
     def _benchmark_core_host_core_async(self, num_samples):
+        # Reset core
+        self.core.reset()
+
         # Accumulated execution time
         t_total = np.int64(0)
 

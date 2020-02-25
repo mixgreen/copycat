@@ -42,7 +42,7 @@ class RtioBenchmarkModule(DaxModule):
 
         with self.core_dma.record(self.DMA_BURST):
             # Record the DMA burst trace
-            for _ in range(self.event_burst // 2):
+            for _ in range(self.event_burst >> 1):
                 delay(self.event_period / 2)
                 self.ttl_out.on()
                 delay(self.event_period / 2)
@@ -450,7 +450,7 @@ class RtioBenchmarkModule(DaxModule):
         # Convert period to machine units
         period_mu = self.core.seconds_to_mu(period)
         # Scale number of events
-        num_events //= 2
+        num_events >>= 1
 
         # Iterate over number of samples
         for _ in range(num_samples):
