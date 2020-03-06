@@ -11,29 +11,16 @@ class _MemsMirrorModule(DaxModule):
 
     def build(self, mems_trig, mems_sw, mems_dac):
         # Devices for the MEMS mirror board
-        self.setattr_device(mems_trig, 'mems_trig', (artiq.coredevice.ttl.TTLOut, artiq.coredevice.ttl.TTLInOut))
+        self.setattr_device(mems_trig, 'mems_trig', artiq.coredevice.ttl.TTLOut)
         self.setattr_device(mems_sw, 'mems_sw')
         self.setattr_device(mems_dac, 'mems_dac')
 
-    def load(self):
+    def init(self):
         # TODO, should store MEMS settings ions (targets)
         pass
 
-    @kernel
-    def init(self):
-        # Break realtime to get some slack
-        self.core.break_realtime()
-
-        # Set direction of trigger signal
-        self.mems_trig.output()
-
-    @kernel
-    def config(self):
-        # Break realtime to get some slack
-        self.core.break_realtime()
-
-        # Guarantee trigger is off
-        self.mems_trig.off()
+    def post_init(self):
+        pass
 
 
 class IndvBeamMemsModule(DaxModule, IndvBeamInterface):
@@ -101,7 +88,7 @@ class IndvBeamMemsModule(DaxModule, IndvBeamInterface):
         # Update kernel invariants
         self.update_kernel_invariants('num_beams', 'num_dpass_signals', 'dpass_aom', 'indv_aom', 'pid_sw')
 
-    def load(self):
+    def init(self):
         # Double-pass AOMs
         self.setattr_dataset_sys(self.DPASS_AOM_FREQ_KEY, [[100 * MHz] * self.num_dpass_signals] * self.num_beams)
         self.setattr_dataset_sys(self.DPASS_AOM_PHASE_KEY, [[0.0] * self.num_dpass_signals] * self.num_beams)
@@ -119,41 +106,34 @@ class IndvBeamMemsModule(DaxModule, IndvBeamInterface):
         self.setattr_dataset_sys(self.INDV_AOM_RESP_TIME_KEY, 10 * us)
         self.setattr_dataset_sys(self.INDV_AOM_RESP_COMP_KEY, True)
 
+        # Initialize devices
+        self._init()
+
     @kernel
-    def init(self):
-        # Break realtime to get some slack
-        self.core.break_realtime()
+    def _init(self):
+        # Reset core
+        self.core.reset()
 
         for b in range(self.num_beams):  # For all beams
             # Configure PID switch as output
-            self.pid_sw[b].output()
-
-            # Initialize individual AOM DDS
-            self.indv_aom[b].init()
-
-            for s in range(self.num_dpass_signals):  # For all signals
-                # Initialize double-pass AOM DDS
-                self.dpass_aom[b][s].init()
-
-    @kernel
-    def config(self):
-        # Break realtime to get some slack
-        self.core.break_realtime()
-
-        for b in range(self.num_beams):  # For all beams
-            # Configure PID switch as output
-            self.pid_sw[b].set_o(False)  # PID initially off
+            self.pid_sw[b].set_o(False)  # PID by default off
 
             # Set default configuration for individual AOMs
             self.indv_aom[b].set(self.indv_aom_freq[b], phase=self.indv_aom_phase[b])
             self.indv_aom[b].set_att(self.indv_aom_att[b])
-            self.indv_aom[b].cfg_sw(False)  # INDV initially off
+            self.indv_aom[b].cfg_sw(False)  # INDV by default off
 
             for s in range(self.num_dpass_signals):  # For all signals
                 # Configure double-pass AOMs
                 self.dpass_aom[b][s].set(self.dpass_aom_freq[b][s], phase=self.dpass_aom_phase[b][s])
                 self.dpass_aom[b][s].set_att(self.dpass_aom_att[b][s])
-                self.dpass_aom[b][s].cfg_sw(True)  # DPASS initially on
+                self.dpass_aom[b][s].cfg_sw(True)  # DPASS by default on
+
+        # Guarantee all events are submitted
+        self.core.wait_until_mu(now_mu())
+
+    def post_init(self):
+        pass
 
     @portable
     def _get_beam(self, target, state):

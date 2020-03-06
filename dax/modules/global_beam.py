@@ -22,36 +22,25 @@ class GlobalBeamModule(DaxModule, GlobalBeamInterface):
             self.setattr_device(k, '{name:s}_aom'.format(name=n))
 
         # Switch between BRC and Z
-        self.setattr_device(sw, 'sw', (artiq.coredevice.ttl.TTLOut, artiq.coredevice.ttl.TTLInOut))
+        self.setattr_device(sw, 'sw', artiq.coredevice.ttl.TTLOut)
 
         # Make switch configurations kernel invariant
         self.update_kernel_invariants('SW_BRC', 'SW_Z')
 
-    def load(self):
+    def init(self):
         for n in self.AOM_NAMES:
             # Set AOM frequency, phase, and attenuation
             self.setattr_dataset_sys(self.AOM_FREQ_KEY.format(name=n), 100 * MHz)
             self.setattr_dataset_sys(self.AOM_PHASE_KEY.format(name=n), 0.0)
             self.setattr_dataset_sys(self.AOM_ATT_KEY.format(name=n), 0.0 * dB)
 
-    @kernel
-    def init(self):
-        # Break realtime to get some slack
-        self.core.break_realtime()
-
-        # Configure switch as output
-        self.sw.output()
-
-        # Initialize all AOMs
-        self.b_aom.init()
-        self.r_aom.init()
-        self.c_aom.init()
-        self.z_aom.init()
+        # Initialize the devices
+        self._init()
 
     @kernel
-    def config(self):
-        # Break realtime to get some slack
-        self.core.break_realtime()
+    def _init(self):
+        # Reset core
+        self.core.reset()
 
         # Make state of switch unambiguous
         self.set_sw(self.SW_BRC)
@@ -68,6 +57,12 @@ class GlobalBeamModule(DaxModule, GlobalBeamInterface):
         self.c_aom.set_att(self.c_aom_att)
         self.z_aom.set(self.z_aom_freq, phase=self.z_aom_phase)
         self.z_aom.set_att(self.z_aom_att)
+
+        # Guarantee all events are submitted
+        self.core.wait_until_mu(now_mu())
+
+    def post_init(self):
+        pass
 
     @kernel
     def set_sw(self, state):

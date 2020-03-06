@@ -15,43 +15,30 @@ class DetectionModule(DaxModule, DetectionInterface):
 
     ACTIVE_PMT_CHANNELS_KEY = 'active_pmt_channels'
 
-    def build(self, detect_sw, pmt_array, pmt_array_size):
+    def build(self, detection_laser_sw, pmt_array, pmt_array_size, pmt_array_ec=None):
         assert isinstance(pmt_array_size, int)
 
         # Detection laser switch
-        self.setattr_device(detect_sw, 'detect_sw', (artiq.coredevice.ttl.TTLOut, artiq.coredevice.ttl.TTLInOut))
+        self.setattr_device(detection_laser_sw, 'detection_laser_sw', artiq.coredevice.ttl.TTLOut)
 
         # Array of PMT channels
         self.pmt_array_size = np.int32(pmt_array_size)
-        self.pmt_array = [self.get_device('{:s}_{:d}'.format(pmt_array, i)) for i in range(self.pmt_array_size)]
+        self.pmt_array = [self.get_device('{:s}_{:d}'.format(pmt_array, i), artiq.coredevice.ttl.TTLInOut) for i in
+                          range(self.pmt_array_size)]
         self.update_kernel_invariants('pmt_array', 'pmt_array_size')
-        # TODO, request both TTLInOut and EC devices?
 
-        # Check if all PMT array devices have the same type
-        pmt_device_types = {type(d) for d in self.pmt_array}
-        if len(pmt_device_types) != 1:
-            msg = 'All devices in the PMT array should have the same type'
-            self.logger.error(msg)
-            raise TypeError(msg)
+        if pmt_array_ec is not None:
+            # Array of PMT edge counters
+            self.pmt_array_ec = [self.get_device('{:s}_{:d}'.format(pmt_array_ec, i),
+                                                 artiq.coredevice.edge_counter.EdgeCounter) for i in
+                                 range(self.pmt_array_size)]
+            self.update_kernel_invariants('pmt_array_ec')
 
-        # Set parameters based on PMT array device type
-        pmt_device_type = pmt_device_types.pop()
-        if pmt_device_type == DummyDevice:
-            pass
-        elif pmt_device_type == artiq.coredevice.ttl.TTLInOut:
-            self.EDGE_COUNTER = False
-        elif pmt_device_type == artiq.coredevice.edge_counter.EdgeCounter:
-            self.EDGE_COUNTER = True
         else:
-            # Unsupported device type
-            msg = 'PMT array has an unsupported device type'
-            self.logger.error(msg)
-            raise TypeError(msg)
+            # Edge counters not provided by user
+            self.pmt_array_ec = None
 
-        # Make flags kernel invariant
-        self.update_kernel_invariants('EDGE_COUNTER')
-
-    def load(self):
+    def init(self):
         # Duration of detection
         self.setattr_dataset_sys(self.DURATION_KEY, 150 * us)
         # Threshold for state discrimination
@@ -60,31 +47,12 @@ class DetectionModule(DaxModule, DetectionInterface):
         # List of active PMT channels, also the mapping of ion to PMT channel (ions are ordered)
         self.setattr_dataset_sys(self.ACTIVE_PMT_CHANNELS_KEY, [np.int32(i) for i in range(self.pmt_array_size)])
 
-    @kernel
-    def init(self):
-        # Break realtime to get some slack
-        self.core.break_realtime()
-
-        # Initialize detection laser switch
-        self.detect_sw.output()
-
-        if not self.EDGE_COUNTER:
-            # Configure the TTLInOut devices
-            for p in self.pmt_array:
-                # Set as input
-                p.input()
-
-    @kernel
-    def config(self):
-        # Break realtime to get some slack
-        self.core.break_realtime()
-
-        # Switch detection laser off
-        self.detection_laser_off()
+    def post_init(self):
+        pass
 
     @kernel
     def set_detection_laser_o(self, state):
-        self.detect_sw.set_o(state)
+        self.detection_laser_sw.set_o(state)
 
     @kernel
     def detection_laser_on(self):
@@ -150,9 +118,9 @@ class DetectionModule(DaxModule, DetectionInterface):
     @kernel
     def _pmt_array_count(self, pmt_channel, detection_window_mu):
         # Get the count of a single PMT
-        if self.EDGE_COUNTER:
+        if self.pmt_array_ec is not None:
             # EdgeCounter
-            return self.pmt_array[pmt_channel].fetch_count(detection_window_mu)
+            return self.pmt_array_ec[pmt_channel].fetch_count(detection_window_mu)
         else:
             # TTLInOut
             return self.pmt_array[pmt_channel].count(detection_window_mu)

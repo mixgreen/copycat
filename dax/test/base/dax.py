@@ -40,13 +40,10 @@ class TestSystem(DaxSystem):
 class TestModule(DaxModule):
     """Testing module."""
 
-    def load(self):
-        pass
-
     def init(self):
         pass
 
-    def config(self):
+    def post_init(self):
         pass
 
 
@@ -57,13 +54,10 @@ class TestModuleChild(TestModule):
 class TestService(DaxService):
     SERVICE_NAME = 'test_service'
 
-    def load(self):
-        pass
-
     def init(self):
         pass
 
-    def config(self):
+    def post_init(self):
         pass
 
 
@@ -139,7 +133,7 @@ class DaxNameRegistryTestCase(unittest.TestCase):
             r.search_module(TestModuleChild)
         self.assertListEqual(r.get_module_key_list(), [m.get_system_key() for m in [s, t0]],
                              'Module key list incorrect')
-        with self.assertRaises(_DaxNameRegistry._NonUniqueRegistrationError, msg='Adding module twice did not raise'):
+        with self.assertRaises(_DaxNameRegistry.NonUniqueRegistrationError, msg='Adding module twice did not raise'):
             r.add_module(t0)
 
         # Test with two modules
@@ -148,7 +142,7 @@ class DaxNameRegistryTestCase(unittest.TestCase):
         self.assertIs(r.get_module(t1.get_system_key(), TestModuleChild), t1,
                       'Type check in get_module() raised unexpectedly')
         self.assertIs(r.search_module(TestModuleChild), t1, 'Did not find expected module')
-        with self.assertRaises(_DaxNameRegistry._NonUniqueSearchError, msg='Non-unique search did not raise'):
+        with self.assertRaises(_DaxNameRegistry.NonUniqueSearchError, msg='Non-unique search did not raise'):
             r.search_module(TestModule)
         self.assertListEqual(r.get_module_key_list(), [m.get_system_key() for m in [s, t0, t1]],
                              'Module key list incorrect')
@@ -175,7 +169,7 @@ class DaxNameRegistryTestCase(unittest.TestCase):
         self.assertIn('ttl1', r.get_device_key_list(),
                       'Device registration did not found correct unique key for device alias')
         self.assertListEqual(r.get_device_key_list(), core_devices + ['ttl0', 'ttl1'], 'Device key list incorrect')
-        with self.assertRaises(_DaxNameRegistry._NonUniqueRegistrationError,
+        with self.assertRaises(_DaxNameRegistry.NonUniqueRegistrationError,
                                msg='Double device registration did not raise when registered by unique name and alias'):
             r.add_device(t0, 'alias_1')
 
@@ -195,7 +189,7 @@ class DaxNameRegistryTestCase(unittest.TestCase):
         r = s.registry
 
         # Test adding the service again
-        with self.assertRaises(_DaxNameRegistry._NonUniqueRegistrationError,
+        with self.assertRaises(_DaxNameRegistry.NonUniqueRegistrationError,
                                msg='Double service registration did not raise'):
             r.add_service(s0)
 
@@ -412,13 +406,10 @@ class DaxServiceTestCase(unittest.TestCase):
         s = TestSystem(_get_manager_or_parent())
 
         class NoNameService(DaxService):
-            def load(self) -> None:
-                pass
-
             def init(self) -> None:
                 pass
 
-            def config(self) -> None:
+            def post_init(self) -> None:
                 pass
 
         with self.assertRaises(AssertionError, msg='Lack of class service name did not raise'):
@@ -442,7 +433,7 @@ class DaxServiceTestCase(unittest.TestCase):
         class DuplicateNameService(NoNameService):
             SERVICE_NAME = 'service_name'
 
-        with self.assertRaises(_DaxNameRegistry._NonUniqueRegistrationError,
+        with self.assertRaises(_DaxNameRegistry.NonUniqueRegistrationError,
                                msg='Duplicate service name registration did not raise'):
             DuplicateNameService(s)
 
@@ -465,8 +456,8 @@ class DaxClientTestCase(unittest.TestCase):
 
     def test_load_super(self):
         class System(TestSystem):
-            def load(self) -> None:
-                self.is_loaded = True
+            def init(self) -> None:
+                self.is_initialized = True
 
         @dax_client_factory
         class Client(DaxClient):
@@ -476,9 +467,9 @@ class DaxClientTestCase(unittest.TestCase):
             pass
 
         c = ImplementableClient(_get_manager_or_parent())
-        c.load()  # Is supposed to call the load() function of the system
+        c.init()  # Is supposed to call the init() function of the system
 
-        self.assertTrue(hasattr(c, 'is_loaded'), 'DAX system parent of client was not loaded correctly')
+        self.assertTrue(hasattr(c, 'is_initialized'), 'DAX system parent of client was not initialized correctly')
 
 
 if __name__ == '__main__':

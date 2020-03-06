@@ -18,17 +18,13 @@ class LoadIonsService(DaxService):
 
         # Other variables
         self.num_channels = self.detect.num_channels()
-        self.num_channels_shifter = np.int32(round(np.log2(self.num_channels)))
-        self.update_kernel_invariants('num_channels', 'num_channels_shifter')
+        self.update_kernel_invariants('num_channels')
 
-    def load(self):
+    def init(self):
         self.setattr_dataset_sys('sample_period', 150 * us)
         self.setattr_dataset_sys('per_ion_cutoff_time', 1 * s)
 
-    def init(self):
-        pass
-
-    def config(self):
+    def post_init(self):
         pass
 
     def load_ions(self, num_ions, fallback=True):
@@ -194,16 +190,22 @@ class LoadIonsService(DaxService):
     """Algorithms for ion counting and finding active channels"""
 
     @portable
-    def _count_ions_edge_detection(self, counts):
-        # Sum of counts
-        counts_sum = np.int32(0)
-        for c in counts:
-            counts_sum += c
+    def _count_ions_threshold(self, counts):
+        # TODO, count channels passing a threshold (threshold might be based on detection time)
+        pass
 
-        # Calculate mean
-        mean = counts_sum >> self.num_channels_shifter
+    @portable
+    def _count_ions_edge_detection(self, counts):
+        # Find max
+        counts_max = np.int32(0)
+        for c in counts:
+            if c > counts_max:
+                counts_max = c
+
         # Set threshold
-        threshold = mean << 1
+        threshold = counts_max >> 1
+
+        # TODO, handle case where threshold is low and therefore no ions were found
 
         # Count peaks / ions with edge-detection
         num_ions = np.int32(0)
@@ -220,8 +222,9 @@ class LoadIonsService(DaxService):
 
     @staticmethod
     def _find_active_channels_scipy_find_peaks(counts) -> TList(TInt32):
-        mean = np.mean(counts)
-        peaks, _ = scipy.signal.find_peaks(counts, height=mean, distance=1)
+        threshold = np.max(counts) / 2
+        # TODO, handle case where threshold is low and therefore no ions were found
+        peaks, _ = scipy.signal.find_peaks(counts, height=threshold, distance=1)
         return peaks.astype(np.int32)
 
     def _count_ions_scipy_find_peaks(self, counts) -> TInt32:

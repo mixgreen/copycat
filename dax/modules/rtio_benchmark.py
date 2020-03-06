@@ -20,38 +20,37 @@ class RtioBenchmarkModule(DaxModule):
 
     def build(self, ttl_out):
         # TTL output device
-        self.setattr_device(ttl_out, 'ttl_out', (artiq.coredevice.ttl.TTLOut, artiq.coredevice.ttl.TTLInOut))
+        self.setattr_device(ttl_out, 'ttl_out', artiq.coredevice.ttl.TTLOut)
 
-    def load(self):
+    def init(self):
         # Load parameters
         self.setattr_dataset_sys(self.EVENT_PERIOD_KEY)
         self.setattr_dataset_sys(self.EVENT_BURST_KEY)
         self.setattr_dataset_sys(self.DMA_EVENT_PERIOD_KEY)
         self.setattr_dataset_sys(self.LATENCY_CORE_RTIO_KEY)
 
-        # Cap burst size to prevent too long DMA recordings, resulting in a connection timeout
-        self.event_burst = min(self.event_burst, 40000)
+        if self.hasattr(self.EVENT_PERIOD_KEY, self.EVENT_BURST_KEY):
+            # Record the DMA burst
+            self._record_dma_burst()
 
     @kernel
-    def init(self):
-        # Break realtime to get some slack
-        self.core.break_realtime()
-
-        # Set TTL direction
-        self.ttl_out.output()
+    def _record_dma_burst(self):
+        # Reset the core
+        self.core.reset()
 
         with self.core_dma.record(self.DMA_BURST):
-            # Record the DMA burst trace
-            for _ in range(self.event_burst >> 1):
+            # Record the DMA burst trace (cap burst size to prevent too long DMA recordings
+            for _ in range(min(self.event_burst, 40000) // 2):
                 delay(self.event_period / 2)
                 self.ttl_out.on()
                 delay(self.event_period / 2)
                 self.ttl_out.off()
 
-    def config(self):
-        # Obtain DMA handle
-        self.burst_dma_handle = self.core_dma.get_handle(self.DMA_BURST)
-        self.update_kernel_invariants('burst_dma_handle')
+    def post_init(self):
+        if self.hasattr(self.EVENT_PERIOD_KEY, self.EVENT_BURST_KEY):
+            # Obtain DMA handle
+            self.burst_dma_handle = self.core_dma.get_handle(self.DMA_BURST)
+            self.update_kernel_invariants('burst_dma_handle')
 
     """Module functionality"""
 
@@ -239,9 +238,6 @@ class RtioBenchmarkModule(DaxModule):
             self.logger.error(msg)
             raise ValueError(msg)
 
-        # Get current period
-        current_period = self.get_dataset_sys(self.EVENT_PERIOD_KEY)
-
         # Store input values in dataset
         self.set_dataset('num_events_min', num_events_min)
         self.set_dataset('num_events_max', num_events_max)
@@ -252,8 +248,8 @@ class RtioBenchmarkModule(DaxModule):
         self.set_dataset('num_step_cutoff', num_step_cutoff)
 
         # Run kernel
-        self._benchmark_event_burst(num_events_min, num_events_max, num_events_step, num_samples, current_period,
-                                    period_step, no_underflow_cutoff, num_step_cutoff)
+        self._benchmark_event_burst(num_events_min, num_events_max, num_events_step, num_samples, period_step,
+                                    no_underflow_cutoff, num_step_cutoff)
 
         # Get results
         no_underflow_count = self.get_dataset('no_underflow_count')
@@ -278,14 +274,16 @@ class RtioBenchmarkModule(DaxModule):
         self.logger.info('Using period {:s}'.format(dax.util.units.time_to_str(current_period)))
 
     @kernel
-    def _benchmark_event_burst(self, num_events_min, num_events_max, num_events_step, num_samples, current_period,
-                               period_step, no_underflow_cutoff, num_step_cutoff):
+    def _benchmark_event_burst(self, num_events_min, num_events_max, num_events_step, num_samples, period_step,
+                               no_underflow_cutoff, num_step_cutoff):
         # Storage for last number of events
         last_num_events = np.int32(0)
         # Count of last number of events without underflow
         no_underflow_count = np.int32(0)
         # A flag to mark if at least one underflow happened
         underflow_flag = False
+        # Current period
+        current_period = self.event_period
 
         while num_step_cutoff > 0:
             # Reset variables
@@ -609,26 +607,15 @@ class RtioLoopBenchmarkModule(RtioBenchmarkModule):
         # Add edge delay to kernel invariants
         self.update_kernel_invariants('EDGE_DELAY')
 
-    def load(self):
+    def init(self):
         # Call super
-        super(RtioLoopBenchmarkModule, self).load()
+        super(RtioLoopBenchmarkModule, self).init()
 
         # Load parameters
         self.setattr_dataset_sys(self.INPUT_BUFFER_SIZE_KEY)
         self.setattr_dataset_sys(self.LATENCY_RTIO_RTIO_KEY)
         self.setattr_dataset_sys(self.LATENCY_RTIO_CORE_KEY)
         self.setattr_dataset_sys(self.LATENCY_RTT_KEY)
-
-    @kernel
-    def init(self):
-        # Call super (not using MRO/super because it is incompatible with the compiler, call parent function directly)
-        RtioBenchmarkModule.init(self)
-
-        # Break realtime to get some slack
-        self.core.break_realtime()
-
-        # Set TTL direction
-        self.ttl_in.input()
 
     @kernel
     def _test_loop_connection(self, detection_window, retry=np.int32(1)):

@@ -5,48 +5,60 @@ import artiq.coredevice.ttl
 from dax.base import *
 from dax.modules.interfaces.trap_if import *
 
-# Alias for TTLOut and TTLInOut type as a tuple
-_TTL_OUT_TYPE = (artiq.coredevice.ttl.TTLOut, artiq.coredevice.ttl.TTLInOut)
-
 
 class TrapModule(DaxModule, TrapInterface):
     """Module for a trap controlled by a Sandia DAC board."""
 
     COOL_DURATION_KEY = 'cool_duration'
     PUMP_DURATION_KEY = 'pump_duration'
-    LOADED_IONS_KEY = 'loaded_ions'
+    NUM_LOADED_IONS_KEY = 'num_loaded_ions'
 
-    def build(self, oven_sw, cool_pump_sw, ion_sw, repump_sw, sdac_trig, sdac_config, sdac_data):
-        # Switch device for oven
-        self.setattr_device(oven_sw, 'oven_sw', _TTL_OUT_TYPE)
+    def build(self, cool_pump_sw, ion_sw, repump_sw, sdac_trig, sdac_config, sdac_data,
+              oven_sw=None, ablation_laser_sw=None):
+
+        # Check if we use an oven or an ablation laser
+        if oven_sw is not None and ablation_laser_sw is None:
+            # Switch device for oven
+            self.setattr_device(oven_sw, 'oven_sw', artiq.coredevice.ttl.TTLOut)
+            # Ablation laser is None
+            self.ablation_laser_sw = None
+
+        elif ablation_laser_sw is not None and oven_sw is None:
+            # Switch device for ablation laser
+            self.setattr_device(ablation_laser_sw, 'ablation_laser_sw', artiq.coredevice.ttl.TTLOut)
+            # Oven is None
+            self.oven_sw = None
+
+        else:
+            raise self.BuildArgumentError('Needs oven_sw xor ablation_laser_sw device')
+
+        # Update kernel invariants
+        self.update_kernel_invariants('oven_sw', 'ablation_laser_sw')
 
         # Switch device for cool and pump laser
-        self.setattr_device(cool_pump_sw, 'cool_pump_sw', _TTL_OUT_TYPE)
-        # Switch device for ion and repump laser
-        self.setattr_device(ion_sw, 'ion_sw', _TTL_OUT_TYPE)
-        # Switch device for ion and repump laser
-        self.setattr_device(repump_sw, 'repump_sw', _TTL_OUT_TYPE)
+        self.setattr_device(cool_pump_sw, 'cool_pump_sw', artiq.coredevice.ttl.TTLOut)
+        # Switch device for ion laser
+        self.setattr_device(ion_sw, 'ion_sw', artiq.coredevice.ttl.TTLOut)
+        # Switch device for repump laser
+        self.setattr_device(repump_sw, 'repump_sw', artiq.coredevice.ttl.TTLOut)
 
         # Devices for Sandia DAC board
-        self.setattr_device(sdac_trig, 'sdac_trig', _TTL_OUT_TYPE)
+        self.setattr_device(sdac_trig, 'sdac_trig', artiq.coredevice.ttl.TTLOut)
         self.setattr_device(sdac_config, 'sdac_config')
         self.setattr_device(sdac_data, 'sdac_data')
 
-    def load(self):
+    def init(self):
         # Default cool duration
         self.setattr_dataset_sys(self.COOL_DURATION_KEY, 5 * us)
         # Default pump duration
         self.setattr_dataset_sys(self.PUMP_DURATION_KEY, 5 * us)
         # Number of loaded ions
-        self.setattr_dataset_sys(self.LOADED_IONS_KEY, np.int32(0))
-
-    def init(self):
-        pass
+        self.setattr_dataset_sys(self.NUM_LOADED_IONS_KEY, np.int32(0))
 
     @kernel
-    def config(self):
-        # Break realtime to get some slack
-        self.core.break_realtime()
+    def post_init(self):
+        # Reset core
+        self.core.reset()
 
         # Oven off by default
         self.oven_off()
@@ -60,6 +72,9 @@ class TrapModule(DaxModule, TrapInterface):
 
         # Guarantee Sandia DAC trigger is off
         self.sdac_trig.off()
+
+        # Guarantee all events are submitted
+        self.core.wait_until_mu(now_mu())
 
     @kernel
     def set_oven_o(self, state):
@@ -151,14 +166,14 @@ class TrapModule(DaxModule, TrapInterface):
 
     @portable
     def num_loaded_ions(self):
-        return self.loaded_ions
+        return self.num_loaded_ions
 
     @host_only
-    def set_loaded_ions(self, loaded_ions):
+    def set_loaded_ions(self, num_loaded_ions):
         # Set a new number of loaded ions
-        self.loaded_ions = np.int32(loaded_ions)
-        self.set_dataset_sys(self.LOADED_IONS_KEY, self.loaded_ions)
+        self.num_loaded_ions = np.int32(num_loaded_ions)
+        self.set_dataset_sys(self.NUM_LOADED_IONS_KEY, self.num_loaded_ions)
 
     @portable
     def get_targets(self):
-        return [np.int32(i) for i in range(self.loaded_ions)]
+        return [np.int32(i) for i in range(self.num_loaded_ions)]

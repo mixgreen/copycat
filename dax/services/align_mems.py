@@ -15,13 +15,10 @@ class AlignMemsService(DaxService):
         self.detect = self.registry.search_module_dict(DetectionInterface)
         self.trap = self.registry.search_module_dict(TrapInterface)
 
-    def load(self):
-        pass
-
     def init(self):
         pass
 
-    def config(self):
+    def post_init(self):
         pass
 
     def align_mems(self):

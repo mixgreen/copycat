@@ -28,14 +28,11 @@ class SamplerService(DaxService):
         # Attribute to store result dataset key
         self.result_dataset_key = ''  # This value could be mutated inside a kernel
 
-    def load(self):
+    def init(self):
         # Pause time between samples (required to obtain slack)
         self.setattr_dataset_sys(self.PAUSE_TIME_KEY, 5 * us)
 
-    def init(self):
-        pass
-
-    def config(self):
+    def post_init(self):
         pass
 
     @portable

@@ -18,8 +18,6 @@ import artiq.coredevice.cache  # type: ignore
 _KEY_SEPARATOR: str = '.'
 # Regex for matching valid names
 _NAME_RE = re.compile(r'\w+')
-# Regex for matching valid keys
-_KEY_RE = re.compile(r'\w+(\.\w+)*')
 
 
 def _is_valid_name(name: str) -> bool:
@@ -31,18 +29,14 @@ def _is_valid_name(name: str) -> bool:
 def _is_valid_key(key: str) -> bool:
     """Return true if the given key is valid."""
     assert isinstance(key, str), 'The given key should be a string'
-    return bool(_KEY_RE.fullmatch(key))
+    return all(_NAME_RE.fullmatch(n) for n in key.split(_KEY_SEPARATOR))
 
 
 class _DaxBase(HasEnvironment, abc.ABC):
     """Base class for all DAX core classes."""
 
-    class _BuildArgumentError(Exception):
-        """Exception for build arguments not matching the expected signature."""
-        pass
-
-    class _IllegalOperationError(Exception):
-        """Exception when user calls a disabled/illegal function."""
+    class BuildArgumentError(TypeError):
+        """Exception for build arguments not matching an expected signature."""
         pass
 
     def __init__(self, managers_or_parent, *args, **kwargs):
@@ -54,10 +48,14 @@ class _DaxBase(HasEnvironment, abc.ABC):
         try:
             # Call super, which will call build()
             super(_DaxBase, self).__init__(managers_or_parent, *args, **kwargs)
+        except self.BuildArgumentError as e:
+            # Log the error message
+            self.logger.error(e.message)
+            raise
         except TypeError as e:
             msg = 'Build arguments do not match the expected signature'
             self.logger.error(msg)
-            raise self._BuildArgumentError(msg) from e
+            raise self.BuildArgumentError(msg) from e
         else:
             self.logger.debug('Build finished')
 
@@ -80,11 +78,11 @@ class _DaxBase(HasEnvironment, abc.ABC):
 class _DaxNameRegistry:
     """A class for unique name registration."""
 
-    class _NonUniqueRegistrationError(ValueError):
+    class NonUniqueRegistrationError(ValueError):
         """Exception when a name is registered more then once."""
         pass
 
-    class _NonUniqueSearchError(ValueError):
+    class NonUniqueSearchError(ValueError):
         """Exception when a search could not find a unique result."""
         pass
 
@@ -103,7 +101,7 @@ class _DaxNameRegistry:
             raise ValueError('Invalid system services key "{:s}"'.format(system.SYS_SERVICES))
 
         # Store system services key
-        self._sys_services_key = system.SYS_SERVICES
+        self._sys_services_key = system.SYS_SERVICES  # Access attribute directly
 
         # A dict containing registered modules
         self._modules: dict = dict()
@@ -127,7 +125,7 @@ class _DaxNameRegistry:
             # Key already in use by an other module
             msg = 'Module key "{:s}" was already registered by module {:s}'.format(key, reg_module.get_identifier())
             module.logger.error(msg)
-            raise self._NonUniqueRegistrationError(msg)
+            raise self.NonUniqueRegistrationError(msg)
 
         # Add module key to the dict of registered modules
         self._modules[key] = module
@@ -167,7 +165,7 @@ class _DaxNameRegistry:
 
         if len(results) > 1:
             # More than one module was found
-            raise self._NonUniqueSearchError('Could not find a unique module with type "{:s}"'.format(type_.__name__))
+            raise self.NonUniqueSearchError('Could not find a unique module with type "{:s}"'.format(type_.__name__))
 
         # Return the only result
         _, module = results.popitem()
@@ -215,7 +213,7 @@ class _DaxNameRegistry:
             device_name = '"{:s}"'.format(key) if key == unique else '"{:s}" ({:s})'.format(key, unique)
             msg = 'Device {:s}, was already registered by parent {:s}'.format(device_name, reg_parent.get_identifier())
             parent.logger.error(msg)
-            raise self._NonUniqueRegistrationError(msg)
+            raise self.NonUniqueRegistrationError(msg)
 
         # Add unique device key to the dict of registered devices
         self._devices[unique] = parent
@@ -277,7 +275,7 @@ class _DaxNameRegistry:
             # Service name was already registered
             msg = 'Service with name "{:s}" was already registered'.format(key)
             service.logger.error(msg)
-            raise self._NonUniqueRegistrationError(msg)
+            raise self.NonUniqueRegistrationError(msg)
 
         # Add service to the registry
         self._services[key] = service
@@ -292,11 +290,11 @@ class _DaxNameRegistry:
             return True
 
     @typing.overload
-    def get_service(self, key: typing.Type[__S_T]) -> __S_T:
+    def get_service(self, key: str) -> DaxService:
         ...
 
     @typing.overload
-    def get_service(self, key: str) -> DaxService:
+    def get_service(self, key: typing.Type[__S_T]) -> __S_T:
         ...
 
     def get_service(self, key) -> DaxService:
@@ -321,8 +319,8 @@ class _DaxNameRegistry:
 class _DaxHasSystem(_DaxBase, abc.ABC):
     """Intermediate base class for DAX classes that are dependent on a DAX system."""
 
-    # Device type
-    __D_T = typing.TypeVar('__D_T')
+    # Device type verification
+    __D_T = typing.Optional[typing.Union[type, typing.Tuple[type, ...]]]
 
     # Attribute names of core devices
     __CORE_DEVICES = ['core', 'core_dma', 'core_cache']
@@ -386,62 +384,38 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
         return self.registry
 
     @host_only
-    def load_system(self) -> None:
-        """Load the DAX system, for loading values from the dataset."""
-
-        self.logger.debug('Loading...')
-        # Load all children
-        self.call_child_method('load_system')
-        # Load this object
-        self.load()
-        self.logger.debug('Loading finished')
-
-    @host_only
-    def init_system(self) -> None:
-        """Initialize the DAX system, for device initialization and recording DMA traces."""
+    def _init_system(self) -> None:
+        """Initialize the DAX system, for dataset access, device initialization, and recording DMA traces."""
 
         self.logger.debug('Initializing...')
         # Initialize all children
-        self.call_child_method('init_system')
+        self.call_child_method('_init_system')
         # Initialize this object
         self.init()
         self.logger.debug('Initialization finished')
 
     @host_only
-    def config_system(self) -> None:
-        """Configure the DAX system, for configuring devices and obtaining DMA handles."""
+    def _post_init_system(self) -> None:
+        """DAX system post-initialization (e.g. obtaining DMA handles)."""
 
-        self.logger.debug('Configuring...')
-        # Configure all children
-        self.call_child_method('config_system')
-        # Configure this object
-        self.config()
-        self.logger.debug('Configuration finished')
-
-    @abc.abstractmethod
-    def load(self) -> None:
-        """Override this method to load dataset parameters (no calls to the core device allowed)."""
-        pass
+        self.logger.debug('Post-initializing...')
+        # Post-initialize all children
+        self.call_child_method('_post_init_system')
+        # Post-initialize this object
+        self.post_init()
+        self.logger.debug('Post-initialization finished')
 
     @abc.abstractmethod
     def init(self) -> None:
-        """Override this method to initialize devices and record DMA traces (calls to core device allowed)."""
+        """Override this method to access the dataset (r/w), initialize devices, and record DMA traces."""
         pass
 
     @abc.abstractmethod
-    def config(self) -> None:
-        """Override this method to configure devices and obtain DMA handles (calls to core device allowed)."""
+    def post_init(self) -> None:
+        """Override this method for post-initialization procedures (e.g. obtaining DMA handles)."""
         pass
 
-    @typing.overload
-    def get_device(self, key: str) -> object:
-        ...
-
-    @typing.overload
-    def get_device(self, key: str, type_: typing.Type[__D_T]) -> __D_T:
-        ...
-
-    def get_device(self, key: str, type_=object) -> object:
+    def get_device(self, key: str, type_: __D_T = object) -> object:
         """Get a device driver."""
 
         assert isinstance(key, str) and key, 'Key must be of type str and not empty'
@@ -464,16 +438,7 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
         # Return the device
         return device
 
-    @typing.overload
-    def setattr_device(self, key: str, attr_name: typing.Optional[str] = None) -> None:
-        ...
-
-    @typing.overload
-    def setattr_device(self, key: str, attr_name: typing.Optional[str] = None,
-                       type_: typing.Type[__D_T] = typing.Type[__D_T]) -> None:
-        ...
-
-    def setattr_device(self, key: str, attr_name: typing.Optional[str] = None, type_=object) -> None:
+    def setattr_device(self, key: str, attr_name: typing.Optional[str] = None, type_: __D_T = object) -> None:
         """Sets a device driver as attribute."""
 
         # Get the device
@@ -544,13 +509,16 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
         """Sets the contents of a system dataset as attribute."""
 
         assert isinstance(key, str), 'Key must be of type str'
+        assert isinstance(kernel_invariant, bool), 'Kernel invariant flag must be of type bool'
 
         try:
             # Get the value from system dataset
-            value = self.get_dataset_sys(key)
+            value = self.get_dataset(self.get_system_key(key), archive=True)
         except KeyError:
             if default is NoDefault:
-                raise  # If there is no default, raise the KeyError
+                # The value was not available in the system dataset and no default was provided
+                self.logger.debug('System attribute "{:s}" not set'.format(key))
+                return
             else:
                 # If the value does not exist, write the default value to the system dataset
                 self.set_dataset_sys(key, default)
@@ -562,6 +530,14 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
         if kernel_invariant:
             # Update kernel invariants
             self.update_kernel_invariants(key)
+
+        # Debug message
+        self.logger.debug('System attribute "{:s}" set to value "{}"{:s}'.format(
+            key, value, ' (kernel invariant)' if kernel_invariant else ''))
+
+    def hasattr(self, *keys: str):
+        """Returns if this object has the given attributes."""
+        return all(hasattr(self, k) for k in keys)
 
     @host_only
     def get_identifier(self) -> str:
@@ -660,28 +636,17 @@ class DaxSystem(_DaxModuleBase):
         if self.CORE_LOG_KEY not in self.get_device_db():
             self.logger.warning('Core log controller "{:s}" not found in device DB'.format(self.CORE_LOG_KEY))
 
-    def dax_load(self) -> None:
-        """Prepare the DAX system for usage by loading and configuring the system."""
-        self.logger.debug('Starting DAX system loading...')
-        self.load_system()
-        self.config_system()
-        self.logger.debug('Finished DAX system loading')
-
     def dax_init(self) -> None:
-        """Prepare the DAX system for usage by loading, initializing, and configuring the system."""
+        """Initialize the DAX system."""
         self.logger.debug('Starting DAX system initialization...')
-        self.load_system()
-        self.init_system()
-        self.config_system()
+        self._init_system()
+        self._post_init_system()
         self.logger.debug('Finished DAX system initialization')
-
-    def load(self) -> None:
-        pass
 
     def init(self) -> None:
         pass
 
-    def config(self) -> None:
+    def post_init(self) -> None:
         pass
 
 
@@ -733,17 +698,13 @@ class DaxClient(_DaxHasSystem, abc.ABC):
         # Call super
         super(DaxClient, self).__init__(managers_or_parent, *args, **kwargs)
 
-    def load(self) -> None:
-        # Call super (will be the user DAX system after the MRO lookup of the client wrapper class)
-        super(DaxClient, self).load()
-
     def init(self) -> None:
         # Call super (will be the user DAX system after the MRO lookup of the client wrapper class)
         super(DaxClient, self).init()
 
-    def config(self) -> None:
+    def post_init(self) -> None:
         # Call super (will be the user DAX system after the MRO lookup of the client wrapper class)
-        super(DaxClient, self).config()
+        super(DaxClient, self).post_init()
 
 
 def dax_client_factory(c: type):
@@ -782,6 +743,12 @@ def dax_client_factory(c: type):
 
                 # Then build the client which can use the registry
                 c.build(self, *args, **kwargs)
+
+            def run(self):
+                # Now we are a DAX system, we need to initialize
+                self.dax_init()
+                # Call the run method (of the client class which is unaware of the system it is now)
+                super(WrapperClass, self).run()
 
         # The factory function returns the newly constructed wrapper class
         return WrapperClass
