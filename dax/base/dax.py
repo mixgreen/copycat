@@ -1,4 +1,4 @@
-from __future__ import annotations  # Required for postponed evaluation of annotations
+from __future__ import annotations  # Required for postponed evaluation of annotations (Python 3.x)
 
 import abc
 import logging
@@ -7,8 +7,8 @@ import re
 import natsort  # type: ignore
 import typing
 
-from artiq.master.worker_db import DummyDevice  # type: ignore
-from artiq.experiment import *  # type: ignore
+import artiq.master.worker_db  # type: ignore
+import artiq.experiment  # type: ignore
 
 import artiq.coredevice.core  # type: ignore
 import artiq.coredevice.dma  # type: ignore
@@ -32,7 +32,7 @@ def _is_valid_key(key: str) -> bool:
     return all(_NAME_RE.fullmatch(n) for n in key.split(_KEY_SEPARATOR))
 
 
-class _DaxBase(HasEnvironment, abc.ABC):
+class _DaxBase(artiq.experiment.HasEnvironment, abc.ABC):
     """Base class for all DAX core classes."""
 
     class BuildArgumentError(TypeError):
@@ -59,7 +59,7 @@ class _DaxBase(HasEnvironment, abc.ABC):
         else:
             self.logger.debug('Build finished')
 
-    @host_only
+    @artiq.experiment.host_only
     def update_kernel_invariants(self, *keys: str) -> None:
         """Add one or more keys to the kernel invariants set."""
 
@@ -353,12 +353,12 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
         # Make core devices kernel invariants
         self.update_kernel_invariants(*self.__CORE_DEVICES)
 
-    @host_only
+    @artiq.experiment.host_only
     def get_name(self) -> str:
         """Get the name."""
         return self._name
 
-    @host_only
+    @artiq.experiment.host_only
     def get_system_key(self, key: typing.Optional[str] = None) -> str:
         """Get the full key based on the system key."""
 
@@ -378,12 +378,12 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
             # Return the assigned key
             return _KEY_SEPARATOR.join([self._system_key, key])
 
-    @host_only
+    @artiq.experiment.host_only
     def get_registry(self) -> _DaxNameRegistry:
         """Return the current registry."""
         return self.registry
 
-    @host_only
+    @artiq.experiment.host_only
     def _init_system(self) -> None:
         """Initialize the DAX system, for dataset access, device initialization, and recording DMA traces."""
 
@@ -394,7 +394,7 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
         self.init()
         self.logger.debug('Initialization finished')
 
-    @host_only
+    @artiq.experiment.host_only
     def _post_init_system(self) -> None:
         """DAX system post-initialization (e.g. obtaining DMA handles)."""
 
@@ -430,7 +430,7 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
         device = super(_DaxHasSystem, self).get_device(key)
 
         # Check device type
-        if not isinstance(device, DummyDevice) and not isinstance(device, type_):
+        if not isinstance(device, artiq.master.worker_db.DummyDevice) and not isinstance(device, type_):
             msg = 'Device "{:s}" does not match the expected type'.format(key)
             self.logger.error(msg)
             raise TypeError(msg)
@@ -455,7 +455,7 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
         # Add attribute to kernel invariants
         self.update_kernel_invariants(attr_name)
 
-    @rpc(flags={'async'})
+    @artiq.experiment.rpc(flags={'async'})
     def set_dataset_sys(self, key: str, value: typing.Any) -> None:
         """Sets the contents of a system dataset."""
 
@@ -465,7 +465,7 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
         self.logger.debug('System dataset key "{:s}" set to value "{}"'.format(key, value))
         self.set_dataset(self.get_system_key(key), value, broadcast=True, persist=True, archive=True)
 
-    @rpc(flags={'async'})
+    @artiq.experiment.rpc(flags={'async'})
     def mutate_dataset_sys(self, key: str, index: int, value: typing.Any) -> None:
         """Mutate an existing system dataset at the given index."""
 
@@ -476,7 +476,7 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
         self.logger.debug('System dataset key "{:s}"[{:d}] mutate to value "{}"'.format(key, index, value))
         self.mutate_dataset(self.get_system_key(key), index, value)
 
-    @rpc(flags={'async'})
+    @artiq.experiment.rpc(flags={'async'})
     def append_to_dataset_sys(self, key: str, value: typing.Any) -> None:
         """Append a value to a system dataset."""
 
@@ -486,7 +486,7 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
         self.logger.debug('System dataset key "{:s}" append value "{}"'.format(key, value))
         self.append_to_dataset(self.get_system_key(key), value)
 
-    def get_dataset_sys(self, key: str, default: typing.Any = NoDefault) -> typing.Any:
+    def get_dataset_sys(self, key: str, default: typing.Any = artiq.experiment.NoDefault) -> typing.Any:
         """Returns the contents of a system dataset."""
 
         assert isinstance(key, str), 'Key must be of type str'
@@ -505,7 +505,8 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
         # Return value
         return value
 
-    def setattr_dataset_sys(self, key: str, default: typing.Any = NoDefault, kernel_invariant: bool = True) -> None:
+    def setattr_dataset_sys(self, key: str, default: typing.Any = artiq.experiment.NoDefault,
+                            kernel_invariant: bool = True) -> None:
         """Sets the contents of a system dataset as attribute."""
 
         assert isinstance(key, str), 'Key must be of type str'
@@ -515,7 +516,7 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
             # Get the value from system dataset
             value = self.get_dataset(self.get_system_key(key), archive=True)
         except KeyError:
-            if default is NoDefault:
+            if default is artiq.experiment.NoDefault:
                 # The value was not available in the system dataset and no default was provided
                 self.logger.debug('System attribute "{:s}" not set'.format(key))
                 return
@@ -539,7 +540,7 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
         """Returns if this object has the given attributes."""
         return all(hasattr(self, k) for k in keys)
 
-    @host_only
+    @artiq.experiment.host_only
     def get_identifier(self) -> str:
         """Return the system key with the class name."""
         return '[{:s}]({:s})'.format(self.get_system_key(), self.__class__.__name__)
@@ -639,9 +640,14 @@ class DaxSystem(_DaxModuleBase):
     def dax_init(self) -> None:
         """Initialize the DAX system."""
         self.logger.debug('Starting DAX system initialization...')
-        self._init_system()
-        self._post_init_system()
-        self.logger.debug('Finished DAX system initialization')
+        try:
+            self._init_system()
+            self._post_init_system()
+        except artiq.coredevice.core.CompileError:
+            self.logger.error('Compilation error occurred during DAX system initialization')
+            raise
+        else:
+            self.logger.debug('Finished DAX system initialization')
 
     def init(self) -> None:
         pass

@@ -56,7 +56,7 @@ class RtioBenchmarkEventBurst(DaxClient, EnvExperiment):
         number_kwargs = {'scale': 1, 'step': 1, 'ndecimals': 0}
         time_kwargs = {'unit': 'ns', 'scale': 1, 'step': 1, 'ndecimals': 0}
         self.setattr_argument('num_events_min', NumberValue(10, min=1, **number_kwargs))
-        self.setattr_argument('num_events_max', NumberValue(10000, min=1, **number_kwargs))
+        self.setattr_argument('num_events_max', NumberValue(1000, min=1, **number_kwargs))
         self.setattr_argument('num_events_step', NumberValue(10, min=1, **number_kwargs))
         self.setattr_argument('num_samples', NumberValue(5, min=1, **number_kwargs))
         self.setattr_argument('period_step', NumberValue(1, min=1, **time_kwargs))
@@ -134,9 +134,9 @@ class RtioBenchmarkLatencyCoreRtio(DaxClient, EnvExperiment):
         # Arguments
         time_kwargs = {'unit': 'ns', 'scale': 1, 'step': 1, 'ndecimals': 0}
         number_kwargs = {'scale': 1, 'step': 1, 'ndecimals': 0}
-        self.setattr_argument('latency_min', NumberValue(600, min=1, **time_kwargs))
-        self.setattr_argument('latency_max', NumberValue(1300, min=1, **time_kwargs))
-        self.setattr_argument('latency_step', NumberValue(1, min=1, **time_kwargs))
+        self.setattr_argument('latency_min', NumberValue(500, min=1, **time_kwargs))
+        self.setattr_argument('latency_max', NumberValue(2000, min=1, **time_kwargs))
+        self.setattr_argument('latency_step', NumberValue(10, min=1, **time_kwargs))
         self.setattr_argument('num_samples', NumberValue(5, min=1, **number_kwargs))
         self.setattr_argument('no_underflow_cutoff', NumberValue(5, min=1, **number_kwargs))
 
