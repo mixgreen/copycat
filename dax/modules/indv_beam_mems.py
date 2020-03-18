@@ -26,17 +26,17 @@ class _MemsMirrorModule(DaxModule):
 class IndvBeamMemsModule(DaxModule, IndvBeamInterface):
     """Module for individual beam path controlled with MEMS mirrors."""
 
-    DPASS_AOM_DEVICE_KEY = '{name:s}_{beam:i}_{signal:i}'
+    DPASS_AOM_DEVICE_KEY = '{name:s}_{beam:d}_{signal:d}'
     DPASS_AOM_FREQ_KEY = 'dpass_aom_freq'
     DPASS_AOM_PHASE_KEY = 'dpass_aom_phase'
     DPASS_AOM_ATT_KEY = 'dpass_aom_att'
 
-    INDV_AOM_DEVICE_KEY = '{name:s}_{beam:i}'
+    INDV_AOM_DEVICE_KEY = '{name:s}_{beam:d}'
     INDV_AOM_FREQ_KEY = 'indv_aom_freq'
     INDV_AOM_PHASE_KEY = 'indv_aom_phase'
     INDV_AOM_ATT_KEY = 'indv_aom_att'
 
-    PID_DEVICE_KEY = '{name:s}_{beam:i}'
+    PID_DEVICE_KEY = '{name:s}_{beam:d}'
     PID_ENABLE_KEY = 'pid_enable'
 
     INDV_AOM_RESP_TIME_KEY = 'indv_aom_resp_time'
@@ -164,15 +164,15 @@ class IndvBeamMemsModule(DaxModule, IndvBeamInterface):
                     else:
                         # We found a beam matching the target with a different state, update state and return beam index
                         c.state = state
-                        return b
+                        return np.int32(b)
                 elif c.is_available():
                     # We found an available beam, store it
-                    available_beam = b
+                    available_beam = np.int32(b)
 
             # We exhausted the search which means that no beam is actively pointed at our target
             if available_beam != self._BeamConfig.NO_BEAM:
                 # Save configuration
-                self._beam_configurations[available_beam].target = target
+                self._beam_configurations[available_beam].target = np.int32(target)
                 self._beam_configurations[available_beam].state = state
                 # Return the index of the available beam
                 return available_beam
@@ -192,7 +192,7 @@ class IndvBeamMemsModule(DaxModule, IndvBeamInterface):
                     else:
                         # We found a beam matching the target with a different state, update state and return beam index
                         c.state = state
-                        return b
+                        return np.int32(b)
 
             # We exhausted the search which means that no beam is actively pointed at our target
             return self._BeamConfig.NO_BEAM
