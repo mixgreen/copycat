@@ -50,10 +50,10 @@ class _DaxBase(artiq.experiment.HasEnvironment, abc.ABC):
             super(_DaxBase, self).__init__(managers_or_parent, *args, **kwargs)
         except self.BuildArgumentError as e:
             # Log the error message
-            self.logger.error(e.message)
+            self.logger.error(str(e))
             raise
         except TypeError as e:
-            msg = 'Build arguments do not match the expected signature'
+            msg = 'Build arguments do not match the expected signature: {:s}'.format(str(e))
             self.logger.error(msg)
             raise self.BuildArgumentError(msg) from e
         else:
@@ -576,9 +576,10 @@ class DaxModule(_DaxModuleBase, abc.ABC):
             self.core = managers_or_parent.core
             self.core_dma = managers_or_parent.core_dma
             self.core_cache = managers_or_parent.core_cache
-        except AttributeError:
-            managers_or_parent.logger.error('Missing core devices (super.build() was probably not called)')
-            raise
+        except AttributeError as e:
+            msg = 'Missing core devices (super.build() was probably not called)'
+            managers_or_parent.logger.error(msg)
+            raise AttributeError(msg) from e
 
         # Call super, use parent to assemble arguments
         super(DaxModule, self).__init__(managers_or_parent, module_name, managers_or_parent.get_system_key(module_name),
