@@ -276,18 +276,23 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
         assert isinstance(key, str), 'Key must be of type str'
         assert isinstance(kernel_invariant, bool), 'Kernel invariant flag must be of type bool'
 
+        # Obtain system key
+        system_key: str = self.get_system_key(key)
+
         try:
             # Get the value from system dataset
-            value: typing.Any = self.get_dataset(self.get_system_key(key), archive=True)
+            value: typing.Any = self.get_dataset(system_key, archive=True)
         except KeyError:
             if default is artiq.experiment.NoDefault:
                 # The value was not available in the system dataset and no default was provided
                 self.logger.debug('System attribute "{:s}" not set'.format(key))
                 return
             else:
-                # If the value does not exist, write the default value to the system dataset
-                self.set_dataset_sys(key, default)
-                value = default
+                # If the value does not exist, write the default value to the system dataset, but do not archive yet
+                self.logger.debug('System dataset key "{:s}" set to default value "{}"'.format(key, default))
+                self.set_dataset(system_key, default, broadcast=True, persist=True, archive=False)
+                # Get the value again and make sure it is archived
+                value = self.get_dataset(system_key, archive=True)  # Should never raise a KeyError
 
         # Set value as an attribute
         setattr(self, key, value)

@@ -424,12 +424,29 @@ class DaxModuleBaseTestCase(unittest.TestCase):
                                msg='get_dataset_sys() wrote the default value to the dataset, which it should not'):
             s.get_dataset_sys(key)
 
+    def test_setattr_dataset(self):
+        s = TestSystem(get_manager_or_parent())
+
         key = 'key3'
         self.assertIsNone(s.setattr_dataset_sys(key, 10), 'setattr_dataset_sys() failed')
         self.assertTrue(hasattr(s, key), 'setattr_dataset_sys() did not set the attribute correctly')
         self.assertEqual(getattr(s, key), 10, 'Returned system dataset value does not match expected result')
         self.assertIn(key, s.kernel_invariants,
                       'setattr_dataset_sys() did not added the attribute to kernel_invariants by default')
+
+        key = 'key5'
+        s.set_dataset_sys(key, 5)
+        self.assertIsNone(s.setattr_dataset_sys(key), 'setattr_dataset_sys() failed')
+        self.assertTrue(hasattr(s, key), 'setattr_dataset_sys() did not set the attribute correctly')
+        self.assertEqual(getattr(s, key), 5, 'Returned system dataset value does not match expected result')
+        self.assertIn(key, s.kernel_invariants,
+                      'setattr_dataset_sys() did not added the attribute to kernel_invariants by default')
+
+        key = 'key4'
+        self.assertIsNone(s.setattr_dataset_sys(key), 'setattr_dataset_sys() failed')
+        self.assertFalse(hasattr(s, key), 'setattr_dataset_sys() set the attribute while it should not')
+        self.assertNotIn(key, s.kernel_invariants,
+                         'setattr_dataset_sys() did added the attribute to kernel_invariants while it should not')
 
     @unittest.expectedFailure
     def test_dataset_append(self):
