@@ -222,9 +222,15 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
 
         assert isinstance(key, str), 'Key must be of type str'
 
+        # Modify logging level of worker_db logger to suppress an unwanted warning message
+        artiq.master.worker_db.logger.setLevel(logging.WARNING + 1)
+
         # Set value in system dataset with extra flags
         self.logger.debug('System dataset key "{:s}" set to value "{}"'.format(key, value))
         self.set_dataset(self.get_system_key(key), value, broadcast=True, persist=True, archive=True)
+
+        # Restore original logging level of worker_db logger
+        artiq.master.worker_db.logger.setLevel(logging.NOTSET)
 
     @artiq.experiment.rpc(flags={'async'})
     def mutate_dataset_sys(self, key: str, index: int, value: typing.Any) -> None:
