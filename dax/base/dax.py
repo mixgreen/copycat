@@ -6,6 +6,9 @@ import functools
 import re
 import natsort  # type: ignore
 import typing
+import git  # type: ignore
+import os
+import numbers
 
 import artiq.master.worker_db  # type: ignore
 import artiq.experiment  # type: ignore
@@ -90,6 +93,9 @@ class _DaxNameRegistry:
     __M_T = typing.TypeVar('__M_T', bound='_DaxModuleBase')
     # Service type variable
     __S_T = typing.TypeVar('__S_T', bound='DaxService')
+
+    # List of ARTIQ virtual devices (not available in the device DB)
+    _VIRTUAL_DEVICES: typing.Set[str] = {'scheduler', 'ccb'}
 
     def __init__(self, system: DaxSystem):
         """Create a new DAX name registry."""
@@ -196,6 +202,9 @@ class _DaxNameRegistry:
 
         assert isinstance(parent, _DaxHasSystem), 'Parent is not a DaxHasSystem type'
         assert isinstance(key, str), 'Device key must be a string'
+
+        if key in self._VIRTUAL_DEVICES:
+            return  # Virtual devices always have unique names are excluded from the registry
 
         try:
             # Get the unique key
@@ -314,6 +323,134 @@ class _DaxNameRegistry:
     def get_service_key_list(self) -> typing.List[str]:
         """Return a list of registered service keys."""
         return natsort.natsorted(self._services.keys())  # Natural sort the list
+
+
+class _DaxDataStoreConnector:
+    """Connector class for the DAX data store."""
+
+    # Field type variable
+    __F_T = typing.Union[numbers.Integral, float, bool, str]  # Supported types for fields (Integral for NumPy ints)
+
+    # Legal field types
+    _FIELD_TYPES = (int, float, bool, str)
+
+    # DAX commit hash
+    _DAX_COMMIT: str
+    # Current working directory commit hash
+    _CWD_COMMIT: str
+
+    def __init__(self, system: DaxSystem):
+        """Create a new DAX data store connector."""
+
+        # Store values that will be used for data points
+        self._sys_id: str = system.SYS_ID
+        self._sys_ver: str = str(system.SYS_VER)  # Convert int version to str since tags are strings
+
+        # Get the scheduler, which is a virtual device
+        self._scheduler = system.get_device('scheduler')
+
+        # todo, obtain access to the data store controller using system.get_device()
+
+    def store(self, key: str, value: __F_T) -> None:
+        """Write a single key-value into the data store."""
+
+        # Make a dict with a single key-value pair and store it
+        self.store_dict({key: value})
+
+    def store_dict(self, d: typing.Dict[str, __F_T]) -> None:
+        """Write a dict with key-value pairs into the data store."""
+
+        # Convert NumPy int values to Python int
+        d = {k: int(v) if isinstance(v, numbers.Integral) else v for k, v in d.items()}
+
+        # Check if all keys and values are valid and have supported types
+        for k, v in d.items():
+            if not _is_valid_key(k):
+                # Invalid key
+                raise ValueError('The data store received an invalid key "{:s}"'.format(k))
+            if not isinstance(v, self._FIELD_TYPES):
+                # Unsupported value type
+                raise TypeError('The data store can not store value "{}" of type {:s}'.format(v, str(type(v))))
+
+        # Make a point object for every key-value pair
+        points = [self._make_point(k, v) for k, v in d.items()]
+
+        # Write points to the data store
+        self._write_points(points)
+
+    def _make_point(self, key: str, value: __F_T) -> typing.Dict[str, typing.Union[str, dict]]:
+        """Make a point object from a key-value pair."""
+
+        # Split the key
+        split_key = key.rsplit(_KEY_SEPARATOR, maxsplit=1)
+        base: str = split_key[0] if len(split_key) == 2 else ''  # Base is empty if the key does not split
+        tail: str = split_key[-1]  # The tail is always the last element of the split
+
+        # Tags
+        tags: typing.Dict[str, str] = {
+            'system_version': self._sys_ver,
+            'key': base,  # Base key is the key tag
+        }
+
+        # Fields
+        fields: typing.Dict[str, _DaxDataStoreConnector.__F_T] = {
+            'dax_commit': self._DAX_COMMIT,
+            'cwd_commit': self._CWD_COMMIT,
+            'rid': int(
+                self._scheduler.rid),  # type: ignore
+            'pipeline_name': str(
+                self._scheduler.pipeline_name),  # type: ignore
+            'priority': int(
+                self._scheduler.priority),  # type: ignore
+            tail: value,  # Tail of the key and the value are the actual field
+        }
+        # Add expid items to fields if keys do not exist yet and the types are appropriate
+        fields.update((k, v) for k, v in
+                      self._scheduler.expid.items()  # type: ignore
+                      if k not in fields and isinstance(v, self._FIELD_TYPES))
+
+        # Create the point object
+        point: dict = {
+            'measurement': self._sys_id,
+            'tags': tags,
+            'fields': fields,
+        }
+
+        # Return point
+        return point
+
+    def _write_points(self, points: typing.List[typing.Dict[str, typing.Union[str, dict]]]) -> None:
+        pass  # todo, write points to the actual data store using the controller
+
+    @classmethod
+    def load_commit_hashes(cls):
+        """Load commit hash class attributes, only needs to be done once."""
+
+        # Obtain commit hash of DAX
+        try:
+            # Obtain repo
+            repo = git.Repo(os.path.dirname(__file__), search_parent_directories=True)
+        except git.InvalidGitRepositoryError:
+            # No repo was found, use empty commit hash
+            cls._DAX_COMMIT = ''
+        else:
+            # Get commit hash
+            cls._DAX_COMMIT = repo.head.commit.hexsha
+
+        # Obtain commit hash of current working directory (if existing)
+        try:
+            # Obtain repo
+            repo = git.Repo(os.getcwd(), search_parent_directories=True)
+        except git.InvalidGitRepositoryError:
+            # No repo was found, use empty commit hash
+            cls._CWD_COMMIT: str = ''
+        else:
+            # Get commit hash
+            cls._CWD_COMMIT = repo.head.commit.hexsha
+
+
+# Load commit hashes into class attributes
+_DaxDataStoreConnector.load_commit_hashes()
 
 
 class _DaxHasSystem(_DaxBase, abc.ABC):
@@ -570,14 +707,16 @@ class DaxModule(_DaxModuleBase, abc.ABC):
         if not isinstance(managers_or_parent, _DaxModuleBase):
             raise TypeError('Parent of module {:s} is not a DAX module base'.format(module_name))
 
-        # Take core devices from parent
+        # Take core devices and other objects created in build() from parent
         try:
             # Use core devices from parent
             self.core = managers_or_parent.core
             self.core_dma = managers_or_parent.core_dma
             self.core_cache = managers_or_parent.core_cache
+            # Use other objects from parent
+            self.data_store = managers_or_parent.data_store
         except AttributeError as e:
-            msg = 'Missing core devices (super.build() was probably not called)'
+            msg = 'Missing parent core devices or objects (super.build() was probably not called)'
             managers_or_parent.logger.error(msg)
             raise AttributeError(msg) from e
 
@@ -637,6 +776,9 @@ class DaxSystem(_DaxModuleBase):
         # Verify existence of core log controller
         if self.CORE_LOG_KEY not in self.get_device_db():
             self.logger.warning('Core log controller "{:s}" not found in device DB'.format(self.CORE_LOG_KEY))
+
+        # Instantiate the data store connector (needs to be done in build() since it requests a controller)
+        self.data_store: _DaxDataStoreConnector = _DaxDataStoreConnector(self)
 
     def dax_init(self) -> None:
         """Initialize the DAX system."""
