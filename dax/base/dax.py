@@ -87,6 +87,8 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
 
     # Attribute names of core devices
     __CORE_DEVICES: typing.List[str] = ['core', 'core_dma', 'core_cache']
+    # Attribute names of core objects created in build() or inherited from parents
+    __CORE_ATTRIBUTES: typing.List[str] = __CORE_DEVICES + ['data_store']
 
     def __init__(self, managers_or_parent: typing.Any, name: str, system_key: str, registry: _DaxNameRegistry,
                  *args: typing.Any, **kwargs: typing.Any):
@@ -100,7 +102,7 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
         if not _is_valid_key(system_key) or not system_key.endswith(name):
             raise ValueError('Invalid system_key "{:s}" for class {:s}'.format(system_key, self.__class__.__name__))
 
-        # Store attributes
+        # Store constructor arguments as attributes
         self._name: str = name
         self._system_key: str = system_key
         self.registry: _DaxNameRegistry = registry
@@ -108,14 +110,30 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
         # Call super, which will result in a call to build()
         super(_DaxHasSystem, self).__init__(managers_or_parent, *args, **kwargs)
 
-        # Verify that all core devices are available
-        if not all(hasattr(self, n) for n in self.__CORE_DEVICES):
-            msg = 'Missing core devices (super.build() was probably not called)'
+        # Verify that all core attributes are available
+        if not all(hasattr(self, n) for n in self.__CORE_ATTRIBUTES):
+            msg = 'Missing core attributes (super.build() was probably not called)'
             self.logger.error(msg)
             raise AttributeError(msg)
 
         # Make core devices kernel invariants
         self.update_kernel_invariants(*self.__CORE_DEVICES)
+
+    def _take_parent_core_attributes(self, parent: _DaxHasSystem) -> None:
+        """Take core attributes from parent.
+
+        If this object does not construct its own core attributes, it should take them from their parent.
+        """
+        try:  #
+            # Take core attributes from parent, attributes are taken one by one to allow typing
+            self.core: artiq.coredevice.core = parent.core
+            self.core_dma: artiq.coredevice.dma = parent.core_dma
+            self.core_cache: artiq.coredevice.cache = parent.core_cache
+            self.data_store: _DaxDataStoreConnector = parent.data_store
+        except AttributeError as e:
+            msg = 'Missing core attributes (super.build() was probably not called)'
+            parent.logger.error(msg)
+            raise AttributeError(msg) from e
 
     @artiq.experiment.host_only
     def get_name(self) -> str:
@@ -340,18 +358,8 @@ class DaxModule(_DaxModuleBase, abc.ABC):
         if not isinstance(managers_or_parent, _DaxModuleBase):
             raise TypeError('Parent of module {:s} is not a DAX module base'.format(module_name))
 
-        # Take core devices and other objects created in build() from parent
-        try:
-            # Use core devices from parent
-            self.core: artiq.coredevice.core = managers_or_parent.core
-            self.core_dma: artiq.coredevice.dma = managers_or_parent.core_dma
-            self.core_cache: artiq.coredevice.cache = managers_or_parent.core_cache
-            # Use other objects from parent
-            self.data_store: _DaxDataStoreConnector = managers_or_parent.data_store
-        except AttributeError as e:
-            msg = 'Missing parent core devices or objects (super.build() was probably not called)'
-            managers_or_parent.logger.error(msg)
-            raise AttributeError(msg) from e
+        # Take core attributes from parent
+        self._take_parent_core_attributes(managers_or_parent)
 
         # Call super, use parent to assemble arguments
         super(DaxModule, self).__init__(managers_or_parent, module_name, managers_or_parent.get_system_key(module_name),
@@ -451,17 +459,10 @@ class DaxService(_DaxHasSystem, abc.ABC):
         if not isinstance(managers_or_parent, (DaxSystem, DaxService)):
             raise TypeError('Parent of service {:s} is not a DAX system or service'.format(self.get_name()))
 
-        # Take core devices from parent
-        try:
-            # Use core devices from parent
-            self.core: artiq.coredevice.core = managers_or_parent.core
-            self.core_dma: artiq.coredevice.dma = managers_or_parent.core_dma
-            self.core_cache: artiq.coredevice.cache = managers_or_parent.core_cache
-        except AttributeError:
-            managers_or_parent.logger.error('Missing core devices (super.build() was probably not called)')
-            raise
+        # Take core attributes from parent
+        self._take_parent_core_attributes(managers_or_parent)
 
-        # Take name registry from parent and obtain a system key
+        # Use name registry of parent to obtain a system key
         registry: _DaxNameRegistry = managers_or_parent.get_registry()
         system_key: str = registry.make_service_key(self.SERVICE_NAME)
 
