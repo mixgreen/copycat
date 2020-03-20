@@ -17,7 +17,7 @@ import artiq.coredevice.cache  # type: ignore
 # Key separator
 _KEY_SEPARATOR: str = '.'
 # Regex for matching valid names
-_NAME_RE = re.compile(r'\w+')
+_NAME_RE: typing.Pattern[str] = re.compile(r'\w+')
 
 
 def _is_valid_name(name: str) -> bool:
@@ -42,7 +42,7 @@ class _DaxBase(artiq.experiment.HasEnvironment, abc.ABC):  # type: ignore
     def __init__(self, managers_or_parent: typing.Any,
                  *args: typing.Any, **kwargs: typing.Any):
         # Logger object
-        self.logger = logging.getLogger(self.get_identifier())
+        self.logger: logging.Logger = logging.getLogger(self.get_identifier())
 
         # Build
         self.logger.debug('Starting build...')
@@ -67,9 +67,9 @@ class _DaxBase(artiq.experiment.HasEnvironment, abc.ABC):  # type: ignore
         assert all(isinstance(k, str) for k in keys), 'All keys must be of type str'
 
         # Get kernel invariants using getattr() such that we do not overwrite a user-defined variable
-        kernel_invariants = getattr(self, "kernel_invariants", set())
+        kernel_invariants: typing.Set[str] = getattr(self, "kernel_invariants", set())
         # Update the set with the given keys
-        self.kernel_invariants = kernel_invariants | {*keys}
+        self.kernel_invariants: typing.Set[str] = kernel_invariants | {*keys}
 
     @abc.abstractmethod
     def get_identifier(self) -> str:
@@ -83,7 +83,7 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
     __D_T = typing.Optional[typing.Union[type, typing.Tuple[type, ...]]]
 
     # Attribute names of core devices
-    __CORE_DEVICES = ['core', 'core_dma', 'core_cache']
+    __CORE_DEVICES: typing.List[str] = ['core', 'core_dma', 'core_cache']
 
     def __init__(self, managers_or_parent: typing.Any, name: str, system_key: str, registry: _DaxNameRegistry,
                  *args: typing.Any, **kwargs: typing.Any):
@@ -98,9 +98,9 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
             raise ValueError('Invalid system_key "{:s}" for class {:s}'.format(system_key, self.__class__.__name__))
 
         # Store attributes
-        self._name = name
-        self._system_key = system_key
-        self.registry = registry
+        self._name: str = name
+        self._system_key: str = system_key
+        self.registry: _DaxNameRegistry = registry
 
         # Call super, which will result in a call to build()
         super(_DaxHasSystem, self).__init__(managers_or_parent, *args, **kwargs)
@@ -188,7 +188,7 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
         self.registry.add_device(self, key)
 
         # Get the device
-        device = super(_DaxHasSystem, self).get_device(key)
+        device: typing.Any = super(_DaxHasSystem, self).get_device(key)
 
         # Check device type
         if not isinstance(device, artiq.master.worker_db.DummyDevice) and not isinstance(device, type_):
@@ -203,7 +203,7 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
         """Sets a device driver as attribute."""
 
         # Get the device
-        device = self.get_device(key, type_)
+        device: typing.Any = self.get_device(key, type_)
 
         if attr_name is None:
             # Set attribute name to key if no attribute name was given
@@ -254,7 +254,7 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
 
         try:
             # Get value from system dataset with extra flags
-            value = self.get_dataset(self.get_system_key(key), default, archive=True)
+            value: typing.Any = self.get_dataset(self.get_system_key(key), default, archive=True)
         except KeyError as e:
             # The key was not found
             msg = 'System dataset key "{:s}" not found'.format(key)
@@ -275,7 +275,7 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
 
         try:
             # Get the value from system dataset
-            value = self.get_dataset(self.get_system_key(key), archive=True)
+            value: typing.Any = self.get_dataset(self.get_system_key(key), archive=True)
         except KeyError:
             if default is artiq.experiment.NoDefault:
                 # The value was not available in the system dataset and no default was provided
@@ -335,9 +335,9 @@ class DaxModule(_DaxModuleBase, abc.ABC):
         # Take core devices from parent
         try:
             # Use core devices from parent
-            self.core = managers_or_parent.core
-            self.core_dma = managers_or_parent.core_dma
-            self.core_cache = managers_or_parent.core_cache
+            self.core: artiq.coredevice.core = managers_or_parent.core
+            self.core_dma: artiq.coredevice.dma = managers_or_parent.core_dma
+            self.core_cache: artiq.coredevice.cache = managers_or_parent.core_cache
         except AttributeError as e:
             msg = 'Missing core devices (super.build() was probably not called)'
             managers_or_parent.logger.error(msg)
@@ -393,9 +393,9 @@ class DaxSystem(_DaxModuleBase):
         """Override this method to build your DAX system. (Do not forget to call super.build() first!)"""
 
         # Core devices
-        self.core = self.get_device(self.CORE_KEY, artiq.coredevice.core.Core)
-        self.core_dma = self.get_device(self.CORE_DMA_KEY, artiq.coredevice.dma.CoreDMA)
-        self.core_cache = self.get_device(self.CORE_CACHE_KEY, artiq.coredevice.cache.CoreCache)
+        self.core: artiq.coredevice.core = self.get_device(self.CORE_KEY, artiq.coredevice.core.Core)
+        self.core_dma: artiq.coredevice.dma = self.get_device(self.CORE_DMA_KEY, artiq.coredevice.dma.CoreDMA)
+        self.core_cache: artiq.coredevice.cache = self.get_device(self.CORE_CACHE_KEY, artiq.coredevice.cache.CoreCache)
 
         # Verify existence of core log controller
         if self.CORE_LOG_KEY not in self.get_device_db():
@@ -449,8 +449,8 @@ class DaxService(_DaxHasSystem, abc.ABC):
             raise
 
         # Take name registry from parent and obtain a system key
-        registry = managers_or_parent.get_registry()
-        system_key = registry.make_service_key(self.SERVICE_NAME)
+        registry: _DaxNameRegistry = managers_or_parent.get_registry()
+        system_key: str = registry.make_service_key(self.SERVICE_NAME)
 
         # Call super
         super(DaxService, self).__init__(managers_or_parent, self.SERVICE_NAME, system_key, registry, *args, **kwargs)
@@ -505,7 +505,7 @@ class _DaxNameRegistry:
             raise ValueError('Invalid system services key "{:s}"'.format(system.SYS_SERVICES))
 
         # Store system services key
-        self._sys_services_key = system.SYS_SERVICES  # Access attribute directly
+        self._sys_services_key: str = system.SYS_SERVICES  # Access attribute directly
 
         # A dict containing registered modules
         self._modules: typing.Dict[str, _DaxModuleBase] = dict()
@@ -520,10 +520,10 @@ class _DaxNameRegistry:
         assert isinstance(module, _DaxModuleBase), 'Module is not a DAX module base'
 
         # Get the module key
-        key = module.get_system_key()
+        key: str = module.get_system_key()
 
         # Get the module that registered the module key (None if the key is available)
-        reg_module = self._modules.get(key)
+        reg_module: typing.Optional[_DaxModuleBase] = self._modules.get(key)
 
         if reg_module:
             # Key already in use by an other module
@@ -565,7 +565,7 @@ class _DaxNameRegistry:
         """Search for a unique module that matches the requested type."""
 
         # Search for all modules matching the type
-        results = self.search_module_dict(type_)
+        results: typing.Dict[str, _DaxNameRegistry.__M_T] = self.search_module_dict(type_)
 
         if len(results) > 1:
             # More than one module was found
@@ -604,14 +604,14 @@ class _DaxNameRegistry:
 
         try:
             # Get the unique key
-            unique = self._get_unique_device_key(parent.get_device_db(), key, set())
+            unique: str = self._get_unique_device_key(parent.get_device_db(), key, set())
         except (KeyError, ValueError, TypeError) as e:
             msg = 'Device "{:s}" could not be found'.format(key)
             parent.logger.error(msg)
             raise KeyError(msg) from e
 
         # Get the parent that registered the device (None if the device was not registered before)
-        reg_parent = self._devices.get(unique)
+        reg_parent: typing.Optional[_DaxHasSystem] = self._devices.get(unique)
 
         if reg_parent:
             # Device was already registered
@@ -638,7 +638,7 @@ class _DaxNameRegistry:
         trace.add(key)
 
         # Get value (could raise KeyError)
-        v = d[key]
+        v: typing.Any = d[key]
 
         if isinstance(v, str):
             # Recurse if we are still dealing with an alias
@@ -673,10 +673,10 @@ class _DaxNameRegistry:
         assert isinstance(service, DaxService), 'Service must be a DAX service'
 
         # Services get indexed by name
-        key = service.get_name()
+        key: str = service.get_name()
 
         # Get the service that registered with the service name (None if key is available)
-        reg_service = self._services.get(key)
+        reg_service: typing.Optional[DaxService] = self._services.get(key)
 
         if reg_service:
             # Service name was already registered
