@@ -101,6 +101,8 @@ class DaxNameRegistryTestCase(unittest.TestCase):
                              'Module key list incorrect')
         with self.assertRaises(_DaxNameRegistry.NonUniqueRegistrationError, msg='Adding module twice did not raise'):
             r.add_module(t0)
+        with self.assertRaises(LookupError, msg='Adding module twice did not raise a LookupError'):
+            r.add_module(t0)
 
         # Test with two modules
         t1 = TestModuleChild(s, 'test_module_child')

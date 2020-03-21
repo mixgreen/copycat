@@ -184,8 +184,13 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
         # Debug message
         self.logger.debug('Requesting device "{:s}"'.format(key))
 
-        # Register the requested device
-        self.registry.add_device(self, key)
+        try:
+            # Register the requested device
+            self.registry.add_device(self, key)
+        except LookupError as e:
+            # Log error
+            self.logger.error(str(e))
+            raise
 
         # Get the device
         device: typing.Any = super(_DaxHasSystem, self).get_device(key)
@@ -328,8 +333,13 @@ class _DaxModuleBase(_DaxHasSystem, abc.ABC):
         # Call super
         super(_DaxModuleBase, self).__init__(managers_or_parent, module_name, module_key, registry, *args, **kwargs)
 
-        # Register this module
-        self.registry.add_module(self)
+        try:
+            # Register this module
+            self.registry.add_module(self)
+        except LookupError as e:
+            # Log error
+            self.logger.error(str(e))
+            raise
 
 
 class DaxModule(_DaxModuleBase, abc.ABC):
@@ -409,7 +419,11 @@ class DaxSystem(_DaxModuleBase):
         self.core_cache: artiq.coredevice.cache = self.get_device(self.CORE_CACHE_KEY, artiq.coredevice.cache.CoreCache)
 
         # Verify existence of core log controller
-        if self.CORE_LOG_KEY not in self.get_device_db():
+        try:
+            # Register the core log controller with the system
+            self.registry.add_device(self, self.CORE_LOG_KEY)
+        except LookupError:
+            # Core log controller was not found in the device DB
             self.logger.warning('Core log controller "{:s}" not found in device DB'.format(self.CORE_LOG_KEY))
 
     def dax_init(self) -> None:
@@ -466,8 +480,13 @@ class DaxService(_DaxHasSystem, abc.ABC):
         # Call super
         super(DaxService, self).__init__(managers_or_parent, self.SERVICE_NAME, system_key, registry, *args, **kwargs)
 
-        # Register this service
-        self.registry.add_service(self)
+        try:
+            # Register this service
+            self.registry.add_service(self)
+        except LookupError as e:
+            # Log error
+            self.logger.error(str(e))
+            raise
 
 
 class DaxClient(_DaxHasSystem, abc.ABC):
@@ -493,11 +512,11 @@ class DaxClient(_DaxHasSystem, abc.ABC):
 class _DaxNameRegistry:
     """A class for unique name registration."""
 
-    class NonUniqueRegistrationError(ValueError):
+    class NonUniqueRegistrationError(LookupError):
         """Exception when a name is registered more then once."""
         pass
 
-    class NonUniqueSearchError(ValueError):
+    class NonUniqueSearchError(LookupError):
         """Exception when a search could not find a unique result."""
         pass
 
@@ -539,7 +558,6 @@ class _DaxNameRegistry:
         if reg_module:
             # Key already in use by an other module
             msg = 'Module key "{:s}" was already registered by module {:s}'.format(key, reg_module.get_identifier())
-            module.logger.error(msg)
             raise self.NonUniqueRegistrationError(msg)
 
         # Add module key to the dict of registered modules
@@ -616,10 +634,9 @@ class _DaxNameRegistry:
         try:
             # Get the unique key
             unique: str = self._get_unique_device_key(parent.get_device_db(), key, set())
-        except (KeyError, ValueError, TypeError) as e:
-            msg = 'Device "{:s}" could not be found'.format(key)
-            parent.logger.error(msg)
-            raise KeyError(msg) from e
+        except (LookupError, TypeError) as e:
+            # Device was not found in the device DB
+            raise KeyError('Device "{:s}" could not be found in the device DB'.format(key)) from e
 
         # Get the parent that registered the device (None if the device was not registered before)
         reg_parent: typing.Optional[_DaxHasSystem] = self._devices.get(unique)
@@ -628,7 +645,6 @@ class _DaxNameRegistry:
             # Device was already registered
             device_name = '"{:s}"'.format(key) if key == unique else '"{:s}" ({:s})'.format(key, unique)
             msg = 'Device {:s}, was already registered by parent {:s}'.format(device_name, reg_parent.get_identifier())
-            parent.logger.error(msg)
             raise self.NonUniqueRegistrationError(msg)
 
         # Add unique device key to the dict of registered devices
@@ -644,7 +660,7 @@ class _DaxNameRegistry:
 
         # Check if we are not stuck in a loop
         if key in trace:
-            raise ValueError('Key {:s} causes an alias loop'.format(key))
+            raise LookupError('Key {:s} causes an alias loop'.format(key))
         # Add key to the trace
         trace.add(key)
 
@@ -691,9 +707,7 @@ class _DaxNameRegistry:
 
         if reg_service:
             # Service name was already registered
-            msg = 'Service with name "{:s}" was already registered'.format(key)
-            service.logger.error(msg)
-            raise self.NonUniqueRegistrationError(msg)
+            raise self.NonUniqueRegistrationError('Service with name "{:s}" was already registered'.format(key))
 
         # Add service to the registry
         self._services[key] = service
