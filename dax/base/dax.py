@@ -698,7 +698,7 @@ class _DaxNameRegistry:
         # Add service to the registry
         self._services[key] = service
 
-    def has_service(self, key: typing.Union[type, str]) -> bool:
+    def has_service(self, key: typing.Union[str, typing.Type[DaxService]]) -> bool:
         """Return if service is available."""
         try:
             self.get_service(key)
@@ -707,15 +707,7 @@ class _DaxNameRegistry:
         else:
             return True
 
-    @typing.overload
-    def get_service(self, key: str) -> DaxService:
-        ...
-
-    @typing.overload
-    def get_service(self, key: typing.Type[__S_T]) -> __S_T:
-        ...
-
-    def get_service(self, key: typing.Union[str, typing.Type[__S_T]]) -> typing.Union[DaxService, __S_T]:
+    def get_service(self, key: typing.Union[str, typing.Type[DaxService]]) -> DaxService:
         """Get a service from the registry."""
 
         assert isinstance(key, str) or issubclass(key, DaxService)
