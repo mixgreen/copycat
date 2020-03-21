@@ -220,12 +220,11 @@ class DaxDataStoreTestCase(unittest.TestCase):
                 # Split key
                 split_key = k.rsplit('.', maxsplit=1)
                 base: str = split_key[0] if len(split_key) == 2 else ''
-                tail: str = split_key[-1]
 
                 # Verify point object
-                self.assertEqual(base, d['tags']['key'], 'Base of key does not match tag in point object')
-                self.assertIn(tail, d['fields'], 'Tail of key is not an available field in the point object')
-                self.assertEqual(v, d['fields'][tail], 'Field value in point object is not equal to inserted value')
+                self.assertEqual(base, d['tags']['base'], 'Base of key does not match tag in point object')
+                self.assertIn(k, d['fields'], 'Key is not an available field in the point object')
+                self.assertEqual(v, d['fields'][k], 'Field value in point object is not equal to inserted value')
 
     def test_np_type_conversion(self):
 

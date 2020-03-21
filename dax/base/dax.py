@@ -805,12 +805,11 @@ class _DaxDataStoreConnector:
         # Split the key
         split_key: typing.List[str] = key.rsplit(_KEY_SEPARATOR, maxsplit=1)
         base: str = split_key[0] if len(split_key) == 2 else ''  # Base is empty if the key does not split
-        tail: str = split_key[-1]  # The tail is always the last element of the split
 
         # Tags
         tags: typing.Dict[str, str] = {
             'system_version': self._sys_ver,
-            'key': base,  # Base key is the key tag
+            'base': base,
         }
 
         # Fields
@@ -820,7 +819,7 @@ class _DaxDataStoreConnector:
             'rid': int(self._scheduler.rid),
             'pipeline_name': str(self._scheduler.pipeline_name),
             'priority': int(self._scheduler.priority),
-            tail: value,  # Tail of the key and the value are the actual field
+            key: value,  # The full key and the value are the actual field
         }
         # Add expid items to fields if keys do not exist yet and the types are appropriate
         fields.update((k, v) for k, v in self._scheduler.expid.items()
