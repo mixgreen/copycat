@@ -1,10 +1,8 @@
-import numpy as np
-
-import artiq.language.core
+from artiq.language.core import *
 from artiq.language.units import *
 
 
-@artiq.language.core.host_only
+@host_only
 def _value_to_str(value, threshold, precision, scales):
     assert isinstance(value, float), 'Input value must be of type float'
     assert isinstance(threshold, float), 'Threshold must be a float'
@@ -28,19 +26,19 @@ def _value_to_str(value, threshold, precision, scales):
     return '{:f} {:s}'.format(scaled_value, scales[-1])
 
 
-@artiq.language.core.host_only
+@host_only
 def time_to_str(time, threshold=1.0, precision=2):
     """Convert a time to a string for pretty printing."""
     return _value_to_str(time, threshold, precision, ['s', 'ms', 'us', 'ns', 'ps'])
 
 
-@artiq.language.core.host_only
+@host_only
 def freq_to_str(frequency, threshold=1.0, precision=2):
     """Convert a frequency to a string for pretty printing."""
     return _value_to_str(frequency, threshold, precision, ['GHz', 'MHz', 'kHz', 'Hz', 'mHz'])
 
 
-@artiq.language.core.host_only
+@host_only
 def _str_to_value(string, units):
     assert isinstance(string, str), 'Input must be of type str'
 
@@ -60,13 +58,13 @@ def _str_to_value(string, units):
         raise ValueError('String "{:s}" does not contain a valid number'.format(string)) from e
 
 
-@artiq.language.core.host_only
+@host_only
 def str_to_time(string):
     """Convert a string to a time."""
     return _str_to_value(string, {'s', 'ms', 'us', 'ns', 'ps'})
 
 
-@artiq.language.core.host_only
+@host_only
 def str_to_freq(string):
     """Convert a string to a frequency."""
     return _str_to_value(string, {'GHz', 'MHz', 'kHz', 'Hz', 'mHz'})
