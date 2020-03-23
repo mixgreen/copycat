@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 
 from artiq.gateware.targets.kc705 import *
-from artiq.gateware.targets.kc705 import _StandaloneBase
+from artiq.gateware.targets.kc705 import _RTIOCRG, _StandaloneBase
 
 
 class KC705_BARE(_StandaloneBase):
     """
-    Bare KC705 board with only onboard hardware. Based on NIST_CLOCK class.
+    Bare KC705 board with only onboard hardware. Based on NIST_CLOCK and SMA_SPI class.
     """
 
     def __init__(self, **kwargs):
@@ -52,6 +52,34 @@ class KC705_BARE(_StandaloneBase):
         rtio_channels.append(rtio.LogChannel())
 
         self.add_rtio(rtio_channels)
+
+    def add_rtio(self, rtio_channels):
+        self.submodules.rtio_crg = _RTIOCRG(self.platform, self.crg.cd_sys.clk,
+                                            use_sma=False)
+        self.csr_devices.append("rtio_crg")
+        self.config["HAS_RTIO_CLOCK_SWITCH"] = None
+        self.submodules.rtio_tsc = rtio.TSC("async", glbl_fine_ts_width=3)
+        self.submodules.rtio_core = rtio.Core(self.rtio_tsc, rtio_channels)
+        self.csr_devices.append("rtio_core")
+        self.submodules.rtio = rtio.KernelInitiator(self.rtio_tsc)
+        self.submodules.rtio_dma = ClockDomainsRenamer("sys_kernel")(
+            rtio.DMA(self.get_native_sdram_if()))
+        self.register_kernel_cpu_csrdevice("rtio")
+        self.register_kernel_cpu_csrdevice("rtio_dma")
+        self.submodules.cri_con = rtio.CRIInterconnectShared(
+            [self.rtio.cri, self.rtio_dma.cri],
+            [self.rtio_core.cri])
+        self.submodules.rtio_moninj = rtio.MonInj(rtio_channels)
+        self.csr_devices.append("rtio_moninj")
+
+        self.platform.add_period_constraint(self.rtio_crg.cd_rtio.clk, 8.)
+        self.platform.add_false_path_constraints(
+            self.crg.cd_sys.clk,
+            self.rtio_crg.cd_rtio.clk)
+
+        self.submodules.rtio_analyzer = rtio.Analyzer(self.rtio_tsc, self.rtio_core.cri,
+                                                      self.get_native_sdram_if())
+        self.csr_devices.append("rtio_analyzer")
 
 
 VARIANTS = {cls.__name__.lower(): cls for cls in [KC705_BARE, NIST_CLOCK, NIST_QC2, SMA_SPI]}
