@@ -124,7 +124,7 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
 
         If this object does not construct its own core attributes, it should take them from their parent.
         """
-        try:  #
+        try:
             # Take core attributes from parent, attributes are taken one by one to allow typing
             self.core: artiq.coredevice.core = parent.core
             self.core_dma: artiq.coredevice.dma = parent.core_dma

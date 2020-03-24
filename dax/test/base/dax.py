@@ -47,8 +47,7 @@ class DaxStaticTyping(unittest.TestCase):
 
     def test_static_typing(self):
         # Type checking on DAX base
-        import dax.base.dax as module
-        type_check(self, module, '--strict')
+        type_check(self, dax.base.dax, '--strict')
 
 
 class DaxHelpersTestCase(unittest.TestCase):
