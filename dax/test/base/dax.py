@@ -1,6 +1,8 @@
 import unittest
+import numpy as np
 
 from dax.base.dax import *
+import dax.base.dax
 
 from dax.test.helpers.artiq import get_manager_or_parent
 from dax.test.helpers.mypy import type_check
@@ -179,6 +181,108 @@ class DaxNameRegistryTestCase(unittest.TestCase):
         self.assertTrue(r.has_service(TestServiceChild.SERVICE_NAME), 'Did not returned true for existing service')
         self.assertListEqual(r.get_service_key_list(), [s.get_name() for s in [s0, s1]],
                              'List of registered service keys incorrect')
+
+
+class DaxDataStoreTestCase(unittest.TestCase):
+    class NoWriteDataStoreConnector(dax.base.dax._DaxDataStoreConnector):
+        """Data store connector that does not write but a callback instead."""
+
+        def __init__(self, callback, *args, **kwargs):
+            assert callable(callback), 'Callback must be a callable function'
+            self.callback = callback
+            super(DaxDataStoreTestCase.NoWriteDataStoreConnector, self).__init__(*args, **kwargs)
+
+        def _write_points(self, points):
+            # Do not write points but do a callback instead
+            self.callback(points)
+
+    def setUp(self) -> None:
+        # Test system
+        self.s = TestSystem(get_manager_or_parent())
+        # Data store
+        self.ds = self.s.data_store
+
+    def test_make_point(self):
+        # Data to test against
+        test_data = [
+            ('k', 4),
+            ('k', 0.1),
+            ('k', True),
+            ('k', 'value'),
+            ('k.a', 7),
+            ('k.b.c', 8),
+            ('k.ddd', 9),
+        ]
+
+        for k, v in test_data:
+            with self.subTest(k=k, v=v):
+                # Test making point
+                d = self.ds._make_point(k, v)
+
+                # Split key
+                split_key = k.rsplit('.', maxsplit=1)
+                base: str = split_key[0] if len(split_key) == 2 else ''
+
+                # Verify point object
+                self.assertEqual(base, d['tags']['base'], 'Base of key does not match tag in point object')
+                self.assertIn(k, d['fields'], 'Key is not an available field in the point object')
+                self.assertEqual(v, d['fields'][k], 'Field value in point object is not equal to inserted value')
+
+    def test_np_type_conversion(self):
+
+        # Callback function
+        def callback(points):
+            # Check if the types of all field values are valid
+            for d in points:
+                for value in d['fields'].values():
+                    self.assertIsInstance(value, (int, float, bool, str))  # These are the valid types for fields
+
+        # Special data store that skips actual writing
+        self.ds = self.NoWriteDataStoreConnector(callback, self.s)
+
+        # Data to test against
+        test_data = [
+            ('k', 4),
+            ('k', 0.1),
+            ('k', True),
+            ('k', 'value'),
+            ('k.a', 7),
+            ('k.b.c', 8),
+            ('k.ddd', 9),
+            ('k', np.int32(3)),
+            ('k', np.int64(99999999)),
+            ('k', np.float(4)),
+        ]
+
+        for k, v in test_data:
+            with self.subTest(k=k, v=v):
+                # Test using the callback function
+                self.ds.store(k, v)
+
+    def test_bad_type(self):
+        # Callback function
+        def callback(*args, **kwargs):
+            # This code is supposed to be unreachable
+            self.assertTrue(False, 'Exception should have been raised earlier {} {}'.format(args, kwargs))
+
+        # Special data store that skips actual writing
+        self.ds = self.NoWriteDataStoreConnector(callback, self.s)
+
+        # Data to test against
+        test_data = [
+            ('k', complex(5)),
+            ('k', {'i': 3}),
+            ('k', [1, 2, 3]),
+            ('k', {1, 2, 6, 7}),
+            ('k.a', self),
+        ]
+
+        for k, v in test_data:
+            with self.subTest(k=k, v=v):
+                with self.assertRaises(TypeError,
+                                       msg='Store function did not raise when provided an unsupported value type'):
+                    # Test using the callback function
+                    self.ds.store(k, v)
 
 
 class DaxModuleBaseTestCase(unittest.TestCase):

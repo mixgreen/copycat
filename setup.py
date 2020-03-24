@@ -17,6 +17,7 @@ requirements = [
     "pyvcd",
     "natsort",
     "mypy",
+    "gitpython",
 ]
 
 setup(
