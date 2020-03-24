@@ -1,7 +1,7 @@
 import unittest
 import numpy as np
 
-from dax.base.dax import *
+from dax.experiment import *
 from dax.modules.indv_beam_mems import *
 
 from dax.test.helpers.artiq import get_manager_or_parent

@@ -3,7 +3,7 @@ import numpy as np
 import artiq.coredevice.ttl
 import artiq.coredevice.edge_counter
 
-from dax.base import *
+from dax.experiment import *
 from dax.modules.interfaces.detection_if import *
 
 

@@ -4,11 +4,11 @@ import abc
 import logging
 import functools
 import re
-import natsort  # type: ignore
+import natsort
 import typing
 
+import artiq.experiment
 import artiq.master.worker_db  # type: ignore
-import artiq.experiment  # type: ignore
 
 import artiq.coredevice.core  # type: ignore
 import artiq.coredevice.dma  # type: ignore
@@ -32,7 +32,7 @@ def _is_valid_key(key: str) -> bool:
     return all(_NAME_RE.fullmatch(n) for n in key.split(_KEY_SEPARATOR))
 
 
-class _DaxBase(artiq.experiment.HasEnvironment, abc.ABC):  # type: ignore
+class _DaxBase(artiq.experiment.HasEnvironment, abc.ABC):
     """Base class for all DAX core classes."""
 
     class BuildArgumentError(TypeError):
@@ -410,8 +410,12 @@ class DaxSystem(_DaxModuleBase):
         super(DaxSystem, self).__init__(managers_or_parent, self.SYS_NAME, self.SYS_NAME, _DaxNameRegistry(self),
                                         *args, **kwargs)
 
-    def build(self) -> None:
+    def build(self, *args: typing.Any, **kwargs: typing.Any) -> None:
         """Override this method to build your DAX system. (Do not forget to call super.build() first!)"""
+
+        if args or kwargs:
+            # Warn if we find any dangling arguments
+            self.logger.warning('Unused args "{}" / kwargs "{}" were passed to super.build()'.format(args, kwargs))
 
         # Core devices
         self.core: artiq.coredevice.core = self.get_device(self.CORE_KEY, artiq.coredevice.core.Core)
@@ -521,9 +525,7 @@ class _DaxNameRegistry:
         pass
 
     # Module base type variable
-    __M_T = typing.TypeVar('__M_T', bound='_DaxModuleBase')
-    # Service type variable
-    __S_T = typing.TypeVar('__S_T', bound='DaxService')
+    __M_T = typing.TypeVar('__M_T', bound=_DaxModuleBase)
 
     def __init__(self, system: DaxSystem):
         """Create a new DAX name registry."""
@@ -571,7 +573,7 @@ class _DaxNameRegistry:
     def get_module(self, key: str, type_: typing.Type[__M_T]) -> __M_T:
         ...
 
-    def get_module(self, key: str, type_: typing.Type[__M_T] = _DaxModuleBase) -> __M_T:
+    def get_module(self, key: str, type_: typing.Type[_DaxModuleBase] = _DaxModuleBase) -> _DaxModuleBase:
         """Return the requested module by key."""
 
         assert isinstance(key, str), 'Key must be a string'
@@ -611,7 +613,8 @@ class _DaxNameRegistry:
             'Provided type must be a DAX module base or interface'
 
         # Search for all modules matching the type
-        results: typing.Dict[str, _DaxModuleBase] = {k: m for k, m in self._modules.items() if isinstance(m, type_)}
+        results: typing.Dict[str, _DaxNameRegistry.__M_T] = {k: m for k, m in self._modules.items()
+                                                             if isinstance(m, type_)}
 
         if not results:
             # No modules were found
@@ -742,13 +745,12 @@ class _DaxNameRegistry:
 
 
 # Type variable for dax_client_factory() decorator c (client) argument
-__C_T = typing.TypeVar('__C_T', bound='DaxClient')
+__C_T = typing.TypeVar('__C_T', bound=DaxClient)
 # Type variable for dax_client_factory() system_type argument
-__S_T = typing.TypeVar('__S_T', bound='DaxSystem')
+__S_T = typing.TypeVar('__S_T', bound=DaxSystem)
 
 
-def dax_client_factory(c: typing.Type[__C_T]) -> typing.Callable[[typing.Type[__S_T], typing.Any, typing.Any],
-                                                                 typing.Type[__C_T]]:
+def dax_client_factory(c: typing.Type[__C_T]) -> typing.Callable[[typing.Type[__S_T]], typing.Type[__C_T]]:
     """Decorator to convert a DaxClient class to a factory function for that class."""
 
     assert isinstance(c, type), 'The decorated object must be a class'

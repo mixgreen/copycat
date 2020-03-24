@@ -1,7 +1,7 @@
 import numpy as np
 import scipy.signal
 
-from dax.base import *
+from dax.experiment import *
 from dax.modules.interfaces.global_beam_if import *
 from dax.modules.interfaces.detection_if import *
 from dax.modules.interfaces.trap_if import *

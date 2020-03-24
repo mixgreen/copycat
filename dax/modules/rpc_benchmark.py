@@ -1,7 +1,7 @@
 import numpy as np
 import timeit
 
-from dax.base import *
+from dax.experiment import *
 
 
 class RpcBenchmarkModule(DaxModule):

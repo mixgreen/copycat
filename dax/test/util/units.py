@@ -2,8 +2,19 @@ import unittest
 
 from artiq.language.units import *
 
+from dax.test.helpers.mypy import type_check
+
+
+class UnitsStaticTyping(unittest.TestCase):
+
+    def test_static_typing(self):
+        # Type checking on DAX base
+        import dax.util.units as module
+        type_check(self, module, '--strict')
+
 
 class UnitsTestCase(unittest.TestCase):
+
     def test_time_to_str(self):
         from dax.util.units import time_to_str
         self.assertEqual(time_to_str(1 * ns, precision=2), '1.00 ns')

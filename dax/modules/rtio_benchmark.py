@@ -2,7 +2,7 @@ import numpy as np
 
 import artiq.coredevice.ttl
 
-from dax.base import *
+from dax.experiment import *
 import dax.util.units
 
 

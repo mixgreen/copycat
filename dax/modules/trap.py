@@ -2,7 +2,7 @@ import numpy as np
 
 import artiq.coredevice.ttl
 
-from dax.base import *
+from dax.experiment import *
 from dax.modules.interfaces.trap_if import *
 
 

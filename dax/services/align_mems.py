@@ -1,4 +1,4 @@
-from dax.base import *
+from dax.experiment import *
 from dax.modules.indv_beam_mems import *
 from dax.modules.interfaces.global_beam_if import *
 from dax.modules.interfaces.detection_if import *
