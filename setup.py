@@ -18,6 +18,7 @@ requirements = [
     "natsort",
     "mypy",
     "gitpython",
+    "pycodestyle",
 ]
 
 setup(

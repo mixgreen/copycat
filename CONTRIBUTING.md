@@ -12,7 +12,7 @@ We recommend the following naming conventions for branches:
 
 ## Merging
 
-When merging a branch into master, we recommend to rebase first or to use the `--no-ff` flag with the merge command.
+When merging a branch into master, we recommend to rebase first or to use the `--no-ff` flag when merging.
 
 ## Releases
 

@@ -18,8 +18,8 @@ def type_check(test_case: unittest.TestCase, module, *cmd_args: str):
     # Run MyPy static typing
     report, err_report, exit_status = mypy.api.run([*cmd_args, module_path])
 
-    # Assert
-    err_report = '\nError report:\n{:s}\n'.format(err_report) if err_report else err_report
+    # Format message and assert
+    err_report = '\nError report:\n{:s}'.format(err_report) if err_report else err_report
     msg = '\n\nType checking report:\n{:s}{:s}'.format(report, err_report)
     test_case.assertEqual(exit_status, 0, msg)
 

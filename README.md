@@ -2,12 +2,12 @@
 
 Duke [ARTIQ](https://github.com/m-labs/artiq) Extensions (DAX).
 
-## Usage
-
-DAX extends the capabilities of ARTIQ while maintaining a vanilla ARTIQ experience.
+DAX is a library that extends the capabilities of ARTIQ while maintaining a vanilla ARTIQ experience.
 More information about ARTIQ can be found in the [ARTIQ manual](https://m-labs.hk/artiq/manual/).
 
-Users can import DAX and the ARTIQ experiment environment using the following import statement:
+## Usage
+
+Users can import DAX and the ARTIQ experiment environment at once using the following import statement:
 
 ```python
 from dax.experiment import *
