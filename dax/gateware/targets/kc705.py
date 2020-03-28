@@ -26,8 +26,8 @@ class KC705_BARE(_StandaloneBase):
         self.submodules += phy
         rtio_channels.append(rtio.Channel.from_phy(phy, ififo_depth=512))
 
-        for i in range(2, 8):
-            # GPIO_LED_[2..7]
+        for i in range(2, 4):
+            # GPIO_LED_[2..3]
             phy = ttl_simple.Output(platform.request("user_led", i))
             self.submodules += phy
             rtio_channels.append(rtio.Channel.from_phy(phy))
@@ -69,6 +69,7 @@ class KC705_BARE(_StandaloneBase):
         self.submodules.cri_con = rtio.CRIInterconnectShared(
             [self.rtio.cri, self.rtio_dma.cri],
             [self.rtio_core.cri])
+        self.register_kernel_cpu_csrdevice("cri_con")
         self.submodules.rtio_moninj = rtio.MonInj(rtio_channels)
         self.csr_devices.append("rtio_moninj")
 
