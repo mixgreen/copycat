@@ -54,8 +54,7 @@ class KC705_BARE(_StandaloneBase):
         self.add_rtio(rtio_channels)
 
     def add_rtio(self, rtio_channels):
-        self.submodules.rtio_crg = _RTIOCRG(self.platform, self.crg.cd_sys.clk,
-                                            use_sma=False)
+        self.submodules.rtio_crg = _RTIOCRG(self.platform, self.crg.cd_sys.clk, use_sma=False)
         self.csr_devices.append("rtio_crg")
         self.config["HAS_RTIO_CLOCK_SWITCH"] = None
         self.submodules.rtio_tsc = rtio.TSC("async", glbl_fine_ts_width=3)

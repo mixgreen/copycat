@@ -38,10 +38,6 @@ def _is_valid_key(key: str) -> bool:
 class _DaxBase(artiq.experiment.HasEnvironment, abc.ABC):
     """Base class for all DAX core classes."""
 
-    class BuildArgumentError(TypeError):
-        """Exception for build arguments not matching an expected signature."""
-        pass
-
     def __init__(self, managers_or_parent: typing.Any,
                  *args: typing.Any, **kwargs: typing.Any):
         # Logger object
@@ -52,14 +48,11 @@ class _DaxBase(artiq.experiment.HasEnvironment, abc.ABC):
         try:
             # Call super, which will call build()
             super(_DaxBase, self).__init__(managers_or_parent, *args, **kwargs)
-        except self.BuildArgumentError as e:
-            # Log the error message
-            self.logger.error(str(e))
-            raise
-        except TypeError as e:
-            msg = 'Build arguments do not match the expected signature: {:s}'.format(str(e))
-            self.logger.error(msg)
-            raise self.BuildArgumentError(msg) from e
+        except (TypeError, LookupError) as e:  # TypeError includes signature mismatch errors for build()
+            # Log the exception to provide more context
+            self.logger.exception(e)
+            # Raise a different exception type to prevent that the caught exception is logged again by the parent
+            raise RuntimeError(e) from e
         else:
             self.logger.debug('Build finished')
 
@@ -98,9 +91,9 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
 
         # Check name and system key
         if not _is_valid_name(name):
-            raise ValueError('Invalid name "{:s}" for class {:s}'.format(name, self.__class__.__name__))
+            raise ValueError('Invalid name "{:s}" for class "{:s}"'.format(name, self.__class__.__name__))
         if not _is_valid_key(system_key) or not system_key.endswith(name):
-            raise ValueError('Invalid system_key "{:s}" for class {:s}'.format(system_key, self.__class__.__name__))
+            raise ValueError('Invalid system key "{:s}" for class "{:s}"'.format(system_key, self.__class__.__name__))
 
         # Store constructor arguments as attributes
         self._name: str = name
@@ -130,10 +123,9 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
             self.core_dma: artiq.coredevice.dma = parent.core_dma
             self.core_cache: artiq.coredevice.cache = parent.core_cache
             self.data_store: _DaxDataStoreConnector = parent.data_store
-        except AttributeError as e:
-            msg = 'Missing core attributes (super.build() was probably not called)'
-            parent.logger.error(msg)
-            raise AttributeError(msg) from e
+        except AttributeError:
+            parent.logger.exception('Missing core attributes (super.build() was probably not called)')
+            raise
 
     @artiq.experiment.host_only
     def get_name(self) -> str:
@@ -144,18 +136,15 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
     def get_system_key(self, key: typing.Optional[str] = None) -> str:
         """Get the full key based on the system key."""
 
+        assert isinstance(key, str) or key is None, 'Key must be a string or None'
+
         if key is None:
             # No key provided, just return the system key
             return self._system_key
-
         else:
-            assert isinstance(key, str), 'Key must be a string'
-
             # Check if the given key is valid
             if not _is_valid_key(key):
-                msg = 'Invalid key "{:s}"'.format(key)
-                self.logger.error(msg)
-                raise ValueError(msg)
+                raise ValueError('Invalid key "{:s}"'.format(key))
 
             # Return the assigned key
             return _KEY_SEPARATOR.join([self._system_key, key])
@@ -205,28 +194,25 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
         # Debug message
         self.logger.debug('Requesting device "{:s}"'.format(key))
 
-        try:
-            # Register the requested device
-            self.registry.add_device(self, key)
-        except LookupError as e:
-            # Log error
-            self.logger.error(str(e))
-            raise
+        # Register the requested device
+        self.registry.add_device(self, key)
 
         # Get the device
         device: typing.Any = super(_DaxHasSystem, self).get_device(key)
 
         # Check device type
         if not isinstance(device, artiq.master.worker_db.DummyDevice) and not isinstance(device, type_):
-            msg = 'Device "{:s}" does not match the expected type'.format(key)
-            self.logger.error(msg)
-            raise TypeError(msg)
+            # Device has an unexpected type
+            raise TypeError('Device "{:s}" requested by "{:s}" does not match the '
+                            'expected type'.format(key, self.get_system_key()))
 
         # Return the device
         return device
 
     def setattr_device(self, key: str, attr_name: typing.Optional[str] = None, type_: __D_T = object) -> None:
         """Sets a device driver as attribute."""
+
+        assert isinstance(attr_name, str) or attr_name is None, 'Attribute name must be of type str or None'
 
         # Get the device
         device: typing.Any = self.get_device(key, type_)
@@ -236,7 +222,8 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
             attr_name = key
 
         # Set the device key to the attribute
-        assert isinstance(attr_name, str) and attr_name, 'Attribute name must be of type str and not empty'
+        if not _is_valid_name(attr_name):
+            raise ValueError('Attribute name {:s} not valid'.format(attr_name))
         setattr(self, attr_name, device)
 
         # Add attribute to kernel invariants
@@ -284,14 +271,15 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
 
         assert isinstance(key, str), 'Key must be of type str'
 
+        # Get the full system key
+        system_key = self.get_system_key(key)
+
         try:
             # Get value from system dataset with extra flags
-            value: typing.Any = self.get_dataset(self.get_system_key(key), default, archive=True)
-        except KeyError as e:
+            value: typing.Any = self.get_dataset(system_key, default, archive=True)
+        except KeyError:
             # The key was not found
-            msg = 'System dataset key "{:s}" not found'.format(key)
-            self.logger.error(msg)
-            raise KeyError(msg) from e
+            raise KeyError('System dataset key "{:s}" not found'.format(system_key)) from None
         else:
             self.logger.debug('System dataset key "{:s}" returned value "{}"'.format(key, value))
 
@@ -354,13 +342,8 @@ class _DaxModuleBase(_DaxHasSystem, abc.ABC):
         # Call super
         super(_DaxModuleBase, self).__init__(managers_or_parent, module_name, module_key, registry, *args, **kwargs)
 
-        try:
-            # Register this module
-            self.registry.add_module(self)
-        except LookupError as e:
-            # Log error
-            self.logger.error(str(e))
-            raise
+        # Register this module
+        self.registry.add_module(self)
 
 
 class DaxModule(_DaxModuleBase, abc.ABC):
@@ -370,9 +353,12 @@ class DaxModule(_DaxModuleBase, abc.ABC):
                  *args: typing.Any, **kwargs: typing.Any):
         """Initialize the DAX module."""
 
+        # Check module name
+        if not _is_valid_name(module_name):
+            raise ValueError('Invalid module name "{:s}"'.format(module_name))
         # Check parent type
         if not isinstance(managers_or_parent, _DaxModuleBase):
-            raise TypeError('Parent of module {:s} is not a DAX module base'.format(module_name))
+            raise TypeError('Parent of module "{:s}" is not a DAX module base'.format(module_name))
 
         # Take core attributes from parent
         self._take_parent_core_attributes(managers_or_parent)
@@ -453,7 +439,7 @@ class DaxSystem(_DaxModuleBase):
             self._init_system()
             self._post_init_system()
         except artiq.coredevice.core.CompileError:
-            self.logger.error('Compilation error occurred during DAX system initialization')
+            self.logger.exception('Compilation error occurred during DAX system initialization')
             raise
         else:
             self.logger.debug('Finished DAX system initialization')
@@ -481,7 +467,7 @@ class DaxService(_DaxHasSystem, abc.ABC):
 
         # Check parent type
         if not isinstance(managers_or_parent, (DaxSystem, DaxService)):
-            raise TypeError('Parent of service {:s} is not a DAX system or service'.format(self.get_name()))
+            raise TypeError('Parent of service "{:s}" is not a DAX system or service'.format(self.SERVICE_NAME))
 
         # Take core attributes from parent
         self._take_parent_core_attributes(managers_or_parent)
@@ -493,13 +479,8 @@ class DaxService(_DaxHasSystem, abc.ABC):
         # Call super
         super(DaxService, self).__init__(managers_or_parent, self.SERVICE_NAME, system_key, registry, *args, **kwargs)
 
-        try:
-            # Register this service
-            self.registry.add_service(self)
-        except LookupError as e:
-            # Log error
-            self.logger.error(str(e))
-            raise
+        # Register this service
+        self.registry.add_service(self)
 
 
 class DaxClient(_DaxHasSystem, abc.ABC):
@@ -508,8 +489,10 @@ class DaxClient(_DaxHasSystem, abc.ABC):
     def __init__(self, managers_or_parent: typing.Any,
                  *args: typing.Any, **kwargs: typing.Any):
         # Check if the decorator was used
-        assert isinstance(self, DaxSystem), \
-            'DAX client class {:s} must be decorated using @dax_client_factory'.format(self.__class__.__name__)
+        if not isinstance(self, DaxSystem):
+            raise TypeError('DAX client class {:s} must be decorated using '
+                            '@dax_client_factory'.format(self.__class__.__name__))
+
         # Call super
         super(DaxClient, self).__init__(managers_or_parent, *args, **kwargs)
 
@@ -593,9 +576,9 @@ class _DaxNameRegistry:
         try:
             # Get the module
             module = self._modules[key]
-        except KeyError as e:
-            # The key was not present
-            raise KeyError('Module "{:s}" could not be found'.format(key)) from e
+        except KeyError:
+            # Module was not found
+            raise KeyError('Module "{:s}" could not be found'.format(key)) from None
 
         if not isinstance(module, type_):
             # Module does not have the correct type
@@ -662,7 +645,8 @@ class _DaxNameRegistry:
         if reg_parent:
             # Device was already registered
             device_name = '"{:s}"'.format(key) if key == unique else '"{:s}" ({:s})'.format(key, unique)
-            msg = 'Device {:s}, was already registered by parent {:s}'.format(device_name, reg_parent.get_identifier())
+            parent_name = reg_parent.get_system_key()
+            msg = 'Device {:s} was already registered by parent "{:s}"'.format(device_name, parent_name)
             raise self.NonUniqueRegistrationError(msg)
 
         # Add unique device key to the dict of registered devices
@@ -678,7 +662,8 @@ class _DaxNameRegistry:
 
         # Check if we are not stuck in a loop
         if key in trace:
-            raise LookupError('Key {:s} causes an alias loop'.format(key))
+            # We are in an alias loop
+            raise LookupError('Key "{:s}" caused an alias loop'.format(key))
         # Add key to the trace
         trace.add(key)
 
@@ -693,7 +678,7 @@ class _DaxNameRegistry:
             return key
         else:
             # We ended up with an unexpected type
-            raise TypeError('Key {:s} returned an unexpected type'.format(key))
+            raise TypeError('Key "{:s}" returned an unexpected type'.format(key))
 
     def get_device_key_list(self) -> typing.List[str]:
         """Return a list of registered device keys."""
@@ -750,8 +735,9 @@ class _DaxNameRegistry:
         # Try to return the requested service
         try:
             return self._services[key]
-        except KeyError as e:
-            raise KeyError('Service "{:s}" is not available') from e
+        except KeyError:
+            # Service was not found
+            raise KeyError('Service "{:s}" is not available') from None
 
     def get_service_key_list(self) -> typing.List[str]:
         """Return a list of registered service keys."""

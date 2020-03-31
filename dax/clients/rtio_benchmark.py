@@ -35,16 +35,15 @@ class RtioBenchmarkEventThroughput(DaxClient, EnvExperiment):
         self.update_kernel_invariants('period_scan')
 
     def run(self):
-        self.success = self.rtio_bench.benchmark_event_throughput(self.period_scan, self.num_samples, self.num_events,
-                                                                  self.no_underflow_cutoff)
+        self.rtio_bench.benchmark_event_throughput(self.period_scan, self.num_samples, self.num_events,
+                                                   self.no_underflow_cutoff)
 
     def analyze(self):
-        if self.success:
-            # Report result
-            last_period = self.rtio_bench.get_dataset_sys(self.rtio_bench.EVENT_PERIOD_KEY)
-            throughput = dax.util.units.freq_to_str(1.0 / last_period)
-            period = '{:s} period'.format(dax.util.units.time_to_str(last_period))
-            self.logger.info('RTIO event throughput is {:s} ({:s})'.format(throughput, period))
+        # Report result
+        last_period = self.rtio_bench.get_dataset_sys(self.rtio_bench.EVENT_PERIOD_KEY)
+        throughput = dax.util.units.freq_to_str(1.0 / last_period)
+        period = '{:s} period'.format(dax.util.units.time_to_str(last_period))
+        self.logger.info('RTIO event throughput is {:s} ({:s})'.format(throughput, period))
 
 
 @dax_client_factory
@@ -71,16 +70,14 @@ class RtioBenchmarkEventBurst(DaxClient, EnvExperiment):
         self.period_step *= ns
 
     def run(self):
-        self.success = self.rtio_bench.benchmark_event_burst(self.num_events_min, self.num_events_max,
-                                                             self.num_events_step, self.num_samples,
-                                                             self.period_step,
-                                                             self.no_underflow_cutoff, self.num_step_cutoff)
+        self.rtio_bench.benchmark_event_burst(self.num_events_min, self.num_events_max, self.num_events_step,
+                                              self.num_samples, self.period_step,
+                                              self.no_underflow_cutoff, self.num_step_cutoff)
 
     def analyze(self):
-        if self.success:
-            # Report result
-            last_num_events = self.rtio_bench.get_dataset_sys(self.rtio_bench.EVENT_BURST_KEY)
-            self.logger.info('RTIO event burst size is {:d}'.format(last_num_events))
+        # Report result
+        last_num_events = self.rtio_bench.get_dataset_sys(self.rtio_bench.EVENT_BURST_KEY)
+        self.logger.info('RTIO event burst size is {:d}'.format(last_num_events))
 
 
 @dax_client_factory
@@ -114,16 +111,15 @@ class RtioBenchmarkDmaThroughput(DaxClient, EnvExperiment):
         self.update_kernel_invariants('period_scan')
 
     def run(self):
-        self.success = self.rtio_bench.benchmark_dma_throughput(self.period_scan, self.num_samples, self.num_events,
-                                                                self.no_underflow_cutoff)
+        self.rtio_bench.benchmark_dma_throughput(self.period_scan, self.num_samples, self.num_events,
+                                                 self.no_underflow_cutoff)
 
     def analyze(self):
-        if self.success:
-            # Report result
-            last_period = self.rtio_bench.get_dataset_sys(self.rtio_bench.DMA_EVENT_PERIOD_KEY)
-            throughput = dax.util.units.freq_to_str(1.0 / last_period)
-            period = '{:s} period'.format(dax.util.units.time_to_str(last_period))
-            self.logger.info('RTIO DMA event throughput is {:s} ({:s})'.format(throughput, period))
+        # Report result
+        last_period = self.rtio_bench.get_dataset_sys(self.rtio_bench.DMA_EVENT_PERIOD_KEY)
+        throughput = dax.util.units.freq_to_str(1.0 / last_period)
+        period = '{:s} period'.format(dax.util.units.time_to_str(last_period))
+        self.logger.info('RTIO DMA event throughput is {:s} ({:s})'.format(throughput, period))
 
 
 @dax_client_factory
@@ -150,16 +146,13 @@ class RtioBenchmarkLatencyCoreRtio(DaxClient, EnvExperiment):
         self.latency_step *= ns
 
     def run(self):
-        self.success = self.rtio_bench.benchmark_latency_core_rtio(self.latency_min, self.latency_max,
-                                                                   self.latency_step,
-                                                                   self.num_samples, self.no_underflow_cutoff)
+        self.rtio_bench.benchmark_latency_core_rtio(self.latency_min, self.latency_max, self.latency_step,
+                                                    self.num_samples, self.no_underflow_cutoff)
 
     def analyze(self):
-        if self.success:
-            # Report result
-            core_rtio = dax.util.units.time_to_str(
-                self.rtio_bench.get_dataset_sys(self.rtio_bench.LATENCY_CORE_RTIO_KEY))
-            self.logger.info('Core-RTIO latency is {:s}'.format(core_rtio))
+        # Report result
+        core_rtio = dax.util.units.time_to_str(self.rtio_bench.get_dataset_sys(self.rtio_bench.LATENCY_CORE_RTIO_KEY))
+        self.logger.info('Core-RTIO latency is {:s}'.format(core_rtio))
 
 
 @dax_client_factory
@@ -169,19 +162,26 @@ class RtioBenchmarkInputBufferSize(DaxClient, EnvExperiment):
     def build(self):
         # Arguments
         number_kwargs = {'scale': 1, 'step': 1, 'ndecimals': 0}
-        self.setattr_argument('max_events', NumberValue(500, min=1, **number_kwargs))
+        self.setattr_argument('min_events', NumberValue(1, min=1, **number_kwargs))
+        self.setattr_argument('max_events', NumberValue(5000, min=1, **number_kwargs))
 
         # Obtain RTIO benchmark module
         self.rtio_bench = self.registry.search_module(RtioLoopBenchmarkModule)
 
+    def prepare(self):
+        # Additional check if arguments are valid
+        if self.min_events > self.max_events:
+            msg = 'Minimum number of events must be smaller than maximum number of events'
+            self.logger.error(msg)
+            raise ValueError(msg)
+
     def run(self):
-        self.success = self.rtio_bench.benchmark_input_buffer_size(self.max_events)
+        self.rtio_bench.benchmark_input_buffer_size(self.min_events, self.max_events)
 
     def analyze(self):
-        if self.success:
-            # Report result
-            input_buffer_size = self.rtio_bench.get_dataset_sys(self.rtio_bench.INPUT_BUFFER_SIZE_KEY)
-            self.logger.info('RTIO input buffer size is {:d}'.format(input_buffer_size))
+        # Report result
+        input_buffer_size = self.rtio_bench.get_dataset_sys(self.rtio_bench.INPUT_BUFFER_SIZE_KEY)
+        self.logger.info('RTIO input buffer size is {:d}'.format(input_buffer_size))
 
 
 @dax_client_factory
@@ -191,29 +191,20 @@ class RtioBenchmarkLatencyRtioCore(DaxClient, EnvExperiment):
     def build(self):
         # Arguments
         number_kwargs = {'scale': 1, 'step': 1, 'ndecimals': 0}
-        time_kwargs = {'unit': 'ns', 'scale': 1, 'step': 1, 'ndecimals': 0}
         self.setattr_argument('num_samples', NumberValue(100, min=1, **number_kwargs))
-        self.setattr_argument('detection_window', NumberValue(1000, min=1, **time_kwargs))
 
         # Obtain RTIO benchmark module
         self.rtio_bench = self.registry.search_module(RtioLoopBenchmarkModule)
 
-    def prepare(self):
-        # Scale detection window
-        self.detection_window *= ns
-
     def run(self):
-        self.success = self.rtio_bench.benchmark_latency_rtio_core(self.num_samples, self.detection_window)
+        self.rtio_bench.benchmark_latency_rtio_core(self.num_samples)
 
     def analyze(self):
-        if self.success:
-            # Report result
-            rtio_core = dax.util.units.time_to_str(
-                self.rtio_bench.get_dataset_sys(self.rtio_bench.LATENCY_RTIO_CORE_KEY))
-            rtio_rtio = dax.util.units.time_to_str(
-                self.rtio_bench.get_dataset_sys(self.rtio_bench.LATENCY_RTIO_RTIO_KEY))
-            self.logger.info('RTIO-core latency is {:s}'.format(rtio_core))
-            self.logger.info('RTIO-RTIO latency is {:s}'.format(rtio_rtio))
+        # Report result
+        rtio_rtio = dax.util.units.time_to_str(self.rtio_bench.get_dataset_sys(self.rtio_bench.LATENCY_RTIO_RTIO_KEY))
+        rtio_core = dax.util.units.time_to_str(self.rtio_bench.get_dataset_sys(self.rtio_bench.LATENCY_RTIO_CORE_KEY))
+        self.logger.info('RTIO-RTIO latency is {:s}'.format(rtio_rtio))
+        self.logger.info('RTIO-core latency is {:s}'.format(rtio_core))
 
 
 @dax_client_factory
@@ -224,11 +215,10 @@ class RtioBenchmarkLatencyRtt(DaxClient, EnvExperiment):
         # Arguments
         time_kwargs = {'unit': 'ns', 'scale': 1, 'step': 1, 'ndecimals': 0}
         number_kwargs = {'scale': 1, 'step': 1, 'ndecimals': 0}
-        self.setattr_argument('latency_min', NumberValue(600, min=1, **time_kwargs))
-        self.setattr_argument('latency_max', NumberValue(1300, min=1, **time_kwargs))
+        self.setattr_argument('latency_min', NumberValue(1000, min=1, **time_kwargs))
+        self.setattr_argument('latency_max', NumberValue(3000, min=1, **time_kwargs))
         self.setattr_argument('latency_step', NumberValue(1, min=1, **time_kwargs))
         self.setattr_argument('num_samples', NumberValue(5, min=1, **number_kwargs))
-        self.setattr_argument('detection_window', NumberValue(1000, min=1, **time_kwargs))
         self.setattr_argument('no_underflow_cutoff', NumberValue(5, min=1, **number_kwargs))
 
         # Obtain RTIO benchmark module
@@ -239,16 +229,12 @@ class RtioBenchmarkLatencyRtt(DaxClient, EnvExperiment):
         self.latency_min *= ns
         self.latency_max *= ns
         self.latency_step *= ns
-        # Scale detection window
-        self.detection_window *= ns
 
     def run(self):
-        self.success = self.rtio_bench.benchmark_latency_rtt(self.latency_min, self.latency_max, self.latency_step,
-                                                             self.num_samples, self.detection_window,
-                                                             self.no_underflow_cutoff)
+        self.rtio_bench.benchmark_latency_rtt(self.latency_min, self.latency_max, self.latency_step,
+                                              self.num_samples, self.no_underflow_cutoff)
 
     def analyze(self):
-        if self.success:
-            # Report result
-            rtt = dax.util.units.time_to_str(self.rtio_bench.get_dataset_sys(self.rtio_bench.LATENCY_RTT_KEY))
-            self.logger.info('RTIO RTT is {:s}'.format(rtt))
+        # Report result
+        rtt = dax.util.units.time_to_str(self.rtio_bench.get_dataset_sys(self.rtio_bench.LATENCY_RTT_KEY))
+        self.logger.info('RTIO RTT is {:s}'.format(rtt))

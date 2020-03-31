@@ -53,9 +53,6 @@ class RpcBenchmarkModule(DaxModule):
         time = self.core.mu_to_seconds(time_mu)
         self.set_dataset_sys(self.LATENCY_CORE_HOST_CORE_ASYNC_KEY, time / num_samples)
 
-        # Always return true (errors should not occur)
-        return True
-
     @kernel
     def _empty_kernel(self):
         # Just break realtime to have minimal computation

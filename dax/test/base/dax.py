@@ -546,7 +546,7 @@ class DaxClientTestCase(unittest.TestCase):
         class Client(DaxClient):
             pass
 
-        with self.assertRaises(AssertionError, msg='Using client without client factory decorator did not raise'):
+        with self.assertRaises(TypeError, msg='Using client without client factory decorator did not raise'):
             Client(s)
 
     def test_load_super(self):

@@ -20,7 +20,7 @@ class RtioBenchmarkModule(DaxModule):
 
     def build(self, ttl_out):
         # TTL output device
-        self.setattr_device(ttl_out, 'ttl_out', artiq.coredevice.ttl.TTLOut)
+        self.setattr_device(ttl_out, 'ttl_out', (artiq.coredevice.ttl.TTLOut, artiq.coredevice.ttl.TTLInOut))
 
     def init(self):
         # Load parameters
@@ -30,13 +30,16 @@ class RtioBenchmarkModule(DaxModule):
         self.setattr_dataset_sys(self.LATENCY_CORE_RTIO_KEY)
 
         if self.hasattr(self.EVENT_PERIOD_KEY, self.EVENT_BURST_KEY):
-            # Record the DMA burst
+            # Initialize and record the DMA burst
             self._record_dma_burst()
+        else:
+            # Only basic initialization
+            self._init()
 
     @kernel
     def _record_dma_burst(self):
-        # Reset the core
-        self.core.reset()
+        # Initialize
+        self._init()
 
         with self.core_dma.record(self.DMA_BURST):
             # Record the DMA burst trace (cap burst size to prevent too long DMA recordings
@@ -45,6 +48,14 @@ class RtioBenchmarkModule(DaxModule):
                 self.ttl_out.on()
                 delay(self.event_period / 2)
                 self.ttl_out.off()
+
+    @kernel
+    def _init(self):
+        # Reset the core
+        self.core.reset()
+
+        # Set direction of pin
+        self.ttl_out.output()
 
     def post_init(self):
         if self.hasattr(self.EVENT_PERIOD_KEY, self.EVENT_BURST_KEY):
@@ -125,16 +136,17 @@ class RtioBenchmarkModule(DaxModule):
         # Process results directly (next experiment might need these values)
         if no_underflow_count == 0:
             # Last data point was an underflow, assuming all data points raised an underflow
-            self.logger.warning('Could not determine event throughput: All data points raised an underflow exception')
-            return False
+            msg = 'Could not determine event throughput: All data points raised an underflow exception'
+            self.logger.warning(msg)
+            raise RuntimeWarning(msg)
         elif not underflow_flag:
             # No underflow occurred
-            self.logger.warning('Could not determine event throughput: No data points raised an underflow exception')
-            return False
+            msg = 'Could not determine event throughput: No data points raised an underflow exception'
+            self.logger.warning(msg)
+            raise RuntimeWarning(msg)
         else:
             # Store result in system dataset
             self.set_dataset_sys(self.EVENT_PERIOD_KEY, last_period)
-            return True
 
     @kernel
     def _benchmark_event_throughput(self, period_scan, num_samples, num_events, no_underflow_cutoff):
@@ -258,15 +270,16 @@ class RtioBenchmarkModule(DaxModule):
 
         # Process results directly (next experiment might need these values)
         if no_underflow_count == 0:
-            self.logger.warning('Could not determine event burst size: All data points raised an underflow exception')
-            return False
+            msg = 'Could not determine event burst size: All data points raised an underflow exception'
+            self.logger.warning(msg)
+            raise RuntimeWarning(msg)
         elif not underflow_flag:
-            self.logger.warning('Could not determine event burst size: No data points raised an underflow exception')
-            return False
+            msg = 'Could not determine event burst size: No data points raised an underflow exception'
+            self.logger.warning(msg)
+            raise RuntimeWarning(msg)
         else:
             # Store result in system dataset
             self.set_dataset_sys(self.EVENT_BURST_KEY, last_num_events)
-            return True
 
     @rpc(flags={"async"})
     def _message_current_period(self, current_period):
@@ -380,16 +393,17 @@ class RtioBenchmarkModule(DaxModule):
         # Process results directly (next experiment might need these values)
         if no_underflow_count == 0:
             # Last data point was an underflow, assuming all data points raised an underflow
-            self.logger.warning('Could not determine DMA throughput: All data points raised an underflow exception')
-            return False
+            msg = 'Could not determine DMA throughput: All data points raised an underflow exception'
+            self.logger.warning(msg)
+            raise RuntimeWarning(msg)
         elif not underflow_flag:
             # No underflow occurred
-            self.logger.warning('Could not determine DMA throughput: No data points raised an underflow exception')
-            return False
+            msg = 'Could not determine DMA throughput: No data points raised an underflow exception'
+            self.logger.warning(msg)
+            raise RuntimeWarning(msg)
         else:
             # Store result in system dataset
             self.set_dataset_sys(self.DMA_EVENT_PERIOD_KEY, last_period)
-            return True
 
     @kernel
     def _benchmark_dma_throughput(self, period_scan, num_samples, num_events, no_underflow_cutoff):
@@ -520,16 +534,17 @@ class RtioBenchmarkModule(DaxModule):
         # Process results directly (next experiment might need these values)
         if no_underflow_count == 0:
             # Last data point was an underflow, assuming all data points raised an underflow
-            self.logger.warning('Could not determine core-RTIO latency: All data points raised an underflow exception')
-            return False
+            msg = 'Could not determine core-RTIO latency: All data points raised an underflow exception'
+            self.logger.warning(msg)
+            raise RuntimeWarning(msg)
         elif not underflow_flag:
             # No underflow occurred
-            self.logger.warning('Could not determine core-RTIO latency: No data points raised an underflow exception')
-            return False
+            msg = 'Could not determine core-RTIO latency: No data points raised an underflow exception'
+            self.logger.warning(msg)
+            raise RuntimeWarning(msg)
         else:
             # Store result in system dataset
             self.set_dataset_sys(self.LATENCY_CORE_RTIO_KEY, last_latency)
-            return True
 
     @kernel
     def _benchmark_latency_core_rtio(self, latency_min, latency_max, latency_step, num_samples, no_underflow_cutoff):
@@ -618,7 +633,15 @@ class RtioLoopBenchmarkModule(RtioBenchmarkModule):
         self.setattr_dataset_sys(self.LATENCY_RTT_KEY)
 
     @kernel
-    def _test_loop_connection(self, detection_window, retry=np.int32(1)):
+    def _init(self):
+        # Initialize super
+        RtioBenchmarkModule._init(self)
+
+        # Set direction of input pin
+        self.ttl_in.input()
+
+    @kernel
+    def test_loop_connection(self, retry=np.int32(1)):
         # Reset core
         self.core.reset()
 
@@ -634,7 +657,7 @@ class RtioLoopBenchmarkModule(RtioBenchmarkModule):
             # Turn output on
             self.ttl_out.on()
             # Get the timestamp when the RTIO core detects the input event
-            t_rtio = self.ttl_in.timestamp_mu(self.ttl_in.gate_rising(detection_window))
+            t_rtio = self.ttl_in.timestamp_mu(self.ttl_in.gate_rising(self.EDGE_DELAY))
 
             if t_rtio != -1:
                 # Loop connection was confirmed
@@ -645,30 +668,37 @@ class RtioLoopBenchmarkModule(RtioBenchmarkModule):
 
     """Benchmark input buffer size"""
 
-    def benchmark_input_buffer_size(self, max_events):
+    def benchmark_input_buffer_size(self, min_events, max_events):
         # Convert types of arguments
+        min_events = np.int32(min_events)
         max_events = np.int32(max_events)
 
         # Check arguments
+        if not min_events > 0:
+            msg = 'Minimum number of events must be larger than 0'
+            self.logger.error(msg)
+            raise ValueError(msg)
         if not max_events > 0:
             msg = 'Maximum number of events must be larger than 0'
             self.logger.error(msg)
             raise ValueError(msg)
-
-        # Calculate detection window
-        detection_window = self.EDGE_DELAY * (max_events + 2)
+        if min_events > max_events:
+            msg = 'Minimum number of events must be smaller than maximum number of events'
+            self.logger.error(msg)
+            raise ValueError(msg)
 
         # Store input values in dataset
+        self.set_dataset('min_events', min_events)
         self.set_dataset('max_events', max_events)
-        self.set_dataset('detection_window', detection_window)
 
         # Test loop connection
-        if not self._test_loop_connection(detection_window):
-            self.logger.error('Could not determine input buffer size: Loop not connected')
-            return False
+        if not self.test_loop_connection():
+            msg = 'Could not determine input buffer size: Loop not connected'
+            self.logger.error(msg)
+            raise RuntimeError(msg)
 
         # Call the kernel
-        self._benchmark_input_buffer_size(max_events, detection_window)
+        self._benchmark_input_buffer_size(min_events, max_events)
 
         # Get results
         num_events = self.get_dataset('num_events')
@@ -676,37 +706,36 @@ class RtioLoopBenchmarkModule(RtioBenchmarkModule):
 
         if not buffer_overflow:
             # No buffer overflow, so we did not found the limit
-            self.logger.warning('Could not determine input buffer size: No overflow occurred')
-            return False
+            msg = 'Could not determine input buffer size: No overflow occurred'
+            self.logger.warning(msg)
+            raise RuntimeWarning(msg)
         else:
             # Process results directly (next experiment might need these values)
             self.set_dataset_sys(self.INPUT_BUFFER_SIZE_KEY, num_events)
-            return True
 
     @kernel
-    def _benchmark_input_buffer_size(self, max_events, detection_window):
+    def _benchmark_input_buffer_size(self, min_events, max_events):
         # Counter for number of events posted
-        num_events = np.int32(0)
+        num_events = np.int32(min_events)
         # Flag for overflow
         buffer_overflow = False
 
-        # Reset core
-        self.core.reset()
-        # Save time zero
-        t_zero = now_mu()
-        # Start detection
-        self.ttl_in.gate_rising(detection_window)
-        # Move back to t_zero to generate events during detection window
-        at_mu(t_zero)
-
         try:
-            # Start generating events
-            while num_events < max_events:
-                # Generate event
-                self.ttl_out.off()
-                delay(self.EDGE_DELAY / 2)
-                self.ttl_out.on()
-                delay(self.EDGE_DELAY / 2)
+            while num_events <= max_events:
+                # Reset core
+                self.core.reset()
+
+                # Start sampling
+                for _ in range(num_events):
+                    # Take one sample
+                    self.ttl_in.sample_input()
+                    delay(self.EDGE_DELAY)
+
+                # Wait until all samples are taken
+                self.core.wait_until_mu(now_mu())
+
+                # Call sample_get() to verify if the queue is full
+                self.ttl_in.sample_get()  # Exception could be raised here
 
                 # Increment counter
                 num_events += 1
@@ -715,35 +744,34 @@ class RtioLoopBenchmarkModule(RtioBenchmarkModule):
             # Flag that an overflow occurred
             buffer_overflow = True
 
+        finally:
+            # Reset the core to clear the buffers
+            self.core.reset()
+
         # Store values at a non-critical time
-        self.append_to_dataset('num_events', num_events)
-        self.append_to_dataset('buffer_overflow', buffer_overflow)
+        self.set_dataset('num_events', num_events - 1)  # Minus one since last value was the last legal num_events
+        self.set_dataset('buffer_overflow', buffer_overflow)
 
     """Benchmark latency RTIO-core"""
 
-    def benchmark_latency_rtio_core(self, num_samples, detection_window):
+    def benchmark_latency_rtio_core(self, num_samples):
         # Convert types of arguments
         num_samples = np.int32(num_samples)
-        detection_window = float(detection_window)
 
         # Check arguments
         if not num_samples > 0:
             msg = 'Number of samples must be larger than 0'
             self.logger.error(msg)
             raise ValueError(msg)
-        if not detection_window > 0.0:
-            msg = 'Detection window must be larger than 0.0'
-            self.logger.error(msg)
-            raise ValueError(msg)
 
         # Store input values in dataset
         self.set_dataset('num_samples', num_samples)
-        self.set_dataset('detection_window', detection_window)
 
         # Test loop connection
-        if not self._test_loop_connection(detection_window):
-            self.logger.error('Could not determine RTIO-core latency: Loop not connected')
-            return False
+        if not self.test_loop_connection():
+            msg = 'Could not determine RTIO-core latency: Loop not connected'
+            self.logger.error(msg)
+            raise RuntimeError(msg)
 
         # Prepare datasets for results
         self.set_dataset('t_zero', [])
@@ -751,28 +779,32 @@ class RtioLoopBenchmarkModule(RtioBenchmarkModule):
         self.set_dataset('t_return', [])
 
         # Call the kernel
-        self._benchmark_latency_rtio_core(num_samples, detection_window)
+        self._benchmark_latency_rtio_core(num_samples)
 
-        # Get results
-        t_zero = np.array(self.get_dataset('t_zero'))
-        t_rtio = np.array(self.get_dataset('t_rtio'))
-        t_return = np.array(self.get_dataset('t_return'))
+        # Get results (mu)
+        t_zero = self.get_dataset('t_zero')
+        t_rtio = self.get_dataset('t_rtio')
+        t_return = self.get_dataset('t_return')
 
         if any(t == -1 for t in t_rtio):
             # One or more tests did not return a timestamp, test failed
-            self.logger.warning(
-                'Could not determine RTIO-core latency: One or more tests did not return a valid timestamp')
-            return False
+            msg = 'Could not determine RTIO-core latency: One or more tests did not return a valid timestamp'
+            self.logger.warning(msg)
+            raise RuntimeWarning(msg)
         else:
+            # Convert values to times
+            t_zero = np.array([self.core.mu_to_seconds(t) for t in t_zero])
+            t_rtio = np.array([self.core.mu_to_seconds(t) for t in t_rtio])
+            t_return = np.array([self.core.mu_to_seconds(t) for t in t_return])
+
             # Process results directly (next experiment might need these values)
             rtio_rtio = (t_rtio - t_zero).mean()
             rtio_core = (t_return - t_zero).mean()
             self.set_dataset_sys(self.LATENCY_RTIO_RTIO_KEY, rtio_rtio)
             self.set_dataset_sys(self.LATENCY_RTIO_CORE_KEY, rtio_core)
-            return True
 
     @kernel
-    def _benchmark_latency_rtio_core(self, num_samples, detection_window):
+    def _benchmark_latency_rtio_core(self, num_samples):
         # Reset core
         self.core.reset()
 
@@ -789,7 +821,7 @@ class RtioLoopBenchmarkModule(RtioBenchmarkModule):
             # Turn output on
             self.ttl_out.on()
             # Get the timestamp when the RTIO core detects the input event
-            t_rtio = self.ttl_in.timestamp_mu(self.ttl_in.gate_rising(detection_window))
+            t_rtio = self.ttl_in.timestamp_mu(self.ttl_in.gate_rising(self.EDGE_DELAY))
             # Get the timestamp (of the RTIO core) when the RISC core reads the input event (return time)
             t_return = self.core.get_rtio_counter_mu()  # Returns a lower bound
 
@@ -800,14 +832,12 @@ class RtioLoopBenchmarkModule(RtioBenchmarkModule):
 
     """Benchmark RTT RTIO-core-RTIO"""
 
-    def benchmark_latency_rtt(self, latency_min, latency_max, latency_step, num_samples, detection_window,
-                              no_underflow_cutoff):
+    def benchmark_latency_rtt(self, latency_min, latency_max, latency_step, num_samples, no_underflow_cutoff):
         # Convert types of arguments
         latency_min = float(latency_min)
         latency_max = float(latency_max)
         latency_step = float(latency_step)
         num_samples = np.int32(num_samples)
-        detection_window = float(detection_window)
         no_underflow_cutoff = np.int32(no_underflow_cutoff)
 
         # Check arguments
@@ -831,10 +861,6 @@ class RtioLoopBenchmarkModule(RtioBenchmarkModule):
             msg = 'Number of samples must be larger than 0'
             self.logger.error(msg)
             raise ValueError(msg)
-        if not detection_window > 0.0:
-            msg = 'Detection window must be larger than 0.0'
-            self.logger.error(msg)
-            raise ValueError(msg)
         if not no_underflow_cutoff > 0:
             msg = 'No underflow cutoff must be larger than 0'
             self.logger.error(msg)
@@ -845,17 +871,16 @@ class RtioLoopBenchmarkModule(RtioBenchmarkModule):
         self.set_dataset('latency_max', latency_max)
         self.set_dataset('latency_step', latency_step)
         self.set_dataset('num_samples', num_samples)
-        self.set_dataset('detection_window', detection_window)
         self.set_dataset('no_underflow_cutoff', no_underflow_cutoff)
 
         # Test loop connection
-        if not self._test_loop_connection(detection_window):
-            self.logger.error('Could not determine RTT: Loop not connected')
-            return False
+        if not self.test_loop_connection():
+            msg = 'Could not determine RTT: Loop not connected'
+            self.logger.error(msg)
+            raise RuntimeError(msg)
 
         # Run kernel
-        self._benchmark_latency_rtt(latency_min, latency_max, latency_step, num_samples, detection_window,
-                                    no_underflow_cutoff)
+        self._benchmark_latency_rtt(latency_min, latency_max, latency_step, num_samples, no_underflow_cutoff)
 
         # Get results
         no_underflow_count = self.get_dataset('no_underflow_count')
@@ -865,20 +890,20 @@ class RtioLoopBenchmarkModule(RtioBenchmarkModule):
         # Process results directly (next experiment might need these values)
         if no_underflow_count == 0:
             # Last data point was an underflow, assuming all data points raised an underflow
-            self.logger.warning('Could not determine RTT: All data points raised an underflow exception')
-            return False
+            msg = 'Could not determine RTT: All data points raised an underflow exception'
+            self.logger.warning(msg)
+            raise RuntimeWarning(msg)
         elif not underflow_flag:
             # No underflow occurred
-            self.logger.warning('Could not determine RTT: No data points raised an underflow exception')
-            return False
+            msg = 'Could not determine RTT: No data points raised an underflow exception'
+            self.logger.warning(msg)
+            raise RuntimeWarning(msg)
         else:
             # Store result in system dataset
             self.set_dataset_sys(self.LATENCY_RTT_KEY, last_latency)
-            return True
 
     @kernel
-    def _benchmark_latency_rtt(self, latency_min, latency_max, latency_step, num_samples, detection_window,
-                               no_underflow_cutoff):
+    def _benchmark_latency_rtt(self, latency_min, latency_max, latency_step, num_samples, no_underflow_cutoff):
         # Storage for last latency
         last_latency = 0.0
         # Count of last latency without underflow
@@ -909,13 +934,13 @@ class RtioLoopBenchmarkModule(RtioBenchmarkModule):
                     # Turn output on (schedule event to respond on)
                     self.ttl_out.on()
                     # Order the RTIO core to detect a rising edge (moves cursor to end of detection window)
-                    t_window = self.ttl_in.gate_rising(detection_window)
+                    t_window = self.ttl_in.gate_rising(self.EDGE_DELAY)
                     # Set the cursor at time zero + current latency (prepare for scheduling feedback event)
                     at_mu(t_zero + current_latency_mu)
                     # Wait for the timestamp when the RTIO core detects the input event
                     self.ttl_in.timestamp_mu(t_window)
                     # Schedule the event at time zero + current latency
-                    self.ttl_out.off()
+                    self.ttl_out.off()  # Could raise RTIOUnderflow
 
             except RTIOUnderflow:
                 # Set underflow flag

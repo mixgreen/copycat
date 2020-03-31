@@ -30,7 +30,7 @@ class TrapModule(DaxModule, TrapInterface):
             self.oven_sw = None
 
         else:
-            raise self.BuildArgumentError('Needs oven_sw xor ablation_laser_sw device')
+            raise TypeError('Needs oven_sw xor ablation_laser_sw device')
 
         # Update kernel invariants
         self.update_kernel_invariants('oven_sw', 'ablation_laser_sw')
