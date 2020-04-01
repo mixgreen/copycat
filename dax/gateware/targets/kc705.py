@@ -296,6 +296,12 @@ def main():
     # TODO: verbosity argument might be unused at this moment
 
     # Prepare kwargs
+    variant = args.variant.lower()
+    try:
+        cls = VARIANTS[variant]
+    except KeyError:
+        raise SystemExit("Invalid variant (-V/--variant)")
+
     kwargs = soc_kc705_argdict(args)
     if cls is EURIQA:
         kwargs.update(sandia_dac_spi=args.sandia_dac_spi)
