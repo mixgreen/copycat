@@ -1,44 +1,29 @@
 #!/usr/bin/env python3
-"""Build ARTIQ for EURIQA's hardware based on the Xilinx KC705 FPGA.
 
-Uses hardware (DAC/ADC/GPIO/etc) built by Duke. Located in blue "pulser" box.
-"""
-import argparse
-import itertools
 import logging
+import itertools
 
-from artiq.build_soc import build_artiq_soc
-from artiq.gateware import rtio
-from artiq.gateware.rtio.phy import spi2
-from artiq.gateware.rtio.phy import ttl_serdes_7series
-from artiq.gateware.rtio.phy import ttl_simple
-from artiq.gateware.targets.kc705 import _StandaloneBase
-from misoc.integration.builder import builder_argdict
-from misoc.integration.builder import builder_args
-from misoc.targets.kc705 import soc_kc705_argdict
-from misoc.targets.kc705 import soc_kc705_args
+from artiq.gateware.targets.kc705 import *
+from artiq.gateware.targets.kc705 import _RTIOCRG, _StandaloneBase
 
-from . import euriqa
+import dax.gateware.euriqa as euriqa
 
+# Logger
 _LOGGER = logging.getLogger(__name__)
+_LOGGER.setLevel(logging.INFO)  # Set default logging level
 
 
-class EURIQA(_StandaloneBase):
-    """EURIQA pulser setup."""
+class KC705_BARE(_StandaloneBase):
+    """
+    Bare KC705 board with only onboard hardware. Based on NIST_CLOCK and SMA_SPI class.
+    """
 
     def __init__(self, **kwargs):
-        """Declare hardware available on Euriqa's KC705 & Duke Breakout."""
-        add_sandia_dac_spi = kwargs.pop("sandia_dac_spi", False)
         _StandaloneBase.__init__(self, **kwargs)
-        unused_count = itertools.count()
 
         platform = self.platform
-        platform.add_extension(euriqa.fmc_adapter_io)
-        if add_sandia_dac_spi:
-            # segment to prevent accidentally adding x100 DAC comm/pins
-            platform.add_extension(euriqa.x100_dac_spi)
 
-        rtio_channels = list()
+        rtio_channels = []
 
         # USER_SMA_GPIO_P
         phy = ttl_serdes_7series.InOut_8X(platform.request("user_sma_gpio_p_33"))
@@ -66,6 +51,57 @@ class EURIQA(_StandaloneBase):
         rtio_channels.append(rtio.Channel.from_phy(
             phy, ififo_depth=4))
 
+        self.config["HAS_RTIO_LOG"] = None
+        self.config["RTIO_LOG_CHANNEL"] = len(rtio_channels)
+        rtio_channels.append(rtio.LogChannel())
+
+        self.add_rtio(rtio_channels)
+
+    def add_rtio(self, rtio_channels):
+        self.submodules.rtio_crg = _RTIOCRG(self.platform, self.crg.cd_sys.clk, use_sma=False)
+        self.csr_devices.append("rtio_crg")
+        self.config["HAS_RTIO_CLOCK_SWITCH"] = None
+        self.submodules.rtio_tsc = rtio.TSC("async", glbl_fine_ts_width=3)
+        self.submodules.rtio_core = rtio.Core(self.rtio_tsc, rtio_channels)
+        self.csr_devices.append("rtio_core")
+        self.submodules.rtio = rtio.KernelInitiator(self.rtio_tsc)
+        self.submodules.rtio_dma = ClockDomainsRenamer("sys_kernel")(
+            rtio.DMA(self.get_native_sdram_if()))
+        self.register_kernel_cpu_csrdevice("rtio")
+        self.register_kernel_cpu_csrdevice("rtio_dma")
+        self.submodules.cri_con = rtio.CRIInterconnectShared(
+            [self.rtio.cri, self.rtio_dma.cri],
+            [self.rtio_core.cri])
+        self.register_kernel_cpu_csrdevice("cri_con")
+        self.submodules.rtio_moninj = rtio.MonInj(rtio_channels)
+        self.csr_devices.append("rtio_moninj")
+
+        self.platform.add_period_constraint(self.rtio_crg.cd_rtio.clk, 8.)
+        self.platform.add_false_path_constraints(
+            self.crg.cd_sys.clk,
+            self.rtio_crg.cd_rtio.clk)
+
+        self.submodules.rtio_analyzer = rtio.Analyzer(self.rtio_tsc, self.rtio_core.cri,
+                                                      self.get_native_sdram_if())
+        self.csr_devices.append("rtio_analyzer")
+
+
+class EURIQA(_StandaloneBase):
+    """EURIQA setup (red chamber)."""
+
+    def __init__(self, **kwargs):
+        """Declare hardware available on Euriqa's KC705 & Duke Breakout."""
+        add_sandia_dac_spi = kwargs.pop("sandia_dac_spi", False)
+        _StandaloneBase.__init__(self, **kwargs)
+        unused_count = itertools.count()
+
+        platform = self.platform
+        platform.add_extension(euriqa.fmc_adapter_io)
+        if add_sandia_dac_spi:
+            # segment to prevent accidentally adding x100 DAC comm/pins
+            platform.add_extension(euriqa.x100_dac_spi)
+
+        rtio_channels = list()
 
         # Output GPIO/TTL Banks
         for bank, i in itertools.product(["out1", "out2", "out3",  "out4"], range(8)):
@@ -186,55 +222,68 @@ class EURIQA(_StandaloneBase):
                       list(enumerate(rtio_channels)))
         self.add_rtio(rtio_channels)
 
+    def add_rtio(self, rtio_channels):
+        self.submodules.rtio_crg = _RTIOCRG(self.platform, self.crg.cd_sys.clk, use_sma=False)
+        self.csr_devices.append("rtio_crg")
+        self.config["HAS_RTIO_CLOCK_SWITCH"] = None
+        self.submodules.rtio_tsc = rtio.TSC("async", glbl_fine_ts_width=3)
+        self.submodules.rtio_core = rtio.Core(self.rtio_tsc, rtio_channels)
+        self.csr_devices.append("rtio_core")
+        self.submodules.rtio = rtio.KernelInitiator(self.rtio_tsc)
+        self.submodules.rtio_dma = ClockDomainsRenamer("sys_kernel")(
+            rtio.DMA(self.get_native_sdram_if()))
+        self.register_kernel_cpu_csrdevice("rtio")
+        self.register_kernel_cpu_csrdevice("rtio_dma")
+        self.submodules.cri_con = rtio.CRIInterconnectShared(
+            [self.rtio.cri, self.rtio_dma.cri],
+            [self.rtio_core.cri])
+        self.register_kernel_cpu_csrdevice("cri_con")
+        self.submodules.rtio_moninj = rtio.MonInj(rtio_channels)
+        self.csr_devices.append("rtio_moninj")
 
-VARIANTS = {cls.__name__.lower(): cls for cls in [EURIQA]}
+        self.platform.add_period_constraint(self.rtio_crg.cd_rtio.clk, 8.)
+        self.platform.add_false_path_constraints(
+            self.crg.cd_sys.clk,
+            self.rtio_crg.cd_rtio.clk)
 
-def get_argument_parser() -> argparse.ArgumentParser:
-    """Create argument parser for kc705 gateware builder."""
-    parser = argparse.ArgumentParser(
-        description="KC705 gateware and firmware builder",
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-    )
+        self.submodules.rtio_analyzer = rtio.Analyzer(self.rtio_tsc, self.rtio_core.cri,
+                                                      self.get_native_sdram_if())
+        self.csr_devices.append("rtio_analyzer")
+
+
+# Update the available variants
+VARIANTS.update({cls.__name__.lower(): cls for cls in [KC705_BARE, EURIQA]})
+
+
+def main():
+    # Parse arguments
+    parser = argparse.ArgumentParser(description="KC705 gateware and firmware builder")
     builder_args(parser)
     soc_kc705_args(parser)
-    parser.set_defaults(output_dir="artiq4_kc705_euriqa")
-    parser.add_argument(
-        "-V",
-        "--variant",
-        choices=VARIANTS.keys(),
-        default="euriqa",
-        help="variant: %(choices)s (default: %(default)s)",
-    )
-    parser.add_argument(
-        "-v",
-        "--verbosity",
-        action="count",
-        default=0,
-        help="increase logging verbosity level (default=WARNING)",
-    )
-    parser.add_argument(
-        "--sandia-dac-spi",
-        action="store_true",
-        help="Add SPI for real-time Sandia 100x DAC serial communication",
-    )
-    return parser
+    parser.set_defaults(output_dir="kc705")
+    parser.add_argument("-V", "--variant", choices=VARIANTS)
+    parser.add_argument("-v", "--verbosity", action="count", default=0,
+                        help="increase logging verbosity level (default=WARNING)")
+    parser.add_argument("--sandia-dac-spi", action="store_true",
+                        help="Add SPI for real-time Sandia 100x DAC serial communication (EURIQA only)")
+    args = parser.parse_args()
 
+    # TODO: verbosity argument might be unused at this moment
 
-def main() -> None:
-    """Build gateware for specified KC705 FPGA variant."""
-    args = get_argument_parser().parse_args()
-    logging.basicConfig(level=logging.WARNING - args.verbosity)
-
+    # Prepare kwargs
     variant = args.variant.lower()
     try:
         cls = VARIANTS[variant]
     except KeyError:
         raise SystemExit("Invalid variant (-V/--variant)")
 
-    soc = cls(**soc_kc705_argdict(args), sandia_dac_spi=args.sandia_dac_spi)
+    kwargs = soc_kc705_argdict(args)
+    if cls is EURIQA:
+        kwargs.update(sandia_dac_spi=args.sandia_dac_spi)
+
+    # Build
+    soc = cls(**kwargs)
     build_artiq_soc(soc, builder_argdict(args))
-    # NOTE: if you get a XILINX license error,
-    #   check you have the proper license in ~/.Xilinx/
 
 
 if __name__ == "__main__":
