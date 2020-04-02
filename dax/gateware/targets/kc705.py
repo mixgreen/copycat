@@ -18,7 +18,7 @@ class KC705_BARE(_StandaloneBase):
     Bare KC705 board with only onboard hardware. Based on NIST_CLOCK and SMA_SPI class.
     """
 
-    def __init__(self, **kwargs):
+    def __init__(self, sd_card_spi=False, **kwargs):
         _StandaloneBase.__init__(self, **kwargs)
 
         platform = self.platform
@@ -50,6 +50,12 @@ class KC705_BARE(_StandaloneBase):
         self.submodules += phy
         rtio_channels.append(rtio.Channel.from_phy(
             phy, ififo_depth=4))
+
+        if sd_card_spi:
+            phy = spi2.SPIMaster(platform.request("sdcard_spi_33"))
+            self.submodules += phy
+            rtio_channels.append(rtio.Channel.from_phy(
+                phy, ififo_depth=4))
 
         self.config["HAS_RTIO_LOG"] = None
         self.config["RTIO_LOG_CHANNEL"] = len(rtio_channels)
@@ -104,7 +110,7 @@ class EURIQA(_StandaloneBase):
         rtio_channels = list()
 
         # Output GPIO/TTL Banks
-        for bank, i in itertools.product(["out1", "out2", "out3",  "out4"], range(8)):
+        for bank, i in itertools.product(["out1", "out2", "out3", "out4"], range(8)):
             # out1-0, out1-1, ..., out3-7
             if add_sandia_dac_spi and bank == "out2" and i == 7:
                 # add unused dummy channel. to keep channel #s same.
@@ -156,7 +162,7 @@ class EURIQA(_StandaloneBase):
         _LOGGER.debug("Ending DDS Reset GPIO chan: %i", len(rtio_channels))
 
         # SPI, CLR, RESET and LDAC interfaces to control the MEMS system
-        for i in range(2)
+        for i in range(2):
             spi_bus = self.platform.request("spi", i)
             phy = spi2.SPIMaster(spi_bus)
             self.submodules += phy
@@ -186,7 +192,7 @@ class EURIQA(_StandaloneBase):
             phy = spi2.SPIMaster(spi_bus)
             self.submodules += phy
             rtio_channels.append(rtio.Channel.from_phy(phy, ififo_depth=128))
-            odd_channel_sdio = platform.request("odd_channel_sdio", (i-2))
+            odd_channel_sdio = platform.request("odd_channel_sdio", (i - 2))
             self.comb += odd_channel_sdio.eq(spi_bus.mosi)
         _LOGGER.debug("Ending SPI chan: %i", len(rtio_channels))
 
@@ -203,7 +209,7 @@ class EURIQA(_StandaloneBase):
         rtio_channels.append(rtio.Channel.from_phy(phy))
         _LOGGER.debug("DAC8568 LDAC GPIO channel: %i", len(rtio_channels))
 
-        # SPI for Coredevice serial comm to Sandia DAC
+        # SPI for core device serial comm to Sandia DAC
         if add_sandia_dac_spi:
             print("Adding SPI for Sandia DAC comms")
             spi_bus = self.platform.request("spi", 7)
@@ -252,7 +258,7 @@ class EURIQA(_StandaloneBase):
 
 
 # Update the available variants
-VARIANTS.update({cls.__name__.lower(): cls for cls in [KC705_BARE, EURIQA]})
+VARIANTS = {cls.__name__.lower(): cls for cls in [KC705_BARE, EURIQA]}
 
 
 def main():
@@ -270,15 +276,13 @@ def main():
 
     # TODO: verbosity argument might be unused at this moment
 
-    # Prepare kwargs
-    variant = args.variant.lower()
-    try:
-        cls = VARIANTS[variant]
-    except KeyError:
-        raise SystemExit("Invalid variant (-V/--variant)")
+    # Obtain variant class
+    cls = VARIANTS[args.variant.lower()]
 
+    # Prepare kwargs
     kwargs = soc_kc705_argdict(args)
     if cls is EURIQA:
+        # Flags only for EURIQA gateware
         kwargs.update(sandia_dac_spi=args.sandia_dac_spi)
 
     # Build

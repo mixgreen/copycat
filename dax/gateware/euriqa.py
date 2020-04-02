@@ -109,7 +109,7 @@ fmc_adapter_io = [
     ("odd_channel_sdio", 3, Pins("HPC:LA12_P"), IOStandard("LVCMOS33")),
     # SPI outputs for MEMS
     (
-        "spi", # used for MEMS system: HV209
+        "spi",  # used for MEMS system: HV209
         0,
         Subsignal("clk", Pins("LPC:LA20_P")),
         Subsignal("cs_n", Pins("")),
@@ -117,7 +117,7 @@ fmc_adapter_io = [
         IOStandard("LVCMOS33"),
     ),
     (
-        "spi", # used for MEMS system: DAC8734
+        "spi",  # used for MEMS system: DAC8734
         1,
         Subsignal("clk", Pins("LPC:LA23_P")),
         Subsignal("cs_n", Pins("LPC:LA23_N")),
@@ -182,9 +182,9 @@ x100_dac_spi = [
         7,
         Subsignal("clk", Pins("AB22")),  # Unassigned # AB22 = SD Card MOSI
         Subsignal("mosi", Pins("HPC:LA04_P")),
-        Subsignal("cs_n", Pins("AC21")),    # AC21 = SD Card CS_n
+        Subsignal("cs_n", Pins("AC21")),  # AC21 = SD Card CS_n
         IOStandard("LVCMOS33"),
     ),
     # unused acts as dummy pin, not routed to relevant location.
-    ("unused", 0, Pins("AC20"), IOStandard("LVCMOS33"))     # AC20 = SD Card MISO
+    ("unused", 0, Pins("AC20"), IOStandard("LVCMOS33"))  # AC20 = SD Card MISO
 ]
