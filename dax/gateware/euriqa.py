@@ -55,7 +55,7 @@ fmc_adapter_io = [
     ("out2", 5, Pins("HPC:LA05_P"), IOStandard("LVCMOS33")),
     ("out2", 6, Pins("HPC:LA04_N"), IOStandard("LVCMOS33")),
     ("out2", 7, Pins("HPC:LA04_P"), IOStandard("LVCMOS33")),
-    # This is out8 on the board, but out3 on the front panel
+    # Output Bank 3
     ("out3", 0, Pins("HPC:LA32_N"), IOStandard("LVCMOS33")),
     ("out3", 1, Pins("HPC:LA09_N"), IOStandard("LVCMOS33")),
     ("out3", 2, Pins("HPC:LA32_P"), IOStandard("LVCMOS33")),
@@ -65,7 +65,7 @@ fmc_adapter_io = [
     ("out3", 6, Pins("HPC:LA30_P"), IOStandard("LVCMOS33")),
     ("out3", 7, Pins("HPC:HA08_P"), IOStandard("LVCMOS33")),
 
-    # This is out9 on the board, but out4 on the front panel
+    # Output Bank 4
     ("out4", 0, Pins("HPC:LA19_P"), IOStandard("LVCMOS33")),
     ("out4", 1, Pins("HPC:LA11_N"), IOStandard("LVCMOS33")),
     ("out4", 2, Pins("HPC:LA19_N"), IOStandard("LVCMOS33")),
@@ -87,43 +87,50 @@ fmc_adapter_io = [
     # OEB = Output enable buffer
     ("oeb", 0, Pins("HPC: HA08_N"), IOStandard("LVCMOS33")),
     # trigger for updating output of the DDS
-    ("io_update", 0, Pins("LPC:LA22_P"), IOStandard("LVCMOS33")),  # dac8734 ldac (MEMS)
-    ("io_update", 1, Pins("LPC:LA22_N"), IOStandard("LVCMOS33")),  # dac8734 out (MEMS)
-    ("io_update", 2, Pins("HPC:HA00_CC_N"), IOStandard("LVCMOS33")),
-    ("io_update", 3, Pins("HPC:HA18_P"), IOStandard("LVCMOS33")),
-    ("io_update", 4, Pins("HPC:LA22_P"), IOStandard("LVCMOS33")),
-    ("io_update", 5, Pins("HPC:LA26_P"), IOStandard("LVCMOS33")),
-    ("io_update", 6, Pins("HPC:LA16_P"), IOStandard("LVCMOS33")),
-    ("io_update", 7, Pins("HPC:LA14_N"), IOStandard("LVCMOS33")),
-    ("io_update", 8, Pins("HPC:LA18_CC_P"), IOStandard("LVCMOS33")),
-    ("io_update", 9, Pins("HPC:LA12_N"), IOStandard("LVCMOS33")),
+    ("io_update", 0, Pins("HPC:HA00_CC_N"), IOStandard("LVCMOS33")),
+    ("io_update", 1, Pins("HPC:HA18_P"), IOStandard("LVCMOS33")),
+    ("io_update", 2, Pins("HPC:LA22_P"), IOStandard("LVCMOS33")),
+    ("io_update", 3, Pins("HPC:LA26_P"), IOStandard("LVCMOS33")),
+    ("io_update", 4, Pins("HPC:LA16_P"), IOStandard("LVCMOS33")),
+    ("io_update", 5, Pins("HPC:LA14_N"), IOStandard("LVCMOS33")),
+    ("io_update", 6, Pins("HPC:LA18_CC_P"), IOStandard("LVCMOS33")),
+    ("io_update", 7, Pins("HPC:LA12_N"), IOStandard("LVCMOS33")),
     # Resets for the DDS control boards
-    ("reset", 0, Pins("LPC:LA23_P"), IOStandard("LVCMOS33")),  # dac8734 clk (MEMS)
-    ("reset", 1, Pins("HPC:HA01_CC_P"), IOStandard("LVCMOS33")),
-    ("reset", 2, Pins("HPC:LA22_N"), IOStandard("LVCMOS33")),
-    ("reset", 3, Pins("HPC:LA16_N"), IOStandard("LVCMOS33")),
-    ("reset", 4, Pins("HPC:LA18_CC_N"), IOStandard("LVCMOS33")),
+    ("reset", 0, Pins("HPC:HA01_CC_P"), IOStandard("LVCMOS33")),
+    ("reset", 1, Pins("HPC:LA22_N"), IOStandard("LVCMOS33")),
+    ("reset", 2, Pins("HPC:LA16_N"), IOStandard("LVCMOS33")),
+    ("reset", 3, Pins("HPC:LA18_CC_N"), IOStandard("LVCMOS33")),
     # data channel for odd DDS channels on the DDS board,
     # Because the data channels are separated
     # the even channels are in the mosi Subsignal of the SPI busses
-    ("odd_channel_sdio", 0, Pins("LPC:LA23_N"), IOStandard("LVCMOS33")),  # dac8734 cs (MEMS)
-    ("odd_channel_sdio", 1, Pins("HPC:HA18_N"), IOStandard("LVCMOS33")),
-    ("odd_channel_sdio", 2, Pins("HPC:LA26_N"), IOStandard("LVCMOS33")),
-    ("odd_channel_sdio", 3, Pins("HPC:LA14_P"), IOStandard("LVCMOS33")),
-    ("odd_channel_sdio", 4, Pins("HPC:LA12_P"), IOStandard("LVCMOS33")),
-    # SPI outputs
+    ("odd_channel_sdio", 0, Pins("HPC:HA18_N"), IOStandard("LVCMOS33")),
+    ("odd_channel_sdio", 1, Pins("HPC:LA26_N"), IOStandard("LVCMOS33")),
+    ("odd_channel_sdio", 2, Pins("HPC:LA14_P"), IOStandard("LVCMOS33")),
+    ("odd_channel_sdio", 3, Pins("HPC:LA12_P"), IOStandard("LVCMOS33")),
+    # SPI outputs for MEMS
     (
-        "spi",  # used for MEMS system
+        "spi", # used for MEMS system: HV209
         0,
-        Subsignal("clk", Pins("LPC:LA20_P")),  # hv209 clk (MEMS)
-        Subsignal("cs_n", Pins("LPC:LA20_N LPC:LA21_P")),  # hv209 clr (MEMS), hv209 d_in (MEMS)
-        Subsignal("mosi", Pins("LPC:LA21_N")),  # dac8734 reset (MEMS)
+        Subsignal("clk", Pins("LPC:LA20_P")),
+        Subsignal("cs_n", Pins("")),
+        Subsignal("mosi", Pins("LPC:LA21_P")),
         IOStandard("LVCMOS33"),
     ),
+    (
+        "spi", # used for MEMS system: DAC8734
+        1,
+        Subsignal("clk", Pins("LPC:LA23_P")),
+        Subsignal("cs_n", Pins("LPC:LA23_N")),
+        Subsignal("mosi", Pins("LPC:LA22_N")),
+        IOStandard("LVCMOS33"),
+    ),
+    ("hv209_clr", 0, Pins("LPC:LA20_N"), IOStandard("LVCMOS33")),
+    ("dac8734_reset", 0, Pins("LPC:LA21_N"), IOStandard("LVCMOS33")),
+    ("ldac_mems", 0, Pins("LPC:LA22_P"), IOStandard("LVCMOS33")),
     # SPI channels for communicating to DDS boards
     (
         "spi",
-        1,
+        2,
         Subsignal("clk", Pins("HPC:HA16_N")),
         Subsignal("cs_n", Pins("HPC:HA17_CC_P HPC:HA00_CC_P")),
         Subsignal("mosi", Pins("HPC:HA17_CC_N")),
@@ -131,7 +138,7 @@ fmc_adapter_io = [
     ),
     (
         "spi",
-        2,
+        3,
         Subsignal("clk", Pins("HPC:LA21_P")),
         Subsignal("cs_n", Pins("HPC:LA25_P HPC:LA21_N")),
         Subsignal("mosi", Pins("HPC:LA25_N")),
@@ -139,7 +146,7 @@ fmc_adapter_io = [
     ),
     (
         "spi",
-        3,
+        4,
         Subsignal("clk", Pins("HPC:LA27_P")),
         Subsignal("cs_n", Pins("HPC:LA23_N HPC:LA27_N")),
         Subsignal("mosi", Pins("HPC:LA15_P")),
@@ -147,7 +154,7 @@ fmc_adapter_io = [
     ),
     (
         "spi",
-        4,
+        5,
         Subsignal("clk", Pins("HPC:LA17_CC_P")),
         Subsignal("cs_n", Pins("HPC:LA13_N HPC:LA17_CC_N")),
         Subsignal("mosi", Pins("HPC:LA13_P")),
@@ -156,7 +163,7 @@ fmc_adapter_io = [
     # DAC8568 Control pins: SPI & Load DAC TTL/GPIO trigger (LDAC)
     (
         "spi",
-        5,
+        6,
         Subsignal("clk", Pins("HPC: HA10_P")),
         Subsignal("cs_n", Pins("HPC: HA23_P")),
         Subsignal("mosi", Pins("HPC: HA23_N")),
@@ -172,12 +179,12 @@ x100_dac_spi = [
     # COULD SCREW UP YOUR SD CARD. CAREFUL
     (
         "spi",
-        6,
+        7,
         Subsignal("clk", Pins("AB22")),  # Unassigned # AB22 = SD Card MOSI
         Subsignal("mosi", Pins("HPC:LA04_P")),
-        Subsignal("cs_n", Pins("AC21")),  # AC21 = SD Card CS_n
+        Subsignal("cs_n", Pins("AC21")),    # AC21 = SD Card CS_n
         IOStandard("LVCMOS33"),
     ),
     # unused acts as dummy pin, not routed to relevant location.
-    ("unused", 0, Pins("AC20"), IOStandard("LVCMOS33"))  # AC20 = SD Card MISO
+    ("unused", 0, Pins("AC20"), IOStandard("LVCMOS33"))     # AC20 = SD Card MISO
 ]
