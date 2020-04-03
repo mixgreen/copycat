@@ -1,3 +1,5 @@
+import numpy as np
+
 from artiq.language.core import *
 from artiq.language.types import *
 from artiq.language.units import *
@@ -29,7 +31,7 @@ class Core:
 
     @portable
     def seconds_to_mu(self, seconds):
-        return numpy.int64(seconds // self.ref_period)
+        return np.int64(seconds // self.ref_period)
 
     @portable
     def mu_to_seconds(self, mu):

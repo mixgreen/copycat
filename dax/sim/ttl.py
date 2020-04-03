@@ -22,9 +22,15 @@ class TTLOut:
 
     @kernel
     def pulse(self, duration):
-        self.set_o(true)
+        self.set_o(True)
         delay(duration)
-        self.set_o(false)
+        self.set_o(False)
+
+    @kernel
+    def pulse_mu(self, duration):
+        self.set_o(True)
+        delay_mu(duration)
+        self.set_o(False)
 
     @kernel
     def on(self):
@@ -37,17 +43,6 @@ class TTLOut:
     @kernel
     def output(self):
         pass
-
-    @kernel
-    def pulse_mu(self, duration):
-        self.on()
-        delay_mu(duration)
-        self.off()
-
-    @kernel
-    def pulse(self, duration):
-        super(TTLOut, self).pulse(duration)
-        return now_mu()
 
 
 class TTLInOut(TTLOut):

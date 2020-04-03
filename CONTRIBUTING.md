@@ -12,12 +12,13 @@ We recommend the following naming conventions for branches:
 
 ## Merging
 
+Test your code before merging.
 When merging a branch into master, we recommend to rebase first or to use the `--no-ff` flag when merging.
 
 ## Releases
 
 The `master` branch will always contain the latest production code (rolling release).
-Releases are tags and have a two or three component version number: major, minor, and optionally micro.
+Releases are tags and have a two or three-component version number: major, minor, and optionally micro.
 See the following examples.
 
 - `v3.0` for a major release with breaking changes.

@@ -28,7 +28,7 @@ class ParallelTimeContext(SequentialTimeContext):
 class Manager:
     def __init__(self, file_name='out.vcd'):
         # TODO, name should preferably be configurable but with a default
-        # TODO, timescale configurable?
+        # TODO, timescale configurable as vcd lib requires, else raise exception ([1,10,100] [s,ms,us,ns,ps,fs])
 
         # Initialize stack
         self.stack = [SequentialTimeContext(0.0)]
@@ -78,7 +78,7 @@ class Manager:
         return self._vcd_writer.register_var(scope, name, var_type, size, init, ident)
 
     def format_timeline(self, ref_period):
-        ref_timescale = ref_period // self._timescale  # TODO, ref_timescale actually does not change
+        ref_timescale = ref_period // self._timescale
         for time, var, value in sorted(self._timeline, key=itemgetter(0)):
             # Add events to the VCD file after time conversion
             self._vcd_writer.change(var, time * ref_timescale, value)
@@ -90,13 +90,12 @@ class Manager:
         self._timeline.clear()
 
     def __del__(self):
-        # TODO, this function is maybe not actually called (and __delete__ neither)
+        # TODO, this function is maybe not actually called and the vcd file not closed (and __delete__ neither)
         # Close the VCD file
         self._vcd_writer.close()
         self._vcd_file.close()
 
 
-# TODO, implement the manager singleton in a more elegant way
 # TODO, make a more elegant way to access the manager for registering signals (in a flavour matching with ARTIQ)
 
 # Set the time manager
