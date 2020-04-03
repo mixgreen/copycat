@@ -63,7 +63,7 @@ fmc_adapter_io = [
     ("out3", 4, Pins("HPC:LA28_P"), IOStandard("LVCMOS33")),
     ("out3", 5, Pins("HPC:LA08_N"), IOStandard("LVCMOS33")),
     ("out3", 6, Pins("HPC:LA30_P"), IOStandard("LVCMOS33")),
-    ("out3", 7, Pins("HPC:HA08_P"), IOStandard("LVCMOS33")),
+    ("out3", 7, Pins("HPC:LA08_P"), IOStandard("LVCMOS33")),
 
     # Output Bank 4
     ("out4", 0, Pins("HPC:LA19_P"), IOStandard("LVCMOS33")),
