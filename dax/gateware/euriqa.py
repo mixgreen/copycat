@@ -85,7 +85,7 @@ fmc_adapter_io = [
     ("sma", 7, Pins("HPC:HA09_N"), IOStandard("LVCMOS33")),
     ("sma", 8, Pins("HPC:LA20_P"), IOStandard("LVCMOS33")),
     # OEB = Output enable buffer
-    ("oeb", 0, Pins("HPC: HA08_N"), IOStandard("LVCMOS33")),
+    ("oeb", 0, Pins("HPC:HA08_N"), IOStandard("LVCMOS33")),
     # trigger for updating output of the DDS
     ("io_update", 0, Pins("HPC:HA00_CC_N"), IOStandard("LVCMOS33")),
     ("io_update", 1, Pins("HPC:HA18_P"), IOStandard("LVCMOS33")),
@@ -112,7 +112,7 @@ fmc_adapter_io = [
         "spi",  # used for MEMS system: HV209
         0,
         Subsignal("clk", Pins("LPC:LA20_P")),
-        Subsignal("cs_n", Pins("")),
+        Subsignal("cs_n", Pins("HPC:HA20_N")),
         Subsignal("mosi", Pins("LPC:LA21_P")),
         IOStandard("LVCMOS33"),
     ),
@@ -164,12 +164,12 @@ fmc_adapter_io = [
     (
         "spi",
         6,
-        Subsignal("clk", Pins("HPC: HA10_P")),
-        Subsignal("cs_n", Pins("HPC: HA23_P")),
-        Subsignal("mosi", Pins("HPC: HA23_N")),
+        Subsignal("clk", Pins("HPC:HA10_P")),
+        Subsignal("cs_n", Pins("HPC:HA23_P")),
+        Subsignal("mosi", Pins("HPC:HA23_N")),
         IOStandard("LVCMOS33"),
     ),
-    ("ldac", 0, Pins("HPC: HA21_P"), IOStandard("LVCMOS33")),
+    ("ldac", 0, Pins("HPC:HA21_P"), IOStandard("LVCMOS33")),
 ]
 
 x100_dac_spi = [
