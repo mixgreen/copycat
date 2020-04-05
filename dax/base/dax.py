@@ -133,21 +133,18 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
         return self._name
 
     @artiq.experiment.host_only
-    def get_system_key(self, key: typing.Optional[str] = None) -> str:
+    def get_system_key(self, *keys: str) -> str:
         """Get the full key based on the system key."""
 
-        assert isinstance(key, str) or key is None, 'Key must be a string or None'
+        assert all(isinstance(k, str) for k in keys), 'Keys must be strings'
 
-        if key is None:
-            # No key provided, just return the system key
-            return self._system_key
-        else:
-            # Check if the given key is valid
-            if not _is_valid_key(key):
-                raise ValueError('Invalid key "{:s}"'.format(key))
+        # Check if the given keys are valid
+        for k in keys:
+            if not _is_valid_key(k):
+                raise ValueError('Invalid key "{:s}"'.format(k))
 
-            # Return the assigned key
-            return _KEY_SEPARATOR.join([self._system_key, key])
+        # Return the assigned key
+        return _KEY_SEPARATOR.join([self._system_key, *keys])
 
     @artiq.experiment.host_only
     def get_registry(self) -> _DaxNameRegistry:
@@ -267,7 +264,12 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
         self.append_to_dataset(self.get_system_key(key), value)
 
     def get_dataset_sys(self, key: str, default: typing.Any = artiq.experiment.NoDefault) -> typing.Any:
-        """Returns the contents of a system dataset."""
+        """Returns the contents of a system dataset.
+
+        If the key is present, its value will be returned.
+        If the key is not present and no default is provided, a KeyError will be raised.
+        If the key is not present and a default is provided, the default value will be returned.
+        """
 
         assert isinstance(key, str), 'Key must be of type str'
 
@@ -288,7 +290,13 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
 
     def setattr_dataset_sys(self, key: str, default: typing.Any = artiq.experiment.NoDefault,
                             kernel_invariant: bool = True) -> None:
-        """Sets the contents of a system dataset as attribute."""
+        """Sets the contents of a system dataset as attribute.
+
+        If the key is present, its value will be loaded to the attribute.
+        If the key is not present and no default is provided, the attribute is not set.
+        If the key is not present and a default is provided, the default value will
+        be written to the dataset and the attribute will be set to the same value.
+        """
 
         assert isinstance(key, str), 'Key must be of type str'
         assert isinstance(kernel_invariant, bool), 'Kernel invariant flag must be of type bool'

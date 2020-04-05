@@ -388,6 +388,12 @@ class DaxModuleBaseTestCase(unittest.TestCase):
         self.assertEqual(s.get_name(), TestSystem.SYS_NAME, 'Returned name did not match expected name')
         self.assertEqual(s.get_system_key(), TestSystem.SYS_NAME, 'Returned key did not match expected key')
 
+        self.assertEqual(s.get_system_key('a', 'b'), '.'.join([TestSystem.SYS_NAME, 'a', 'b']),
+                         'Returned key did not match expected key based on multiple components')
+        k = 'string_as_key_list'
+        self.assertEqual(s.get_system_key(*k), '.'.join([TestSystem.SYS_NAME, *k]),
+                         'Returned key did not match expected key based on multiple components')
+
         n = 'test_module_name'
         t = TestModule(s, n)
         self.assertEqual(t.get_system_key(), '.'.join([TestSystem.SYS_NAME, n]),
@@ -397,6 +403,8 @@ class DaxModuleBaseTestCase(unittest.TestCase):
                          'System key creation derived from current module key failed')
         with self.assertRaises(ValueError, msg='Creating bad system key did not raise'):
             s.get_system_key('bad,key')
+        with self.assertRaises(ValueError, msg='Creating bad system key did not raise'):
+            s.get_system_key('good_key', 'bad,key')
         with self.assertRaises(AssertionError, msg='Creating system key with wrong key input did not raise'):
             # Intentionally wrong argument type, disabling inspection
             # noinspection PyTypeChecker
