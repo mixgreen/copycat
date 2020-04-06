@@ -579,13 +579,17 @@ class RtioBenchmarkModule(DaxModule):
             try:
                 for _ in range(num_samples):
                     # Break realtime to get some slack
-                    self.core.break_realtime()
-                    # Reduce the slack to zero by waiting
-                    self.core.wait_until_mu(now_mu())
+                    self.core.break_realtime()  # break_realtime() performs better than reset() in this scenario
 
-                    # Insert latency and try to schedule an event
+                    # Store time zero
+                    t_zero = now_mu()
+                    # Prepare cursor for event
                     delay_mu(current_latency_mu)
-                    self.ttl_out.off()
+
+                    # Reduce the slack to zero by waiting
+                    self.core.wait_until_mu(t_zero)
+                    # Try to schedule an event
+                    self.ttl_out.off()  # Could raise RTIOUnderFlow
 
             except RTIOUnderflow:
                 # Set underflow flag
@@ -663,13 +667,11 @@ class RtioLoopBenchmarkModule(RtioBenchmarkModule):
 
     @kernel
     def test_loop_connection(self, retry=np.int32(1)):
-        # Reset core
-        self.core.reset()
+        """True if a loop connection was detected."""
 
-        # Test if we can confirm the loop connection
         for _ in range(retry):
-            # Guarantee a healthy amount of slack
-            self.core.break_realtime()
+            # Reset core
+            self.core.reset()
 
             # Turn output off
             self.ttl_out.off()
@@ -844,7 +846,7 @@ class RtioLoopBenchmarkModule(RtioBenchmarkModule):
             # Get the timestamp when the RTIO core detects the input event
             t_rtio = self.ttl_in.timestamp_mu(self.ttl_in.gate_rising(self.EDGE_DELAY))
             # Get the timestamp (of the RTIO core) when the RISC core reads the input event (return time)
-            t_return = self.core.get_rtio_counter_mu()  # Returns a lower bound
+            t_return = self.core.get_rtio_counter_mu()  # Returns an upper bound
 
             # Store values at a non-critical time
             self.append_to_dataset('t_zero', t_zero)
@@ -958,6 +960,7 @@ class RtioLoopBenchmarkModule(RtioBenchmarkModule):
                     t_window = self.ttl_in.gate_rising(self.EDGE_DELAY)
                     # Set the cursor at time zero + current latency (prepare for scheduling feedback event)
                     at_mu(t_zero + current_latency_mu)
+
                     # Wait for the timestamp when the RTIO core detects the input event
                     self.ttl_in.timestamp_mu(t_window)
                     # Schedule the event at time zero + current latency

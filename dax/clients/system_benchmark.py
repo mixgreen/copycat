@@ -17,31 +17,44 @@ class SystemBenchmarkDaxInit(DaxClient, EnvExperiment):
         self.setattr_argument('num_samples', NumberValue(5, min=1, **number_kwargs))
 
     def run(self):
-        # Suppress dataset warnings because of multiple initializations
-        artiq.master.worker_db.logger.setLevel(logging.WARNING + 1)
+        # Get the system (which is actually self after using the client factory)
+        self.system = self.registry.search_module(DaxSystem)  # Not possible in build()
+
+        # Store input values in dataset
+        self.set_dataset('num_samples', self.num_samples)
+        # Prepare result dataset
+        result_key = 'dax_init_time'
+        self.set_dataset(result_key, [])
 
         # Total time recorded
         total = 0.0
+
+        # Suppress dataset warnings because of multiple initializations
+        artiq.master.worker_db.logger.setLevel(logging.WARNING + 1)
 
         for _ in range(self.num_samples):
             # Record start time
             start = time.perf_counter()
             # Run DAX system initialization
-            self.dax_init()  # After using the client factory, this object will be a DaxSystem
+            self.system.dax_init()
             # Record time
             stop = time.perf_counter()
 
             # Add difference to total time
-            total += stop - start
+            diff = stop - start
+            total += diff
 
-        # Store recorded average initialization time
-        self.init_time = total / self.num_samples
+            # Store intermediate result
+            self.append_to_dataset(result_key, diff)
 
         # Restore logging level
         artiq.master.worker_db.logger.setLevel(logging.NOTSET)
 
+        # Store recorded average initialization time
+        init_time = total / self.num_samples
+        self.system.set_dataset_sys(self.system.DAX_INIT_TIME_KEY, init_time)
+
     def analyze(self):
         # Report result
-        sys_id = self.SYS_ID
-        init_time = dax.util.units.time_to_str(self.init_time)
-        self.logger.info('Average execution time of dax_init() for system "{:s}" is {:s}'.format(sys_id, init_time))
+        init_time = dax.util.units.time_to_str(self.system.get_dataset_sys(self.system.DAX_INIT_TIME_KEY))
+        self.logger.info('Average execution time of dax_init() is {:s}'.format(init_time))

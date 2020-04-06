@@ -402,6 +402,9 @@ class DaxSystem(_DaxModuleBase):
     # Key of core log controller
     CORE_LOG_KEY: str = 'core_log'
 
+    # System keys
+    DAX_INIT_TIME_KEY = 'dax_init_time'
+
     def __init__(self, managers_or_parent: typing.Any,
                  *args: typing.Any, **kwargs: typing.Any):
         # Check if system ID was overridden
