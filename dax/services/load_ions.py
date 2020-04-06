@@ -12,9 +12,9 @@ class LoadIonsService(DaxService):
 
     def build(self):
         # Obtain required modules
-        self.gbeam = self.registry.search_module(GlobalBeamInterface)
-        self.detect = self.registry.search_module_dict(DetectionInterface)
-        self.trap = self.registry.search_module_dict(TrapInterface)
+        self.gbeam = self.registry.find_module(GlobalBeamInterface)
+        self.detect = self.registry.find_module(DetectionInterface)
+        self.trap = self.registry.find_module(TrapInterface)
 
         # Other variables
         self.num_channels = self.detect.num_channels()

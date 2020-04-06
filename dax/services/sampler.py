@@ -20,10 +20,10 @@ class SamplerService(DaxService):
 
     def build(self):
         # Obtain required modules
-        self.gbeam = self.registry.search_module(GlobalBeamInterface)
-        self.ibeam = self.registry.search_module(IndvBeamInterface)
-        self.detect = self.registry.search_module_dict(DetectionInterface)
-        self.trap = self.registry.search_module_dict(TrapInterface)
+        self.gbeam = self.registry.find_module(GlobalBeamInterface)
+        self.ibeam = self.registry.find_module(IndvBeamInterface)
+        self.detect = self.registry.find_module(DetectionInterface)
+        self.trap = self.registry.find_module(TrapInterface)
 
         # Attribute to store result dataset key
         self.result_dataset_key = ''  # This value could be mutated inside a kernel

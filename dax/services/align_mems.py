@@ -10,10 +10,10 @@ class AlignMemsService(DaxService):
 
     def build(self):
         # Obtain required modules
-        self.ibeam = self.registry.search_module(IndvBeamMemsModule)  # Specifically request IndvBeamMemsModule
-        self.gbeam = self.registry.search_module(GlobalBeamInterface)
-        self.detect = self.registry.search_module_dict(DetectionInterface)
-        self.trap = self.registry.search_module_dict(TrapInterface)
+        self.ibeam = self.registry.find_module(IndvBeamMemsModule)  # Specifically request IndvBeamMemsModule
+        self.gbeam = self.registry.find_module(GlobalBeamInterface)
+        self.detect = self.registry.find_module(DetectionInterface)
+        self.trap = self.registry.find_module(TrapInterface)
 
     def init(self):
         pass

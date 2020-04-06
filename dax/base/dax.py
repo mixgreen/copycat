@@ -524,10 +524,6 @@ class _DaxNameRegistry:
         """Exception when a name is registered more then once."""
         pass
 
-    class NonUniqueSearchError(LookupError):
-        """Exception when a search could not find a unique result."""
-        pass
-
     # Module base type variable
     __M_T = typing.TypeVar('__M_T', bound=_DaxModuleBase)
 
@@ -599,21 +595,24 @@ class _DaxNameRegistry:
         # Return the module
         return module
 
-    def search_module(self, type_: typing.Type[__M_T]) -> __M_T:
-        """Search for a unique module that matches the requested type."""
+    def find_module(self, type_: typing.Type[__M_T]) -> __M_T:
+        """Find a unique module that matches the requested type, raise otherwise."""
 
         # Search for all modules matching the type
-        results: typing.Dict[str, _DaxNameRegistry.__M_T] = self.search_module_dict(type_)
+        results: typing.Dict[str, _DaxNameRegistry.__M_T] = self.search_modules(type_)
 
-        if len(results) > 1:
+        if not results:
+            # No modules were found
+            raise KeyError('Could not find modules with type "{:s}"'.format(type_.__name__))
+        elif len(results) > 1:
             # More than one module was found
-            raise self.NonUniqueSearchError('Could not find a unique module with type "{:s}"'.format(type_.__name__))
+            raise LookupError('Could not find a unique module with type "{:s}"'.format(type_.__name__))
 
         # Return the only result
         _, module = results.popitem()
         return module
 
-    def search_module_dict(self, type_: typing.Type[__M_T]) -> typing.Dict[str, __M_T]:
+    def search_modules(self, type_: typing.Type[__M_T]) -> typing.Dict[str, __M_T]:
         """Search for modules that match the requested type and return results as a dict."""
 
         assert issubclass(type_, (DaxModuleInterface, _DaxModuleBase)), \
@@ -622,10 +621,6 @@ class _DaxNameRegistry:
         # Search for all modules matching the type
         results: typing.Dict[str, _DaxNameRegistry.__M_T] = {k: m for k, m in self._modules.items()
                                                              if isinstance(m, type_)}
-
-        if not results:
-            # No modules were found
-            raise KeyError('Could not find modules with type "{:s}"'.format(type_.__name__))
 
         # Return the list with results
         return results

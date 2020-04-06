@@ -14,7 +14,7 @@ class RpcBenchmarkLatency(DaxClient, EnvExperiment):
         self.setattr_argument('num_samples', NumberValue(100, min=1, **number_kwargs))
 
         # Obtain RTIO benchmark module
-        self.rpc_bench = self.registry.search_module(RpcBenchmarkModule)
+        self.rpc_bench = self.registry.find_module(RpcBenchmarkModule)
 
     def run(self):
         self.rpc_bench.benchmark_latency(self.num_samples)

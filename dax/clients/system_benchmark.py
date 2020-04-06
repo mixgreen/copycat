@@ -18,7 +18,7 @@ class SystemBenchmarkDaxInit(DaxClient, EnvExperiment):
 
     def run(self):
         # Get the system (which is actually self after using the client factory)
-        self.system = self.registry.search_module(DaxSystem)  # Not possible in build()
+        self.system = self.registry.find_module(DaxSystem)  # Not possible in build()
 
         # Store input values in dataset
         self.set_dataset('num_samples', self.num_samples)

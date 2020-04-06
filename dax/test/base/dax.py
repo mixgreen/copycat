@@ -88,16 +88,19 @@ class DaxNameRegistryTestCase(unittest.TestCase):
         # Test with no modules
         with self.assertRaises(KeyError, msg='Get non-existing module did not raise'):
             r.get_module('not_existing_key')
+        with self.assertRaises(KeyError, msg='Find non-existing module did not raise'):
+            r.find_module(TestModule)
+        self.assertDictEqual(r.search_modules(TestModule), {}, 'Search result dict incorrect')
 
         # Test with one module
         t0 = TestModule(s, 'test_module')
         self.assertIs(r.get_module(t0.get_system_key()), t0, 'Returned module does not match expected module')
         with self.assertRaises(TypeError, msg='Type check in get_module() did not raise'):
             r.get_module(t0.get_system_key(), TestModuleChild)
-        self.assertIs(r.search_module(TestModule), t0, 'Did not find the expected module')
-        self.assertIs(r.search_module(DaxModule), t0, 'Did not find the expected module')
+        self.assertIs(r.find_module(TestModule), t0, 'Did not find the expected module')
+        self.assertIs(r.find_module(DaxModule), t0, 'Did not find the expected module')
         with self.assertRaises(KeyError, msg='Search non-existing module did not raise'):
-            r.search_module(TestModuleChild)
+            r.find_module(TestModuleChild)
         self.assertListEqual(r.get_module_key_list(), [m.get_system_key() for m in [s, t0]],
                              'Module key list incorrect')
         with self.assertRaises(_DaxNameRegistry.NonUniqueRegistrationError, msg='Adding module twice did not raise'):
@@ -110,12 +113,12 @@ class DaxNameRegistryTestCase(unittest.TestCase):
         self.assertIs(r.get_module(t1.get_system_key()), t1, 'Returned module does not match expected module')
         self.assertIs(r.get_module(t1.get_system_key(), TestModuleChild), t1,
                       'Type check in get_module() raised unexpectedly')
-        self.assertIs(r.search_module(TestModuleChild), t1, 'Did not find expected module')
-        with self.assertRaises(_DaxNameRegistry.NonUniqueSearchError, msg='Non-unique search did not raise'):
-            r.search_module(TestModule)
+        self.assertIs(r.find_module(TestModuleChild), t1, 'Did not find expected module')
+        with self.assertRaises(LookupError, msg='Non-unique search did not raise'):
+            r.find_module(TestModule)
         self.assertListEqual(r.get_module_key_list(), [m.get_system_key() for m in [s, t0, t1]],
                              'Module key list incorrect')
-        self.assertDictEqual(r.search_module_dict(TestModule), {m.get_system_key(): m for m in [t0, t1]},
+        self.assertDictEqual(r.search_modules(TestModule), {m.get_system_key(): m for m in [t0, t1]},
                              'Search result dict incorrect')
 
     def test_device(self):
