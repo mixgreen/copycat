@@ -10,6 +10,7 @@ import git  # type: ignore
 import os
 import numbers
 
+import artiq
 import artiq.experiment
 import artiq.master.worker_db  # type: ignore
 
@@ -772,6 +773,9 @@ class _DaxDataStoreConnector:
     def __init__(self, system: DaxSystem):
         """Create a new DAX data store connector."""
 
+        assert isinstance(self._DAX_COMMIT, str), 'DAX commit hash was not loaded'
+        assert isinstance(self._CWD_COMMIT, str), 'Current working directory commit hash was not loaded'
+
         # Store values that will be used for data points
         self._sys_id: str = system.SYS_ID
         self._sys_ver: str = str(system.SYS_VER)  # Convert int version to str since tags are strings
@@ -828,6 +832,7 @@ class _DaxDataStoreConnector:
             'rid': int(self._scheduler.rid),
             'pipeline_name': str(self._scheduler.pipeline_name),
             'priority': int(self._scheduler.priority),
+            'artiq_version': str(artiq.__version__),
             key: value,  # The full key and the value are the actual field
         }
         # Add expid items to fields if keys do not exist yet and the types are appropriate

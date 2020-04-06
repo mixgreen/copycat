@@ -55,8 +55,11 @@ class TrapModule(DaxModule, TrapInterface):
         # Number of loaded ions
         self.setattr_dataset_sys(self.NUM_LOADED_IONS_KEY, np.int32(0))
 
+        # Device initialization
+        self._init()
+
     @kernel
-    def post_init(self):
+    def _init(self):
         # Reset core
         self.core.reset()
 
@@ -75,6 +78,9 @@ class TrapModule(DaxModule, TrapInterface):
 
         # Guarantee all events are submitted
         self.core.wait_until_mu(now_mu())
+
+    def post_init(self):
+        pass
 
     @kernel
     def set_oven_o(self, state):
