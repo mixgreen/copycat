@@ -59,7 +59,13 @@ class _DaxBase(artiq.experiment.HasEnvironment, abc.ABC):
 
     @artiq.experiment.host_only
     def update_kernel_invariants(self, *keys: str) -> None:
-        """Add one or more keys to the kernel invariants set."""
+        """Add one or more keys to the set of kernel invariants.
+
+        Kernel invariants are attributes that are not changed during kernel execution.
+        Marking attributes as invariant enables more aggressive compiler optimizations.
+
+        :param keys: The keys to add to the set of kernel invariants.
+        """
 
         assert all(isinstance(k, str) for k in keys), 'All keys must be of type str'
 
@@ -67,6 +73,11 @@ class _DaxBase(artiq.experiment.HasEnvironment, abc.ABC):
         kernel_invariants: typing.Set[str] = getattr(self, "kernel_invariants", set())
         # Update the set with the given keys
         self.kernel_invariants: typing.Set[str] = kernel_invariants | {*keys}
+
+    @artiq.experiment.host_only
+    def get_logger(self) -> logging.Logger:
+        """Return the logger of this object."""
+        return self.logger
 
     @abc.abstractmethod
     def get_identifier(self) -> str:
@@ -125,17 +136,24 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
             self.core_cache: artiq.coredevice.cache = parent.core_cache
             self.data_store: _DaxDataStoreConnector = parent.data_store
         except AttributeError:
-            parent.logger.exception('Missing core attributes (super.build() was probably not called)')
+            parent.get_logger().exception('Missing core attributes (super.build() was probably not called)')
             raise
 
     @artiq.experiment.host_only
     def get_name(self) -> str:
-        """Get the name."""
+        """Get the name of this component."""
         return self._name
 
     @artiq.experiment.host_only
     def get_system_key(self, *keys: str) -> str:
-        """Get the full key based on the system key."""
+        """Get the full key based on the system key.
+
+        If no keys are provided, the system key is returned.
+        If one or more keys are provided, the provided keys are appended to the system key.
+
+        :param keys: The keys to append to the system key
+        :returns: The system key with provided keys appended.
+        """
 
         assert all(isinstance(k, str) for k in keys), 'Keys must be strings'
 
@@ -151,6 +169,11 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
     def get_registry(self) -> _DaxNameRegistry:
         """Return the current registry."""
         return self.registry
+
+    @artiq.experiment.host_only
+    def get_data_store(self) -> _DaxDataStoreConnector:
+        """Return the data store."""
+        return self.data_store
 
     @artiq.experiment.host_only
     def _init_system(self) -> None:
@@ -176,16 +199,38 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
 
     @abc.abstractmethod
     def init(self) -> None:
-        """Override this method to access the dataset (r/w), initialize devices, and record DMA traces."""
+        """Override this method to access the dataset (r/w), initialize devices, and record DMA traces.
+
+        The init() function will be called when the user calls dax_init() in the experiment run() function.
+        """
         pass
 
     @abc.abstractmethod
     def post_init(self) -> None:
-        """Override this method for post-initialization procedures (e.g. obtaining DMA handles)."""
+        """Override this method for post-initialization procedures (e.g. obtaining DMA handles).
+
+        The post_init() function will be called when the user calls dax_init() in the experiment run() function.
+        The post_init() function is called after all init() functions have been called.
+        This function is used to perform initialization tasks that are dependent on the initialization
+        of other components, for example to obtain a DMA handle.
+        """
         pass
 
     def get_device(self, key: str, type_: __D_T = object) -> typing.Any:
-        """Get a device driver."""
+        """Get a device driver.
+
+        Users can optionally specify an expected device type.
+        If the device does not match the expected type, an exception is raised.
+
+        Devices that are retrieved using get_device() are not automatically added as kernel invariants.
+        The user is responsible for adding the attribute to the list of kernel invariants.
+
+        :param key: The key of the device to obtain
+        :param type_: The expected type of the device
+        :returns: The requested device driver
+        :raises KeyError: Raised when the device could not be obtained from the device DB
+        :raises TypeError: Raised when the device does not match the expected type
+        """
 
         assert isinstance(key, str) and key, 'Key must be of type str and not empty'
 
@@ -208,7 +253,22 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
         return device
 
     def setattr_device(self, key: str, attr_name: typing.Optional[str] = None, type_: __D_T = object) -> None:
-        """Sets a device driver as attribute."""
+        """Sets a device driver as attribute.
+
+        If no attr_name is provided, the key will be the attribute name.
+
+        Users can optionally specify an expected device type.
+        If the device does not match the expected type, an exception is raised.
+
+        The attribute used to set the device driver is automatically added to the kernel invariants.
+
+        :param key: The key of the device
+        :param attr_name: The attribute name to assign the device driver to
+        :param type_: The expected type of the device
+        :raises KeyError: Raised when the device could not be obtained from the device DB
+        :raises TypeError: Raised when the device does not match the expected type
+        :raises ValueError: Raised if problems are encountered with the attribute name
+        """
 
         assert isinstance(attr_name, str) or attr_name is None, 'Attribute name must be of type str or None'
 
@@ -221,7 +281,9 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
 
         # Set the device key to the attribute
         if not _is_valid_name(attr_name):
-            raise ValueError('Attribute name {:s} not valid'.format(attr_name))
+            raise ValueError('Attribute name "{:s}" not valid'.format(attr_name))
+        if hasattr(self, attr_name):
+            raise ValueError('Attribute name "{:s}" was already assigned'.format(attr_name))
         setattr(self, attr_name, device)
 
         # Add attribute to kernel invariants
@@ -229,7 +291,11 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
 
     @artiq.experiment.rpc(flags={'async'})
     def set_dataset_sys(self, key: str, value: typing.Any) -> None:
-        """Sets the contents of a system dataset."""
+        """Sets the contents of a system dataset.
+
+        :param key: The key of the system dataset
+        :param value: The value to store
+        """
 
         assert isinstance(key, str), 'Key must be of type str'
 
@@ -244,11 +310,16 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
         artiq.master.worker_db.logger.setLevel(logging.NOTSET)
 
     @artiq.experiment.rpc(flags={'async'})
-    def mutate_dataset_sys(self, key: str, index: int, value: typing.Any) -> None:
-        """Mutate an existing system dataset at the given index."""
+    def mutate_dataset_sys(self, key: str, index: typing.Any, value: typing.Any) -> None:
+        """Mutate an existing system dataset at the given index.
+
+        :param key: The key of the system dataset
+        :param index: The array index to mutate, slicing and multi-dimensional indexing allowed
+        :param value: The value to store
+        :raises KeyError: Raised if the key was not present
+        """
 
         assert isinstance(key, str), 'Key must be of type str'
-        assert isinstance(index, int), 'Index must be of type int'
 
         # Mutate system dataset
         self.logger.debug('System dataset key "{:s}"[{:d}] mutate to value "{}"'.format(key, index, value))
@@ -256,7 +327,12 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
 
     @artiq.experiment.rpc(flags={'async'})
     def append_to_dataset_sys(self, key: str, value: typing.Any) -> None:
-        """Append a value to a system dataset."""
+        """Append a value to a system dataset.
+
+        :param key: The key of the system dataset
+        :param value: The value to store
+        :raises KeyError: Raised if the key was not present
+        """
 
         assert isinstance(key, str), 'Key must be of type str'
 
@@ -270,6 +346,11 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
         If the key is present, its value will be returned.
         If the key is not present and no default is provided, a KeyError will be raised.
         If the key is not present and a default is provided, the default value will be returned.
+
+        :param key: The key of the system dataset
+        :param default: The default value to return
+        :returns: The value of the system dataset or the default value
+        :raises KeyError: Raised if the key was not present
         """
 
         assert isinstance(key, str), 'Key must be of type str'
@@ -297,6 +378,22 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
         If the key is not present and no default is provided, the attribute is not set.
         If the key is not present and a default is provided, the default value will
         be written to the dataset and the attribute will be set to the same value.
+
+        The above behavior differs slightly from :func:`setattr_dataset` since it will never raise an exception.
+        This behavior was chosen to make sure initialization can always pass, even when keys are not available.
+        Exceptions will be raised when an attribute is missing while being accessed in Python
+        or when a kernel is compiled that needs the attribute.
+
+        The function :func:`hasattr` can be used for conditional initialization in case it is possible that a
+        certain attribute is not present (i.e. when this function is used without a default value).
+
+        Attributes set using this function will by default be added as a kernel invariant.
+        It is possible to disable this behavior by setting the appropriate function parameter.
+
+        :param key: The key of the system dataset
+        :param default: The default value to set the system dataset to if not present
+        :param kernel_invariant: Flag to set the attribute as kernel invariant or not
+        :raises ValueError: Raised if problems are encountered with the attribute name
         """
 
         assert isinstance(key, str), 'Key must be of type str'
@@ -321,6 +418,8 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
                 value = self.get_dataset(system_key, archive=True)  # Should never raise a KeyError
 
         # Set value as an attribute
+        if hasattr(self, key):
+            raise ValueError('Attribute name "{:s}" was already assigned'.format(key))
         setattr(self, key, value)
 
         if kernel_invariant:
@@ -332,7 +431,13 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
             key, value, ' (kernel invariant)' if kernel_invariant else ''))
 
     def hasattr(self, *keys: str) -> bool:
-        """Returns if this object has the given attributes."""
+        """Returns if this object has the given attributes.
+
+        This function is especially useful when :func:`setattr_dataset_sys` is used without a default value.
+
+        :param keys: The attribute names to check
+        :returns: True if all attributes are set
+        """
         return all(hasattr(self, k) for k in keys)
 
     @artiq.experiment.host_only
@@ -407,6 +512,13 @@ class DaxSystem(_DaxModuleBase):
 
     def __init__(self, managers_or_parent: typing.Any,
                  *args: typing.Any, **kwargs: typing.Any):
+        """Initialize the DAX system.
+
+        :param managers_or_parent: The manager or parent of this object
+        :param args: Positional arguments forwarded to the :func:`build` function
+        :param kwargs: Keyword arguments forwarded to the :func:`build` function
+        """
+
         # Check if system ID was overridden
         assert hasattr(self, 'SYS_ID'), 'Every DAX system class must have a SYS_ID class attribute'
         assert isinstance(self.SYS_ID, str), 'System ID must be of type str'
@@ -445,7 +557,13 @@ class DaxSystem(_DaxModuleBase):
         self.data_store: _DaxDataStoreConnector = _DaxDataStoreConnector(self)
 
     def dax_init(self) -> None:
-        """Initialize the DAX system."""
+        """Initialize the DAX system.
+
+        When initializing, first the :func:`init` function of child objects are called in hierarchical order.
+        The :func:`init` function of this system is called last.
+        Finally, all :func:`post_init` functions are called in the same order.
+        """
+
         self.logger.debug('Starting DAX system initialization...')
         try:
             self._init_system()
@@ -469,9 +587,14 @@ class DaxService(_DaxHasSystem, abc.ABC):
     # The unique name of this service
     SERVICE_NAME: str
 
-    def __init__(self, managers_or_parent: typing.Union[DaxSystem, DaxService],
+    def __init__(self, managers_or_parent: _DaxHasSystem,
                  *args: typing.Any, **kwargs: typing.Any):
-        """Initialize the DAX service base class."""
+        """Initialize the DAX service base class.
+
+        :param managers_or_parent: The manager or parent of this object
+        :param args: Positional arguments forwarded to the :func:`build` function
+        :param kwargs: Keyword arguments forwarded to the :func:`build` function
+        """
 
         # Check if service name was overridden
         assert hasattr(self, 'SERVICE_NAME'), 'Every DAX service class must have a SERVICE_NAME class attribute'
@@ -531,7 +654,10 @@ class _DaxNameRegistry:
     _VIRTUAL_DEVICES: typing.Set[str] = {'scheduler', 'ccb'}
 
     def __init__(self, system: DaxSystem):
-        """Create a new DAX name registry."""
+        """Create a new DAX name registry.
+
+        :param system: The DAX system this registry belongs to
+        """
 
         assert isinstance(system, DaxSystem), 'System must be of type DAX system'
 
@@ -550,7 +676,10 @@ class _DaxNameRegistry:
         self._services: typing.Dict[str, DaxService] = dict()
 
     def add_module(self, module: _DaxModuleBase) -> None:
-        """Register a module."""
+        """Register a module.
+
+        :param module: The module to register
+        """
 
         assert isinstance(module, _DaxModuleBase), 'Module is not a DAX module base'
 
@@ -577,7 +706,13 @@ class _DaxNameRegistry:
         ...
 
     def get_module(self, key: str, type_: typing.Type[_DaxModuleBase] = _DaxModuleBase) -> _DaxModuleBase:
-        """Return the requested module by key."""
+        """Return the requested module by key.
+
+        :param key: The key of the module
+        :param type_: The expected type of the module
+        :raises KeyError: Raised if the module could not be found
+        :raises TypeError: Raised if the module type does not match the expected type
+        """
 
         assert isinstance(key, str), 'Key must be a string'
 
@@ -596,7 +731,13 @@ class _DaxNameRegistry:
         return module
 
     def find_module(self, type_: typing.Type[__M_T]) -> __M_T:
-        """Find a unique module that matches the requested type, raise otherwise."""
+        """Find a unique module that matches the requested type.
+
+        :param type_: The type of the module
+        :returns: The unique module of the requested type
+        :raises KeyError: Raised if no modules of the desired type were found
+        :raises LookupError: Raised if more then one module of the desired type was found
+        """
 
         # Search for all modules matching the type
         results: typing.Dict[str, _DaxNameRegistry.__M_T] = self.search_modules(type_)
@@ -613,7 +754,11 @@ class _DaxNameRegistry:
         return module
 
     def search_modules(self, type_: typing.Type[__M_T]) -> typing.Dict[str, __M_T]:
-        """Search for modules that match the requested type and return results as a dict."""
+        """Search for modules that match the requested type and return results as a dict.
+
+        :param type_: The type of the modules
+        :returns: A dict with key-module pairs
+        """
 
         assert issubclass(type_, (DaxModuleInterface, _DaxModuleBase)), \
             'Provided type must be a DAX module base or interface'
@@ -626,12 +771,24 @@ class _DaxNameRegistry:
         return results
 
     def get_module_key_list(self) -> typing.List[str]:
-        """Return a list of registered module keys."""
+        """Return a list of registered module keys.
+
+        :returns: A list with module keys
+        """
+
         module_key_list: typing.List[str] = natsort.natsorted(self._modules.keys())  # Natural sort the list
         return module_key_list
 
     def add_device(self, parent: _DaxHasSystem, key: str) -> None:
-        """Register a device."""
+        """Register a device.
+
+        Devices are added to the registry to ensure every device is only owned by a single parent.
+
+        :param parent: The parent that requested the device
+        :param key: The key of the device
+        :raises KeyError: Raised if the device could not be obtained from the device DB
+        :raises NonUniqueRegistrationError: Raised if the device was already registered by an other parent
+        """
 
         assert isinstance(parent, _DaxHasSystem), 'Parent is not a DaxHasSystem type'
         assert isinstance(key, str), 'Device key must be a string'
@@ -688,12 +845,22 @@ class _DaxNameRegistry:
             raise TypeError('Key "{:s}" returned an unexpected type'.format(key))
 
     def get_device_key_list(self) -> typing.List[str]:
-        """Return a list of registered device keys."""
+        """Return a list of registered device keys.
+
+        :returns: A list of device keys that were registered
+        """
+
         device_key_list: typing.List[str] = natsort.natsorted(self._devices.keys())  # Natural sort the list
         return device_key_list
 
     def make_service_key(self, service_name: str) -> str:
-        """Return the system key for a service name."""
+        """Return the system key for a service name.
+
+        This function can be used to generate a system key for a new service.
+
+        :param service_name: The unique name of the service
+        :returns: The system key for this service
+        """
 
         # Check the given name
         assert isinstance(service_name, str), 'Service name must be a string'
@@ -705,7 +872,13 @@ class _DaxNameRegistry:
         return _KEY_SEPARATOR.join([self._sys_services_key, service_name])
 
     def add_service(self, service: DaxService) -> None:
-        """Register a service."""
+        """Register a service.
+
+        Services are added to the registry to ensure every service is only present once.
+        Services can also be found using the registry.
+
+        :param service: The service to register
+        """
 
         assert isinstance(service, DaxService), 'Service must be a DAX service'
 
@@ -723,7 +896,13 @@ class _DaxNameRegistry:
         self._services[key] = service
 
     def has_service(self, key: typing.Union[str, typing.Type[DaxService]]) -> bool:
-        """Return if service is available."""
+        """Return if a service is available.
+
+        Check if a service is available in this system.
+
+        :param key: The key of the service, can be a string or the type of the service
+        :returns: True if the service is available
+        """
         try:
             self.get_service(key)
         except KeyError:
@@ -732,7 +911,14 @@ class _DaxNameRegistry:
             return True
 
     def get_service(self, key: typing.Union[str, typing.Type[DaxService]]) -> DaxService:
-        """Get a service from the registry."""
+        """Get a service from the registry.
+
+        Obtain a registered service.
+
+        :param key: The key of the service, can be a string or the type of the service
+        :returns: The requested service
+        :raises KeyError: Raised if the service is not available
+        """
 
         assert isinstance(key, str) or issubclass(key, DaxService)
 
@@ -747,7 +933,11 @@ class _DaxNameRegistry:
             raise KeyError('Service "{:s}" is not available') from None
 
     def get_service_key_list(self) -> typing.List[str]:
-        """Return a list of registered service keys."""
+        """Return a list of registered service keys.
+
+        :returns: A list of service keys that were registered
+        """
+
         service_key_list: typing.List[str] = natsort.natsorted(self._services.keys())  # Natural sort the list
         return service_key_list
 
@@ -769,7 +959,10 @@ class _DaxDataStoreConnector:
     _CWD_COMMIT: str
 
     def __init__(self, system: DaxSystem):
-        """Create a new DAX data store connector."""
+        """Create a new DAX data store connector.
+
+        :param system: The system this data store connector is part of
+        """
 
         assert isinstance(self._DAX_COMMIT, str), 'DAX commit hash was not loaded'
         assert isinstance(self._CWD_COMMIT, str), 'Current working directory commit hash was not loaded'
@@ -784,13 +977,20 @@ class _DaxDataStoreConnector:
         # todo, obtain access to the data store controller using system.get_device()
 
     def store(self, key: str, value: __F_T) -> None:
-        """Write a single key-value into the data store."""
+        """Write a single key-value into the data store.
+
+        :param key: The key of the value
+        :param value: The value associated with the key
+        """
 
         # Make a dict with a single key-value pair and store it
         self.store_dict({key: value})
 
     def store_dict(self, d: typing.Dict[str, __F_T]) -> None:
-        """Write a dict with key-value pairs into the data store."""
+        """Write a dict with key-value pairs into the data store.
+
+        :param d: A dict with key-value pairs to store
+        """
 
         # Convert NumPy int values to Python int
         d = {k: int(v) if isinstance(v, numbers.Integral) else v for k, v in d.items()}
@@ -887,7 +1087,11 @@ __S_T = typing.TypeVar('__S_T', bound=DaxSystem)
 
 
 def dax_client_factory(c: typing.Type[__C_T]) -> typing.Callable[[typing.Type[__S_T]], typing.Type[__C_T]]:
-    """Decorator to convert a DaxClient class to a factory function for that class."""
+    """Decorator to convert a DaxClient class to a factory function for that class.
+
+    :param c: The DAX client to create a factory function for
+    :returns: A factory for the client class that allows the client to be matched with a system
+    """
 
     assert isinstance(c, type), 'The decorated object must be a class'
     assert issubclass(c, DaxClient), 'The decorated class must be a subclass of DaxClient'
@@ -899,7 +1103,8 @@ def dax_client_factory(c: typing.Type[__C_T]) -> typing.Callable[[typing.Type[__
 
         This factory function will create a new client class for a given system type.
 
-        :param system_type: The system type used by the client.
+        :param system_type: The system type used by the client
+        :returns: A fusion of the client and system class which can be executed
         """
 
         # Check the system type

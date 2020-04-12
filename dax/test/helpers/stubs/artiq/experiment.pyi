@@ -104,7 +104,7 @@ class HasEnvironment:
                     broadcast: bool = False, persist: bool = False, archive: bool = True) -> None:
         ...
 
-    def mutate_dataset(self, key: str, index: int, value: __DV_T) -> None:
+    def mutate_dataset(self, key: str, index: typing.Any, value: __DV_T) -> None:
         ...
 
     def append_to_dataset(self, key: str, value: __DV_T) -> None:
