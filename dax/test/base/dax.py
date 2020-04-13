@@ -61,6 +61,9 @@ class DaxHelpersTestCase(unittest.TestCase):
             # Test valid names
             self.assertTrue(_is_valid_name(n))
 
+    def test_invalid_name(self):
+        from dax.base.dax import _is_valid_name
+
         for n in ['', 'foo()', 'foo.bar', 'foo/', 'foo*', 'foo,', 'FOO+', 'foo-bar', 'foo/bar']:
             # Test illegal names
             self.assertFalse(_is_valid_name(n))
@@ -71,6 +74,9 @@ class DaxHelpersTestCase(unittest.TestCase):
         for k in ['foo', '_0foo', '_', '0', 'foo.bar', 'foo.bar.baz', '_.0.A', 'foo0._bar']:
             # Test valid keys
             self.assertTrue(_is_valid_key(k))
+
+    def test_invalid_key(self):
+        from dax.base.dax import _is_valid_key
 
         for k in ['', 'foo()', 'foo,bar', 'foo/', '.foo', 'bar.', 'foo.bar.baz.']:
             # Test illegal keys
@@ -92,11 +98,25 @@ class DaxHelpersTestCase(unittest.TestCase):
         self.assertEqual(_get_unique_device_key(d, 'alias_2'), 'ttl1',
                          'Multi-alias key does not return correct unique key')
 
+    def test_looped_device_key(self):
+        from dax.base.dax import _get_unique_device_key
+
+        # Test system and device DB
+        s = TestSystem(get_manager_or_parent())
+        d = s.get_device_db()
+
         # Test looped alias
         loop_aliases = ['loop_alias_1', 'loop_alias_4']
         for key in loop_aliases:
             with self.assertRaises(LookupError, msg='Looped key alias did not raise'):
                 _get_unique_device_key(d, key)
+
+    def test_unavailable_device_key(self):
+        from dax.base.dax import _get_unique_device_key
+
+        # Test system and device DB
+        s = TestSystem(get_manager_or_parent())
+        d = s.get_device_db()
 
         # Test non-existing keys
         loop_aliases = ['not_existing_key_0', 'not_existing_key_1', 'dead_alias_2']
@@ -104,6 +124,12 @@ class DaxHelpersTestCase(unittest.TestCase):
             with self.assertRaises(KeyError, msg='Non-existing key did not raise'):
                 _get_unique_device_key(d, key)
 
+    def test_virtual_device_key(self):
+        from dax.base.dax import _get_unique_device_key
+
+        # Test system and device DB
+        s = TestSystem(get_manager_or_parent())
+        d = s.get_device_db()
         # Test virtual devices
         virtual_devices = ['scheduler', 'ccb']
         for k in virtual_devices:
@@ -399,17 +425,25 @@ class DaxModuleBaseTestCase(unittest.TestCase):
         with self.assertRaises(TypeError, msg='Providing non-DaxModuleBase parent to new module did not raise'):
             TestModule(manager_or_parent, 'module_name')
 
+    def test_module_registration(self):
         # Check register
         s = TestSystem(get_manager_or_parent())
         t = TestModule(s, 'module_name')
         self.assertDictEqual(s.registry._modules, {m.get_system_key(): m for m in [s, t]},
                              'Dict with registered modules does not match expected content')
 
-    def test_names_keys(self):
+    def test_name(self):
         s = TestSystem(get_manager_or_parent())
 
         self.assertEqual(s.get_name(), TestSystem.SYS_NAME, 'Returned name did not match expected name')
+
+    def test_system_key(self):
+        s = TestSystem(get_manager_or_parent())
+
         self.assertEqual(s.get_system_key(), TestSystem.SYS_NAME, 'Returned key did not match expected key')
+
+    def test_system_key_arguments(self):
+        s = TestSystem(get_manager_or_parent())
 
         self.assertEqual(s.get_system_key('a', 'b'), '.'.join([TestSystem.SYS_NAME, 'a', 'b']),
                          'Returned key did not match expected key based on multiple components')
@@ -424,6 +458,10 @@ class DaxModuleBaseTestCase(unittest.TestCase):
         some_key = 'some_key'
         self.assertEqual(t.get_system_key(some_key), '.'.join([TestSystem.SYS_NAME, n, some_key]),
                          'System key creation derived from current module key failed')
+
+    def test_bad_system_key_arguments(self):
+        s = TestSystem(get_manager_or_parent())
+
         with self.assertRaises(ValueError, msg='Creating bad system key did not raise'):
             s.get_system_key('bad,key')
         with self.assertRaises(ValueError, msg='Creating bad system key did not raise'):

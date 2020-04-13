@@ -94,7 +94,7 @@ class _DaxBase(artiq.experiment.HasEnvironment, abc.ABC):
         try:
             # Call super, which will call build()
             super(_DaxBase, self).__init__(managers_or_parent, *args, **kwargs)
-        except (TypeError, LookupError) as e:  # TypeError includes signature mismatch errors for build()
+        except Exception as e:
             # Log the exception to provide more context
             self.logger.exception(e)
             # Raise a different exception type to prevent that the caught exception is logged again by the parent
@@ -198,6 +198,7 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
 
         :param keys: The keys to append to the system key
         :returns: The system key with provided keys appended.
+        :raises ValueError: Raised if the key has an invalid format
         """
 
         assert all(isinstance(k, str) for k in keys), 'Keys must be strings'
@@ -224,23 +225,45 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
     def _init_system(self) -> None:
         """Initialize the DAX system, for dataset access, device initialization, and recording DMA traces."""
 
-        self.logger.debug('Initializing...')
         # Initialize all children
         self.call_child_method('_init_system')
+
         # Initialize this object
-        self.init()
-        self.logger.debug('Initialization finished')
+        self.logger.debug('Initializing...')
+        try:
+            self.init()
+        except artiq.coredevice.core.CompileError:
+            # Log a fixed message, the exception message is empty
+            self.logger.exception('Compilation error occurred during initialization')
+            raise
+        except Exception as e:
+            # Log the exception to provide more context
+            self.logger.exception(e)
+            raise
+        else:
+            self.logger.debug('Initialization finished')
 
     @artiq.experiment.host_only
     def _post_init_system(self) -> None:
         """DAX system post-initialization (e.g. obtaining DMA handles)."""
 
-        self.logger.debug('Post-initializing...')
         # Post-initialize all children
         self.call_child_method('_post_init_system')
+
         # Post-initialize this object
-        self.post_init()
-        self.logger.debug('Post-initialization finished')
+        self.logger.debug('Post-initializing...')
+        try:
+            self.post_init()
+        except artiq.coredevice.core.CompileError:
+            # Log a fixed message, the exception message is empty
+            self.logger.exception('Compilation error occurred during post-initialization')
+            raise
+        except Exception as e:
+            # Log the exception to provide more context
+            self.logger.exception(e)
+            raise
+        else:
+            self.logger.debug('Post-initialization finished')
 
     @abc.abstractmethod
     def init(self) -> None:
@@ -287,8 +310,7 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
             unique: str = _get_unique_device_key(self.get_device_db(), key)
         except (LookupError, TypeError) as e:
             # Device was not found in the device DB
-            raise KeyError('Device "{:s}" requested by "{:s}" could not be found in '
-                           'the device DB'.format(key, self.get_system_key())) from e
+            raise KeyError('Device "{:s}" could not be found in the device DB'.format(key)) from e
 
         # Get the device using the initial key (let ARTIQ resolve the aliases)
         device: typing.Any = super(_DaxHasSystem, self).get_device(key)
@@ -296,8 +318,7 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
         # Check device type
         if not isinstance(device, artiq.master.worker_db.DummyDevice) and not isinstance(device, type_):
             # Device has an unexpected type
-            raise TypeError('Device "{:s}" requested by "{:s}" does not match the '
-                            'expected type'.format(key, self.get_system_key()))
+            raise TypeError('Device "{:s}" does not match the expected type'.format(key))
 
         # Register the requested device with the unique key
         self.registry.add_device(unique, device, self)
@@ -371,6 +392,7 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
         :param index: The array index to mutate, slicing and multi-dimensional indexing allowed
         :param value: The value to store
         :raises KeyError: Raised if the key was not present
+        :raises ValueError: Raised if the key has an invalid format
         """
 
         assert isinstance(key, str), 'Key must be of type str'
@@ -386,6 +408,7 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
         :param key: The key of the system dataset
         :param value: The value to store
         :raises KeyError: Raised if the key was not present
+        :raises ValueError: Raised if the key has an invalid format
         """
 
         assert isinstance(key, str), 'Key must be of type str'
@@ -405,6 +428,7 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
         :param default: The default value to return
         :returns: The value of the system dataset or the default value
         :raises KeyError: Raised if the key was not present
+        :raises ValueError: Raised if the key has an invalid format
         """
 
         assert isinstance(key, str), 'Key must be of type str'
@@ -447,6 +471,8 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
         :param key: The key of the system dataset
         :param default: The default value to set the system dataset to if not present
         :param kernel_invariant: Flag to set the attribute as kernel invariant or not
+        :raises KeyError: Raised if the key was not present
+        :raises ValueError: Raised if the key has an invalid format
         :raises AttributeError: Raised if the attribute name was already assigned
         """
 
@@ -619,14 +645,9 @@ class DaxSystem(_DaxModuleBase):
         """
 
         self.logger.debug('Starting DAX system initialization...')
-        try:
-            self._init_system()
-            self._post_init_system()
-        except artiq.coredevice.core.CompileError:
-            self.logger.exception('Compilation error occurred during DAX system initialization')
-            raise
-        else:
-            self.logger.debug('Finished DAX system initialization')
+        self._init_system()
+        self._post_init_system()
+        self.logger.debug('Finished DAX system initialization')
 
     def init(self) -> None:
         pass
@@ -745,6 +766,7 @@ class _DaxNameRegistry:
         """Register a module.
 
         :param module: The module to register
+        :raises NonUniqueRegistrationError: Raised if the module key was already registered by another module
         """
 
         assert isinstance(module, _DaxModuleBase), 'Module is not a DAX module base'
@@ -756,7 +778,7 @@ class _DaxNameRegistry:
         reg_module: typing.Optional[_DaxModuleBase] = self._modules.get(key)
 
         if reg_module is not None:
-            # Key already in use by an other module
+            # Key already in use by another module
             msg = 'Module key "{:s}" was already registered by module {:s}'.format(key, reg_module.get_identifier())
             raise self.NonUniqueRegistrationError(msg)
 
@@ -854,7 +876,7 @@ class _DaxNameRegistry:
         :param device: The device object
         :param parent: The parent that requested the device
         :returns: The requested device driver
-        :raises NonUniqueRegistrationError: Raised if the device was already registered by an other parent
+        :raises NonUniqueRegistrationError: Raised if the device was already registered by another parent
         """
 
         assert isinstance(key, str), 'Device key must be a string'
@@ -904,6 +926,7 @@ class _DaxNameRegistry:
 
         :param service_name: The unique name of the service
         :returns: The system key for this service
+        :raises ValueError: Raised if the provided service name is not valid
         """
 
         # Check the given name
@@ -922,6 +945,7 @@ class _DaxNameRegistry:
         Services can also be found using the registry.
 
         :param service: The service to register
+        :raises NonUniqueRegistrationError: Raised if the service name was already registered
         """
 
         assert isinstance(service, DaxService), 'Service must be a DAX service'
@@ -1149,6 +1173,7 @@ def dax_client_factory(c: typing.Type[__C_T]) -> typing.Callable[[typing.Type[__
 
         :param system_type: The system type used by the client
         :returns: A fusion of the client and system class which can be executed
+        :raises TypeError: Raised if the provided `system_type` parameter is not a subclass of `DaxSystem`
         """
 
         # Check the system type
