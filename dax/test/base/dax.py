@@ -8,6 +8,8 @@ from dax.test.helpers.artiq import get_manager_or_parent
 from dax.test.helpers.mypy import type_check
 
 from artiq.coredevice.edge_counter import EdgeCounter
+from artiq.coredevice.ttl import TTLInOut, TTLOut
+from artiq.coredevice.core import Core
 
 
 class TestSystem(DaxSystem):
@@ -74,6 +76,39 @@ class DaxHelpersTestCase(unittest.TestCase):
             # Test illegal keys
             self.assertFalse(_is_valid_key(k))
 
+    def test_unique_device_key(self):
+        from dax.base.dax import _get_unique_device_key
+
+        # Test system and device DB
+        s = TestSystem(get_manager_or_parent())
+        d = s.get_device_db()
+
+        # Test against various keys
+        self.assertEqual(_get_unique_device_key(d, 'ttl0'), 'ttl0', 'Unique device key not returned correctly')
+        self.assertEqual(_get_unique_device_key(d, 'alias_0'), 'ttl1',
+                         'Alias key key does not return correct unique key')
+        self.assertEqual(_get_unique_device_key(d, 'alias_1'), 'ttl1',
+                         'Multi-alias key does not return correct unique key')
+        self.assertEqual(_get_unique_device_key(d, 'alias_2'), 'ttl1',
+                         'Multi-alias key does not return correct unique key')
+
+        # Test looped alias
+        loop_aliases = ['loop_alias_1', 'loop_alias_4']
+        for key in loop_aliases:
+            with self.assertRaises(LookupError, msg='Looped key alias did not raise'):
+                _get_unique_device_key(d, key)
+
+        # Test non-existing keys
+        loop_aliases = ['not_existing_key_0', 'not_existing_key_1', 'dead_alias_2']
+        for key in loop_aliases:
+            with self.assertRaises(KeyError, msg='Non-existing key did not raise'):
+                _get_unique_device_key(d, key)
+
+        # Test virtual devices
+        virtual_devices = ['scheduler', 'ccb']
+        for k in virtual_devices:
+            self.assertEqual(_get_unique_device_key(d, k), k, 'Virtual device key not returned correctly')
+
 
 class DaxNameRegistryTestCase(unittest.TestCase):
 
@@ -126,30 +161,15 @@ class DaxNameRegistryTestCase(unittest.TestCase):
 
         # Test system
         s = TestSystem(get_manager_or_parent())
-        t0 = TestModule(s, 'test_module')
         # List of core devices
         core_devices = ['core', 'core_cache', 'core_dma']
         # Registry
         r = s.registry
 
         # Test core devices, which should be existing
-        self.assertEqual(r.get_device_key_list(), core_devices, 'Core devices were not found in device list')
-
-        # Test adding other keys
-        self.assertIsNone(r.add_device(t0, 'ttl0'), 'Device registration failed')
-        self.assertIsNone(r.add_device(t0, 'alias_2'), 'Device registration with alias failed')
-        self.assertIn('ttl1', r.get_device_key_list(),
-                      'Device registration did not found correct unique key for device alias')
-        self.assertListEqual(r.get_device_key_list(), core_devices + ['ttl0', 'ttl1'], 'Device key list incorrect')
-        with self.assertRaises(_DaxNameRegistry.NonUniqueRegistrationError,
-                               msg='Double device registration did not raise when registered by unique name and alias'):
-            r.add_device(t0, 'alias_1')
-
-        # Test looped alias
-        with self.assertRaises(KeyError, msg='Looped key alias did not raise'):
-            r.add_device(t0, 'loop_alias_1')
-        with self.assertRaises(KeyError, msg='Looped key alias did not raise'):
-            r.add_device(t0, 'loop_alias_4')
+        self.assertListEqual(r.get_device_key_list(), core_devices, 'Core devices were not found in device list')
+        self.assertSetEqual(r.search_devices(Core), {'core'},
+                            'Search devices did not returned the expected set of results')
 
     def test_service(self):
         from dax.base.dax import _DaxNameRegistry
@@ -413,7 +433,7 @@ class DaxModuleBaseTestCase(unittest.TestCase):
             # noinspection PyTypeChecker
             s.get_system_key(1)
 
-    def test_devices(self):
+    def test_setattr_device(self):
         s = TestSystem(get_manager_or_parent())
 
         self.assertIsNone(s.setattr_device('ttl0'), 'setattr_device() did not return None')
@@ -421,9 +441,50 @@ class DaxModuleBaseTestCase(unittest.TestCase):
         self.assertIsNone(s.setattr_device('alias_2', 'foo'), 'setattr_device() with attribute name failed')
         self.assertTrue(hasattr(s, 'foo'), 'setattr_device() with attribute name did not set attribute correctly')
 
+    def test_get_device(self):
+        from dax.base.dax import _DaxNameRegistry
+
+        # Test system
         s = TestSystem(get_manager_or_parent())
+        # List of core devices
+        core_devices = ['core', 'core_cache', 'core_dma']
+        # Registry
+        r = s.registry
+
+        # Test getting devices
+        self.assertIsNotNone(s.get_device('ttl0'), 'Device request with unique key failed')
+        self.assertIsNotNone(s.get_device('alias_2'), 'Device request with alias failed')
+        self.assertIn('ttl1', r.get_device_key_list(),
+                      'Device registration did not found correct unique key for device alias')
+        self.assertListEqual(r.get_device_key_list(), core_devices + ['ttl0', 'ttl1'], 'Device key list incorrect')
+        with self.assertRaises(_DaxNameRegistry.NonUniqueRegistrationError,
+                               msg='Double device registration did not raise when registered by unique name and alias'):
+            s.get_device('alias_1')
+
+    def test_get_device_type_check(self):
+        s = TestSystem(get_manager_or_parent())
+
         with self.assertRaises(TypeError, msg='get_device() type check did not raise'):
             s.get_device('ttl1', EdgeCounter)  # EdgeCounter does not match the device type of ttl1
+
+        # Correct type, should not raise
+        self.assertIsNotNone(s.get_device('ttl1', TTLOut), 'get_device() type check raised unexpectedly')
+
+    def test_search_devices(self):
+        s = TestSystem(get_manager_or_parent())
+        r = s.registry
+
+        # Add devices
+        self.assertIsNotNone(s.get_device('ttl0'), 'Device request with unique key failed')
+        self.assertIsNotNone(s.get_device('alias_2'), 'Device request with alias failed')
+
+        # Test if registry returns correct result
+        self.assertSetEqual(r.search_devices(TTLInOut), {'ttl0'},
+                            'Search devices did not returned expected result')
+        self.assertSetEqual(r.search_devices(EdgeCounter), set(),
+                            'Search devices did not returned expected result')
+        self.assertSetEqual(r.search_devices((TTLInOut, TTLOut)), {'ttl0', 'ttl1'},
+                            'Search devices did not returned expected result')
 
     def test_dataset(self):
         s = TestSystem(get_manager_or_parent())

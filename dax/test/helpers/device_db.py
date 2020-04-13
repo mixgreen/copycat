@@ -25,7 +25,7 @@ device_db = {
     'ttl0': {
         'type': 'local',
         'module': 'artiq.coredevice.ttl',
-        'class': 'TTLOut',
+        'class': 'TTLInOut',
         'arguments': {'channel': 0},
         'comment': 'This is a fairly long comment, shown as tooltip.'
     },
@@ -48,4 +48,9 @@ device_db = {
     'loop_alias_2': 'loop_alias_4',
     'loop_alias_3': 'loop_alias_2',
     'loop_alias_4': 'loop_alias_3',
+
+    # Dead aliases
+    'dead_alias_0': 'this_key_does_not_exist_123',
+    'dead_alias_1': 'dead_alias_0',
+    'dead_alias_2': 'dead_alias_1',
 }

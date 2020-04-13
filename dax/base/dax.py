@@ -36,6 +36,51 @@ def _is_valid_key(key: str) -> bool:
     return all(_NAME_RE.fullmatch(n) for n in key.split(_KEY_SEPARATOR))
 
 
+# ARTIQ virtual devices
+_ARTIQ_VIRTUAL_DEVICES: typing.Set[str] = {'scheduler', 'ccb'}
+
+
+def _get_unique_device_key(d: typing.Dict[str, typing.Any], key: str) -> str:
+    """Get the unique device key."""
+
+    assert isinstance(key, str), 'Key must be a string'
+
+    if key in _ARTIQ_VIRTUAL_DEVICES:
+        # Virtual devices always have unique names
+        return key
+    else:
+        # Resolve the unique device key
+        return _resolve_unique_device_key(d, key, set())
+
+
+def _resolve_unique_device_key(d: typing.Dict[str, typing.Any], key: str, trace: typing.Set[str]) -> str:
+    """Recursively resolve aliases until we find the unique device name."""
+
+    assert isinstance(d, dict), 'First argument must be a dict to search in'
+    assert isinstance(key, str), 'Key must be a string'
+    assert isinstance(trace, set), 'Trace must be a set'
+
+    # Check if we are not stuck in a loop
+    if key in trace:
+        # We are in an alias loop
+        raise LookupError('Key "{:s}" caused an alias loop'.format(key))
+    # Add key to the trace
+    trace.add(key)
+
+    # Get value (could raise KeyError)
+    v: typing.Any = d[key]
+
+    if isinstance(v, str):
+        # Recurse if we are still dealing with an alias
+        return _resolve_unique_device_key(d, v, trace)
+    elif isinstance(v, dict):
+        # We reached a dict, key must be the unique key
+        return key
+    else:
+        # We ended up with an unexpected type
+        raise TypeError('Key "{:s}" returned an unexpected type'.format(key))
+
+
 class _DaxBase(artiq.experiment.HasEnvironment, abc.ABC):
     """Base class for all DAX core classes."""
 
@@ -237,10 +282,15 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
         # Debug message
         self.logger.debug('Requesting device "{:s}"'.format(key))
 
-        # Register the requested device
-        self.registry.add_device(self, key)
+        try:
+            # Get the unique key, which will also check the keys and aliases
+            unique: str = _get_unique_device_key(self.get_device_db(), key)
+        except (LookupError, TypeError) as e:
+            # Device was not found in the device DB
+            raise KeyError('Device "{:s}" requested by "{:s}" could not be found in '
+                           'the device DB'.format(key, self.get_system_key())) from e
 
-        # Get the device
+        # Get the device using the initial key (let ARTIQ resolve the aliases)
         device: typing.Any = super(_DaxHasSystem, self).get_device(key)
 
         # Check device type
@@ -248,6 +298,9 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
             # Device has an unexpected type
             raise TypeError('Device "{:s}" requested by "{:s}" does not match the '
                             'expected type'.format(key, self.get_system_key()))
+
+        # Register the requested device with the unique key
+        self.registry.add_device(unique, device, self)
 
         # Return the device
         return device
@@ -267,7 +320,8 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
         :param type_: The expected type of the device
         :raises KeyError: Raised when the device could not be obtained from the device DB
         :raises TypeError: Raised when the device does not match the expected type
-        :raises ValueError: Raised if problems are encountered with the attribute name
+        :raises ValueError: Raised if the attribute name is not valid
+        :raises AttributeError: Raised if the attribute name was already assigned
         """
 
         assert isinstance(attr_name, str) or attr_name is None, 'Attribute name must be of type str or None'
@@ -283,7 +337,7 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
         if not _is_valid_name(attr_name):
             raise ValueError('Attribute name "{:s}" not valid'.format(attr_name))
         if hasattr(self, attr_name):
-            raise ValueError('Attribute name "{:s}" was already assigned'.format(attr_name))
+            raise AttributeError('Attribute name "{:s}" was already assigned'.format(attr_name))
         setattr(self, attr_name, device)
 
         # Add attribute to kernel invariants
@@ -393,7 +447,7 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
         :param key: The key of the system dataset
         :param default: The default value to set the system dataset to if not present
         :param kernel_invariant: Flag to set the attribute as kernel invariant or not
-        :raises ValueError: Raised if problems are encountered with the attribute name
+        :raises AttributeError: Raised if the attribute name was already assigned
         """
 
         assert isinstance(key, str), 'Key must be of type str'
@@ -419,7 +473,7 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
 
         # Set value as an attribute
         if hasattr(self, key):
-            raise ValueError('Attribute name "{:s}" was already assigned'.format(key))
+            raise AttributeError('Attribute name "{:s}" was already assigned'.format(key))
         setattr(self, key, value)
 
         if kernel_invariant:
@@ -548,7 +602,7 @@ class DaxSystem(_DaxModuleBase):
         # Verify existence of core log controller
         try:
             # Register the core log controller with the system
-            self.registry.add_device(self, self.CORE_LOG_KEY)
+            self.get_device(self.CORE_LOG_KEY)
         except LookupError:
             # Core log controller was not found in the device DB
             self.logger.warning('Core log controller "{:s}" not found in device DB'.format(self.CORE_LOG_KEY))
@@ -647,11 +701,23 @@ class _DaxNameRegistry:
         """Exception when a name is registered more then once."""
         pass
 
+    class _DeviceValue:
+        """Class to hold all values for a device"""
+
+        def __init__(self, device: typing.Any, parent: _DaxHasSystem):
+            self._device: typing.Any = device
+            self._parent: _DaxHasSystem = parent
+
+        @property
+        def device(self) -> typing.Any:
+            return self._device
+
+        @property
+        def parent(self) -> _DaxHasSystem:
+            return self._parent
+
     # Module base type variable
     __M_T = typing.TypeVar('__M_T', bound=_DaxModuleBase)
-
-    # List of ARTIQ virtual devices (not available in the device DB)
-    _VIRTUAL_DEVICES: typing.Set[str] = {'scheduler', 'ccb'}
 
     def __init__(self, system: DaxSystem):
         """Create a new DAX name registry.
@@ -670,8 +736,8 @@ class _DaxNameRegistry:
 
         # A dict containing registered modules
         self._modules: typing.Dict[str, _DaxModuleBase] = dict()
-        # A dict containing registered devices and the parents that registered them
-        self._devices: typing.Dict[str, _DaxHasSystem] = dict()
+        # A dict containing registered devices
+        self._devices: typing.Dict[str, _DaxNameRegistry._DeviceValue] = dict()
         # A dict containing registered services
         self._services: typing.Dict[str, DaxService] = dict()
 
@@ -689,7 +755,7 @@ class _DaxNameRegistry:
         # Get the module that registered the module key (None if the key is available)
         reg_module: typing.Optional[_DaxModuleBase] = self._modules.get(key)
 
-        if reg_module:
+        if reg_module is not None:
             # Key already in use by an other module
             msg = 'Module key "{:s}" was already registered by module {:s}'.format(key, reg_module.get_identifier())
             raise self.NonUniqueRegistrationError(msg)
@@ -779,70 +845,48 @@ class _DaxNameRegistry:
         module_key_list: typing.List[str] = natsort.natsorted(self._modules.keys())  # Natural sort the list
         return module_key_list
 
-    def add_device(self, parent: _DaxHasSystem, key: str) -> None:
+    def add_device(self, key: str, device: typing.Any, parent: _DaxHasSystem) -> None:
         """Register a device.
 
         Devices are added to the registry to ensure every device is only owned by a single parent.
 
+        :param key: The unique key of the device
+        :param device: The device object
         :param parent: The parent that requested the device
-        :param key: The key of the device
-        :raises KeyError: Raised if the device could not be obtained from the device DB
+        :returns: The requested device driver
         :raises NonUniqueRegistrationError: Raised if the device was already registered by an other parent
         """
 
-        assert isinstance(parent, _DaxHasSystem), 'Parent is not a DaxHasSystem type'
         assert isinstance(key, str), 'Device key must be a string'
+        assert isinstance(parent, _DaxHasSystem), 'Parent is not a DaxHasSystem type'
 
-        if key in self._VIRTUAL_DEVICES:
+        if key in _ARTIQ_VIRTUAL_DEVICES:
             return  # Virtual devices always have unique names are excluded from the registry
 
-        try:
-            # Get the unique key
-            unique: str = self._get_unique_device_key(parent.get_device_db(), key, set())
-        except (LookupError, TypeError) as e:
-            # Device was not found in the device DB
-            raise KeyError('Device "{:s}" could not be found in the device DB'.format(key)) from e
+        # Get the device value object (None if the device was not registered before)
+        device_value: typing.Optional[_DaxNameRegistry._DeviceValue] = self._devices.get(key)
 
-        # Get the parent that registered the device (None if the device was not registered before)
-        reg_parent: typing.Optional[_DaxHasSystem] = self._devices.get(unique)
-
-        if reg_parent:
+        if device_value is not None:
             # Device was already registered
-            device_name = '"{:s}"'.format(key) if key == unique else '"{:s}" ({:s})'.format(key, unique)
-            parent_name = reg_parent.get_system_key()
-            msg = 'Device {:s} was already registered by parent "{:s}"'.format(device_name, parent_name)
+            parent_name: str = device_value.parent.get_system_key()
+            msg = 'Device "{:s}" was already registered by parent "{:s}"'.format(key, parent_name)
             raise self.NonUniqueRegistrationError(msg)
 
         # Add unique device key to the dict of registered devices
-        self._devices[unique] = parent
+        self._devices[key] = self._DeviceValue(device, parent)
 
-    def _get_unique_device_key(self, d: typing.Dict[str, typing.Any], key: str,
-                               trace: typing.Set[str]) -> str:
-        """Recursively resolve aliases until we find the unique device name."""
+    def search_devices(self, type_: typing.Union[type, typing.Tuple[type, ...]]) -> typing.Set[str]:
+        """Search for registered devices that match the requested type and return their keys.
 
-        assert isinstance(d, dict), 'First argument must be a dict to search in'
-        assert isinstance(key, str), 'Key must be a string'
-        assert isinstance(trace, set), 'Trace must be a set'
+        :param type_: The type of the devices
+        :returns: A set with unique device keys
+        """
 
-        # Check if we are not stuck in a loop
-        if key in trace:
-            # We are in an alias loop
-            raise LookupError('Key "{:s}" caused an alias loop'.format(key))
-        # Add key to the trace
-        trace.add(key)
+        # Search for all registered devices matching the type
+        results: typing.Set[str] = {k for k, dv in self._devices.items() if isinstance(dv.device, type_)}
 
-        # Get value (could raise KeyError)
-        v: typing.Any = d[key]
-
-        if isinstance(v, str):
-            # Recurse if we are still dealing with an alias
-            return self._get_unique_device_key(d, v, trace)
-        elif isinstance(v, dict):
-            # We reached a dict, key must be the unique key
-            return key
-        else:
-            # We ended up with an unexpected type
-            raise TypeError('Key "{:s}" returned an unexpected type'.format(key))
+        # Return the list with results
+        return results
 
     def get_device_key_list(self) -> typing.List[str]:
         """Return a list of registered device keys.
@@ -888,7 +932,7 @@ class _DaxNameRegistry:
         # Get the service that registered with the service name (None if key is available)
         reg_service: typing.Optional[DaxService] = self._services.get(key)
 
-        if reg_service:
+        if reg_service is not None:
             # Service name was already registered
             raise self.NonUniqueRegistrationError('Service with name "{:s}" was already registered'.format(key))
 

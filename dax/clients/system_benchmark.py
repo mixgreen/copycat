@@ -16,10 +16,11 @@ class SystemBenchmarkDaxInit(DaxClient, EnvExperiment):
         number_kwargs = {'scale': 1, 'step': 1, 'ndecimals': 0}
         self.setattr_argument('num_samples', NumberValue(5, min=1, **number_kwargs))
 
-    def run(self):
+    def prepare(self):
         # Get the system (which is actually self after using the client factory)
         self.system = self.registry.find_module(DaxSystem)  # Not possible in build()
 
+    def run(self):
         # Store input values in dataset
         self.set_dataset('num_samples', self.num_samples)
         # Prepare result dataset
@@ -33,10 +34,13 @@ class SystemBenchmarkDaxInit(DaxClient, EnvExperiment):
         artiq.master.worker_db.logger.setLevel(logging.WARNING + 1)
 
         for _ in range(self.num_samples):
+            # Create a new experiment class which is an instance of the type of self
+            exp = type(self)(self)
+
             # Record start time
             start = time.perf_counter()
             # Run DAX system initialization
-            self.system.dax_init()
+            exp.dax_init()
             # Record time
             stop = time.perf_counter()
 
