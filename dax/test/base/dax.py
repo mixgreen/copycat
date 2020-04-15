@@ -164,7 +164,7 @@ class DaxNameRegistryTestCase(unittest.TestCase):
             r.find_module(TestModuleChild)
         self.assertListEqual(r.get_module_key_list(), [m.get_system_key() for m in [s, t0]],
                              'Module key list incorrect')
-        with self.assertRaises(_DaxNameRegistry.NonUniqueRegistrationError, msg='Adding module twice did not raise'):
+        with self.assertRaises(_DaxNameRegistry._NonUniqueRegistrationError, msg='Adding module twice did not raise'):
             r.add_module(t0)
         with self.assertRaises(LookupError, msg='Adding module twice did not raise a LookupError'):
             r.add_module(t0)
@@ -207,7 +207,7 @@ class DaxNameRegistryTestCase(unittest.TestCase):
         r = s.registry
 
         # Test adding the service again
-        with self.assertRaises(_DaxNameRegistry.NonUniqueRegistrationError,
+        with self.assertRaises(_DaxNameRegistry._NonUniqueRegistrationError,
                                msg='Double service registration did not raise'):
             r.add_service(s0)
 
@@ -495,7 +495,7 @@ class DaxModuleBaseTestCase(unittest.TestCase):
         self.assertIn('ttl1', r.get_device_key_list(),
                       'Device registration did not found correct unique key for device alias')
         self.assertListEqual(r.get_device_key_list(), core_devices + ['ttl0', 'ttl1'], 'Device key list incorrect')
-        with self.assertRaises(_DaxNameRegistry.NonUniqueRegistrationError,
+        with self.assertRaises(_DaxNameRegistry._NonUniqueRegistrationError,
                                msg='Double device registration did not raise when registered by unique name and alias'):
             s.get_device('alias_1')
 
@@ -638,7 +638,7 @@ class DaxServiceTestCase(unittest.TestCase):
         class DuplicateNameService(NoNameService):
             SERVICE_NAME = 'service_name'
 
-        with self.assertRaises(_DaxNameRegistry.NonUniqueRegistrationError,
+        with self.assertRaises(_DaxNameRegistry._NonUniqueRegistrationError,
                                msg='Duplicate service name registration did not raise'):
             DuplicateNameService(s)
 

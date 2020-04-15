@@ -84,23 +84,37 @@ def _resolve_unique_device_key(d: typing.Dict[str, typing.Any], key: str, trace:
 class _DaxBase(artiq.experiment.HasEnvironment, abc.ABC):
     """Base class for all DAX core classes."""
 
+    class __BuildError(RuntimeError):
+        """Raised when the original build error has already been logged."""
+        pass
+
     def __init__(self, managers_or_parent: typing.Any,
                  *args: typing.Any, **kwargs: typing.Any):
         # Logger object
-        self.logger: logging.Logger = logging.getLogger(self.get_identifier())
+        self.__logger: logging.Logger = logging.getLogger(self.get_identifier())
 
         # Build
         self.logger.debug('Starting build...')
         try:
             # Call super, which will call build()
             super(_DaxBase, self).__init__(managers_or_parent, *args, **kwargs)
+        except self.__BuildError:
+            raise  # Exception was already logged
         except Exception as e:
             # Log the exception to provide more context
             self.logger.exception(e)
             # Raise a different exception type to prevent that the caught exception is logged again by the parent
-            raise RuntimeError(e) from e
+            raise self.__BuildError(e) from None  # Do not duplicate full traceback again
         else:
             self.logger.debug('Build finished')
+
+    @property
+    def logger(self) -> logging.Logger:
+        """Get the logger of this object.
+
+        :returns: The logger object
+        """
+        return self.__logger
 
     @artiq.experiment.host_only
     def update_kernel_invariants(self, *keys: str) -> None:
@@ -118,11 +132,6 @@ class _DaxBase(artiq.experiment.HasEnvironment, abc.ABC):
         kernel_invariants: typing.Set[str] = getattr(self, "kernel_invariants", set())
         # Update the set with the given keys
         self.kernel_invariants: typing.Set[str] = kernel_invariants | {*keys}
-
-    @artiq.experiment.host_only
-    def get_logger(self) -> logging.Logger:
-        """Return the logger of this object."""
-        return self.logger
 
     @abc.abstractmethod
     def get_identifier(self) -> str:
@@ -142,6 +151,7 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
 
     def __init__(self, managers_or_parent: typing.Any, name: str, system_key: str, registry: _DaxNameRegistry,
                  *args: typing.Any, **kwargs: typing.Any):
+
         assert isinstance(name, str), 'Name must be a string'
         assert isinstance(system_key, str), 'System key must be a string'
         assert isinstance(registry, _DaxNameRegistry), 'Registry must be a DAX name registry'
@@ -153,9 +163,9 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
             raise ValueError('Invalid system key "{:s}" for class "{:s}"'.format(system_key, self.__class__.__name__))
 
         # Store constructor arguments as attributes
-        self._name: str = name
-        self._system_key: str = system_key
-        self.registry: _DaxNameRegistry = registry
+        self.__name: str = name
+        self.__system_key: str = system_key
+        self.__registry: _DaxNameRegistry = registry
 
         # Call super, which will result in a call to build()
         super(_DaxHasSystem, self).__init__(managers_or_parent, *args, **kwargs)
@@ -169,6 +179,14 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
         # Make core devices kernel invariants
         self.update_kernel_invariants(*self.__CORE_DEVICES)
 
+    @property
+    def registry(self) -> _DaxNameRegistry:
+        """Get the DAX registry.
+
+        :returns: The logger object
+        """
+        return self.__registry
+
     def _take_parent_core_attributes(self, parent: _DaxHasSystem) -> None:
         """Take core attributes from parent.
 
@@ -176,18 +194,18 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
         """
         try:
             # Take core attributes from parent, attributes are taken one by one to allow typing
-            self.core: artiq.coredevice.core = parent.core
-            self.core_dma: artiq.coredevice.dma = parent.core_dma
-            self.core_cache: artiq.coredevice.cache = parent.core_cache
+            self.core: artiq.coredevice.core.Core = parent.core
+            self.core_dma: artiq.coredevice.dma.CoreDMA = parent.core_dma
+            self.core_cache: artiq.coredevice.cache.CoreCache = parent.core_cache
             self.data_store: _DaxDataStoreConnector = parent.data_store
         except AttributeError:
-            parent.get_logger().exception('Missing core attributes (super.build() was probably not called)')
+            parent.logger.exception('Missing core attributes (super.build() was probably not called)')
             raise
 
     @artiq.experiment.host_only
     def get_name(self) -> str:
         """Get the name of this component."""
-        return self._name
+        return self.__name
 
     @artiq.experiment.host_only
     def get_system_key(self, *keys: str) -> str:
@@ -209,17 +227,7 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
                 raise ValueError('Invalid key "{:s}"'.format(k))
 
         # Return the assigned key
-        return _KEY_SEPARATOR.join([self._system_key, *keys])
-
-    @artiq.experiment.host_only
-    def get_registry(self) -> _DaxNameRegistry:
-        """Return the current registry."""
-        return self.registry
-
-    @artiq.experiment.host_only
-    def get_data_store(self) -> _DaxDataStoreConnector:
-        """Return the data store."""
-        return self.data_store
+        return _KEY_SEPARATOR.join([self.__system_key, *keys])
 
     @artiq.experiment.host_only
     def _init_system(self) -> None:
@@ -559,7 +567,7 @@ class DaxModule(_DaxModuleBase, abc.ABC):
 
         # Call super, use parent to assemble arguments
         super(DaxModule, self).__init__(managers_or_parent, module_name, managers_or_parent.get_system_key(module_name),
-                                        managers_or_parent.get_registry(), *args, **kwargs)
+                                        managers_or_parent.registry, *args, **kwargs)
 
 
 class DaxModuleInterface(abc.ABC):
@@ -621,9 +629,11 @@ class DaxSystem(_DaxModuleBase):
             self.logger.warning('Unused args "{}" / kwargs "{}" were passed to super.build()'.format(args, kwargs))
 
         # Core devices
-        self.core: artiq.coredevice.core = self.get_device(self.CORE_KEY, artiq.coredevice.core.Core)
-        self.core_dma: artiq.coredevice.dma = self.get_device(self.CORE_DMA_KEY, artiq.coredevice.dma.CoreDMA)
-        self.core_cache: artiq.coredevice.cache = self.get_device(self.CORE_CACHE_KEY, artiq.coredevice.cache.CoreCache)
+
+        self.core: artiq.coredevice.core.Core = self.get_device(self.CORE_KEY, artiq.coredevice.core.Core)
+        self.core_dma: artiq.coredevice.dma.CoreDMA = self.get_device(self.CORE_DMA_KEY, artiq.coredevice.dma.CoreDMA)
+        self.core_cache: artiq.coredevice.cache.CoreCache = self.get_device(self.CORE_CACHE_KEY,
+                                                                            artiq.coredevice.cache.CoreCache)
 
         # Verify existence of core log controller
         try:
@@ -683,7 +693,7 @@ class DaxService(_DaxHasSystem, abc.ABC):
         self._take_parent_core_attributes(managers_or_parent)
 
         # Use name registry of parent to obtain a system key
-        registry: _DaxNameRegistry = managers_or_parent.get_registry()
+        registry: _DaxNameRegistry = managers_or_parent.registry
         system_key: str = registry.make_service_key(self.SERVICE_NAME)
 
         # Call super
@@ -718,7 +728,7 @@ class DaxClient(_DaxHasSystem, abc.ABC):
 class _DaxNameRegistry:
     """A class for unique name registration."""
 
-    class NonUniqueRegistrationError(LookupError):
+    class _NonUniqueRegistrationError(LookupError):
         """Exception when a name is registered more then once."""
         pass
 
@@ -780,7 +790,7 @@ class _DaxNameRegistry:
         if reg_module is not None:
             # Key already in use by another module
             msg = 'Module key "{:s}" was already registered by module {:s}'.format(key, reg_module.get_identifier())
-            raise self.NonUniqueRegistrationError(msg)
+            raise self._NonUniqueRegistrationError(msg)
 
         # Add module key to the dict of registered modules
         self._modules[key] = module
@@ -892,7 +902,7 @@ class _DaxNameRegistry:
             # Device was already registered
             parent_name: str = device_value.parent.get_system_key()
             msg = 'Device "{:s}" was already registered by parent "{:s}"'.format(key, parent_name)
-            raise self.NonUniqueRegistrationError(msg)
+            raise self._NonUniqueRegistrationError(msg)
 
         # Add unique device key to the dict of registered devices
         self._devices[key] = self._DeviceValue(device, parent)
@@ -958,7 +968,7 @@ class _DaxNameRegistry:
 
         if reg_service is not None:
             # Service name was already registered
-            raise self.NonUniqueRegistrationError('Service with name "{:s}" was already registered'.format(key))
+            raise self._NonUniqueRegistrationError('Service with name "{:s}" was already registered'.format(key))
 
         # Add service to the registry
         self._services[key] = service
