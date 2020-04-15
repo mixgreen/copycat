@@ -1,12 +1,9 @@
-from artiq.language.core import *
-from artiq.language.types import *
-from artiq.language.units import *
 from artiq.coredevice.exceptions import DMAError
 
-import dax.sim.time as time
+from dax.sim.coredevice import *
 
 
-class DMARecordContext:
+class _DMARecordContext:
 
     def __init__(self, core, name, epoch):
         # Store fixed variables
@@ -28,27 +25,28 @@ class DMARecordContext:
         self.duration = now_mu() - self.duration
 
 
-class CoreDMA:
-    kernel_invariants = {'core'}
+class CoreDMA(DaxSimDevice):
 
-    def __init__(self, dmgr, name='core_dma', core_device='core'):
-        self.name = name
-        self.core = dmgr.get(core_device)
-        self.epoch = 0
+    def __init__(self, dmgr, **kwargs):
+        # Call super
+        super(CoreDMA, self).__init__(dmgr, **kwargs)
 
+        # Initialize epoch to zero
+        self._epoch = 0
         # Dict for DMA traces
         self._dma_traces = dict()
 
-        # Register variables
-        self._dma = time.manager.register(self.name, 'play', 'string')
+        # Register signal
+        self._signal_manager = get_signal_manager()
+        self._dma = self._signal_manager.register(self.key, 'play', str)
 
     @kernel
     def record(self, name):
         """Returns a context manager that will record a DMA trace called ``name``.
         Any previously recorded trace with the same name is overwritten.
         The trace will persist across kernel switches."""
-        self.epoch += 1
-        recorder = DMARecordContext(self.core, name, self.epoch)
+        self._epoch += 1
+        recorder = _DMARecordContext(self.core, name, self._epoch)
 
         # Store DMA trace
         self._dma_traces[name] = recorder
@@ -61,7 +59,7 @@ class CoreDMA:
     @kernel
     def erase(self, name):
         """Removes the DMA trace with the given name from storage."""
-        self.epoch += 1
+        self._epoch += 1
         self._dma_traces.pop(name)
 
     @kernel
@@ -77,7 +75,7 @@ class CoreDMA:
         # Get recorder
         recorder = self._dma_traces[name]
         # Place an event for the DMA playback
-        time.manager.event(self._dma, recorder.name)
+        self._signal_manager.event(self._dma, recorder.name)
         # Forward time by the duration of the DMA trace
         delay_mu(recorder.duration)
 
@@ -98,7 +96,7 @@ class CoreDMA:
         # Get recorder
         recorder = self._dma_traces[handle]
         # Check if it was the last recording, since playback_handle() is only possible with the latest trace
-        if self.epoch != recorder.epoch:
+        if self._epoch != recorder.epoch:
             raise DMAError('Invalid handle')
 
         # Playback the trace (handle == name)

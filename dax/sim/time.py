@@ -1,103 +1,116 @@
-from operator import itemgetter
+import abc
+import typing
+import numpy as np
 
-import vcd
-import vcd.writer
-
-import artiq.language.core
 from artiq.language.units import *
 
-import dax.util.units
+# The type of machine units (MU)
+_MU_T: type = np.int64
 
 
-class SequentialTimeContext:
-    def __init__(self, current_time):
-        self.current_time = current_time
-        self.block_duration = 0.0
+class _TimeContext(abc.ABC):
+    """Abstract time context class."""
 
-    def take_time(self, amount):
-        self.current_time += amount
-        self.block_duration += amount
+    def __init__(self, current_time: _MU_T):
+        self._current_time: _MU_T = current_time
+        self._block_duration: _MU_T = _MU_T(0)
+
+    @property
+    def current_time(self) -> _MU_T:
+        return self._current_time
+
+    @property
+    def block_duration(self) -> _MU_T:
+        return self._block_duration
+
+    @abc.abstractmethod
+    def take_time(self, amount: _MU_T) -> None:
+        pass
 
 
-class ParallelTimeContext(SequentialTimeContext):
-    def take_time(self, amount):
-        if amount > self.block_duration:
-            self.block_duration = amount
+class _SequentialTimeContext(_TimeContext):
+    """Sequential time context class."""
+
+    def take_time(self, amount: _MU_T) -> None:
+        self._current_time += amount
+        self._block_duration += amount
 
 
-class Manager:
-    def __init__(self, file_name='out.vcd'):
-        # TODO, name should preferably be configurable but with a default
-        # TODO, timescale configurable as vcd lib requires, else raise exception ([1,10,100] [s,ms,us,ns,ps,fs])
+class _ParallelTimeContext(_TimeContext):
+    """Parallel time context class."""
 
-        # Initialize stack
-        self.stack = [SequentialTimeContext(0.0)]
+    def take_time(self, amount: _MU_T) -> None:
+        if amount > self._block_duration:
+            self._block_duration = amount
 
-        # Initialize timeline and timescale
-        self._timeline = list()
-        self._timescale = ns
 
-        # Open file and instantiate VCD writer
-        self._vcd_file = open(file_name, mode='w')
-        self._vcd_writer = vcd.VCDWriter(self._vcd_file,
-                                         timescale=dax.util.units.time_to_str(self._timescale, precision=0))
+class DaxTimeManager:
+    def __init__(self, timescale: float):
+        assert isinstance(timescale, float), 'Timescale must be of type float'
 
-    def enter_sequential(self):
-        new_context = SequentialTimeContext(self.get_time_mu())
-        self.stack.append(new_context)
+        if timescale <= 0.0:
+            # The timescale must be larger than zero
+            raise ValueError('The timescale must be larger than zero')
 
-    def enter_parallel(self):
-        new_context = ParallelTimeContext(self.get_time_mu())
-        self.stack.append(new_context)
+        # Store timescale, this should also be the leading timescale for the core device
+        self._timescale: float = timescale
 
-    def exit(self):
-        old_context = self.stack.pop()
+        # Initialize time context stack
+        self._stack: typing.List[_TimeContext] = [_SequentialTimeContext(_MU_T(0))]
+
+    """Functions that interface with the ARTIQ language core"""
+
+    def enter_sequential(self) -> None:
+        """Add a new sequential time context to the stack."""
+        new_context = _SequentialTimeContext(self.get_time_mu())
+        self._stack.append(new_context)
+
+    def enter_parallel(self) -> None:
+        """Add a new parallel time context to the stack."""
+        new_context = _ParallelTimeContext(self.get_time_mu())
+        self._stack.append(new_context)
+
+    def exit(self) -> None:
+        """Exit the last time context."""
+        old_context = self._stack.pop()
         self.take_time(old_context.block_duration)
 
-    def take_time_mu(self, duration):
-        self.stack[-1].take_time(duration)
+    def take_time_mu(self, duration: _MU_T) -> None:
+        """Take time from the current context.
 
-    def get_time_mu(self):
-        return self.stack[-1].current_time
+        :param duration: The duration in machine units
+        """
+        self._stack[-1].take_time(duration)
 
-    def set_time_mu(self, t):
-        dt = t - self.get_time_mu()
-        if dt < 0.0:
+    def take_time(self, duration: float) -> None:
+        """Take time from the current context.
+
+        The duration will be converted to machine units based on the timescale
+        before it is used. This might result in some rounding error.
+
+        :param duration: The duration in natural time (float)
+        """
+
+        # Divide duration by the timescale and convert to machine units
+        self.take_time_mu(_MU_T(duration / self._timescale))
+
+    def get_time_mu(self) -> _MU_T:
+        """Return the current time in machine units.
+
+        :returns: Current time in machine units
+        """
+        return self._stack[-1].current_time
+
+    def set_time_mu(self, t: _MU_T) -> None:
+        """Set the time to a specific point.
+
+        :param t: The specific point in time (machine units) to set the current time to
+        """
+
+        if t < self.get_time_mu():
             # Going back in time is not allowed by the VCD writer
             raise ValueError("Attempted to go back in time")
+
+        # Take time to match the given time point
+        dt = t - self.get_time_mu()
         self.take_time_mu(dt)
-
-    def take_time(self, duration):
-        self.take_time_mu(duration // self._timescale)
-
-    @artiq.language.core.rpc(flags={"async"})  # Added for accuracy, but does not imply an actual RPC call
-    def event(self, var, value):
-        self._timeline.append((self.get_time_mu(), var, value))
-
-    def register(self, scope, name, var_type, size=None, init=None, ident=None):
-        return self._vcd_writer.register_var(scope, name, var_type, size, init, ident)
-
-    def format_timeline(self, ref_period):
-        ref_timescale = ref_period // self._timescale
-        for time, var, value in sorted(self._timeline, key=itemgetter(0)):
-            # Add events to the VCD file after time conversion
-            self._vcd_writer.change(var, time * ref_timescale, value)
-
-        # Flush the VCD file
-        self._vcd_writer.flush()
-
-        # Clear events from timeline
-        self._timeline.clear()
-
-    def __del__(self):
-        # TODO, this function is maybe not actually called and the vcd file not closed (and __delete__ neither)
-        # Close the VCD file
-        self._vcd_writer.close()
-        self._vcd_file.close()
-
-
-# TODO, make a more elegant way to access the manager for registering signals (in a flavour matching with ARTIQ)
-
-# Set the time manager
-manager = Manager()
-artiq.language.core.set_time_manager(manager)

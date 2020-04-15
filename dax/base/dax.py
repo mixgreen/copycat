@@ -18,6 +18,9 @@ import artiq.coredevice.core  # type: ignore
 import artiq.coredevice.dma  # type: ignore
 import artiq.coredevice.cache  # type: ignore
 
+from dax.sim.sim import DAX_SIM_CONFIG_DEVICE_KEY as _DAX_SIM_CONFIG_DEVICE_KEY
+from dax.sim.device import DaxSimDevice as _DaxSimDevice
+
 # Key separator
 _KEY_SEPARATOR: str = '.'
 # Regex for matching valid names
@@ -324,7 +327,7 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
         device: typing.Any = super(_DaxHasSystem, self).get_device(key)
 
         # Check device type
-        if not isinstance(device, artiq.master.worker_db.DummyDevice) and not isinstance(device, type_):
+        if not (isinstance(device, (artiq.master.worker_db.DummyDevice, _DaxSimDevice)) or isinstance(device, type_)):
             # Device has an unexpected type
             raise TypeError('Device "{:s}" does not match the expected type'.format(key))
 
@@ -627,6 +630,19 @@ class DaxSystem(_DaxModuleBase):
         if args or kwargs:
             # Warn if we find any dangling arguments
             self.logger.warning('Unused args "{}" / kwargs "{}" were passed to super.build()'.format(args, kwargs))
+
+        try:
+            # Get the virtual simulation configuration device
+            self.get_device(_DAX_SIM_CONFIG_DEVICE_KEY)
+        except KeyError:
+            pass  # Simulation disabled
+        except artiq.master.worker_db.DeviceError:
+            # Error while initializing simulation
+            self.logger.exception('Failed to initialize DAX simulation')
+            raise
+        else:
+            # Report that simulation was enabled
+            self.logger.info('DAX simulation enabled and initialized')
 
         # Core devices
 
