@@ -34,32 +34,31 @@ class RtioBenchmarkModule(DaxModule):
         self.setattr_dataset_sys(self.DMA_EVENT_PERIOD_KEY)
         self.setattr_dataset_sys(self.LATENCY_CORE_RTIO_KEY)
 
-        # Cap event burst size
-        self.event_burst_cap = np.int32(min(self.event_burst, 10000))
-        self.logger.debug('Event burst cap: {:d}'.format(self.event_burst_cap))
-
         # Update DMA enabled flag
         self._dma_enabled = self._dma_enabled and self.hasattr(self.EVENT_PERIOD_KEY, self.EVENT_BURST_KEY)
         self.logger.debug('DMA enabled: {}'.format(self._dma_enabled))
 
         # Update kernel invariants
-        self.update_kernel_invariants('event_burst_cap', '_dma_enabled')
+        self.update_kernel_invariants('_dma_enabled', 'DMA_BURST')
 
         if self._dma_enabled:
+            # Cap event burst size
+            burst_size = np.int32(min(self.event_burst, 10000))
+            self.logger.debug('Event burst size set to: {:d}'.format(burst_size))
             # Initialize and record the DMA burst
-            self._record_dma_burst()
+            self._record_dma_burst(burst_size)
         else:
             # Only basic initialization
             self._init()
 
     @kernel
-    def _record_dma_burst(self):
+    def _record_dma_burst(self, burst_size):
         # Initialize
         self._init()
 
         with self.core_dma.record(self.DMA_BURST):
             # Record the DMA burst trace
-            for _ in range(self.event_burst_cap):
+            for _ in range(burst_size):
                 delay(self.event_period / 2)
                 self.ttl_out.on()
                 delay(self.event_period / 2)
