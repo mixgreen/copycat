@@ -9,11 +9,19 @@ _logger: logging.Logger = logging.getLogger(__name__)
 
 # The dax.sim device module
 _DAX_DEVICE_MODULE: str = 'dax.sim.coredevice'
+
 # The properties of a generic device
 _GENERIC_DEVICE: typing.Dict[str, typing.Any] = {
+    'type': 'local',
     'module': '.'.join([_DAX_DEVICE_MODULE, 'generic']),
     'class': 'Generic',
 }
+
+# Special keys/entries in the device DB that will be replaced
+_SPECIAL_KEYS: typing.Dict[str, typing.Any] = {
+    'core_log': _GENERIC_DEVICE,  # Core log should not start when simulating
+}
+
 # The simulation argument/option for controllers as proposed by the ARTIQ manual
 _SIMULATION_ARG: str = '--simulation'
 
@@ -30,7 +38,13 @@ def enable_dax_sim(enable: bool,
                    ) -> typing.Dict[str, typing.Any]:
     """Enable the DAX simulation package by applying this function on your device DB.
 
-    The simulation parameters can be configured through the function parameters.
+    This function will modify your device DB in-place to configure it for simulation.
+
+    The simulation can be configured through the function parameters.
+
+    If supported by a specific simulated device, extra simulation-specific arguments
+    can be added by adding a `sim_args` dict to the device entry in the device DB.
+    The `arguments` dict of the device will be updated by the `sim_args` dict.
 
     :param enable: Flag to enable DAX simulation
     :param ddb: The device DB (will be updated if simulation is enabled)
@@ -58,7 +72,9 @@ def enable_dax_sim(enable: bool,
         # Convert the device DB
         _logger.debug('Converting device DB...')
         try:
-            ddb = {k: _convert_ddb_value(k, v) for k, v in ddb.items()}
+            for k, v in ddb.items():
+                # Mutate every entry in-place
+                _mutate_ddb_entry(k, v)
         except Exception as e:
             # Log exception to provide more context
             _logger.exception(e)
@@ -85,10 +101,14 @@ def enable_dax_sim(enable: bool,
         return ddb
 
 
-def _convert_ddb_value(key: str, value: typing.Any) -> typing.Any:
-    """Convert a device DB value to use it for simulation."""
+def _mutate_ddb_entry(key: str, value: typing.Any) -> typing.Any:
+    """Mutate a device DB entry to use it for simulation."""
 
     assert isinstance(key, str), 'The key must be of type str'
+
+    if key in _SPECIAL_KEYS and isinstance(value, dict):
+        # Special keys receive pre-processing
+        value.update(_SPECIAL_KEYS[key])  # Update dict of special key
 
     if isinstance(value, dict):  # If value is a dict, further processing is needed
         # Get the type entry of this value
@@ -97,12 +117,6 @@ def _convert_ddb_value(key: str, value: typing.Any) -> typing.Any:
             raise TypeError('The type key of local device "{:s}" must be of type str'.format(key))
 
         if type_ == 'local':  # If value type is 'local' this is a device we will simulate
-            # Add unique name of the device to the device arguments
-            arguments = value.setdefault('arguments', {})
-            if not isinstance(arguments, dict):
-                raise TypeError('The arguments key of local device "{:s}" must be of type dict'.format(key))
-            arguments.update(_key=key)
-
             # Get the module of the device
             module = value.get('module')
             if not isinstance(module, str):
@@ -132,9 +146,20 @@ def _convert_ddb_value(key: str, value: typing.Any) -> typing.Any:
                     # Both module and class were found, update module
                     value['module'] = module
 
-            finally:
-                # Log conversion
-                _logger.debug('Converted local device "{:s}" to class "{module:s}.{class:s}"'.format(key, **value))
+            # Add key of the device to the device arguments
+            arguments = value.setdefault('arguments', {})
+            if not isinstance(arguments, dict):
+                raise TypeError('The arguments key of local device "{:s}" must be of type dict'.format(key))
+            arguments.update(_key=key)
+
+            # Add simulation arguments to normal arguments
+            sim_args = value.setdefault('sim_args', {})
+            if not isinstance(sim_args, dict):
+                raise TypeError('The sim_args key of local device "{:s}" must be of type dict'.format(key))
+            arguments.update(sim_args)
+
+            # Debug message
+            _logger.debug('Converted local device "{:s}" to class "{module:s}.{class:s}"'.format(key, **value))
 
         elif type_ == 'controller':  # If value type is 'controller' this controller needs to be set to simulation mode
             # Get the command of this controller
