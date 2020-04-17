@@ -1,6 +1,6 @@
 import abc
 import typing
-import vcd.writer
+import vcd.writer  # type: ignore
 import numpy as np
 
 import artiq.language.core
@@ -35,10 +35,10 @@ class DaxSignalManager(abc.ABC):
 class NullSignalManager(DaxSignalManager):
     """A signal manager that does nothing."""
 
-    def register(self, scope: str, name: str, type_: type, size: typing.Optional[int] = None) -> None:
+    def register(self, scope: str, name: str, type_: type, size: typing.Optional[int] = None) -> typing.Any:
         return None
 
-    def event(self, signal: None, value: typing.Any) -> None:
+    def event(self, signal: typing.Any, value: typing.Any) -> None:
         pass
 
     def flush(self) -> None:
@@ -64,7 +64,6 @@ class VcdSignalManager(DaxSignalManager):
         np.int32: 'integer',
         np.int64: 'integer',
         float: 'real',
-        np.float: 'real',
         str: 'string',
     }
 
@@ -73,13 +72,13 @@ class VcdSignalManager(DaxSignalManager):
         assert isinstance(timescale, float), 'Timescale must be of type float'
 
         # Convert timescale
-        timescale = dax.util.units.time_to_str(timescale, precision=0)
+        timescale_str: str = dax.util.units.time_to_str(timescale, precision=0)
 
         # Open file
         self._output_file = open(output_file, mode='w')
 
         # Create VCD writer
-        self._vcd = vcd.writer.VCDWriter(self._output_file, timescale=timescale)
+        self._vcd = vcd.writer.VCDWriter(self._output_file, timescale=timescale_str)
 
     def register(self, scope: str, name: str, type_: type, size: typing.Optional[int] = None) -> __S_T:
         if type_ not in self._CONVERT_TYPE:
@@ -94,7 +93,7 @@ class VcdSignalManager(DaxSignalManager):
     def event(self, signal: __S_T, value: typing.Any) -> None:
         self._vcd.change(signal, artiq.language.core.now_mu(), value)
 
-    def flush(self):
+    def flush(self) -> None:
         # Flush the VCD file
         self._vcd.flush()
 

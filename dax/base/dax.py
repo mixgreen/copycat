@@ -624,6 +624,14 @@ class DaxSystem(_DaxModuleBase):
         super(DaxSystem, self).__init__(managers_or_parent, self.SYS_NAME, self.SYS_NAME, _DaxNameRegistry(self),
                                         *args, **kwargs)
 
+    @property
+    def dax_sim_enabled(self) -> bool:
+        """True if DAX simulation is enabled.
+
+        :returns: Bool that indicates if DAX simulation is enabled
+        """
+        return self.__sim_enabled
+
     def build(self, *args: typing.Any, **kwargs: typing.Any) -> None:
         """Override this method to build your DAX system. (Do not forget to call super.build() first!)"""
 
@@ -635,13 +643,15 @@ class DaxSystem(_DaxModuleBase):
             # Get the virtual simulation configuration device
             self.get_device(_DAX_SIM_CONFIG_DEVICE_KEY)
         except KeyError:
-            pass  # Simulation disabled
+            # Simulation disabled
+            self.__sim_enabled = False
         except artiq.master.worker_db.DeviceError:
             # Error while initializing simulation
             self.logger.exception('Failed to initialize DAX simulation')
             raise
         else:
-            # Report that simulation was enabled
+            # Simulation enabled
+            self.__sim_enabled = True
             self.logger.info('DAX simulation enabled and initialized')
 
         # Core devices
@@ -657,7 +667,9 @@ class DaxSystem(_DaxModuleBase):
             self.get_device(self.CORE_LOG_KEY)
         except LookupError:
             # Core log controller was not found in the device DB
-            self.logger.warning('Core log controller "{:s}" not found in device DB'.format(self.CORE_LOG_KEY))
+            if not self.dax_sim_enabled:
+                # Log a warning (if we are not in simulation)
+                self.logger.warning('Core log controller "{:s}" not found in device DB'.format(self.CORE_LOG_KEY))
 
         # Instantiate the data store connector (needs to be done in build() since it requests a controller)
         self.data_store: _DaxDataStoreConnector = _DaxDataStoreConnector(self)

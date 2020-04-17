@@ -60,6 +60,7 @@ class TTLInOut(TTLOut):
     def set_oe(self, oe):
         # 0 = input, 1 = output
         self._signal_manager.event(self._direction, oe)
+        self._signal_manager.event(self._value, 'x')
 
     @kernel
     def output(self):

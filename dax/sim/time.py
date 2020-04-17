@@ -5,7 +5,7 @@ import numpy as np
 from artiq.language.units import *
 
 # The type of machine units (MU)
-_MU_T: type = np.int64
+_MU_T = np.int64
 
 
 class _TimeContext(abc.ABC):
