@@ -4,8 +4,6 @@ import os
 import io
 import contextlib
 
-import dax
-
 
 class TestCodeStyle(unittest.TestCase):
 
@@ -13,6 +11,7 @@ class TestCodeStyle(unittest.TestCase):
         """Test that the code in the repository conforms to PEP-8."""
 
         # Get path to the root of DAX
+        import dax
         dax_path = os.path.dirname(os.path.realpath(dax.__file__))
 
         # Create a style object
