@@ -1,4 +1,6 @@
 import typing
+import collections
+import csv
 import numpy as np
 
 from dax.sim.coredevice import *
@@ -16,7 +18,7 @@ class Core(DaxSimDevice):
 
         # Get the virtual simulation configuration device, which will configure the simulation
         # DAX system already initializes the virtual sim config device, this is a fallback
-        sim_config: typing.Any = dmgr.get(DAX_SIM_CONFIG_KEY)
+        self._sim_config: typing.Any = dmgr.get(DAX_SIM_CONFIG_KEY)
 
         # Call super
         super(Core, self).__init__(dmgr, _core=self, **kwargs)  # type: ignore
@@ -26,13 +28,18 @@ class Core(DaxSimDevice):
         self._ref_period: float = ref_period
         self._ref_multiplier: np.int32 = np.int32(ref_multiplier)
 
-        # Set the timescale of the core based on the simulation configuration
-        self._timescale: float = sim_config.timescale
-        # Get the signal manager
-        self._signal_manager: DaxSignalManager = get_signal_manager()
-
         # Set initial call nesting level to zero
-        self._level: int = 0
+        self._level: np.int32 = np.int32(0)
+        # Set the timescale of the core based on the simulation configuration
+        self._timescale: float = self._sim_config.timescale
+
+        # Get the signal manager and register signals
+        self._signal_manager: DaxSignalManager = get_signal_manager()
+        self._reset_signal: typing.Any = self._signal_manager.register(self.key, 'reset', object)
+
+        # Counting dicts for function call profiling
+        self._func_counter: typing.Counter[typing.Any] = collections.Counter()
+        self._func_time: typing.Counter[typing.Any] = collections.Counter()
 
     @property
     def ref_period(self) -> float:
@@ -48,10 +55,21 @@ class Core(DaxSimDevice):
 
     def run(self, k_function: typing.Any,
             k_args: typing.Tuple[typing.Any, ...], k_kwargs: typing.Dict[str, typing.Any]) -> typing.Any:
+        # Unpack function
+        func: typing.Callable[..., typing.Any] = k_function.artiq_embedded.function
+
+        # Register the function call
+        self._func_counter[func] += 1
+        # Track current time
+        t_start: np.int64 = now_mu()
+
         # Call the kernel function while increasing the level
         self._level += 1
-        result = k_function.artiq_embedded.function(*k_args, **k_kwargs)
+        result = func(*k_args, **k_kwargs)
         self._level -= 1
+
+        # Accumulate the time spend in this function call
+        self._func_time[func] += now_mu() - t_start
 
         if self._level == 0:
             # Flush signal manager if we are about to leave the kernel context
@@ -59,6 +77,18 @@ class Core(DaxSimDevice):
 
         # Return the result
         return result
+
+    def close(self) -> None:
+        if self._sim_config.output_enabled:
+            # Create a profiling report
+            with open(self._sim_config.get_output_file_name('csv', postfix='profile'), 'w') as csv_file:
+                # Open CSV writer
+                csv_writer = csv.writer(csv_file)
+                # Submit headers
+                csv_writer.writerow(['ncalls', 'cumtime_mu', 'cumtime_s', 'function'])
+                # Submit data
+                csv_writer.writerows((self._func_counter[func], time, self.mu_to_seconds(time), func.__qualname__)
+                                     for func, time in self._func_time.items())
 
     @portable
     def seconds_to_mu(self, seconds: float) -> np.int64:
@@ -70,6 +100,9 @@ class Core(DaxSimDevice):
 
     @kernel
     def reset(self) -> None:
+        # Register reset event
+        self._signal_manager.event(self._reset_signal, None)
+
         # Reset devices
         for _, d in self._device_manager.active_devices:
             if isinstance(d, DaxSimDevice):

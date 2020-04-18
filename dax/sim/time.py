@@ -107,10 +107,6 @@ class DaxTimeManager:
         :param t: The specific point in time (machine units) to set the current time to
         """
 
-        if t < self.get_time_mu():
-            # Going back in time is not allowed by the VCD writer
-            raise ValueError("Attempted to go back in time")
-
         # Take time to match the given time point
         dt = t - self.get_time_mu()
         self.take_time_mu(dt)

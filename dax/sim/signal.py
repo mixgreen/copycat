@@ -1,6 +1,7 @@
 import abc
 import typing
 import vcd.writer  # type: ignore
+import operator
 import numpy as np
 
 import artiq.language.core
@@ -16,7 +17,8 @@ class DaxSignalManager(abc.ABC):
     __S_T = typing.TypeVar('__S_T')
 
     @abc.abstractmethod
-    def register(self, scope: str, name: str, type_: type, size: typing.Optional[int] = None) -> __S_T:
+    def register(self, scope: str, name: str, type_: type,
+                 size: typing.Optional[int] = None, init: typing.Any = None) -> __S_T:
         pass
 
     @abc.abstractmethod
@@ -35,8 +37,9 @@ class DaxSignalManager(abc.ABC):
 class NullSignalManager(DaxSignalManager):
     """A signal manager that does nothing."""
 
-    def register(self, scope: str, name: str, type_: type, size: typing.Optional[int] = None) -> typing.Any:
-        return None
+    def register(self, scope: str, name: str, type_: type,
+                 size: typing.Optional[int] = None, init: typing.Any = None) -> typing.Any:
+        pass
 
     def event(self, signal: typing.Any, value: typing.Any, time: typing.Optional[np.int64] = None) -> None:
         pass
@@ -56,15 +59,18 @@ class VcdSignalManager(DaxSignalManager):
                          vcd.writer.ScalarVariable,
                          vcd.writer.StringVariable,
                          vcd.writer.VectorVariable]
+    # The signal-type type
+    __T_T = typing.Union[bool, int, np.int32, np.int64, float, str, object]
 
     # Dict to convert Python types to VCD types
-    _CONVERT_TYPE: typing.Dict[type, str] = {
+    _CONVERT_TYPE: typing.Dict[__T_T, str] = {
         bool: 'reg',
         int: 'integer',
         np.int32: 'integer',
         np.int64: 'integer',
         float: 'real',
         str: 'string',
+        object: 'event',
     }
 
     def __init__(self, output_file: str, timescale: float):
@@ -75,31 +81,80 @@ class VcdSignalManager(DaxSignalManager):
         timescale_str: str = dax.util.units.time_to_str(timescale, precision=0)
 
         # Open file
-        self._output_file = open(output_file, mode='w')
+        self._output_file: typing.IO[str] = open(output_file, mode='w')
 
         # Create VCD writer
-        self._vcd = vcd.writer.VCDWriter(self._output_file, timescale=timescale_str)
+        self._vcd = vcd.writer.VCDWriter(self._output_file, timescale=timescale_str,
+                                         comment=output_file)
+        # Create event buffer to support reverting time
+        self._event_buffer: typing.List[typing.Tuple[np.int64, VcdSignalManager.__S_T, typing.Any]] = []
 
-    def register(self, scope: str, name: str, type_: type, size: typing.Optional[int] = None) -> __S_T:
+    def register(self, scope: str, name: str, type_: __T_T,
+                 size: typing.Optional[int] = None, init: typing.Any = None) -> __S_T:
+        """ Register a signal.
+
+        Signals have to be registered before any events are committed.
+
+        Possible types and expected arguments:
+        - bool (a register with bit values 0,1,X,Z), provide a size of the register
+        - int, np.int32, np.int64
+        - float
+        - str
+        - object (an event type with value None or 0,1,X,Z)
+
+        :param scope: The scope of the signal, normally the device or module name
+        :param name: The name of the signal
+        :param type_: The type of the signal
+        :param size: The size of the data (only for type bool)
+        :param init: Initial value (defaults to X)
+        :return: The signal object to use when committing events
+        """
         if type_ not in self._CONVERT_TYPE:
             raise TypeError('VCD signal manager can not handle type {}'.format(type_))
 
         # Get the var type
-        var_type = self._CONVERT_TYPE[type_]
+        var_type: str = self._CONVERT_TYPE[type_]
 
         # Register the signal with the VCD writer
-        return self._vcd.register_var(scope, name, var_type=var_type, size=size)
+        return self._vcd.register_var(scope, name, var_type=var_type, size=size, init=init)
 
     def event(self, signal: __S_T, value: typing.Any, time: typing.Optional[np.int64] = None) -> None:
-        self._vcd.change(signal, artiq.language.core.now_mu() if time is None else time, value)
+        """Commit an event.
+
+        Bool type signals can have values 0, 1, X, Z.
+
+        Event (`object`) type signals are treated like bool type signals,
+        but the values do not show up in the graphical interface.
+        We recommend to use value `None` for event type events.
+
+        String type signals can use value `None` which is equivalent to `Z`
+
+        :param signal: The signal that changed
+        :param value: The new value of the signal
+        :param time: Optional time that the signal changed (now_mu() if no time was provided)
+        """
+        # Add event to buffer
+        self._event_buffer.append((artiq.language.core.now_mu() if time is None else time, signal, value))
 
     def flush(self) -> None:
-        # Flush the VCD file
-        self._vcd.flush()
+        """Commit all buffered events."""
+        # Sort the list of events (VCD writer can only handle a linear timeline)
+        self._event_buffer.sort(key=operator.itemgetter(0))
+
+        try:
+            # Submit sorted events to the VCD writer
+            for time, signal, value in self._event_buffer:
+                self._vcd.change(signal, time, value)
+        except vcd.writer.VCDPhaseError:
+            # Occurs when we try to submit a timestamp which is earlier than the last submitted timestamp
+            raise RuntimeError('Attempt to go back in time too much') from None
+
+        # Clear the event buffer
+        self._event_buffer.clear()
 
     def close(self) -> None:
         # Close the VCD writer
-        self._vcd.close()
+        self._vcd.close(artiq.language.core.now_mu())
         # Close the file
         self._output_file.close()
 

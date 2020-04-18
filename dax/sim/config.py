@@ -19,17 +19,17 @@ class DaxSimConfig:
         _logger.setLevel(logging_level)
         _logger.info('DAX simulation enabled')
 
-        # Store timescale
+        # Store attributes
         self.__timescale: float = timescale
+        self.__output_enabled: bool = output
 
-        if output:
-            # Get The scheduler
-            scheduler: typing.Any = dmgr.get('scheduler')
+        # Make base name for output files
+        scheduler: typing.Any = dmgr.get('scheduler')
+        self.__base_name: str = f'{scheduler.rid:09d}-{str(scheduler.expid.get("class_name"))}'
 
+        if self.output_enabled:
             # Set the signal manager
-            _logger.debug('Initializing VCD signal manager...')
-            output_file: str = f'{scheduler.rid:09d}-{str(scheduler.expid.get("class_name"))}.vcd'
-            set_signal_manager(VcdSignalManager(output_file, timescale))
+            set_signal_manager(VcdSignalManager(self.get_output_file_name('vcd', postfix='trace'), timescale))
             _logger.debug('VCD signal manager initialized')
 
         # Set the time manager in ARTIQ
@@ -42,6 +42,19 @@ class DaxSimConfig:
     def timescale(self) -> float:
         """Return the timescale of the simulation."""
         return self.__timescale
+
+    @property
+    def output_enabled(self) -> bool:
+        return self.__output_enabled
+
+    def get_output_file_name(self, ext: str, postfix: typing.Optional[str] = None) -> str:
+        assert isinstance(ext, str), 'File extension must be of type str'
+        assert isinstance(postfix, str) or postfix is None, 'Postfix must be of type str or None'
+
+        # Add postfix if provided
+        output_file_name: str = self.__base_name if postfix is None else f'{self.__base_name:s}-{postfix:s}'
+        # Return full file name
+        return f'{output_file_name:s}.{ext:s}'
 
     @staticmethod
     def close() -> None:

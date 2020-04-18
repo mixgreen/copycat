@@ -599,7 +599,7 @@ class DaxSystem(_DaxModuleBase):
     CORE_LOG_KEY: str = 'core_log'
 
     # System keys
-    DAX_INIT_LATENCY_KEY = 'dax_init_latency'
+    DAX_INIT_LATENCY_KEY: str = 'dax_init_latency'
 
     def __init__(self, managers_or_parent: typing.Any,
                  *args: typing.Any, **kwargs: typing.Any):
@@ -653,6 +653,9 @@ class DaxSystem(_DaxModuleBase):
             # Simulation enabled
             self.__sim_enabled = True
             self.logger.info('DAX simulation enabled and initialized')
+        finally:
+            # Add dax_sim_enabled property as a kernel invariant
+            self.update_kernel_invariants('dax_sim_enabled')
 
         # Core devices
 

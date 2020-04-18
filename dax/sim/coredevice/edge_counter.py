@@ -32,31 +32,33 @@ class EdgeCounter(DaxSimDevice):
         self._rng = random.Random()
 
         # Buffers to store counts
-        self._counts = collections.deque()
+        self._count_buffer = collections.deque()
 
         # Register signals
         self._signal_manager = get_signal_manager()
-        self._value = self._signal_manager.register(self.key, 'count', int)
-        self._sensitivity = self._signal_manager.register(self.key, 'sensitivity', bool, size=1)
+        self._count = self._signal_manager.register(self.key, 'count', int)
+        self._sensitivity = self._signal_manager.register(self.key, 'sensitivity', bool, size=1, init=0)
 
     def core_reset(self) -> None:
         # Clear buffers
-        self._counts.clear()
+        self._count_buffer.clear()
 
     def _simulate_input_signal(self, duration: np.int64, edge_type: _EdgeType) -> None:
         """Simulate input signal for a given duration."""
 
-        # Move the cursor
-        delay_mu(duration)
-
         # Calculate the number of events we expect to observe based on duration and frequency
-        num_events = self.core.mu_to_seconds(duration) * self._input_freq * 2
+        num_events = int(self.core.mu_to_seconds(duration) * self._input_freq)
         # Multiply by 2 in case we detect both edges
         if edge_type is self._EdgeType.BOTH:
             num_events *= 2
 
+        # Set the number of counts for the duration window (for graphical purposes)
+        self._signal_manager.event(self._count, num_events)
+        delay_mu(duration)  # Move the cursor
+        self._signal_manager.event(self._count, 0)
+
         # Store number of events and the timestamp in count buffer
-        self._counts.append((now_mu(), num_events))
+        self._count_buffer.append((now_mu(), num_events))
 
     @kernel
     def gate_rising_mu(self, duration):
@@ -92,15 +94,14 @@ class EdgeCounter(DaxSimDevice):
         return self.gate_both_mu(self.core.seconds_to_mu(duration))
 
     @kernel
-    def set_config(self, count_rising: TBool, count_falling: TBool,
-                   send_count_event: TBool, reset_to_zero: TBool):
+    def set_config(self, count_rising: TBool, count_falling: TBool, send_count_event: TBool, reset_to_zero: TBool):
         raise NotImplementedError
 
     @kernel
     def fetch_count(self) -> TInt32:
-        if len(self._counts):
+        if len(self._count_buffer):
             # Get count from the buffer (drop the timestamp)
-            _, count = self._counts.popleft()
+            _, count = self._count_buffer.popleft()
 
             if count >= self.counter_max:
                 # Count overflow
@@ -114,9 +115,9 @@ class EdgeCounter(DaxSimDevice):
 
     @kernel
     def fetch_timestamped_count(self, timeout_mu=np.int64(-1)) -> TTuple([TInt64, TInt32]):
-        if len(self._counts):
+        if len(self._count_buffer):
             # Get count and timestamp from the buffer
-            timestamp, count = self._counts.popleft()
+            timestamp, count = self._count_buffer.popleft()
 
             if count >= self.counter_max:
                 # Count overflow
