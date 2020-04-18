@@ -20,7 +20,7 @@ class DaxSignalManager(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def event(self, signal: __S_T, value: typing.Any) -> None:
+    def event(self, signal: __S_T, value: typing.Any, time: typing.Optional[np.int64] = None) -> None:
         pass
 
     @abc.abstractmethod
@@ -38,7 +38,7 @@ class NullSignalManager(DaxSignalManager):
     def register(self, scope: str, name: str, type_: type, size: typing.Optional[int] = None) -> typing.Any:
         return None
 
-    def event(self, signal: typing.Any, value: typing.Any) -> None:
+    def event(self, signal: typing.Any, value: typing.Any, time: typing.Optional[np.int64] = None) -> None:
         pass
 
     def flush(self) -> None:
@@ -90,8 +90,8 @@ class VcdSignalManager(DaxSignalManager):
         # Register the signal with the VCD writer
         return self._vcd.register_var(scope, name, var_type=var_type, size=size)
 
-    def event(self, signal: __S_T, value: typing.Any) -> None:
-        self._vcd.change(signal, artiq.language.core.now_mu(), value)
+    def event(self, signal: __S_T, value: typing.Any, time: typing.Optional[np.int64] = None) -> None:
+        self._vcd.change(signal, artiq.language.core.now_mu() if time is None else time, value)
 
     def flush(self) -> None:
         # Flush the VCD file

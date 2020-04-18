@@ -18,7 +18,7 @@ import artiq.coredevice.core  # type: ignore
 import artiq.coredevice.dma  # type: ignore
 import artiq.coredevice.cache  # type: ignore
 
-from dax.sim.sim import DAX_SIM_CONFIG_DEVICE_KEY as _DAX_SIM_CONFIG_DEVICE_KEY
+from dax.sim.sim import DAX_SIM_CONFIG_KEY as _DAX_SIM_CONFIG_KEY
 from dax.sim.device import DaxSimDevice as _DaxSimDevice
 
 # Key separator
@@ -66,7 +66,7 @@ def _resolve_unique_device_key(d: typing.Dict[str, typing.Any], key: str, trace:
     # Check if we are not stuck in a loop
     if key in trace:
         # We are in an alias loop
-        raise LookupError('Key "{:s}" caused an alias loop'.format(key))
+        raise LookupError(f'Key "{key:s}" caused an alias loop')
     # Add key to the trace
     trace.add(key)
 
@@ -81,7 +81,7 @@ def _resolve_unique_device_key(d: typing.Dict[str, typing.Any], key: str, trace:
         return key
     else:
         # We ended up with an unexpected type
-        raise TypeError('Key "{:s}" returned an unexpected type'.format(key))
+        raise TypeError(f'Key "{key:s}" returned an unexpected type')
 
 
 class _DaxBase(artiq.experiment.HasEnvironment, abc.ABC):
@@ -161,9 +161,9 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
 
         # Check name and system key
         if not _is_valid_name(name):
-            raise ValueError('Invalid name "{:s}" for class "{:s}"'.format(name, self.__class__.__name__))
+            raise ValueError(f'Invalid name "{name:s}" for class "{self.__class__.__name__:s}"')
         if not _is_valid_key(system_key) or not system_key.endswith(name):
-            raise ValueError('Invalid system key "{:s}" for class "{:s}"'.format(system_key, self.__class__.__name__))
+            raise ValueError(f'Invalid system key "{system_key:s}" for class "{self.__class__.__name__:s}"')
 
         # Store constructor arguments as attributes
         self.__name: str = name
@@ -227,7 +227,7 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
         # Check if the given keys are valid
         for k in keys:
             if not _is_valid_key(k):
-                raise ValueError('Invalid key "{:s}"'.format(k))
+                raise ValueError(f'Invalid key "{k:s}"')
 
         # Return the assigned key
         return _KEY_SEPARATOR.join([self.__system_key, *keys])
@@ -314,14 +314,14 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
         assert isinstance(key, str) and key, 'Key must be of type str and not empty'
 
         # Debug message
-        self.logger.debug('Requesting device "{:s}"'.format(key))
+        self.logger.debug(f'Requesting device "{key:s}"')
 
         try:
             # Get the unique key, which will also check the keys and aliases
             unique: str = _get_unique_device_key(self.get_device_db(), key)
         except (LookupError, TypeError) as e:
             # Device was not found in the device DB
-            raise KeyError('Device "{:s}" could not be found in the device DB'.format(key)) from e
+            raise KeyError(f'Device "{key:s}" could not be found in the device DB') from e
 
         # Get the device using the initial key (let ARTIQ resolve the aliases)
         device: typing.Any = super(_DaxHasSystem, self).get_device(key)
@@ -329,7 +329,7 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
         # Check device type
         if not (isinstance(device, (artiq.master.worker_db.DummyDevice, _DaxSimDevice)) or isinstance(device, type_)):
             # Device has an unexpected type
-            raise TypeError('Device "{:s}" does not match the expected type'.format(key))
+            raise TypeError(f'Device "{key:s}" does not match the expected type')
 
         # Register the requested device with the unique key
         self.registry.add_device(unique, device, self)
@@ -367,9 +367,9 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
 
         # Set the device key to the attribute
         if not _is_valid_name(attr_name):
-            raise ValueError('Attribute name "{:s}" not valid'.format(attr_name))
+            raise ValueError(f'Attribute name "{attr_name:s}" not valid')
         if hasattr(self, attr_name):
-            raise AttributeError('Attribute name "{:s}" was already assigned'.format(attr_name))
+            raise AttributeError(f'Attribute name "{attr_name:s}" was already assigned')
         setattr(self, attr_name, device)
 
         # Add attribute to kernel invariants
@@ -389,7 +389,7 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
         artiq.master.worker_db.logger.setLevel(logging.WARNING + 1)
 
         # Set value in system dataset with extra flags
-        self.logger.debug('System dataset key "{:s}" set to value "{}"'.format(key, value))
+        self.logger.debug(f'System dataset key "{key:s}" set to value "{value}"')
         self.set_dataset(self.get_system_key(key), value, broadcast=True, persist=True, archive=True)
 
         # Restore original logging level of worker_db logger
@@ -409,7 +409,7 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
         assert isinstance(key, str), 'Key must be of type str'
 
         # Mutate system dataset
-        self.logger.debug('System dataset key "{:s}"[{:d}] mutate to value "{}"'.format(key, index, value))
+        self.logger.debug(f'System dataset key "{key:s}"[{index:d}] mutate to value "{value}"')
         self.mutate_dataset(self.get_system_key(key), index, value)
 
     @artiq.experiment.rpc(flags={'async'})
@@ -425,7 +425,7 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
         assert isinstance(key, str), 'Key must be of type str'
 
         # Append value to system dataset
-        self.logger.debug('System dataset key "{:s}" append value "{}"'.format(key, value))
+        self.logger.debug(f'System dataset key "{key:s}" append value "{value}"')
         self.append_to_dataset(self.get_system_key(key), value)
 
     def get_dataset_sys(self, key: str, default: typing.Any = artiq.experiment.NoDefault) -> typing.Any:
@@ -452,9 +452,9 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
             value: typing.Any = self.get_dataset(system_key, default, archive=True)
         except KeyError:
             # The key was not found
-            raise KeyError('System dataset key "{:s}" not found'.format(system_key)) from None
+            raise KeyError(f'System dataset key "{system_key:s}" not found') from None
         else:
-            self.logger.debug('System dataset key "{:s}" returned value "{}"'.format(key, value))
+            self.logger.debug(f'System dataset key "{key:s}" returned value "{value}"')
 
         # Return value
         return value
@@ -499,18 +499,18 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
         except KeyError:
             if default is artiq.experiment.NoDefault:
                 # The value was not available in the system dataset and no default was provided
-                self.logger.debug('System attribute "{:s}" not set'.format(key))
+                self.logger.debug(f'System attribute "{key:s}" not set')
                 return
             else:
                 # If the value does not exist, write the default value to the system dataset, but do not archive yet
-                self.logger.debug('System dataset key "{:s}" set to default value "{}"'.format(key, default))
+                self.logger.debug(f'System dataset key "{key:s}" set to default value "{default}"')
                 self.set_dataset(system_key, default, broadcast=True, persist=True, archive=False)
                 # Get the value again and make sure it is archived
                 value = self.get_dataset(system_key, archive=True)  # Should never raise a KeyError
 
         # Set value as an attribute
         if hasattr(self, key):
-            raise AttributeError('Attribute name "{:s}" was already assigned'.format(key))
+            raise AttributeError(f'Attribute name "{key:s}" was already assigned')
         setattr(self, key, value)
 
         if kernel_invariant:
@@ -518,8 +518,8 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
             self.update_kernel_invariants(key)
 
         # Debug message
-        self.logger.debug('System attribute "{:s}" set to value "{}"{:s}'.format(
-            key, value, ' (kernel invariant)' if kernel_invariant else ''))
+        msg_postfix: str = ' (kernel invariant)' if kernel_invariant else ''
+        self.logger.debug(f'System attribute "{key:s}" set to value "{value}"{msg_postfix:s}')
 
     def hasattr(self, *keys: str) -> bool:
         """Returns if this object has the given attributes.
@@ -534,7 +534,7 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
     @artiq.experiment.host_only
     def get_identifier(self) -> str:
         """Return the system key with the class name."""
-        return '[{:s}]({:s})'.format(self.get_system_key(), self.__class__.__name__)
+        return f'[{self.get_system_key():s}]({self.__class__.__name__:s})'
 
 
 class _DaxModuleBase(_DaxHasSystem, abc.ABC):
@@ -560,10 +560,10 @@ class DaxModule(_DaxModuleBase, abc.ABC):
 
         # Check module name
         if not _is_valid_name(module_name):
-            raise ValueError('Invalid module name "{:s}"'.format(module_name))
+            raise ValueError(f'Invalid module name "{module_name:s}"')
         # Check parent type
         if not isinstance(managers_or_parent, _DaxModuleBase):
-            raise TypeError('Parent of module "{:s}" is not a DAX module base'.format(module_name))
+            raise TypeError(f'Parent of module "{module_name:s}" is not a DAX module base')
 
         # Take core attributes from parent
         self._take_parent_core_attributes(managers_or_parent)
@@ -613,7 +613,7 @@ class DaxSystem(_DaxModuleBase):
         # Check if system ID was overridden
         assert hasattr(self, 'SYS_ID'), 'Every DAX system class must have a SYS_ID class attribute'
         assert isinstance(self.SYS_ID, str), 'System ID must be of type str'
-        assert _is_valid_name(self.SYS_ID), 'Invalid system ID "{:s}"'.format(self.SYS_ID)
+        assert _is_valid_name(self.SYS_ID), f'Invalid system ID "{self.SYS_ID:s}"'
 
         # Check if system version was overridden
         assert hasattr(self, 'SYS_VER'), 'Every DAX system class must have a SYS_VER class attribute'
@@ -637,11 +637,11 @@ class DaxSystem(_DaxModuleBase):
 
         if args or kwargs:
             # Warn if we find any dangling arguments
-            self.logger.warning('Unused args "{}" / kwargs "{}" were passed to super.build()'.format(args, kwargs))
+            self.logger.warning(f'Unused args "{args}" / kwargs "{kwargs}" were passed to super.build()')
 
         try:
             # Get the virtual simulation configuration device
-            self.get_device(_DAX_SIM_CONFIG_DEVICE_KEY)
+            self.get_device(_DAX_SIM_CONFIG_KEY)
         except KeyError:
             # Simulation disabled
             self.__sim_enabled = False
@@ -669,7 +669,7 @@ class DaxSystem(_DaxModuleBase):
             # Core log controller was not found in the device DB
             if not self.dax_sim_enabled:
                 # Log a warning (if we are not in simulation)
-                self.logger.warning('Core log controller "{:s}" not found in device DB'.format(self.CORE_LOG_KEY))
+                self.logger.warning(f'Core log controller "{self.CORE_LOG_KEY:s}" not found in device DB')
 
         # Instantiate the data store connector (needs to be done in build() since it requests a controller)
         self.data_store: _DaxDataStoreConnector = _DaxDataStoreConnector(self)
@@ -715,7 +715,7 @@ class DaxService(_DaxHasSystem, abc.ABC):
 
         # Check parent type
         if not isinstance(managers_or_parent, (DaxSystem, DaxService)):
-            raise TypeError('Parent of service "{:s}" is not a DAX system or service'.format(self.SERVICE_NAME))
+            raise TypeError(f'Parent of service "{self.SERVICE_NAME:s}" is not a DAX system or service')
 
         # Take core attributes from parent
         self._take_parent_core_attributes(managers_or_parent)
@@ -738,8 +738,7 @@ class DaxClient(_DaxHasSystem, abc.ABC):
                  *args: typing.Any, **kwargs: typing.Any):
         # Check if the decorator was used
         if not isinstance(self, DaxSystem):
-            raise TypeError('DAX client class {:s} must be decorated using '
-                            '@dax_client_factory'.format(self.__class__.__name__))
+            raise TypeError(f'DAX client class {self.__class__.__name__:s} must be decorated using @dax_client_factory')
 
         # Call super
         super(DaxClient, self).__init__(managers_or_parent, *args, **kwargs)
@@ -788,7 +787,7 @@ class _DaxNameRegistry:
 
         # Check system services key
         if not _is_valid_key(system.SYS_SERVICES):
-            raise ValueError('Invalid system services key "{:s}"'.format(system.SYS_SERVICES))
+            raise ValueError(f'Invalid system services key "{system.SYS_SERVICES:s}"')
 
         # Store system services key
         self._sys_services_key: str = system.SYS_SERVICES  # Access attribute directly
@@ -817,7 +816,7 @@ class _DaxNameRegistry:
 
         if reg_module is not None:
             # Key already in use by another module
-            msg = 'Module key "{:s}" was already registered by module {:s}'.format(key, reg_module.get_identifier())
+            msg = f'Module key "{key:s}" was already registered by module {reg_module.get_identifier():s}'
             raise self._NonUniqueRegistrationError(msg)
 
         # Add module key to the dict of registered modules
@@ -847,11 +846,11 @@ class _DaxNameRegistry:
             module = self._modules[key]
         except KeyError:
             # Module was not found
-            raise KeyError('Module "{:s}" could not be found'.format(key)) from None
+            raise KeyError(f'Module "{key:s}" could not be found') from None
 
         if not isinstance(module, type_):
             # Module does not have the correct type
-            raise TypeError('Module "{:s}" does not match the expected type'.format(key))
+            raise TypeError(f'Module "{key:s}" does not match the expected type')
 
         # Return the module
         return module
@@ -870,10 +869,10 @@ class _DaxNameRegistry:
 
         if not results:
             # No modules were found
-            raise KeyError('Could not find modules with type "{:s}"'.format(type_.__name__))
+            raise KeyError(f'Could not find modules with type "{type_.__name__:s}"')
         elif len(results) > 1:
             # More than one module was found
-            raise LookupError('Could not find a unique module with type "{:s}"'.format(type_.__name__))
+            raise LookupError(f'Could not find a unique module with type "{type_.__name__:s}"')
 
         # Return the only result
         _, module = results.popitem()
@@ -929,7 +928,7 @@ class _DaxNameRegistry:
         if device_value is not None:
             # Device was already registered
             parent_name: str = device_value.parent.get_system_key()
-            msg = 'Device "{:s}" was already registered by parent "{:s}"'.format(key, parent_name)
+            msg = f'Device "{key:s}" was already registered by parent "{parent_name:s}"'
             raise self._NonUniqueRegistrationError(msg)
 
         # Add unique device key to the dict of registered devices
@@ -971,7 +970,7 @@ class _DaxNameRegistry:
         assert isinstance(service_name, str), 'Service name must be a string'
         if not _is_valid_name(service_name):
             # Service name not valid
-            raise ValueError('Invalid service name "{:s}"'.format(service_name))
+            raise ValueError(f'Invalid service name "{service_name:s}"')
 
         # Return assigned key
         return _KEY_SEPARATOR.join([self._sys_services_key, service_name])
@@ -996,7 +995,7 @@ class _DaxNameRegistry:
 
         if reg_service is not None:
             # Service name was already registered
-            raise self._NonUniqueRegistrationError('Service with name "{:s}" was already registered'.format(key))
+            raise self._NonUniqueRegistrationError(f'Service with name "{key:s}" was already registered')
 
         # Add service to the registry
         self._services[key] = service
@@ -1105,10 +1104,10 @@ class _DaxDataStoreConnector:
         for k, v in d.items():
             if not _is_valid_key(k):
                 # Invalid key
-                raise ValueError('The data store received an invalid key "{:s}"'.format(k))
+                raise ValueError(f'The data store received an invalid key "{k:s}"')
             if not isinstance(v, self._FIELD_TYPES):
                 # Unsupported value type
-                raise TypeError('The data store can not store value "{}" of type {:s}'.format(v, str(type(v))))
+                raise TypeError(f'The data store can not store value "{v}" of type {str(type(v)):s}')
 
         # Make a point object for every key-value pair
         points: typing.List[_DaxDataStoreConnector.__P_T] = [self._make_point(k, v) for k, v in d.items()]

@@ -1,4 +1,5 @@
 import typing
+import abc
 
 import artiq.coredevice.core  # type: ignore
 
@@ -41,6 +42,14 @@ class DaxSimDevice:
         :return: The unique device key as defined in the device DB
         """
         return self.__key
+
+    def core_reset(self) -> None:
+        """Called when `core.reset()` is used.
+
+        By default this function does nothing.
+        Mainly intended for clearing buffers of devices.
+        """
+        pass
 
     def close(self) -> None:
         """Called by ARTIQ to close the device.

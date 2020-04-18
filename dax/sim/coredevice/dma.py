@@ -51,8 +51,6 @@ class CoreDMA(DaxSimDevice):
         # Store DMA trace
         self._dma_traces[name] = recorder
 
-        # TODO, events should actually be captured so they can be replayed at playback
-
         # Return the record context
         return recorder
 
@@ -64,9 +62,6 @@ class CoreDMA(DaxSimDevice):
 
     @kernel
     def playback(self, name):
-        """Replays a previously recorded DMA trace. This function blocks until
-        the entire trace is submitted to the RTIO FIFOs."""
-
         # Playback DMA trace
         self._playback(name)
 
@@ -81,18 +76,11 @@ class CoreDMA(DaxSimDevice):
 
     @kernel
     def get_handle(self, name):
-        """Returns a handle to a previously recorded DMA trace. The returned handle
-        is only valid until the next call to :meth:`record` or :meth:`erase`."""
-
         # There are no handles in the simulated DMA controller, so we just return the name
         return name
 
     @kernel
     def playback_handle(self, handle):
-        """Replays a handle obtained with :meth:`get_handle`. Using this function
-        is much faster than :meth:`playback` for replaying a set of traces repeatedly,
-        but incurs the overhead of managing the handles onto the programmer."""
-
         # Get recorder
         recorder = self._dma_traces[handle]
         # Check if it was the last recording, since playback_handle() is only possible with the latest trace

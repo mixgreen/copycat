@@ -17,22 +17,30 @@ _GENERIC_DEVICE: typing.Dict[str, typing.Any] = {
     'class': 'Generic',
 }
 
+# The properties of a dummy device
+_DUMMY_DEVICE: typing.Dict[str, typing.Any] = {
+    'type': 'local',
+    'module': '.'.join([_DAX_DEVICE_MODULE, 'dummy']),
+    'class': 'Dummy',
+}
+
 # Special keys/entries in the device DB that will be replaced
 _SPECIAL_KEYS: typing.Dict[str, typing.Any] = {
-    'core_log': _GENERIC_DEVICE,  # Core log should not start when simulating
+    'core_log': _DUMMY_DEVICE,  # Core log controller should not start in simulation, replace with dummy device
 }
 
 # The simulation argument/option for controllers as proposed by the ARTIQ manual
 _SIMULATION_ARG: str = '--simulation'
 
 # The key of the virtual simulation configuration device
-DAX_SIM_CONFIG_DEVICE_KEY = '_dax_sim_config'
+DAX_SIM_CONFIG_KEY = '_dax_sim_config'
 
 
 def enable_dax_sim(enable: bool,
                    ddb: typing.Dict[str, typing.Any],
                    timescale: float = ns,
                    logging_level: typing.Union[int, str] = logging.NOTSET,
+                   output: bool = True,
                    sim_config_module: str = 'dax.sim.config',
                    sim_config_class: str = 'DaxSimConfig',
                    ) -> typing.Dict[str, typing.Any]:
@@ -50,6 +58,7 @@ def enable_dax_sim(enable: bool,
     :param ddb: The device DB (will be updated if simulation is enabled)
     :param timescale: The timescale of the simulation (i.e. time of a machine unit)
     :param logging_level: The logging level
+    :param output: Flag to enable or disable simulation output
     :param sim_config_module: The module name of the simulation configuration class
     :param sim_config_class: The class name of the simulation configuration class
     :returns: The updated device DB
@@ -59,6 +68,7 @@ def enable_dax_sim(enable: bool,
     assert isinstance(ddb, dict), 'The device DB argument must be a dict'
     assert isinstance(timescale, float), 'Timescale must be of type float'
     assert isinstance(logging_level, int) or logging_level is None, 'Logging level must be of type int'
+    assert isinstance(output, bool), 'Output flag must be of type bool'
     assert isinstance(sim_config_module, str), 'Simulation configuration module name must be of type str'
     assert isinstance(sim_config_module, str), 'Simulation configuration class name must be of type str'
 
@@ -67,7 +77,7 @@ def enable_dax_sim(enable: bool,
 
     if enable:
         # Log that dax.sim was enabled
-        _logger.info('DAX simulation enabled')
+        _logger.info('DAX simulation enabled in device DB')
 
         # Convert the device DB
         _logger.debug('Converting device DB...')
@@ -81,11 +91,12 @@ def enable_dax_sim(enable: bool,
             raise
 
         # Prepare virtual device used for passing simulation configuration
-        sim_config: typing.Dict[str, typing.Any] = {DAX_SIM_CONFIG_DEVICE_KEY: {
+        sim_config: typing.Dict[str, typing.Any] = {DAX_SIM_CONFIG_KEY: {
             'type': 'local', 'module': sim_config_module, 'class': sim_config_class,
             # Simulation configuration is passed through the arguments
             'arguments': {'logging_level': logging_level,
-                          'timescale': timescale, },
+                          'timescale': timescale,
+                          'output': output, },
         }}
 
         # Add simulation configuration to device DB
