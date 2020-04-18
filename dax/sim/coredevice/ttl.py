@@ -83,7 +83,7 @@ class TTLInOut(TTLOut):
     def set_oe(self, oe):
         # 0 = input, 1 = output
         self._signal_manager.event(self._direction, 1 if oe else 0)
-        self._signal_manager.event(self._sensitivity, 0)
+        self._signal_manager.event(self._sensitivity, 'x' if oe else 0)
         self._signal_manager.event(self._count, 0)
         self._signal_manager.event(self._value, 'x')
 

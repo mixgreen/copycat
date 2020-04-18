@@ -9,3 +9,7 @@ class DaxSimTimeStaticTyping(unittest.TestCase):
         # Type checking on DAX sim time
         import dax.sim.time
         type_check(self, dax.sim.time, '--strict')
+
+
+if __name__ == '__main__':
+    unittest.main()

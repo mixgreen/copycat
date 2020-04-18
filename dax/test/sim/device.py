@@ -9,3 +9,7 @@ class DaxSimDeviceStaticTyping(unittest.TestCase):
         # Type checking on DAX sim device
         import dax.sim.device
         type_check(self, dax.sim.device, '--strict')
+
+
+if __name__ == '__main__':
+    unittest.main()

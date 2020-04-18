@@ -9,3 +9,7 @@ class DaxSimSignalStaticTyping(unittest.TestCase):
         # Type checking on DAX sim signal
         import dax.sim.signal
         type_check(self, dax.sim.signal, '--strict')
+
+
+if __name__ == '__main__':
+    unittest.main()

@@ -12,8 +12,6 @@ def _value_to_str(value: float, threshold: float, precision: int, scales: typing
 
     # Take the abs of threshold
     threshold = abs(threshold)
-    # Prepare the string template
-    template: str = '{{:.{:d}f}} {{:s}}'.format(precision)
     # The scaled value
     scaled_value: float = value
 
@@ -22,10 +20,10 @@ def _value_to_str(value: float, threshold: float, precision: int, scales: typing
         scaled_value = value / globals()[s]
         if abs(scaled_value) >= threshold:
             # Return value as string
-            return template.format(scaled_value, s)
+            return f'{scaled_value:.{precision:d}f} {s:s}'
 
     # Using last scaling without rounding
-    return '{:f} {:s}'.format(scaled_value, scales[-1])
+    return f'{scaled_value:f} {scales[-1]:s}'
 
 
 @host_only
@@ -48,16 +46,16 @@ def _str_to_value(string: str, units: typing.Set[str]) -> float:
         # Split the string
         value, unit = string.split()
     except ValueError as e:
-        raise ValueError('String "{:s}" can not be tokenized correctly (missing a space?)'.format(string)) from e
+        raise ValueError(f'String "{string:s}" can not be tokenized correctly (missing a space?)') from e
 
     if unit not in units:
-        raise ValueError('String "{:s}" does not contain a valid unit for this conversion'.format(string))
+        raise ValueError(f'String "{string:s}" does not contain a valid unit for this conversion')
 
     try:
         # Return the scaled value
         return float(value) * float(globals()[unit])
     except ValueError as e:
-        raise ValueError('String "{:s}" does not contain a valid number'.format(string)) from e
+        raise ValueError(f'String "{string:s}" does not contain a valid number') from e
 
 
 @host_only
