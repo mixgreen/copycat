@@ -92,32 +92,43 @@ class Core(DaxSimDevice):
 
     @portable
     def seconds_to_mu(self, seconds: float) -> np.int64:
-        return np.int64(seconds / self._timescale)
+        # Simulation machine units are decided by the timescale, not by the reference period
+        return np.int64(seconds // self._timescale)
 
     @portable
     def mu_to_seconds(self, mu: np.int64) -> float:
+        # Simulation machine units are decided by the timescale, not by the reference period
         return mu * self._timescale
-
-    @kernel
-    def reset(self) -> None:
-        # Register reset event
-        self._signal_manager.event(self._reset_signal, None)
-
-        # Reset devices
-        for _, d in self._device_manager.active_devices:
-            if isinstance(d, DaxSimDevice):
-                d.core_reset()
-
-        # Move cursor
-        at_mu(now_mu() + 125000)
-
-    @kernel
-    def break_realtime(self) -> None:
-        # Move cursor
-        at_mu(now_mu() + 125000)
 
     @kernel
     def wait_until_mu(self, cursor_mu: np.int64) -> None:
         # Move time to given cursor position if that time is in the future
         if cursor_mu > now_mu():
             at_mu(cursor_mu)
+
+    @kernel
+    def get_rtio_counter_mu(self) -> np.int64:
+        # In simulation there is no difference between the RTIO counter and the cursor
+        return now_mu()
+
+    @kernel
+    def get_rtio_destination_status(self, destination: np.int32) -> bool:
+        return True
+
+    @kernel
+    def reset(self) -> None:
+        # Register reset event
+        self._signal_manager.event(self._reset_signal, None)
+
+        # Reset devices to clear buffers
+        for _, d in self._device_manager.active_devices:
+            if isinstance(d, DaxSimDevice):
+                d.core_reset()
+
+        # Move cursor
+        delay_mu(125000)
+
+    @kernel
+    def break_realtime(self) -> None:
+        # Move cursor
+        delay_mu(125000)

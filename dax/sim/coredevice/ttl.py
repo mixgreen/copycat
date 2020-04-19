@@ -53,8 +53,8 @@ class TTLInOut(TTLOut):
         FALLING = 2
         BOTH = 3
 
-    def __init__(self, dmgr, input_freq=100 * kHz, **kwargs):
-        assert isinstance(input_freq, float) and input_freq > 0.0, 'Input frequency must be a positive float'
+    def __init__(self, dmgr, input_freq=0.0, **kwargs):
+        assert isinstance(input_freq, float) and input_freq >= 0.0, 'Input frequency must be a positive float'
 
         # Call super
         super(TTLInOut, self).__init__(dmgr, **kwargs)

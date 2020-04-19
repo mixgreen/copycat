@@ -15,8 +15,8 @@ class EdgeCounter(DaxSimDevice):
         FALLING = 2
         BOTH = 3
 
-    def __init__(self, dmgr, input_freq=100 * kHz, gateware_width=31, **kwargs):
-        assert isinstance(input_freq, float) and input_freq > 0.0, 'Input frequency must be a positive float'
+    def __init__(self, dmgr, input_freq=0.0, gateware_width=31, **kwargs):
+        assert isinstance(input_freq, float) and input_freq >= 0.0, 'Input frequency must be a positive float'
         assert isinstance(gateware_width, int), 'Gateware width must be of type int'
 
         # Call super
@@ -37,7 +37,6 @@ class EdgeCounter(DaxSimDevice):
         # Register signals
         self._signal_manager = get_signal_manager()
         self._count = self._signal_manager.register(self.key, 'count', int, init='z')
-        self._sensitivity = self._signal_manager.register(self.key, 'sensitivity', bool, size=1, init=0)
 
     def core_reset(self) -> None:
         # Clear buffers
@@ -62,23 +61,17 @@ class EdgeCounter(DaxSimDevice):
 
     @kernel
     def gate_rising_mu(self, duration):
-        self._signal_manager.event(self._sensitivity, 1)
         self._simulate_input_signal(duration, self._EdgeType.RISING)
-        self._signal_manager.event(self._sensitivity, 0)
         return now_mu()
 
     @kernel
     def gate_falling_mu(self, duration):
-        self._signal_manager.event(self._sensitivity, 1)
         self._simulate_input_signal(duration, self._EdgeType.FALLING)
-        self._signal_manager.event(self._sensitivity, 0)
         return now_mu()
 
     @kernel
     def gate_both_mu(self, duration):
-        self._signal_manager.event(self._sensitivity, 1)
         self._simulate_input_signal(duration, self._EdgeType.BOTH)
-        self._signal_manager.event(self._sensitivity, 0)
         return now_mu()
 
     @kernel
