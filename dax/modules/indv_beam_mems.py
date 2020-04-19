@@ -3,7 +3,6 @@ import numpy as np
 import artiq.coredevice.ttl
 
 from dax.experiment import *
-from dax.modules.interfaces.indv_beam_if import *
 
 
 class _MemsMirrorModule(DaxModule):
@@ -23,7 +22,7 @@ class _MemsMirrorModule(DaxModule):
         pass
 
 
-class IndvBeamMemsModule(DaxModule, IndvBeamInterface):
+class IndvBeamMemsModule(DaxModule):
     """Module for individual beam path controlled with MEMS mirrors."""
 
     DPASS_AOM_DEVICE_KEY = '{name:s}_{beam:d}_{signal:d}'

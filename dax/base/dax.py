@@ -2,6 +2,7 @@ from __future__ import annotations  # Required for postponed evaluation of annot
 
 import abc
 import logging
+import itertools
 import functools
 import re
 import natsort
@@ -145,7 +146,7 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
     """Intermediate base class for DAX classes that are dependent on a DAX system."""
 
     # Device type verification
-    __D_T = typing.Optional[typing.Union[type, typing.Tuple[type, ...]]]
+    __D_T = typing.TypeVar('__D_T')
 
     # Attribute names of core devices
     __CORE_DEVICES: typing.List[str] = ['core', 'core_dma', 'core_cache']
@@ -295,7 +296,16 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
         """
         pass
 
-    def get_device(self, key: str, type_: __D_T = object) -> typing.Any:
+    @typing.overload
+    def get_device(self, key: str) -> typing.Any:
+        ...
+
+    @typing.overload
+    def get_device(self, key: str, type_: typing.Type[__D_T]) -> __D_T:
+        ...
+
+    @artiq.experiment.host_only
+    def get_device(self, key: str, type_: typing.Optional[typing.Type[__D_T]] = None) -> typing.Any:
         """Get a device driver.
 
         Users can optionally specify an expected device type.
@@ -326,8 +336,7 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
         # Get the device using the initial key (let ARTIQ resolve the aliases)
         device: typing.Any = super(_DaxHasSystem, self).get_device(key)
 
-        # Check device type
-        if not (isinstance(device, (artiq.master.worker_db.DummyDevice, _DaxSimDevice)) or isinstance(device, type_)):
+        if type_ is not None and not isinstance(device, (type_, artiq.master.worker_db.DummyDevice, _DaxSimDevice)):
             # Device has an unexpected type
             raise TypeError(f'Device "{key:s}" does not match the expected type')
 
@@ -337,7 +346,9 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
         # Return the device
         return device
 
-    def setattr_device(self, key: str, attr_name: typing.Optional[str] = None, type_: __D_T = object) -> None:
+    @artiq.experiment.host_only
+    def setattr_device(self, key: str, attr_name: typing.Optional[str] = None,
+                       type_: typing.Optional[typing.Type[__D_T]] = None) -> None:
         """Sets a device driver as attribute.
 
         If no attr_name is provided, the key will be the attribute name.
@@ -359,7 +370,7 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
         assert isinstance(attr_name, str) or attr_name is None, 'Attribute name must be of type str or None'
 
         # Get the device
-        device: typing.Any = self.get_device(key, type_)
+        device: typing.Any = self.get_device(key, type_)  # type: ignore
 
         if attr_name is None:
             # Set attribute name to key if no attribute name was given
@@ -459,6 +470,7 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
         # Return value
         return value
 
+    @artiq.experiment.host_only
     def setattr_dataset_sys(self, key: str, default: typing.Any = artiq.experiment.NoDefault,
                             kernel_invariant: bool = True) -> None:
         """Sets the contents of a system dataset as attribute.
@@ -521,6 +533,7 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
         msg_postfix: str = ' (kernel invariant)' if kernel_invariant else ''
         self.logger.debug(f'System attribute "{key:s}" set to value "{value}"{msg_postfix:s}')
 
+    @artiq.experiment.host_only
     def hasattr(self, *keys: str) -> bool:
         """Returns if this object has the given attributes.
 
@@ -573,8 +586,8 @@ class DaxModule(_DaxModuleBase, abc.ABC):
                                         managers_or_parent.registry, *args, **kwargs)
 
 
-class DaxModuleInterface(abc.ABC):
-    """Base class for module interfaces."""
+class DaxInterface(abc.ABC):
+    """Base class for interfaces."""
     pass
 
 
@@ -599,7 +612,7 @@ class DaxSystem(_DaxModuleBase):
     CORE_LOG_KEY: str = 'core_log'
 
     # System keys
-    DAX_INIT_LATENCY_KEY: str = 'dax_init_latency'
+    DAX_INIT_TIME_KEY: str = 'dax_init_time'
 
     def __init__(self, managers_or_parent: typing.Any,
                  *args: typing.Any, **kwargs: typing.Any):
@@ -652,7 +665,6 @@ class DaxSystem(_DaxModuleBase):
         else:
             # Simulation enabled
             self.__sim_enabled = True
-            self.logger.info('DAX simulation enabled and initialized')
         finally:
             # Add dax_sim_enabled property as a kernel invariant
             self.update_kernel_invariants('dax_sim_enabled')
@@ -677,6 +689,7 @@ class DaxSystem(_DaxModuleBase):
         # Instantiate the data store connector (needs to be done in build() since it requests a controller)
         self.data_store: _DaxDataStoreConnector = _DaxDataStoreConnector(self)
 
+    @artiq.experiment.host_only
     def dax_init(self) -> None:
         """Initialize the DAX system.
 
@@ -685,6 +698,11 @@ class DaxSystem(_DaxModuleBase):
         Finally, all :func:`post_init` functions are called in the same order.
         """
 
+        # Store system information in local archive
+        self.set_dataset(self.get_system_key('dax_system_id'), self.SYS_ID, archive=True)
+        self.set_dataset(self.get_system_key('dax_system_version'), self.SYS_VER, archive=True)
+
+        # Perform system initialization
         self.logger.debug('Starting DAX system initialization...')
         self._init_system()
         self._post_init_system()
@@ -779,6 +797,10 @@ class _DaxNameRegistry:
 
     # Module base type variable
     __M_T = typing.TypeVar('__M_T', bound=_DaxModuleBase)
+    # Service type variable
+    __S_T = typing.TypeVar('__S_T', bound=DaxService)
+    # Interface type variable
+    __I_T = typing.TypeVar('__I_T', bound=DaxInterface)
 
     def __init__(self, system: DaxSystem):
         """Create a new DAX name registry.
@@ -802,7 +824,7 @@ class _DaxNameRegistry:
         # A dict containing registered services
         self._services: typing.Dict[str, DaxService] = dict()
 
-    def add_module(self, module: _DaxModuleBase) -> None:
+    def add_module(self, module: __M_T) -> None:
         """Register a module.
 
         :param module: The module to register
@@ -888,8 +910,7 @@ class _DaxNameRegistry:
         :returns: A dict with key-module pairs
         """
 
-        assert issubclass(type_, (DaxModuleInterface, _DaxModuleBase)), \
-            'Provided type must be a DAX module base or interface'
+        assert issubclass(type_, _DaxModuleBase), 'Provided type must be a subclass of DaxModuleBase'
 
         # Search for all modules matching the type
         results: typing.Dict[str, _DaxNameRegistry.__M_T] = {k: m for k, m in self._modules.items()
@@ -955,7 +976,6 @@ class _DaxNameRegistry:
 
         :returns: A list of device keys that were registered
         """
-
         device_key_list: typing.List[str] = natsort.natsorted(self._devices.keys())  # Natural sort the list
         return device_key_list
 
@@ -978,7 +998,7 @@ class _DaxNameRegistry:
         # Return assigned key
         return _KEY_SEPARATOR.join([self._sys_services_key, service_name])
 
-    def add_service(self, service: DaxService) -> None:
+    def add_service(self, service: __S_T) -> None:
         """Register a service.
 
         Services are added to the registry to ensure every service is only present once.
@@ -990,7 +1010,7 @@ class _DaxNameRegistry:
 
         assert isinstance(service, DaxService), 'Service must be a DAX service'
 
-        # Services get indexed by name
+        # Services get indexed by name (the name of a service is unique)
         key: str = service.get_name()
 
         # Get the service that registered with the service name (None if key is available)
@@ -1003,7 +1023,7 @@ class _DaxNameRegistry:
         # Add service to the registry
         self._services[key] = service
 
-    def has_service(self, key: typing.Union[str, typing.Type[DaxService]]) -> bool:
+    def has_service(self, key: typing.Union[str, typing.Type[__S_T]]) -> bool:
         """Return if a service is available.
 
         Check if a service is available in this system.
@@ -1018,7 +1038,15 @@ class _DaxNameRegistry:
         else:
             return True
 
-    def get_service(self, key: typing.Union[str, typing.Type[DaxService]]) -> DaxService:
+    @typing.overload
+    def get_service(self, key: str) -> DaxService:
+        ...
+
+    @typing.overload
+    def get_service(self, key: typing.Type[__S_T]) -> __S_T:
+        ...
+
+    def get_service(self, key: typing.Union[str, typing.Type[__S_T]]) -> DaxService:
         """Get a service from the registry.
 
         Obtain a registered service.
@@ -1028,17 +1056,17 @@ class _DaxNameRegistry:
         :raises KeyError: Raised if the service is not available
         """
 
-        assert isinstance(key, str) or issubclass(key, DaxService)
+        assert isinstance(key, str) or issubclass(key, DaxService), 'Key must be a string or a DAX service type'
 
-        # Figure the right key
-        key = key if isinstance(key, str) else key.SERVICE_NAME
+        # Obtain the key
+        service_key: str = key if isinstance(key, str) else key.SERVICE_NAME
 
         # Try to return the requested service
         try:
-            return self._services[key]
+            return self._services[service_key]
         except KeyError:
             # Service was not found
-            raise KeyError('Service "{:s}" is not available') from None
+            raise KeyError(f'Service "{service_key:s}" is not available') from None
 
     def get_service_key_list(self) -> typing.List[str]:
         """Return a list of registered service keys.
@@ -1048,6 +1076,46 @@ class _DaxNameRegistry:
 
         service_key_list: typing.List[str] = natsort.natsorted(self._services.keys())  # Natural sort the list
         return service_key_list
+
+    def find_interface(self, type_: typing.Type[__I_T]) -> __I_T:
+        """Find a unique interface that matches the requested type.
+
+        :param type_: The type of the interface
+        :returns: The unique interface of the requested type
+        :raises KeyError: Raised if no interfaces of the desired type were found
+        :raises LookupError: Raised if more then one interface of the desired type was found
+        """
+
+        # Search for all interfaces matching the type
+        results: typing.Dict[str, _DaxNameRegistry.__I_T] = self.search_interfaces(type_)
+
+        if not results:
+            # No interfaces were found
+            raise KeyError(f'Could not find interfaces with type "{type_.__name__:s}"')
+        elif len(results) > 1:
+            # More than one interface was found
+            raise LookupError(f'Could not find a unique interface with type "{type_.__name__:s}"')
+
+        # Return the only result
+        _, interface = results.popitem()
+        return interface
+
+    def search_interfaces(self, type_: typing.Type[__I_T]) -> typing.Dict[str, __I_T]:
+        """Search for interfaces that match the requested type and return results as a dict.
+
+        :param type_: The type of the interfaces
+        :returns: A dict with key-interface pairs
+        """
+
+        assert issubclass(type_, DaxInterface), 'Provided type must be a subclass of DaxInterface'
+
+        # Search for all modules and services matching the interface type
+        iterator: typing.Iterable[_DaxHasSystem] = itertools.chain(self._modules.values(), self._services.values())
+        results: typing.Dict[str, _DaxNameRegistry.__I_T] = {itf.get_system_key(): itf  # type: ignore
+                                                             for itf in iterator if isinstance(itf, type_)}
+
+        # Return the list with results
+        return results
 
 
 class _DaxDataStoreConnector:
@@ -1189,12 +1257,12 @@ class _DaxDataStoreConnector:
 _DaxDataStoreConnector.load_commit_hashes()
 
 # Type variable for dax_client_factory() decorator c (client) argument
-__C_T = typing.TypeVar('__C_T', bound=DaxClient)
+__DCF_C_T = typing.TypeVar('__DCF_C_T', bound=DaxClient)  # Note: this name should not alias with other type variables!
 # Type variable for dax_client_factory() system_type argument
-__S_T = typing.TypeVar('__S_T', bound=DaxSystem)
+__DCF_S_T = typing.TypeVar('__DCF_S_T', bound=DaxSystem)  # Note: this name should not alias with other type variables!
 
 
-def dax_client_factory(c: typing.Type[__C_T]) -> typing.Callable[[typing.Type[__S_T]], typing.Type[__C_T]]:
+def dax_client_factory(c: typing.Type[__DCF_C_T]) -> typing.Callable[[typing.Type[__DCF_S_T]], typing.Type[__DCF_C_T]]:
     """Decorator to convert a DaxClient class to a factory function for that class.
 
     :param c: The DAX client to create a factory function for
@@ -1206,7 +1274,7 @@ def dax_client_factory(c: typing.Type[__C_T]) -> typing.Callable[[typing.Type[__
 
     # Use the wraps decorator, but do not inherit the docstring
     @functools.wraps(c, assigned=[e for e in functools.WRAPPER_ASSIGNMENTS if e != '__doc__'])
-    def wrapper(system_type: typing.Type[__S_T]) -> typing.Type[__C_T]:
+    def wrapper(system_type: typing.Type[__DCF_S_T]) -> typing.Type[__DCF_C_T]:
         """Create a new DAX client class.
 
         This factory function will create a new client class for a given system type.

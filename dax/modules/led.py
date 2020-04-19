@@ -11,7 +11,7 @@ class LedModule(DaxModule):
     def build(self, *leds, init=False):
         # Check arguments
         if 1 > len(leds) > 8:
-            raise TypeError("Number of LED's must be in the range 1..8")
+            raise TypeError("Number of LED's must be in the range [1..8]")
         assert isinstance(init, bool), 'Initialization flag must be of type bool'
 
         # Store attributes
@@ -48,7 +48,7 @@ class LedModule(DaxModule):
 
     @kernel
     def set_o(self, o, index=np.int32(0)):
-        self.led[index].set_o(o)
+        self.led[index].set_o(bool(o))
 
     @kernel
     def on(self, index=np.int32(0)):

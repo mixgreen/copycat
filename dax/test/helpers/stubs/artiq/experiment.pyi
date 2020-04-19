@@ -65,7 +65,7 @@ class StringValue(_SimpleArgProcessor):
 
 class HasEnvironment:
     # Possible data types for basic dataset values
-    __BDV_T = typing.Union[bool, int, float, np.int32, np.int64]
+    __BDV_T = typing.Union[bool, int, float, str, np.int32, np.int64]
     # Possible data types for dataset values
     __DV_T = typing.Union[__BDV_T, typing.List[__BDV_T], np.ndarray]
     # Possible data types for dataset default values

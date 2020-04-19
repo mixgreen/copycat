@@ -56,9 +56,9 @@ class SystemBenchmarkDaxInit(DaxClient, EnvExperiment):
 
         # Store recorded average initialization time
         init_time = total / self.num_samples
-        self.system.set_dataset_sys(self.system.DAX_INIT_LATENCY_KEY, init_time)
+        self.system.set_dataset_sys(self.system.DAX_INIT_TIME_KEY, init_time)
 
     def analyze(self):
         # Report result
-        init_time = dax.util.units.time_to_str(self.system.get_dataset_sys(self.system.DAX_INIT_LATENCY_KEY))
+        init_time = dax.util.units.time_to_str(self.system.get_dataset_sys(self.system.DAX_INIT_TIME_KEY))
         self.logger.info('Average execution time of dax_init() is {:s}'.format(init_time))

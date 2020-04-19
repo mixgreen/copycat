@@ -11,6 +11,8 @@ from artiq.coredevice.edge_counter import EdgeCounter
 from artiq.coredevice.ttl import TTLInOut, TTLOut
 from artiq.coredevice.core import Core
 
+"""Classes used for testing"""
+
 
 class TestSystem(DaxSystem):
     SYS_ID = 'unittest_system'
@@ -41,8 +43,15 @@ class TestService(DaxService):
         pass
 
 
-class TestServiceChild(TestService):
+class TestInterface(DaxInterface):
+    pass
+
+
+class TestServiceChild(TestService, TestInterface):
     SERVICE_NAME = 'test_service_child'
+
+
+"""Actual test cases"""
 
 
 class DaxStaticTyping(unittest.TestCase):
@@ -229,6 +238,27 @@ class DaxNameRegistryTestCase(unittest.TestCase):
         self.assertTrue(r.has_service(TestServiceChild.SERVICE_NAME), 'Did not returned true for existing service')
         self.assertListEqual(r.get_service_key_list(), [s.get_name() for s in [s0, s1]],
                              'List of registered service keys incorrect')
+
+    def test_interface(self):
+        from dax.base.dax import _DaxNameRegistry
+
+        # Test system
+        s = TestSystem(get_manager_or_parent())
+        TestService(s)
+        # Registry
+        r = s.registry
+
+        # Confirm that interface can not be found before adding
+        with self.assertRaises(KeyError, msg='Interface not available did not raise'):
+            r.find_interface(TestInterface)
+        self.assertDictEqual(r.search_interfaces(TestInterface), {},
+                             'Interface not available did not return an empty dict')
+
+        # Add and test interface features
+        itf = TestServiceChild(s)  # Class that implements the interface
+        self.assertIs(r.find_interface(TestInterface), itf, 'Find interface did not return expected object')
+        self.assertDictEqual(r.search_interfaces(TestInterface), {itf.get_system_key(): itf},
+                             'Search interfaces did not return expected result')
 
 
 class DaxDataStoreTestCase(unittest.TestCase):

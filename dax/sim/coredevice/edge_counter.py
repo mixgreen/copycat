@@ -36,7 +36,7 @@ class EdgeCounter(DaxSimDevice):
 
         # Register signals
         self._signal_manager = get_signal_manager()
-        self._count = self._signal_manager.register(self.key, 'count', int)
+        self._count = self._signal_manager.register(self.key, 'count', int, init='z')
         self._sensitivity = self._signal_manager.register(self.key, 'sensitivity', bool, size=1, init=0)
 
     def core_reset(self) -> None:
@@ -55,7 +55,7 @@ class EdgeCounter(DaxSimDevice):
         # Set the number of counts for the duration window (for graphical purposes)
         self._signal_manager.event(self._count, num_events)
         delay_mu(duration)  # Move the cursor
-        self._signal_manager.event(self._count, 0)
+        self._signal_manager.event(self._count, 'z')
 
         # Store number of events and the timestamp in count buffer
         self._count_buffer.append((now_mu(), num_events))

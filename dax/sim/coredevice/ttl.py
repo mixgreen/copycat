@@ -83,7 +83,7 @@ class TTLInOut(TTLOut):
         # 0 = input, 1 = output
         self._signal_manager.event(self._direction, 1 if oe else 0)
         self._signal_manager.event(self._sensitivity, 'z' if oe else 0)
-        self._signal_manager.event(self._value, 'x')
+        self._signal_manager.event(self._value, 'x' if oe else 'z')
 
     @kernel
     def output(self):
@@ -123,8 +123,8 @@ class TTLInOut(TTLOut):
 
         # Move the cursor
         delay_mu(duration)
-        # Return to X after all signals were inserted
-        self._signal_manager.event(self._value, 'x')
+        # Return to Z after all signals were inserted
+        self._signal_manager.event(self._value, 'z')
 
     @kernel
     def gate_rising_mu(self, duration):
