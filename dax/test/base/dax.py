@@ -380,6 +380,17 @@ class DaxModuleBaseTestCase(unittest.TestCase):
         with self.assertRaises(AttributeError, msg='Not calling super.build() in user system did not raise'):
             BadTestSystem(get_manager_or_parent())
 
+    def test_system_kernel_invariants(self):
+        s = TestSystem(get_manager_or_parent())
+
+        # No kernel invariants attribute yet
+        self.assertTrue(hasattr(s, 'kernel_invariants'), 'Default kernel invariants not found')
+
+        # Update kernel invariants
+        invariant = 'foo'
+        s.update_kernel_invariants(invariant)
+        self.assertIn(invariant, s.kernel_invariants, 'Kernel invariants update not successful')
+
     def test_system_id(self):
         # Test if an error is raised when no ID is given to a system
         with self.assertRaises(AssertionError, msg='Not providing system id did not raise'):
@@ -558,11 +569,11 @@ class DaxModuleBaseTestCase(unittest.TestCase):
         s = TestSystem(get_manager_or_parent())
 
         key = 'key1'
-        self.assertListEqual(s.get_dataset_sys(key, default=[11, 12, 13]), [11, 12, 13],
+        value = [11, 12, 13]
+        self.assertListEqual(s.get_dataset_sys(key, default=value), value,
                              'get_dataset_sys() did not returned the provided default value')
-        with self.assertRaises(KeyError,
-                               msg='get_dataset_sys() wrote the default value to the dataset, which it should not'):
-            s.get_dataset_sys(key)
+        self.assertListEqual(s.get_dataset_sys(key), value,
+                             'get_dataset_sys() did not write the default value to the dataset')
 
     def test_setattr_dataset(self):
         s = TestSystem(get_manager_or_parent())

@@ -133,7 +133,7 @@ class _DaxBase(artiq.experiment.HasEnvironment, abc.ABC):
         assert all(isinstance(k, str) for k in keys), 'All keys must be of type str'
 
         # Get kernel invariants using getattr() such that we do not overwrite a user-defined variable
-        kernel_invariants: typing.Set[str] = getattr(self, "kernel_invariants", set())
+        kernel_invariants: typing.Set[str] = getattr(self, 'kernel_invariants', set())
         # Update the set with the given keys
         self.kernel_invariants: typing.Set[str] = kernel_invariants | {*keys}
 
@@ -281,7 +281,8 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
     def init(self) -> None:
         """Override this method to access the dataset (r/w), initialize devices, and record DMA traces.
 
-        The init() function will be called when the user calls dax_init() in the experiment run() function.
+        The :func:`init` function will be called when the user calls :func:`dax_init`
+        in the experiment :func:`run` function.
         """
         pass
 
@@ -289,8 +290,9 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
     def post_init(self) -> None:
         """Override this method for post-initialization procedures (e.g. obtaining DMA handles).
 
-        The post_init() function will be called when the user calls dax_init() in the experiment run() function.
-        The post_init() function is called after all init() functions have been called.
+        The :func:`post_init` function will be called when the user calls :func:`dax_init`
+        in the experiment :func:`run` function.
+        The :func`post_init` function is called after all :func:`init` functions have been called.
         This function is used to perform initialization tasks that are dependent on the initialization
         of other components, for example to obtain a DMA handle.
         """
@@ -311,7 +313,7 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
         Users can optionally specify an expected device type.
         If the device does not match the expected type, an exception is raised.
 
-        Devices that are retrieved using get_device() are not automatically added as kernel invariants.
+        Devices that are retrieved using :func:`get_device` can not be added to the kernel invariants.
         The user is responsible for adding the attribute to the list of kernel invariants.
 
         :param key: The key of the device to obtain
@@ -376,7 +378,7 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
             # Set attribute name to key if no attribute name was given
             attr_name = key
 
-        # Set the device key to the attribute
+        # Set the device as attribute
         if not _is_valid_name(attr_name):
             raise ValueError(f'Attribute name "{attr_name:s}" not valid')
         if hasattr(self, attr_name):
@@ -443,27 +445,41 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
         """Returns the contents of a system dataset.
 
         If the key is present, its value will be returned.
-        If the key is not present and no default is provided, a KeyError will be raised.
-        If the key is not present and a default is provided, the default value will be returned.
+        If the key is not present and no default is provided, a `KeyError` will be raised.
+        If the key is not present and a default is provided, the default value will
+        be written to the dataset and the same value will be returned.
+
+        The above behavior differs slightly from :func:`get_dataset` since it will write
+        the default value to the dataset in case the key was not present.
+
+        Values that are retrieved using this method can not be added to the kernel invariants.
+        The user is responsible for adding the attribute to the list of kernel invariants.
 
         :param key: The key of the system dataset
-        :param default: The default value to return
+        :param default: The default value to set the system dataset to if not present
         :returns: The value of the system dataset or the default value
-        :raises KeyError: Raised if the key was not present
+        :raises KeyError: Raised if the key was not present and no default was provided
         :raises ValueError: Raised if the key has an invalid format
         """
 
         assert isinstance(key, str), 'Key must be of type str'
 
         # Get the full system key
-        system_key = self.get_system_key(key)
+        system_key: str = self.get_system_key(key)
 
         try:
             # Get value from system dataset with extra flags
-            value: typing.Any = self.get_dataset(system_key, default, archive=True)
+            value: typing.Any = self.get_dataset(system_key, archive=True)
         except KeyError:
-            # The key was not found
-            raise KeyError(f'System dataset key "{system_key:s}" not found') from None
+            if default is artiq.experiment.NoDefault:
+                # The value was not available in the system dataset and no default was provided
+                raise KeyError(f'System dataset key "{system_key:s}" not found') from None
+            else:
+                # If the value does not exist, write the default value to the system dataset, but do not archive yet
+                self.logger.debug(f'System dataset key "{key:s}" set to default value "{default}"')
+                self.set_dataset(system_key, default, broadcast=True, persist=True, archive=False)
+                # Get the value again and make sure it is archived
+                value = self.get_dataset(system_key, archive=True)  # Should never raise a KeyError
         else:
             self.logger.debug(f'System dataset key "{key:s}" returned value "{value}"')
 
@@ -488,7 +504,7 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
         The function :func:`hasattr` can be used for conditional initialization in case it is possible that a
         certain attribute is not present (i.e. when this function is used without a default value).
 
-        Attributes set using this function will by default be added as a kernel invariant.
+        Attributes set using this function will by default be added to the kernel invariants.
         It is possible to disable this behavior by setting the appropriate function parameter.
 
         :param key: The key of the system dataset
@@ -499,39 +515,27 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
         :raises AttributeError: Raised if the attribute name was already assigned
         """
 
-        assert isinstance(key, str), 'Key must be of type str'
         assert isinstance(kernel_invariant, bool), 'Kernel invariant flag must be of type bool'
-
-        # Obtain system key
-        system_key: str = self.get_system_key(key)
 
         try:
             # Get the value from system dataset
-            value: typing.Any = self.get_dataset(system_key, archive=True)
+            value: typing.Any = self.get_dataset_sys(key, default)
         except KeyError:
-            if default is artiq.experiment.NoDefault:
-                # The value was not available in the system dataset and no default was provided
-                self.logger.debug(f'System attribute "{key:s}" not set')
-                return
-            else:
-                # If the value does not exist, write the default value to the system dataset, but do not archive yet
-                self.logger.debug(f'System dataset key "{key:s}" set to default value "{default}"')
-                self.set_dataset(system_key, default, broadcast=True, persist=True, archive=False)
-                # Get the value again and make sure it is archived
-                value = self.get_dataset(system_key, archive=True)  # Should never raise a KeyError
+            # The value was not available in the system dataset and no default was provided, attribute will not be set
+            self.logger.debug(f'System attribute "{key:s}" not set')
+        else:
+            # Set the value as attribute
+            if hasattr(self, key):
+                raise AttributeError(f'Attribute name "{key:s}" was already assigned')
+            setattr(self, key, value)
 
-        # Set value as an attribute
-        if hasattr(self, key):
-            raise AttributeError(f'Attribute name "{key:s}" was already assigned')
-        setattr(self, key, value)
+            if kernel_invariant:
+                # Update kernel invariants
+                self.update_kernel_invariants(key)
 
-        if kernel_invariant:
-            # Update kernel invariants
-            self.update_kernel_invariants(key)
-
-        # Debug message
-        msg_postfix: str = ' (kernel invariant)' if kernel_invariant else ''
-        self.logger.debug(f'System attribute "{key:s}" set to value "{value}"{msg_postfix:s}')
+            # Debug message
+            msg_postfix: str = ' (kernel invariant)' if kernel_invariant else ''
+            self.logger.debug(f'System attribute "{key:s}" set to value "{value}"{msg_postfix:s}')
 
     @artiq.experiment.host_only
     def hasattr(self, *keys: str) -> bool:
@@ -631,7 +635,7 @@ class DaxSystem(_DaxModuleBase):
         # Check if system version was overridden
         assert hasattr(self, 'SYS_VER'), 'Every DAX system class must have a SYS_VER class attribute'
         assert isinstance(self.SYS_VER, int), 'System version must be of type int'
-        assert self.SYS_VER >= 0, 'Invalid system version, version number must be positive'
+        assert self.SYS_VER >= 0, 'Invalid system version, version number must be larger or equal to zero'
 
         # Call super, add names, add a new registry
         super(DaxSystem, self).__init__(managers_or_parent, self.SYS_NAME, self.SYS_NAME, _DaxNameRegistry(self),
