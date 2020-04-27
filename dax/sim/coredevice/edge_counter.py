@@ -7,6 +7,7 @@ from artiq.coredevice.edge_counter import CounterOverflow
 
 from artiq.language.core import *
 from artiq.language.units import *
+from artiq.language.types import *
 
 from dax.sim.device import DaxSimDevice
 from dax.sim.signal import get_signal_manager
@@ -111,7 +112,7 @@ class EdgeCounter(DaxSimDevice):
             raise IndexError(f'Device "{self.key:s}" has no count to return')
 
     @kernel
-    def fetch_timestamped_count(self, timeout_mu=np.int64(-1)) -> TTuple([TInt64, TInt32]):
+    def fetch_timestamped_count(self, timeout_mu=np.int64(-1)) -> TTuple([TInt64, TInt32]):  # type: ignore
         if len(self._count_buffer):
             # Get count and timestamp from the buffer
             timestamp, count = self._count_buffer.popleft()
