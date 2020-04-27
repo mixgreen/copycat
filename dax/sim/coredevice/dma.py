@@ -2,7 +2,11 @@ import numpy as np
 
 from artiq.coredevice.exceptions import DMAError
 
-from dax.sim.coredevice import *
+from artiq.language.core import *
+from artiq.language.units import *
+
+from dax.sim.device import DaxSimDevice
+from dax.sim.signal import get_signal_manager
 
 
 class _DMARecordContext:
@@ -125,7 +129,7 @@ class CoreDMA(DaxSimDevice):
             raise DMAError(f'Invalid DMA handle "{handle.name:s}", epoch mismatch')
 
         # Place events for DMA playback
-        self._signal_manager.event(self._dma_play, None)  # Represents the event of playing a trace
+        self._signal_manager.event(self._dma_play, True)  # Represents the event of playing a trace
         self._signal_manager.event(self._dma_play_name, handle.name)  # Represents the duration of the event
 
         # Forward time by the duration of the DMA trace

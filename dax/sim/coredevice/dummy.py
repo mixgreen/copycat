@@ -1,4 +1,4 @@
-from dax.sim.coredevice import *
+from dax.sim.device import DaxSimDevice
 
 
 class Dummy(DaxSimDevice):

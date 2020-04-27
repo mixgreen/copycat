@@ -3,8 +3,10 @@ import collections
 import csv
 import numpy as np
 
-from dax.sim.coredevice import *
-from dax.sim.signal import DaxSignalManager
+from artiq.language.core import *
+
+from dax.sim.device import DaxSimDevice
+from dax.sim.signal import get_signal_manager, DaxSignalManager
 from dax.sim.sim import DAX_SIM_CONFIG_KEY
 
 
@@ -35,7 +37,7 @@ class Core(DaxSimDevice):
 
         # Get the signal manager and register signals
         self._signal_manager: DaxSignalManager = get_signal_manager()
-        self._reset_signal: typing.Any = self._signal_manager.register(self.key, 'reset', object)
+        self._reset_signal: typing.Any = self._signal_manager.register(self.key, 'reset', bool, size=1)
 
         # Counting dicts for function call profiling
         self._func_counter: typing.Counter[typing.Any] = collections.Counter()
@@ -117,8 +119,8 @@ class Core(DaxSimDevice):
 
     @kernel
     def reset(self) -> None:
-        # Register reset event
-        self._signal_manager.event(self._reset_signal, None)
+        # Reset signal to 1
+        self._signal_manager.event(self._reset_signal, 1)
 
         # Reset devices to clear buffers
         for _, d in self._device_manager.active_devices:
@@ -127,6 +129,9 @@ class Core(DaxSimDevice):
 
         # Move cursor
         delay_mu(125000)
+
+        # Reset signal back to 0
+        self._signal_manager.event(self._reset_signal, 0)
 
     @kernel
     def break_realtime(self) -> None:

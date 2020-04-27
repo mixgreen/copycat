@@ -1,7 +1,9 @@
 import typing
 
-from dax.sim.coredevice import *
-from dax.sim.signal import DaxSignalManager
+from artiq.language.core import *
+
+from dax.sim.device import DaxSimDevice
+from dax.sim.signal import get_signal_manager, DaxSignalManager
 
 
 class _GenericBase:
@@ -31,7 +33,7 @@ class _GenericBase:
                           f'{",".join(f"{k:s}={v}" for k, v in kwargs.items())}'
 
         # Register the event
-        self._signal_manager.event(self._signal_call, None)  # Register the timestamp of the call
+        self._signal_manager.event(self._signal_call, True)  # Register the timestamp of the call
         self._signal_manager.event(self._signal_function, f'{self._attr_name:s}({parameters})')
 
 
@@ -42,12 +44,12 @@ class Generic(_GenericBase, DaxSimDevice):
         DaxSimDevice.__init__(self, dmgr, **kwargs)
 
         # Register signal
-        self._signal_manager = get_signal_manager()
-        signal_call = self._signal_manager.register(self.key, 'call', object)
-        signal_function = self._signal_manager.register(self.key, 'function', str)
+        signal_manager = get_signal_manager()
+        signal_call = signal_manager.register(self.key, 'call', object)
+        signal_function = signal_manager.register(self.key, 'function', str)
 
         # Call super for _GenericBase
-        _GenericBase.__init__(self, None, self._signal_manager, signal_call, signal_function)
+        _GenericBase.__init__(self, None, signal_manager, signal_call, signal_function)
 
     def __call__(self, *args: typing.Tuple[typing.Any, ...], **kwargs: typing.Dict[str, typing.Any]):
         # The device can not be directly called, only its attributes

@@ -5,7 +5,11 @@ import numpy as np
 
 from artiq.coredevice.edge_counter import CounterOverflow
 
-from dax.sim.coredevice import *
+from artiq.language.core import *
+from artiq.language.units import *
+
+from dax.sim.device import DaxSimDevice
+from dax.sim.signal import get_signal_manager
 
 
 class EdgeCounter(DaxSimDevice):

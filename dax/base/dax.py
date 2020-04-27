@@ -292,7 +292,7 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
 
         The :func:`post_init` function will be called when the user calls :func:`dax_init`
         in the experiment :func:`run` function.
-        The :func`post_init` function is called after all :func:`init` functions have been called.
+        The :func:`post_init` function is called after all :func:`init` functions have been called.
         This function is used to perform initialization tasks that are dependent on the initialization
         of other components, for example to obtain a DMA handle.
         """
@@ -650,7 +650,7 @@ class DaxSystem(_DaxModuleBase):
         return self.__sim_enabled
 
     def build(self, *args: typing.Any, **kwargs: typing.Any) -> None:
-        """Override this method to build your DAX system. (Do not forget to call super.build() first!)"""
+        """Override this method to build your DAX system. (Do not forget to call `super.build()` first!)"""
 
         if args or kwargs:
             # Warn if we find any dangling arguments

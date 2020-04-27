@@ -4,7 +4,7 @@ import abc
 import artiq.coredevice.core  # type: ignore
 
 
-class DaxSimDevice:
+class DaxSimDevice(abc.ABC):
     def __init__(self, dmgr: typing.Any, _key: str,
                  _core: typing.Any = None, core_device: str = 'core',
                  **kwargs: typing.Dict[str, typing.Any]):

@@ -1,5 +1,3 @@
-import numpy as np
-
 from dax.modules.rpc_benchmark import *
 import dax.util.units
 

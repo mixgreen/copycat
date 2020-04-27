@@ -96,17 +96,17 @@ class VcdSignalManager(DaxSignalManager):
         Signals have to be registered before any events are committed.
 
         Possible types and expected arguments:
-        - bool (a register with bit values 0,1,X,Z), provide a size of the register
-        - int, np.int32, np.int64
-        - float
-        - str
-        - object (an event type with value None or 0,1,X,Z)
+        - `bool` (a register with bit values `0`,`1`,`X`,`Z`), provide a size of the register
+        - `int`, `np.int32`, `np.int64`
+        - `float`
+        - `str`
+        - `object` (an event type with no value)
 
         :param scope: The scope of the signal, normally the device or module name
         :param name: The name of the signal
         :param type_: The type of the signal
         :param size: The size of the data (only for type bool)
-        :param init: Initial value (defaults to X)
+        :param init: Initial value (defaults to `X`)
         :return: The signal object to use when committing events
         """
         if type_ not in self._CONVERT_TYPE:
@@ -115,23 +115,26 @@ class VcdSignalManager(DaxSignalManager):
         # Get the var type
         var_type: str = self._CONVERT_TYPE[type_]
 
+        # Workaround for str init values
+        if type_ is str and init is None:
+            init = ''  # Shows up as `Z` instead of string value 'x'
+
         # Register the signal with the VCD writer
         return self._vcd.register_var(scope, name, var_type=var_type, size=size, init=init)
 
     def event(self, signal: __S_T, value: typing.Any, time: typing.Optional[np.int64] = None) -> None:
         """Commit an event.
 
-        Bool type signals can have values 0, 1, X, Z.
+        Bool type signals can have values `0`,`1`,`X`,`Z`.
 
-        Event (`object`) type signals are treated like bool type signals,
-        but the values do not show up in the graphical interface.
-        We recommend to use value `None` for event type events.
+        Event (`object`) type signals represent timestamps and do not have a value.
+        We recommend to always use value `True` for event type signals.
 
         String type signals can use value `None` which is equivalent to `Z`
 
         :param signal: The signal that changed
         :param value: The new value of the signal
-        :param time: Optional time that the signal changed (now_mu() if no time was provided)
+        :param time: Optional time that the signal changed (:func:`now_mu()` if no time was provided)
         """
         # Add event to buffer
         self._event_buffer.append((artiq.language.core.now_mu() if time is None else time, signal, value))

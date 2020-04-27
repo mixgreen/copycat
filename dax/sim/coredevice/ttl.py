@@ -4,7 +4,11 @@ import itertools
 import enum
 import numpy as np
 
-from dax.sim.coredevice import *
+from artiq.language.core import *
+from artiq.language.units import *
+
+from dax.sim.device import DaxSimDevice
+from dax.sim.signal import get_signal_manager
 
 
 class TTLOut(DaxSimDevice):
