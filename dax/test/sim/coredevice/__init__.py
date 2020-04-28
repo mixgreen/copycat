@@ -1,3 +1,4 @@
+from .ad9910 import *
 from .ad9912 import *
 from .core import *
 from .dma import *

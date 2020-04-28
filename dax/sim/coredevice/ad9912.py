@@ -19,6 +19,7 @@ class AD9912(DaxSimDevice):
         self._freq = self._signal_manager.register(self.key, 'freq', float)
         self._phase = self._signal_manager.register(self.key, 'phase', float)
         self._att = self._signal_manager.register(self.key, 'att', float)
+        self._sw = self._signal_manager.register(self.key, 'sw', bool, size=1)
 
         # CPLD device
         self.cpld = dmgr.get(cpld_device)
@@ -49,7 +50,7 @@ class AD9912(DaxSimDevice):
     # noinspection PyUnusedLocal
     @kernel
     def set_att_mu(self, att):
-        att = (255 - att_mu) / 8  # Inverted att to att_mu
+        att = (255 - att) / 8  # Inverted att to att_mu
         self.set_att(att)
 
     @kernel
@@ -77,3 +78,7 @@ class AD9912(DaxSimDevice):
     def set(self, frequency, phase=0.0):
         self._signal_manager.event(self._freq, frequency)
         self._signal_manager.event(self._phase, phase)
+
+    @kernel
+    def cfg_sw(self, state):
+        self._signal_manager.event(self._sw, state)

@@ -1,4 +1,3 @@
-import random
 import collections
 import enum
 import numpy as np
@@ -33,9 +32,6 @@ class EdgeCounter(DaxSimDevice):
 
         # Store simulation settings
         self._input_freq = input_freq
-
-        # Random number generator for generating values
-        self._rng = random.Random()
 
         # Buffers to store counts
         self._count_buffer = collections.deque()

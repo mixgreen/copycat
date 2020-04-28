@@ -19,7 +19,7 @@ class TTLOut(DaxSimDevice):
 
         # Register signals
         self._signal_manager = get_signal_manager()
-        self._value = self._signal_manager.register(self.key, 'value', bool, size=1)
+        self._state = self._signal_manager.register(self.key, 'state', bool, size=1)
 
     @kernel
     def output(self):
@@ -27,7 +27,7 @@ class TTLOut(DaxSimDevice):
 
     @kernel
     def set_o(self, o):
-        self._signal_manager.event(self._value, 1 if o else 0)
+        self._signal_manager.event(self._state, 1 if o else 0)
 
     @kernel
     def on(self):
@@ -87,7 +87,7 @@ class TTLInOut(TTLOut):
         # 0 = input, 1 = output
         self._signal_manager.event(self._direction, 1 if oe else 0)
         self._signal_manager.event(self._sensitivity, 'z' if oe else 0)
-        self._signal_manager.event(self._value, 'x' if oe else 'z')
+        self._signal_manager.event(self._state, 'x' if oe else 'z')
 
     @kernel
     def output(self):
@@ -109,11 +109,11 @@ class TTLInOut(TTLOut):
         timestamps = self._rng.sample(range(now, now + duration), num_events)
 
         # Initialize the signal to 0 at the start of the window (for graphical purposes)
-        self._signal_manager.event(self._value, 0)
+        self._signal_manager.event(self._state, 0)
 
         # Write the stream of input events to the signal manager
         for t, v in zip(timestamps, itertools.cycle((1, 0))):
-            self._signal_manager.event(self._value, v, t)
+            self._signal_manager.event(self._state, v, t)
 
         if edge_type is self._EdgeType.RISING:
             # Store odd half of the event times in the event buffer
@@ -128,7 +128,7 @@ class TTLInOut(TTLOut):
         # Move the cursor
         delay_mu(duration)
         # Return to Z after all signals were inserted
-        self._signal_manager.event(self._value, 'z')
+        self._signal_manager.event(self._state, 'z')
 
     @kernel
     def gate_rising_mu(self, duration):
@@ -184,8 +184,8 @@ class TTLInOut(TTLOut):
         # Sample at the current time and store result in the sample buffer
         val = np.int32(self._rng.randint(0, 1))
         self._sample_buffer.append(val)
-        self._signal_manager.event(self._value, val)  # Sample value at current time
-        self._signal_manager.event(self._value, 'x', now_mu() + 1)  # Return to X after sample
+        self._signal_manager.event(self._state, val)  # Sample value at current time
+        self._signal_manager.event(self._state, 'x', now_mu() + 1)  # Return to X after sample
 
     @kernel
     def sample_get(self):
