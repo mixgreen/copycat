@@ -46,6 +46,7 @@ class AD9912(DaxSimDevice):
         delay(1 * ms)
         self._signal_manager.event(self._init, 1)
 
+    # noinspection PyUnusedLocal
     @kernel
     def set_att_mu(self, att):
         att = (255 - att_mu) / 8  # Inverted att to att_mu

@@ -13,28 +13,27 @@ class _GenericBase:
         assert isinstance(attr_name, str) or attr_name is None, 'Attribute name must be of type str or None'
 
         # Store attributes
-        self._attr_name: typing.Optional[str] = attr_name
-        self._signal_manager: DaxSignalManager = signal_manager
+        self._attr_name = attr_name
+        self._signal_manager = signal_manager
         self._signal_call = signal_call
         self._signal_function = signal_function
 
     def __getattr__(self, item: str) -> typing.Any:
         # Non-existing attributes are added
-        attr_name: str = item if self._attr_name is None else '.'.join([self._attr_name, item])
-        obj: typing.Any = _GenericBase(attr_name, self._signal_manager,
-                                       self._signal_call, self._signal_function)
+        attr_name = item if self._attr_name is None else '.'.join([self._attr_name, item])
+        obj = _GenericBase(attr_name, self._signal_manager, self._signal_call, self._signal_function)
         setattr(self, item, obj)
         return obj
 
     def __call__(self, *args: typing.Tuple[typing.Any, ...], **kwargs: typing.Dict[str, typing.Any]):
         # Make a string for the parameters
-        parameters: str = f'{",".join(str(a) for a in args)}' \
-                          f'{"," if args and kwargs else ""}' \
-                          f'{",".join(f"{k:s}={v}" for k, v in kwargs.items())}'
+        parameters = '{:s}{:s}{:s}'.format(','.join(str(a) for a in args),
+                                           ',' if args and kwargs else '',
+                                           ','.join('{:s}={}'.format(k, v) for k, v in kwargs.items()))
 
         # Register the event
         self._signal_manager.event(self._signal_call, True)  # Register the timestamp of the call
-        self._signal_manager.event(self._signal_function, f'{self._attr_name:s}({parameters})')
+        self._signal_manager.event(self._signal_function, '{:s}({})'.format(self._attr_name, parameters))
 
 
 class Generic(_GenericBase, DaxSimDevice):

@@ -5,6 +5,8 @@ import artiq.coredevice.core  # type: ignore
 
 
 class DaxSimDevice(abc.ABC):
+    """Abstract base class for simulated device drivers."""
+
     def __init__(self, dmgr: typing.Any, _key: str,
                  _core: typing.Any = None, core_device: str = 'core',
                  **kwargs: typing.Dict[str, typing.Any]):
@@ -20,7 +22,7 @@ class DaxSimDevice(abc.ABC):
         assert isinstance(core_device, str), 'Core device argument must be of type str'
 
         # Store device key
-        self.__key: str = _key
+        self.__key = _key
         # Store core device
         self.__core = dmgr.get(core_device) if _core is None else _core
 
@@ -31,7 +33,7 @@ class DaxSimDevice(abc.ABC):
     def core(self) -> artiq.coredevice.core.Core:
         """Get the core object.
 
-        :returns: The core object
+        :return: The core object
         """
         return self.__core
 

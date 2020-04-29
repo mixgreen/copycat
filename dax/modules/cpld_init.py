@@ -1,7 +1,7 @@
-import artiq.coredevice.urukul
-import artiq.coredevice.ad9910
-import artiq.coredevice.ad9912
-import artiq.coredevice.suservo
+import artiq.coredevice.urukul  # type: ignore
+import artiq.coredevice.ad9910  # type: ignore
+import artiq.coredevice.ad9912  # type: ignore
+import artiq.coredevice.suservo  # type: ignore
 
 from dax.experiment import *
 import dax.util.units
@@ -14,12 +14,12 @@ class CpldInitModule(DaxModule):
     the attenuation settings are loaded to the device driver.
     """
 
-    # Devices types that use Urukul CPLD
     DEVICE_TYPES = (artiq.coredevice.ad9910.AD9910,
                     artiq.coredevice.ad9912.AD9912,
-                    artiq.coredevice.suservo.SUServo)
+                    artiq.coredevice.suservo.SUServo,)
+    """Devices types that use Urukul CPLD."""
 
-    def build(self, interval=5 * us, check_registered_devices=True):
+    def build(self, interval: float = 5 * us, check_registered_devices: bool = True) -> None:  # type: ignore
         assert isinstance(interval, float), 'Interval must be a time which has type float'
         assert isinstance(check_registered_devices, bool), 'Check registered devices flag must be of type bool'
 
@@ -48,13 +48,13 @@ class CpldInitModule(DaxModule):
         # Store kernel invariants
         self.update_kernel_invariants('_interval', '_cpld')
 
-    def init(self):
+    def init(self) -> None:
         if self._cpld:
             # Initialize CPLD devices
             self._init()
 
     @kernel
-    def _init(self):
+    def _init(self) -> None:
         # Reset the core
         self.core.reset()
 
@@ -66,5 +66,5 @@ class CpldInitModule(DaxModule):
         # Wait until event is submitted
         self.core.wait_until_mu(now_mu())
 
-    def post_init(self):
+    def post_init(self) -> None:
         pass

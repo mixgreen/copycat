@@ -3,5 +3,6 @@ int32 = int
 int64 = int
 
 
+# noinspection PyPep8Naming
 class ndarray:
     ...

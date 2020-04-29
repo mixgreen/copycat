@@ -1,6 +1,6 @@
 import numpy as np
 
-import artiq.coredevice.ttl
+import artiq.coredevice.ttl  # type: ignore
 
 from dax.experiment import *
 import dax.util.units

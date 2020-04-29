@@ -4,8 +4,8 @@ import typing
 from dax.sim.time import DaxTimeManager
 from dax.sim.signal import set_signal_manager, get_signal_manager, VcdSignalManager
 
-# The logger for this file
-_logger: logging.Logger = logging.getLogger(__name__)
+_logger = logging.getLogger(__name__)
+"""The logger for this file."""
 
 
 class DaxSimConfig:
@@ -20,12 +20,12 @@ class DaxSimConfig:
         _logger.info('DAX simulation enabled')
 
         # Store attributes
-        self.__timescale: float = timescale
-        self.__output_enabled: bool = output
+        self.__timescale = timescale
+        self.__output_enabled = output
 
         # Make base name for output files
-        scheduler: typing.Any = dmgr.get('scheduler')
-        self.__base_name: str = f'{scheduler.rid:09d}-{str(scheduler.expid.get("class_name"))}'
+        scheduler = dmgr.get('scheduler')
+        self.__base_name = '{:09d}-{}'.format(scheduler.rid, str(scheduler.expid.get("class_name")))
 
         if self.output_enabled:
             # Set the signal manager
@@ -52,9 +52,9 @@ class DaxSimConfig:
         assert isinstance(postfix, str) or postfix is None, 'Postfix must be of type str or None'
 
         # Add postfix if provided
-        output_file_name: str = self.__base_name if postfix is None else f'{self.__base_name:s}-{postfix:s}'
+        output_file_name = self.__base_name if postfix is None else '{:s}-{:s}'.format(self.__base_name, postfix)
         # Return full file name
-        return f'{output_file_name:s}.{ext:s}'
+        return '{:s}.{:s}'.format(output_file_name, ext)
 
     @staticmethod
     def close() -> None:

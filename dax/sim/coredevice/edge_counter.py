@@ -15,6 +15,7 @@ from dax.sim.signal import get_signal_manager
 
 class EdgeCounter(DaxSimDevice):
     class _EdgeType(enum.IntEnum):
+        """Enum class for the edge type."""
         NONE = 0
         RISING = 1
         FALLING = 2
@@ -103,14 +104,15 @@ class EdgeCounter(DaxSimDevice):
 
             if count >= self.counter_max:
                 # Count overflow
-                raise CounterOverflow(f'Input edge counter overflow for device {self.key:s}')
+                raise CounterOverflow('Input edge counter overflow for device {:s}'.format(self.key))
 
             # Return the result
             return count
         else:
             # No count available to return
-            raise IndexError(f'Device "{self.key:s}" has no count to return')
+            raise IndexError('Device "{:s}" has no count to return'.format(self.key))
 
+    # noinspection PyUnusedLocal
     @kernel
     def fetch_timestamped_count(self, timeout_mu=np.int64(-1)) -> TTuple([TInt64, TInt32]):  # type: ignore
         if len(self._count_buffer):
@@ -119,7 +121,7 @@ class EdgeCounter(DaxSimDevice):
 
             if count >= self.counter_max:
                 # Count overflow
-                raise CounterOverflow(f'Input edge counter overflow for device {self.key:s}')
+                raise CounterOverflow('Input edge counter overflow for device {:s}'.format(self.key))
 
             # Return the result
             return timestamp, count

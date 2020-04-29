@@ -163,6 +163,7 @@ class TTLInOut(TTLOut):
     def gate_both(self, duration):
         return self.gate_both_mu(self.core.seconds_to_mu(duration))
 
+    # noinspection PyUnusedLocal
     @kernel
     def count(self, up_to_timestamp_mu):
         # This function does not interact with the timeline
@@ -172,6 +173,7 @@ class TTLInOut(TTLOut):
         # Return the count
         return count
 
+    # noinspection PyUnusedLocal
     @kernel
     def timestamp_mu(self, up_to_timestamp_mu):
         # This function does not interact with the timeline
@@ -192,7 +194,7 @@ class TTLInOut(TTLOut):
             return self._sample_buffer.popleft()
         else:
             # Not samples available
-            raise IndexError(f'Device "{self.key:s}" has no sample to return')
+            raise IndexError('Device "{:s}" has no sample to return'.format(self.key))
 
     @kernel
     def sample_get_nonrt(self):

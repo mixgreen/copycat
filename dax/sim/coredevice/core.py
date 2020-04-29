@@ -20,28 +20,28 @@ class Core(DaxSimDevice):
 
         # Get the virtual simulation configuration device, which will configure the simulation
         # DAX system already initializes the virtual sim config device, this is a fallback
-        self._sim_config: typing.Any = dmgr.get(DAX_SIM_CONFIG_KEY)
+        self._sim_config = dmgr.get(DAX_SIM_CONFIG_KEY)
 
         # Call super
         super(Core, self).__init__(dmgr, _core=self, **kwargs)  # type: ignore
 
         # Store arguments
-        self._device_manager: typing.Any = dmgr
-        self._ref_period: float = ref_period
-        self._ref_multiplier: np.int32 = np.int32(ref_multiplier)
+        self._device_manager = dmgr
+        self._ref_period = ref_period
+        self._ref_multiplier = np.int32(ref_multiplier)
 
         # Set initial call nesting level to zero
-        self._level: np.int32 = np.int32(0)
+        self._level = np.int32(0)
         # Set the timescale of the core based on the simulation configuration
-        self._timescale: float = self._sim_config.timescale
+        self._timescale = self._sim_config.timescale  # type: float
 
         # Get the signal manager and register signals
-        self._signal_manager: DaxSignalManager = get_signal_manager()
-        self._reset_signal: typing.Any = self._signal_manager.register(self.key, 'reset', bool, size=1)
+        self._signal_manager = get_signal_manager()
+        self._reset_signal = self._signal_manager.register(self.key, 'reset', bool, size=1)  # type: typing.Any
 
         # Counting dicts for function call profiling
-        self._func_counter: typing.Counter[typing.Any] = collections.Counter()
-        self._func_time: typing.Counter[typing.Any] = collections.Counter()
+        self._func_counter = collections.Counter()  # type: typing.Counter[typing.Any]
+        self._func_time = collections.Counter()  # type: typing.Counter[typing.Any]
 
     @property
     def ref_period(self) -> float:
@@ -58,12 +58,12 @@ class Core(DaxSimDevice):
     def run(self, k_function: typing.Any,
             k_args: typing.Tuple[typing.Any, ...], k_kwargs: typing.Dict[str, typing.Any]) -> typing.Any:
         # Unpack function
-        func: typing.Callable[..., typing.Any] = k_function.artiq_embedded.function
+        func = k_function.artiq_embedded.function
 
         # Register the function call
         self._func_counter[func] += 1
         # Track current time
-        t_start: np.int64 = now_mu()
+        t_start = now_mu()  # type: np.int64
 
         # Call the kernel function while increasing the level
         self._level += 1
@@ -113,8 +113,10 @@ class Core(DaxSimDevice):
         # In simulation there is no difference between the RTIO counter and the cursor
         return now_mu()
 
+    # noinspection PyUnusedLocal
     @kernel
     def get_rtio_destination_status(self, destination: np.int32) -> bool:
+        # Status is always ready
         return True
 
     @kernel

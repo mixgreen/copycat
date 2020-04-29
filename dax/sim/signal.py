@@ -13,8 +13,7 @@ import dax.util.units
 class DaxSignalManager(abc.ABC):
     """Abstract class for classes that manage simulated signals."""
 
-    # The abstract signal type
-    __S_T = typing.TypeVar('__S_T')
+    __S_T = typing.TypeVar('__S_T')  # The abstract signal type
 
     @abc.abstractmethod
     def register(self, scope: str, name: str, type_: type,
@@ -54,16 +53,14 @@ class NullSignalManager(DaxSignalManager):
 class VcdSignalManager(DaxSignalManager):
     """VCD signal manager."""
 
-    # The signal type
     __S_T = typing.Union[vcd.writer.RealVariable,
                          vcd.writer.ScalarVariable,
                          vcd.writer.StringVariable,
-                         vcd.writer.VectorVariable]
-    # The signal-type type
-    __T_T = typing.Union[bool, int, np.int32, np.int64, float, str, object]
+                         vcd.writer.VectorVariable]  # The signal type
+    __T_T = typing.Type[typing.Union[bool, int, np.int32, np.int64, float, str, object]]  # The signal-type type
+    __V_T = typing.Union[bool, int, np.int32, np.int64, float, str]  # The value types
 
-    # Dict to convert Python types to VCD types
-    _CONVERT_TYPE: typing.Dict[__T_T, str] = {
+    _CONVERT_TYPE = {
         bool: 'reg',
         int: 'integer',
         np.int32: 'integer',
@@ -72,22 +69,23 @@ class VcdSignalManager(DaxSignalManager):
         str: 'string',
         object: 'event',
     }
+    """Dict to convert Python types to VCD types."""
 
     def __init__(self, output_file: str, timescale: float):
         assert isinstance(output_file, str), 'Output file must be of type str'
         assert isinstance(timescale, float), 'Timescale must be of type float'
 
         # Convert timescale
-        timescale_str: str = dax.util.units.time_to_str(timescale, precision=0)
+        timescale_str = dax.util.units.time_to_str(timescale, precision=0)
 
         # Open file
-        self._output_file: typing.IO[str] = open(output_file, mode='w')
+        self._output_file = open(output_file, mode='w')
 
         # Create VCD writer
         self._vcd = vcd.writer.VCDWriter(self._output_file, timescale=timescale_str,
                                          comment=output_file)
         # Create event buffer to support reverting time
-        self._event_buffer: typing.List[typing.Tuple[np.int64, VcdSignalManager.__S_T, typing.Any]] = []
+        self._event_buffer = []  # type: typing.List[typing.Tuple[np.int64, VcdSignalManager.__S_T, typing.Any]]
 
     def register(self, scope: str, name: str, type_: __T_T,
                  size: typing.Optional[int] = None, init: typing.Any = None) -> __S_T:
@@ -113,7 +111,7 @@ class VcdSignalManager(DaxSignalManager):
             raise TypeError('VCD signal manager can not handle type {}'.format(type_))
 
         # Get the var type
-        var_type: str = self._CONVERT_TYPE[type_]
+        var_type = self._CONVERT_TYPE[type_]
 
         # Workaround for str init values
         if type_ is str and init is None:
@@ -122,7 +120,7 @@ class VcdSignalManager(DaxSignalManager):
         # Register the signal with the VCD writer
         return self._vcd.register_var(scope, name, var_type=var_type, size=size, init=init)
 
-    def event(self, signal: __S_T, value: typing.Any, time: typing.Optional[np.int64] = None) -> None:
+    def event(self, signal: __S_T, value: __V_T, time: typing.Optional[np.int64] = None) -> None:
         """Commit an event.
 
         Bool type signals can have values `0`,`1`,`X`,`Z`.
@@ -162,8 +160,8 @@ class VcdSignalManager(DaxSignalManager):
         self._output_file.close()
 
 
-# Singleton instance of the signal manager
-_signal_manager: DaxSignalManager = NullSignalManager()
+_signal_manager = NullSignalManager()  # type: DaxSignalManager
+"""Singleton instance of the signal manager."""
 
 
 def get_signal_manager() -> DaxSignalManager:
@@ -171,7 +169,7 @@ def get_signal_manager() -> DaxSignalManager:
 
     The signal manager is used by simulated devices to register and change signals during simulation.
 
-    :returns: The signal manager object
+    :return: The signal manager object
     """
     return _signal_manager
 

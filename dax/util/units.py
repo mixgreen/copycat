@@ -13,17 +13,17 @@ def _value_to_str(value: float, threshold: float, precision: int, scales: typing
     # Take the abs of threshold
     threshold = abs(threshold)
     # The scaled value
-    scaled_value: float = value
+    scaled_value = value
 
     for s in scales:
         # Scale time
         scaled_value = value / globals()[s]
         if abs(scaled_value) >= threshold:
             # Return value as string
-            return f'{scaled_value:.{precision:d}f} {s:s}'
+            return '{{:.{:d}f}} {{:s}}'.format(precision).format(scaled_value, s)
 
     # Using last scaling without rounding
-    return f'{scaled_value:f} {scales[-1]:s}'
+    return '{:f} {:s}'.format(scaled_value, scales[-1])
 
 
 @host_only
@@ -46,16 +46,16 @@ def _str_to_value(string: str, units: typing.Set[str]) -> float:
         # Split the string
         value, unit = string.split()
     except ValueError as e:
-        raise ValueError(f'String "{string:s}" can not be tokenized correctly (missing a space?)') from e
+        raise ValueError('String "{:s}" can not be tokenized correctly (missing a space?)'.format(string)) from e
 
     if unit not in units:
-        raise ValueError(f'String "{string:s}" does not contain a valid unit for this conversion')
+        raise ValueError('String "{:s}" does not contain a valid unit for this conversion'.format(string))
 
     try:
         # Return the scaled value
         return float(value) * float(globals()[unit])
     except ValueError as e:
-        raise ValueError(f'String "{string:s}" does not contain a valid number') from e
+        raise ValueError('String "{:s}" does not contain a valid number'.format(string)) from e
 
 
 @host_only

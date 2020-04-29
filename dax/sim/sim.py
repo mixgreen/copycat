@@ -4,36 +4,36 @@ import typing
 
 from artiq.language.units import *
 
-# The logger for this file
-_logger: logging.Logger = logging.getLogger(__name__)
+_logger = logging.getLogger(__name__)
+"""The logger for this file."""
 
-# The dax.sim device module
-_DAX_DEVICE_MODULE: str = 'dax.sim.coredevice'
+_DAX_DEVICE_MODULE = 'dax.sim.coredevice'
+"""The dax.sim device module."""
 
-# The properties of a generic device
-_GENERIC_DEVICE: typing.Dict[str, typing.Any] = {
+_GENERIC_DEVICE = {
     'type': 'local',
     'module': '.'.join([_DAX_DEVICE_MODULE, 'generic']),
     'class': 'Generic',
 }
+"""The properties of a generic device."""
 
-# The properties of a dummy device
-_DUMMY_DEVICE: typing.Dict[str, typing.Any] = {
+_DUMMY_DEVICE = {
     'type': 'local',
     'module': '.'.join([_DAX_DEVICE_MODULE, 'dummy']),
     'class': 'Dummy',
 }
+"""The properties of a dummy device."""
 
-# Special keys/entries in the device DB that will be replaced
-_SPECIAL_KEYS: typing.Dict[str, typing.Any] = {
+_SPECIAL_KEYS = {
     'core_log': _DUMMY_DEVICE,  # Core log controller should not start in simulation, replace with dummy device
 }
+"""Special keys/entries in the device DB that will be replaced."""
 
-# The simulation argument/option for controllers as proposed by the ARTIQ manual
-_SIMULATION_ARG: str = '--simulation'
+_SIMULATION_ARG = '--simulation'
+"""The simulation argument/option for controllers as proposed by the ARTIQ manual."""
 
-# The key of the virtual simulation configuration device
 DAX_SIM_CONFIG_KEY = '_dax_sim_config'
+"""The key of the virtual simulation configuration device."""
 
 
 def enable_dax_sim(enable: bool,
@@ -61,7 +61,7 @@ def enable_dax_sim(enable: bool,
     :param output: Flag to enable or disable simulation output
     :param sim_config_module: The module name of the simulation configuration class
     :param sim_config_class: The class name of the simulation configuration class
-    :returns: The updated device DB
+    :return: The updated device DB
     """
 
     assert isinstance(enable, bool), 'The enable flag must be of type bool'
@@ -91,7 +91,7 @@ def enable_dax_sim(enable: bool,
             raise
 
         # Prepare virtual device used for passing simulation configuration
-        sim_config: typing.Dict[str, typing.Any] = {DAX_SIM_CONFIG_KEY: {
+        sim_config = {DAX_SIM_CONFIG_KEY: {
             'type': 'local', 'module': sim_config_module, 'class': sim_config_class,
             # Simulation configuration is passed through the arguments
             'arguments': {'logging_level': logging_level,

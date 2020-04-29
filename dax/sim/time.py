@@ -4,16 +4,16 @@ import numpy as np
 
 from artiq.language.units import *
 
-# The type of machine units (MU)
 _MU_T = np.int64
+"""The type of machine units (MU)."""
 
 
 class _TimeContext(abc.ABC):
     """Abstract time context class."""
 
     def __init__(self, current_time: _MU_T):
-        self._current_time: _MU_T = current_time
-        self._block_duration: _MU_T = _MU_T(0)
+        self._current_time = current_time
+        self._block_duration = _MU_T(0)
 
     @property
     def current_time(self) -> _MU_T:
@@ -53,10 +53,10 @@ class DaxTimeManager:
             raise ValueError('The timescale must be larger than zero')
 
         # Store timescale, this should also be the leading timescale for the core device
-        self._timescale: float = timescale
+        self._timescale = timescale
 
         # Initialize time context stack
-        self._stack: typing.List[_TimeContext] = [_SequentialTimeContext(_MU_T(0))]
+        self._stack = [_SequentialTimeContext(_MU_T(0))]  # type: typing.List[_TimeContext]
 
     """Functions that interface with the ARTIQ language core"""
 
@@ -97,7 +97,7 @@ class DaxTimeManager:
     def get_time_mu(self) -> _MU_T:
         """Return the current time in machine units.
 
-        :returns: Current time in machine units
+        :return: Current time in machine units
         """
         return self._stack[-1].current_time
 

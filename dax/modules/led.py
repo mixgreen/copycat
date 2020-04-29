@@ -1,6 +1,6 @@
 import numpy as np
 
-import artiq.coredevice.ttl
+import artiq.coredevice.ttl  # type: ignore
 
 from dax.experiment import *
 
@@ -8,10 +8,11 @@ from dax.experiment import *
 class LedModule(DaxModule):
     """Module to control user LED's."""
 
-    def build(self, *leds, init=False):
+    def build(self, *leds: str, init: bool = False) -> None:  # type: ignore
         # Check arguments
         if 1 > len(leds) > 8:
             raise TypeError("Number of LED's must be in the range [1..8]")
+        assert all(isinstance(led, str) for led in leds), 'Provided LED keys must be of type str'
         assert isinstance(init, bool), 'Initialization flag must be of type bool'
 
         # Store attributes
@@ -25,13 +26,13 @@ class LedModule(DaxModule):
         # Store kernel invariants
         self.update_kernel_invariants('_init_flag', 'led')
 
-    def init(self):
+    def init(self) -> None:
         if self._init_flag:
             # Initialize the LED's if the init flag is set
             self._init()
 
     @kernel
-    def _init(self):
+    def _init(self) -> None:
         # Reset the core
         self.core.reset()
 
@@ -41,7 +42,7 @@ class LedModule(DaxModule):
         # Wait until event is submitted
         self.core.wait_until_mu(now_mu())
 
-    def post_init(self):
+    def post_init(self) -> None:
         pass
 
     """Module functionality"""

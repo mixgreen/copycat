@@ -33,6 +33,7 @@ class CPLD(DaxSimDevice):
     def sta_read(self):
         raise NotImplementedError
 
+    # noinspection PyUnusedLocal
     @kernel
     def init(self, blind=False):
         # Delays from ARTIQ code

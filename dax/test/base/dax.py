@@ -299,7 +299,7 @@ class DaxDataStoreTestCase(unittest.TestCase):
 
                 # Split key
                 split_key = k.rsplit('.', maxsplit=1)
-                base: str = split_key[0] if len(split_key) == 2 else ''
+                base = split_key[0] if len(split_key) == 2 else ''
 
                 # Verify point object
                 self.assertEqual(base, d['tags']['base'], 'Base of key does not match tag in point object')

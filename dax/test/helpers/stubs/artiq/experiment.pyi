@@ -1,7 +1,7 @@
 import typing
 import numpy as np
 
-from .language.core import *
+from .language import *
 
 
 class NoDefault:
