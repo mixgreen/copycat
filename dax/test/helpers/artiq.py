@@ -4,8 +4,8 @@ import tempfile
 import logging
 
 import artiq.master.worker_db
-import artiq.master.databases
-import artiq.frontend.artiq_run
+import artiq.master.databases  # type: ignore
+import artiq.frontend.artiq_run  # type: ignore
 
 
 def disable_logging():

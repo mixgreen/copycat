@@ -7,9 +7,9 @@ import dax.base.dax
 from dax.test.helpers.artiq import get_manager_or_parent
 from dax.test.helpers.mypy import type_check
 
-from artiq.coredevice.edge_counter import EdgeCounter
-from artiq.coredevice.ttl import TTLInOut, TTLOut
-from artiq.coredevice.core import Core
+from artiq.coredevice.edge_counter import EdgeCounter  # type: ignore
+from artiq.coredevice.ttl import TTLInOut, TTLOut  # type: ignore
+from artiq.coredevice.core import Core  # type: ignore
 
 """Classes used for testing"""
 

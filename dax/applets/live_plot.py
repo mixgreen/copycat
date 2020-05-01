@@ -1,15 +1,16 @@
 #!/usr/bin/env python3
 
 import numpy as np
-import PyQt5  # make sure pyqtgraph imports Qt5
+# make sure pyqtgraph imports Qt5
+import PyQt5  # type: ignore
 from PyQt5 import QtGui, QtCore
-from PyQt5.QtWidgets import QWidget, QLabel, QVBoxLayout, QHBoxLayout
-from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QFont, QPalette
-import pyqtgraph
+from PyQt5.QtWidgets import QWidget, QLabel, QVBoxLayout, QHBoxLayout  # type: ignore
+from PyQt5.QtCore import Qt  # type: ignore
+from PyQt5.QtGui import QFont, QPalette  # type: ignore
+import pyqtgraph  # type: ignore
 import itertools
 from artiq.applets.simple import TitleApplet
-from pyqtgraph import InfiniteLine
+from pyqtgraph import InfiniteLine  # type: ignore
 
 
 class MainWidget(QWidget):

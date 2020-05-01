@@ -11,7 +11,7 @@ import numbers
 
 import artiq
 import artiq.experiment
-import artiq.master.worker_db  # type: ignore
+import artiq.master.worker_db
 
 import artiq.coredevice.core  # type: ignore
 import artiq.coredevice.dma  # type: ignore

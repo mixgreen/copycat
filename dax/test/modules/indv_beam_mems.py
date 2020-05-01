@@ -24,7 +24,7 @@ class TestSystem(DaxSystem):
     SYS_ID = 'unittest_system'
     SYS_VER = 0
 
-    def build(self, num_beams) -> None:
+    def build(self, num_beams) -> None:  # type: ignore
         super(TestSystem, self).build()
 
         # Only number of beams is relevant, rest are dummy values

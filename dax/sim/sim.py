@@ -140,7 +140,7 @@ def _mutate_ddb_entry(key: str, value: typing.Any) -> typing.Any:
                 # Check if the module exists by importing it
                 m = importlib.import_module(module)
 
-            except ModuleNotFoundError:
+            except ImportError:
                 # Module was not found, fall back on generic device
                 value.update(_GENERIC_DEVICE)
 

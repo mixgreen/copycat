@@ -2,7 +2,7 @@ import unittest
 import types
 import os
 
-import mypy.api
+import mypy.api  # type: ignore
 
 
 def type_check(test_case: unittest.TestCase, module, *cmd_args: str) -> None:

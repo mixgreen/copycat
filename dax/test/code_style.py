@@ -1,5 +1,5 @@
 import unittest
-import pycodestyle
+import pycodestyle  # type: ignore
 import os
 import io
 import contextlib
