@@ -15,7 +15,7 @@ class TestCodeStyle(unittest.TestCase):
         dax_path = os.path.dirname(os.path.realpath(dax.__file__))
 
         # Create a style object
-        style = pycodestyle.StyleGuide(ignore=['E501'])  # Ignore line too long
+        style = pycodestyle.StyleGuide(max_line_length=120)  # Increase line length
 
         # Buffer to store stdout output
         buf = io.StringIO()

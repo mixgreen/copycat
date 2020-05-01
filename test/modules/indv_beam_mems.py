@@ -1,10 +1,8 @@
 import unittest
-import numpy as np
 
-from dax.experiment import *
 from dax.modules.indv_beam_mems import *
 
-from dax.test.helpers.artiq import get_manager_or_parent
+from dax.util.artiq_helpers import get_manager_or_parent
 
 
 class ModuleWrapper(IndvBeamMemsModule):

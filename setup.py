@@ -12,9 +12,7 @@ requirements = [
     "scipy",
     "pyvcd",
     "natsort",
-    "mypy",
     "gitpython",
-    "pycodestyle",
 ]
 
 setup(
