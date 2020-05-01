@@ -1,5 +1,6 @@
 import unittest
 import numpy as np
+import logging
 
 from dax.base.dax import *
 import dax.base.dax
@@ -304,24 +305,43 @@ class DaxNameRegistryTestCase(unittest.TestCase):
                              'Search interfaces did not return expected result')
 
 
-class DaxDataStoreTestCase(unittest.TestCase):
-    class NoWriteDataStoreConnector(dax.base.dax._DaxDataStoreConnector):
+class DaxDataStoreInfluxDbTestCase(unittest.TestCase):
+    class NoWriteDataStore(dax.base.dax._DaxDataStoreInfluxDb):
         """Data store connector that does not write but a callback instead."""
 
         def __init__(self, callback, *args, **kwargs):
             assert callable(callback), 'Callback must be a callable function'
             self.callback = callback
-            super(DaxDataStoreTestCase.NoWriteDataStoreConnector, self).__init__(*args, **kwargs)
+            super(DaxDataStoreInfluxDbTestCase.NoWriteDataStore, self).__init__(*args, **kwargs)
+
+        def _get_driver(self, system: DaxSystem, key: str) -> None:
+            pass  # Do not obtain the driver
 
         def _write_points(self, points):
             # Do not write points but do a callback instead
             self.callback(points)
 
     def setUp(self) -> None:
+        # Callback function
+        def callback(points):
+            for d in points:
+                # Check if the types of all field values are valid
+                for value in d['fields'].values():
+                    self.assertIsInstance(value, (int, str, float, bool), 'Field in point has invalid type')
+                # Check if the index is correct (if existing)
+                self.assertIsInstance(d['tags'].get('index', ''), str, 'Index has invalid type (expected str)')
+
         # Test system
         self.s = TestSystem(get_manager_or_parent(device_db))
-        # Data store
-        self.ds = self.s.data_store
+        # Special data store that skips actual writing
+        self.ds = self.NoWriteDataStore(callback, self.s, 'dax_influx_db')
+
+    def test_commit_hash(self):
+        # Test if DAX commit hash was loaded, we can assume that the code was versioned (if not, the test fails)
+        self.assertIsNotNone(self.ds._DAX_COMMIT, 'DAX commit hash was not loaded')
+        self.assertIsInstance(self.ds._DAX_COMMIT, str, 'Unexpected type for DAX commit hash')
+        # We are not sure if CWD is loaded, depends on where the test was initiated from
+        self.assertIsInstance(self.ds._CWD_COMMIT, (str, type(None)), 'Unexpected type for cwd commit hash')
 
     def test_make_point(self):
         # Data to test against
@@ -349,27 +369,111 @@ class DaxDataStoreTestCase(unittest.TestCase):
                 self.assertIn(k, d['fields'], 'Key is not an available field in the point object')
                 self.assertEqual(v, d['fields'][k], 'Field value in point object is not equal to inserted value')
 
-    def test_np_type_conversion(self):
+    def test_make_point_index(self):
+        # Data to test against
+        test_data = [
+            ('k', 4, None),
+            ('k', 0.1, 1),
+            ('k', True, np.int32(5)),
+            ('k', 'value', np.int64(88)),
+        ]
 
+        for k, v, i in test_data:
+            with self.subTest(k=k, v=v, i=i):
+                # Test making point
+                d = self.ds._make_point(k, v, i)
+
+                if i is not None:
+                    # Verify point object
+                    self.assertIn('index', d['tags'], 'Index is not an available tag in the point object')
+                    self.assertEqual(str(i), d['tags']['index'], 'Index of point object is not equal to inserted value')
+                else:
+                    # Confirm index does not exist
+                    self.assertNotIn('index', d['tags'], 'Index found as tag in the point object while None was given')
+
+    def test_set(self):
+        # Data to test against
+        test_data = [
+            ('k', 5),
+            ('k', 5),
+            ('k', 7.65),
+            ('k', 3.55),
+            ('k', 'value'),
+            ('k', False),
+        ]
+
+        for k, v in test_data:
+            with self.subTest(k=k, v=v):
+                # Test using the callback function
+                self.ds.set(k, v)
+
+    def test_set_bad(self):
         # Callback function
-        def callback(points):
-            # Check if the types of all field values are valid
-            for d in points:
-                for value in d['fields'].values():
-                    self.assertIsInstance(value, (int, float, bool, str))  # These are the valid types for fields
+        def callback(*args, **kwargs):
+            # This code is supposed to be unreachable
+            self.fail('Bad type resulted in unwanted write {} {}'.format(args, kwargs))
 
-        # Special data store that skips actual writing
-        self.ds = self.NoWriteDataStoreConnector(callback, self.s)
+        # Replace callback function with a specific one for testing bad types
+        self.ds.callback = callback
 
         # Data to test against
         test_data = [
-            ('k', 4),
-            ('k', 0.1),
-            ('k', True),
-            ('k', 'value'),
-            ('k.a', 7),
-            ('k.b.c', 8),
-            ('k.ddd', 9),
+            ('k', self),
+            ('k', complex(3, 5)),
+            ('k', complex(5)),
+            ('k.a', self),
+            ('kas', {1, 2, 6, 7}),
+            ('kfd', {'i': 3}),
+        ]
+
+        for k, v in test_data:
+            with self.subTest(k=k, v=v):
+                with self.assertLogs(self.ds._logger, logging.WARNING):
+                    # A warning will be given but no error is raised!
+                    self.ds.set(k, v)
+
+    def test_set_sequence(self):
+        # Data to test against
+        test_data = [
+            ('k', [1, 2, 3]),
+            ('k', list(range(9))),
+            ('k', [str(i + 66) for i in range(5)]),
+            ('k', [7.65 * i for i in range(4)]),
+            ('k.a', np.arange(5)),
+            ('k.a', np.empty(5)),
+            ('k', [1, '2', True, 5.5]),
+            ('k.a', range(7)),  # Ranges also work, though this is not specifically intended behavior
+        ]
+
+        for k, v in test_data:
+            with self.subTest(k=k, v=v):
+                # Test using the callback function
+                self.ds.set(k, v)
+
+    def test_set_sequence_bad(self):
+        # Callback function
+        def callback(*args, **kwargs):
+            # This code is supposed to be unreachable
+            self.fail('Bad sequence resulted in unwanted write {} {}'.format(args, kwargs))
+
+        # Replace callback function with a specific one for testing bad types
+        self.ds.callback = callback
+
+        # Data to test against
+        test_data = [
+            ('k', {bool(i % 2) for i in range(5)}),  # Set should not work
+            ('k', {i: float(i) for i in range(5)}),  # Dict should not work
+        ]
+
+        for k, v in test_data:
+            with self.subTest(k=k, v=v):
+                with self.assertLogs(self.ds._logger, logging.WARNING):
+                    # A warning will be given but no error is raised!
+                    self.ds.set(k, v)
+
+    def test_np_type_conversion(self):
+        # Data to test against
+        test_data = [
             ('k', np.int32(3)),
             ('k', np.int64(99999999)),
             ('k', np.float(4)),
@@ -378,32 +482,159 @@ class DaxDataStoreTestCase(unittest.TestCase):
         for k, v in test_data:
             with self.subTest(k=k, v=v):
                 # Test using the callback function
-                self.ds.store(k, v)
+                self.ds.set(k, v)
 
-    def test_bad_type(self):
+    def test_mutate(self):
+        # Data to test against
+        test_data = [
+            ('k', 3, 5),
+            ('k', 44, 23),
+            ('k', 'np.float(4)', -99),  # Negative indices are valid, though this is not specifically intended behavior
+        ]
+
+        for k, v, i in test_data:
+            with self.subTest(k=k, v=v, i=i):
+                # Test using the callback function
+                self.ds.mutate(k, i, v)
+
+    def test_mutate_index_np_type_conversion(self):
+        # Data to test against
+        test_data = [
+            ('k', 3, np.int32(4)),
+            ('k', 44, np.int64(-4)),
+            ('k', True, np.int32(0)),
+        ]
+
+        for k, v, i in test_data:
+            with self.subTest(k=k, v=v, i=i):
+                # Test using the callback function
+                self.ds.mutate(k, i, v)
+
+    def test_append(self):
+        # Key
+        key = 'k'
+        # Data to test against
+        test_data = [
+            (key, 5),
+            (key, 5),
+            (key, 7.65),
+            (key, 3.55),
+            (key, 'value'),
+            (key, False),
+        ]
+
+        # Initialize list for appending
+        init_list = [4]
+        self.ds.set(key, init_list)
+        length = len(init_list)
+
+        for k, v in test_data:
+            with self.subTest(k=k, v=v):
+                # Test using the callback function
+                self.ds.append(k, v)
+                # Test increment
+                length += 1
+                self.assertEqual(self.ds._index_table[key], length, 'Cached index was not updated correctly')
+
+    def test_append_bad(self):
         # Callback function
         def callback(*args, **kwargs):
             # This code is supposed to be unreachable
-            self.fail('Exception should have been raised earlier {} {}'.format(args, kwargs))
+            self.fail('Bad type resulted in unwanted write {} {}'.format(args, kwargs))
 
-        # Special data store that skips actual writing
-        self.ds = self.NoWriteDataStoreConnector(callback, self.s)
-
+        # Key
+        key = 'k'
         # Data to test against
         test_data = [
-            ('k', complex(5)),
-            ('k', {'i': 3}),
-            ('k', [1, 2, 3]),
-            ('k', {1, 2, 6, 7}),
-            ('k.a', self),
+            (key, self),
+            (key, complex(3, 5)),
+            (key, [2, 7, 4]),  # Can not append a list, only simple values
+            (key, complex(5)),
+        ]
+
+        # Initialize list for appending
+        self.ds.set(key, [4])
+
+        # Replace callback function with a specific one for testing bad types
+        self.ds.callback = callback
+
+        for k, v in test_data:
+            with self.subTest(k=k, v=v):
+                with self.assertLogs(self.ds._logger, logging.WARNING):
+                    # A warning will be given but no error is raised!
+                    self.ds.append(k, v)
+
+    def test_append_not_cached(self):
+        # Callback function
+        def callback(*args, **kwargs):
+            # This code is supposed to be unreachable
+            self.fail('Bad type resulted in unwanted write {} {}'.format(args, kwargs))
+
+        # Replace callback function with a specific one for testing bad types
+        self.ds.callback = callback
+
+        # Key
+        key = 'k'
+        # Data to test against
+        test_data = [
+            (key, 1),
+            (key, 'complex(3, 5)'),
+            (key, 5.5),
         ]
 
         for k, v in test_data:
             with self.subTest(k=k, v=v):
-                with self.assertRaises(TypeError,
-                                       msg='Store function did not raise when provided an unsupported value type'):
-                    # Test using the callback function
-                    self.ds.store(k, v)
+                with self.assertLogs(self.ds._logger, logging.WARNING):
+                    # A warning will be given but no error is raised!
+                    self.ds.append(k, v)
+
+    def test_append_cache(self):
+        # Data to test against
+        test_data = [
+            ('k.b.c', []),
+            ('k.a', list()),
+            ('fds.aaa', np.zeros(0)),
+            ('kfh', range(0)),
+            ('ka.a', [5, 7, 3, 2]),
+            ('kh.rt', np.zeros(4)),
+            ('kee', range(6)),
+        ]
+
+        # Test empty cache
+        self.assertDictEqual(self.ds._index_table, {}, 'Expected empty index cache table')
+
+        for k, v in test_data:
+            with self.subTest(k=k, v=v):
+                # Set
+                self.ds.set(k, v)
+                # Check if length is cached
+                self.assertIn(k, self.ds._index_table, 'Expected entry in cache')
+                self.assertEqual(len(v), self.ds._index_table[k], 'Cached length does not match actual list length')
+
+    def test_empty_list(self):
+        # Callback function
+        def callback(*args, **kwargs):
+            # This code is supposed to be unreachable
+            self.fail('Empty list of values resulted in unwanted write {} {}'.format(args, kwargs))
+
+        # Replace callback function with a specific one for testing bad types
+        self.ds.callback = callback
+
+        # Data to test against
+        test_data = [
+            ('k', []),
+            ('k.a', list()),
+            ('k', np.zeros(0)),
+            ('k', range(0)),
+        ]
+
+        for k, v in test_data:
+            with self.subTest(k=k, v=v):
+                # Store of empty sequence should never result in a write
+                self.ds.set(k, v)
+                # Check if length is cached
+                self.assertIn(k, self.ds._index_table, 'Expected entry in cache')
+                self.assertEqual(0, self.ds._index_table[k], 'Cached length does not match actual list length')
 
 
 class DaxModuleBaseTestCase(unittest.TestCase):

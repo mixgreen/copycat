@@ -8,6 +8,8 @@ import typing
 import git  # type: ignore
 import os
 import numbers
+import collections
+import numpy as np
 
 import artiq
 import artiq.experiment
@@ -19,6 +21,9 @@ import artiq.coredevice.cache  # type: ignore
 
 from dax.sim.sim import DAX_SIM_CONFIG_KEY as _DAX_SIM_CONFIG_KEY
 from dax.sim.device import DaxSimDevice as _DaxSimDevice
+
+# Workaround: Add Numpy ndarray as a sequence type (see https://github.com/numpy/numpy/issues/2776)
+collections.abc.Sequence.register(np.ndarray)
 
 _KEY_SEPARATOR = '.'
 """Key separator for datasets."""
@@ -214,7 +219,7 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
         return self.__core_cache
 
     @property
-    def data_store(self) -> '_DaxDataStoreConnector':
+    def data_store(self) -> '_DaxDataStore':
         """Get the data store.
 
         :return: The data store object
@@ -231,7 +236,7 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
             self.__core = parent.core  # type: artiq.coredevice.core.Core
             self.__core_dma = parent.core_dma  # type: artiq.coredevice.dma.CoreDMA
             self.__core_cache = parent.core_cache  # type: artiq.coredevice.cache.CoreCache
-            self.__data_store = parent.data_store  # type: _DaxDataStoreConnector
+            self.__data_store = parent.data_store  # type: _DaxDataStore
         except AttributeError:
             parent.logger.exception('Missing core attributes (super.build() was probably not called)')
             raise
@@ -342,6 +347,7 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
 
         Users can optionally specify an expected device type.
         If the device does not match the expected type, an exception is raised.
+        Note that drivers of controllers are SiPyCo RPC objects and type checks are therefore not useful.
 
         Devices that are retrieved using :func:`get_device` can not be added to the kernel invariants.
         The user is responsible for adding the attribute to the list of kernel invariants.
@@ -426,17 +432,21 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
         :param value: The value to store
         """
 
-        assert isinstance(key, str), 'Key must be of type str'
+        # Get the full system key
+        system_key = self.get_system_key(key)
 
         # Modify logging level of worker_db logger to suppress an unwanted warning message
         artiq.master.worker_db.logger.setLevel(logging.WARNING + 1)
 
         # Set value in system dataset with extra flags
         self.logger.debug('System dataset key "{:s}" set to value "{}"'.format(key, value))
-        self.set_dataset(self.get_system_key(key), value, broadcast=True, persist=True, archive=True)
+        self.set_dataset(system_key, value, broadcast=True, persist=True, archive=True)
 
         # Restore original logging level of worker_db logger
         artiq.master.worker_db.logger.setLevel(logging.NOTSET)
+
+        # Archive value using the data store
+        self.data_store.set(system_key, value)
 
     @artiq.experiment.rpc(flags={'async'})
     def mutate_dataset_sys(self, key: str, index: typing.Any, value: typing.Any) -> None:
@@ -449,11 +459,15 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
         :raises ValueError: Raised if the key has an invalid format
         """
 
-        assert isinstance(key, str), 'Key must be of type str'
+        # Get the full system key
+        system_key = self.get_system_key(key)
 
         # Mutate system dataset
-        self.logger.debug('System dataset key "{:s}"[{:d}] mutate to value "{}"'.format(key, index, value))
-        self.mutate_dataset(self.get_system_key(key), index, value)
+        self.logger.debug('System dataset key "{:s}"[{}] mutate to value "{}"'.format(key, index, value))
+        self.mutate_dataset(system_key, index, value)
+
+        # Archive value using the data store
+        self.data_store.mutate(system_key, index, value)
 
     @artiq.experiment.rpc(flags={'async'})
     def append_to_dataset_sys(self, key: str, value: typing.Any) -> None:
@@ -465,11 +479,15 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
         :raises ValueError: Raised if the key has an invalid format
         """
 
-        assert isinstance(key, str), 'Key must be of type str'
+        # Get the full system key
+        system_key = self.get_system_key(key)
 
         # Append value to system dataset
         self.logger.debug('System dataset key "{:s}" append value "{}"'.format(key, value))
-        self.append_to_dataset(self.get_system_key(key), value)
+        self.append_to_dataset(system_key, value)
+
+        # Archive value using the data store
+        self.data_store.append(system_key, value)
 
     def get_dataset_sys(self, key: str, default: typing.Any = artiq.experiment.NoDefault) -> typing.Any:
         """Returns the contents of a system dataset.
@@ -492,8 +510,6 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
         :raises ValueError: Raised if the key has an invalid format
         """
 
-        assert isinstance(key, str), 'Key must be of type str'
-
         # Get the full system key
         system_key = self.get_system_key(key)
 
@@ -510,6 +526,8 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
                 self.set_dataset(system_key, default, broadcast=True, persist=True, archive=False)
                 # Get the value again and make sure it is archived
                 value = self.get_dataset(system_key, archive=True)  # Should never raise a KeyError
+                # Archive value using the data store
+                self.data_store.set(system_key, value)
         else:
             self.logger.debug('System dataset key "{:s}" returned value "{}"'.format(key, value))
 
@@ -576,6 +594,7 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
         :param keys: The attribute names to check
         :return: True if all attributes are set
         """
+        assert all(isinstance(k, str) for k in keys), 'Keys must be of type str'
         return all(hasattr(self, k) for k in keys)
 
     @artiq.experiment.host_only
@@ -652,6 +671,8 @@ class DaxSystem(_DaxModuleBase):
     """Key of the core cache device."""
     CORE_LOG_KEY = 'core_log'
     """Key of the core log controller."""
+    DAX_INFLUX_DB_KEY = 'dax_influx_db'
+    """Key of the DAX Influx DB controller."""
 
     DAX_INIT_TIME_KEY = 'dax_init_time'
     """DAX initialization time dataset key."""
@@ -704,7 +725,7 @@ class DaxSystem(_DaxModuleBase):
         return self.__core_cache
 
     @property
-    def data_store(self) -> '_DaxDataStoreConnector':
+    def data_store(self) -> '_DaxDataStore':
         """Get the data store.
 
         :return: The data store object
@@ -744,6 +765,7 @@ class DaxSystem(_DaxModuleBase):
             self.update_kernel_invariants('dax_sim_enabled')
 
         # Core devices
+        self.logger.debug('Requesting core device drivers')
         self.__core = self.get_device(self.CORE_KEY, artiq.coredevice.core.Core)
         self.__core_dma = self.get_device(self.CORE_DMA_KEY, artiq.coredevice.dma.CoreDMA)
         self.__core_cache = self.get_device(self.CORE_CACHE_KEY, artiq.coredevice.cache.CoreCache)
@@ -751,15 +773,35 @@ class DaxSystem(_DaxModuleBase):
         # Verify existence of core log controller
         try:
             # Register the core log controller with the system
+            self.logger.debug('Requesting core log driver')
             self.get_device(self.CORE_LOG_KEY)
-        except LookupError:
+        except KeyError:
             # Core log controller was not found in the device DB
             if not self.dax_sim_enabled:
                 # Log a warning (if we are not in simulation)
                 self.logger.warning('Core log controller "{:s}" not found in device DB'.format(self.CORE_LOG_KEY))
+        except artiq.master.worker_db.DeviceError:
+            # Failed to create core log driver
+            self.logger.warning('Failed to create core log driver "{:s}"'.format(self.CORE_LOG_KEY), exc_info=True)
 
-        # Instantiate the data store connector (needs to be done in build() since it requests a controller)
-        self.__data_store = _DaxDataStoreConnector(self)
+        # Instantiate the data store (needs to be done in build() since it requests a controller)
+        try:
+            # Create an Influx DB data store
+            self.logger.debug('Initializing Influx DB data store')
+            self.__data_store = _DaxDataStoreInfluxDb(self, self.DAX_INFLUX_DB_KEY)
+        except KeyError:
+            # Influx DB controller was not found in the device DB, fall back on base data store
+            if not self.dax_sim_enabled:
+                # Log a warning (if we are not in simulation)
+                self.logger.warning('Influx DB controller "{:s}" not found in device DB'.format(self.DAX_INFLUX_DB_KEY))
+            # Log a debug message
+            self.logger.debug('Fall back on base data store')
+            self.__data_store = _DaxDataStore()
+        except artiq.master.worker_db.DeviceError:
+            # Failed to create Influx DB driver, fall back on base data store
+            self.__data_store = _DaxDataStore()
+            self.logger.warning('Failed to create DAX Influx DB driver "{:s}"'.format(self.DAX_INFLUX_DB_KEY),
+                                exc_info=True)
 
     @artiq.experiment.host_only
     def dax_init(self) -> None:
@@ -1173,98 +1215,254 @@ class _DaxNameRegistry:
         return results  # type: ignore
 
 
-class _DaxDataStoreConnector:
-    """Connector class for the DAX data store."""
+class _DaxDataStore:
+    """Base class for the DAX data store.
 
-    __F_T = typing.Union[numbers.Integral, float, bool, str]  # Field type variable (Integral for NumPy ints)
-    __P_T = typing.Dict[str, typing.Union[str, typing.Union[typing.Dict[str, __F_T]]]]  # Point type variable
+    Data stores have methods that reflect the operations on ARTIQ
+    datasets: set, mutate, and append.
 
-    _FIELD_TYPES = (int, float, bool, str)
-    """Legal field types."""
+    The base DAX data store does not store anything and can be used
+    as a placeholder object since it is not an abstract base class.
+    Other DAX data store classes can inherit from this class and
+    override the :func:`set`, :func:`mutate`, and :func:`append` methods.
+    """
 
-    _DAX_COMMIT = ''
+    _DAX_COMMIT = None
     """DAX commit hash."""
-    _CWD_COMMIT = ''
+    _CWD_COMMIT = None
     """Current working directory commit hash."""
 
-    def __init__(self, system: DaxSystem):
-        """Create a new DAX data store connector.
+    def __init__(self) -> None:  # Constructor return type required if no parameters are given
+        # Create a logger object
+        self._logger = logging.getLogger('{:s}.{:s}'.format(self.__module__, self.__class__.__name__))
 
-        :param system: The system this data store connector is part of
-        """
-
-        assert self._DAX_COMMIT, 'DAX commit hash was not loaded'
-        assert self._CWD_COMMIT, 'Current working directory commit hash was not loaded'
-
-        # Store values that will be used for data points
-        self._sys_id = system.SYS_ID
-        self._sys_ver = str(system.SYS_VER)  # Convert int version to str since tags are strings
-
-        # Get the scheduler, which is a virtual device
-        self._scheduler = system.get_device('scheduler')
-
-        # todo, obtain access to the data store controller using system.get_device(), warning if not found
-
-    def store(self, key: str, value: __F_T) -> None:
-        """Write a single key-value into the data store.
+    def set(self, key: str, value: typing.Any) -> None:
+        """Write a key-value into the data store.
 
         :param key: The key of the value
-        :param value: The value associated with the key
+        :param value: The value to store
+        """
+        self._logger.debug('Set key "{:s}" to value: "{}"'.format(key, value))
+
+    def mutate(self, key: str, index: typing.Any, value: typing.Any) -> None:
+        """Mutate a specific index of a key-value in the data store.
+
+        :param key: The key of the value
+        :param index: The index to mutate
+        :param value: The value to store
+        """
+        self._logger.debug('Mutate key "{:s}"[{}] to value "{}"'.format(key, index, value))
+
+    def append(self, key: str, value: typing.Any) -> None:
+        """Append a value to a key-value in the data store.
+
+        :param key: The key of the value
+        :param value: The value to append
+        """
+        self._logger.debug('Append key "{:s}" with value "{}"'.format(key, value))
+
+
+def __load_commit_hashes() -> None:
+    """Load commit hash class attributes, only needs to be done once."""
+
+    # Obtain commit hash of DAX
+    try:
+        # Obtain repo
+        repo = git.Repo(os.path.dirname(__file__), search_parent_directories=True)
+    except git.InvalidGitRepositoryError:
+        # No repo was found
+        pass
+    else:
+        # Get commit hash
+        _DaxDataStore._DAX_COMMIT = repo.head.commit.hexsha
+
+    # Obtain commit hash of current working directory (if existing)
+    try:
+        # Obtain repo
+        repo = git.Repo(os.getcwd(), search_parent_directories=True)
+    except git.InvalidGitRepositoryError:
+        # No repo was found
+        pass
+    else:
+        # Get commit hash
+        _DaxDataStore._CWD_COMMIT = repo.head.commit.hexsha
+
+
+__load_commit_hashes()  # Load commit hashes into class attributes
+del __load_commit_hashes  # Remove one-time function
+
+
+class _DaxDataStoreInfluxDb(_DaxDataStore):
+    """Influx DB DAX data store class."""
+
+    __F_T = typing.Union[numbers.Real, str]  # Field type variable for Influx DB supported types
+    __P_T = typing.Dict[str, typing.Union[str, typing.Union[typing.Dict[str, __F_T]]]]  # Point type variable
+
+    _FIELD_TYPES = (numbers.Real, str)  # numbers.Real includes bool, float, int, and NumPy int (for runtime checks)
+    """Legal field types for Influx DB."""
+
+    def __init__(self, system: DaxSystem, key: str):
+        """Create a new DAX data store that uses an Influx DB backend.
+
+        :param system: The system this data store is managed by
+        :param key: The key of the DAX Influx DB controller
         """
 
-        # Make a dict with a single key-value pair and store it
-        self.store_dict({key: value})
+        assert isinstance(system, DaxSystem), 'System parameter must be of type DaxSystem'
+        assert isinstance(key, str), 'The Influx DB controller key must be of type str'
 
-    def store_dict(self, d: typing.Dict[str, __F_T]) -> None:
-        """Write a dict with key-value pairs into the data store.
+        # Call super
+        super(_DaxDataStoreInfluxDb, self).__init__()
 
-        :param d: A dict with key-value pairs to store
+        # Get the Influx DB driver, this call can raise various exceptions
+        self._get_driver(system, key)
+
+        # Get the scheduler, which is a virtual device
+        scheduler = system.get_device('scheduler')
+        if isinstance(scheduler, artiq.master.worker_db.DummyDevice):
+            return  # ARTIQ is only discovering experiment classes, do not continue initialization
+
+        # Store values that will be used for data points later
+        self._sys_id = system.SYS_ID
+        # Initialize index table for the append function, required to emulate appending behavior
+        self._index_table = dict()  # type: typing.Dict[str, int]
+
+        # Prepare base tags
+        self._base_tags = {
+            'system_version': str(system.SYS_VER),  # Convert int version to str since tags are strings
+        }  # type: typing.Dict[str, str]
+
+        # Prepare base fields
+        self._base_fields = {
+            'rid': int(scheduler.rid),
+            'pipeline_name': str(scheduler.pipeline_name),
+            'priority': int(scheduler.priority),
+            'artiq_version': str(artiq.__version__),
+        }
+
+        # Add expid items to fields if keys do not exist yet and the types are appropriate
+        self._base_fields.update((k, v) for k, v in scheduler.expid.items()
+                                 if k not in self._base_fields and isinstance(v, self._FIELD_TYPES))
+
+        # Add commit hashes to fields
+        if self._DAX_COMMIT is not None:
+            self._base_fields['dax_commit'] = self._DAX_COMMIT
+        if self._CWD_COMMIT is not None:
+            self._base_fields['cwd_commit'] = self._CWD_COMMIT
+
+        # Debug message
+        self._logger.debug('Initialized base fields: {}'.format(self._base_fields))
+
+    def set(self, key: str, value: typing.Any) -> None:
+        """Write a key-value into the Influx DB data store.
+
+        Lists will be flattened to separate elements with an index since
+        Influx DB does not support lists.
+
+        :param key: The key of the value
+        :param value: The value to store
         """
 
-        # Convert NumPy int values to Python int
-        d = {k: int(v) if isinstance(v, numbers.Integral) else v for k, v in d.items()}
+        if isinstance(value, self._FIELD_TYPES):
+            # Write a single point
+            self._write_points([self._make_point(key, value)])
+        elif isinstance(value, collections.abc.Sequence) and all(isinstance(e, self._FIELD_TYPES) for e in value):
+            if len(value):
+                # If the list is not empty, write a list of points
+                self._write_points([self._make_point(key, v, i) for v, i in zip(value, itertools.count(0))])
+            # Store the length of the sequence for emulated appending later
+            self._index_table[key] = len(value)
+        else:
+            # Unsupported type, do not raise but warn user instead
+            self._logger.warning('Could not store value for key "{:s}", unsupported value type '
+                                 'for value "{}"'.format(key, value))
 
-        # Check if all keys and values are valid and have supported types
-        for k, v in d.items():
-            if not _is_valid_key(k):
-                # Invalid key
-                raise ValueError('The data store received an invalid key "{:s}"'.format(k))
-            if not isinstance(v, self._FIELD_TYPES):
-                # Unsupported value type
-                raise TypeError('The data store can not store value "{}" of type {:s}'.format(v, str(type(v))))
+    def mutate(self, key: str, index: typing.Any, value: typing.Any) -> None:
+        """Mutate a specified index of a key-value in the Influx DB data store.
 
-        # Make a point object for every key-value pair
-        points = [self._make_point(k, v) for k, v in d.items()]
+        List structures are not supported by Influx DB and are emulated by using indices.
+        The emulation only supports single-dimensional list structures.
+        Hence, the index must be an integer.
+        It is not checked if the key contains an actual list structure and if the index is in range.
 
-        # Write points to the data store
-        self._write_points(points)
+        :param key: The key of the value
+        :param index: The index to mutate
+        :param value: The value to store
+        """
 
-    def _make_point(self, key: str, value: __F_T) -> __P_T:
-        """Make a point object from a key-value pair."""
+        if isinstance(value, self._FIELD_TYPES):
+            if isinstance(index, numbers.Integral):
+                # Write a single point
+                self._write_points([self._make_point(key, value, index)])
+            else:
+                # Non-integer index is not supported, do not raise but warn user instead
+                self._logger.warning('Could not mutate value for key "{:s}", multi-dimensional index "{}" '
+                                     'not supported'.format(key, index))
+        else:
+            # Unsupported type, do not raise but warn user instead
+            self._logger.warning('Could not mutate value for key "{:s}", unsupported value type '
+                                 'for value "{}"'.format(key, value))
+
+    def append(self, key: str, value: typing.Any) -> None:
+        """Append a value to a key-value in the Influx DB data store.
+
+        List structures are not supported by Influx DB and are emulated by using indices.
+        The Influx DB data store caches the length of arrays when using :func:`set` to emulate appending.
+        If the length of the array is not in the cache, the append operation can not be emulated.
+
+        :param key: The key of the value
+        :param value: The value to store
+        """
+
+        if isinstance(value, self._FIELD_TYPES):
+            # Get the current index
+            index = self._index_table.get(key)
+            if index is not None:
+                # Write a single point
+                self._write_points([self._make_point(key, value, index)])
+                # Update the index table
+                self._index_table[key] += 1
+            else:
+                # Index unknown, can not emulate append operation
+                self._logger.warning('Could not append value for key "{:s}", no index was cached '
+                                     'and the append operation could not be emulated'.format(key))
+        else:
+            # Unsupported type, do not raise but warn user instead
+            self._logger.warning('Could not append value for key "{:s}", unsupported value type '
+                                 'for value "{}"'.format(key, value))
+
+    def _make_point(self, key: str, value: __F_T, index: typing.Union[None, int, numbers.Integral] = None) -> __P_T:
+        """Make a point object from a key-value pair, optionally with an index.
+
+        This function does not check the type of the value and the index, which should be checked before.
+        Numpy integers are automatically converted to Python int.
+        """
+
+        assert isinstance(key, str), 'Key should be of type str'
+
+        if not _is_valid_key(key):
+            # Invalid key
+            raise ValueError('Influx DB data store received an invalid key "{:s}"'.format(key))
+
+        if isinstance(value, np.integer):
+            # Convert Numpy int to Python int
+            value = int(value)
+
+        # Copy the base tags and fields
+        tags = self._base_tags.copy()
+        fields = self._base_fields.copy()
 
         # Split the key
         split_key = key.rsplit(_KEY_SEPARATOR, maxsplit=1)
         base = split_key[0] if len(split_key) == 2 else ''  # Base is empty if the key does not split
 
-        # Tags
-        tags = {
-            'system_version': self._sys_ver,
-            'base': base,
-        }
-
-        # Fields
-        fields = {
-            'dax_commit': self._DAX_COMMIT,
-            'cwd_commit': self._CWD_COMMIT,
-            'rid': int(self._scheduler.rid),
-            'pipeline_name': str(self._scheduler.pipeline_name),
-            'priority': int(self._scheduler.priority),
-            'artiq_version': str(artiq.__version__),
-            key: value,  # The full key and the value are the actual field
-        }
-        # Add expid items to fields if keys do not exist yet and the types are appropriate
-        fields.update((k, v) for k, v in self._scheduler.expid.items()
-                      if k not in fields and isinstance(v, self._FIELD_TYPES))
+        if index is not None:
+            # Add index if provided
+            tags['index'] = str(index)  # Tags need to be of type str
+        # Add base to tags
+        tags['base'] = base
+        # Add key-value to fields
+        fields[key] = value  # The full key and the value are the actual field
 
         # Create the point object
         point = {
@@ -1276,37 +1474,22 @@ class _DaxDataStoreConnector:
         # Return point
         return point  # type: ignore
 
+    def _get_driver(self, system: DaxSystem, key: str) -> None:
+        """Get the required driver.
+
+        This method was separated to allow testing without writing points.
+        """
+        self._influx = system.get_device(key)  # Get the Influx DB driver, this call can raise various exceptions
+
     def _write_points(self, points: typing.List[__P_T]) -> None:
-        pass  # todo, write points to the actual data store using the controller
+        """Submit points to the Influx DB driver.
 
-    @classmethod
-    def load_commit_hashes(cls) -> None:
-        """Load commit hash class attributes, only needs to be done once."""
+        This method was separated to allow testing without writing points.
 
-        # Obtain commit hash of DAX
-        try:
-            # Obtain repo
-            repo = git.Repo(os.path.dirname(__file__), search_parent_directories=True)
-        except git.InvalidGitRepositoryError:
-            # No repo was found, use empty commit hash
-            cls._DAX_COMMIT = ''
-        else:
-            # Get commit hash
-            cls._DAX_COMMIT = repo.head.commit.hexsha
+        :param points: A list of points to write
+        """
+        self._influx.write_points(points)
 
-        # Obtain commit hash of current working directory (if existing)
-        try:
-            # Obtain repo
-            repo = git.Repo(os.getcwd(), search_parent_directories=True)
-        except git.InvalidGitRepositoryError:
-            # No repo was found, use empty commit hash
-            cls._CWD_COMMIT = ''
-        else:
-            # Get commit hash
-            cls._CWD_COMMIT = repo.head.commit.hexsha
-
-
-_DaxDataStoreConnector.load_commit_hashes()  # Load commit hashes into class attributes
 
 # Note: These names should not alias with other type variable names!
 __DCF_C_T = typing.TypeVar('__DCF_C_T', bound=DaxClient)  # Type variable for dax_client_factory() c (client) argument

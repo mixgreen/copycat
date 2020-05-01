@@ -4,5 +4,10 @@ int64 = int
 
 
 # noinspection PyPep8Naming
+class integer:
+    ...
+
+
+# noinspection PyPep8Naming
 class ndarray:
     ...
