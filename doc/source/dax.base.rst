@@ -25,3 +25,13 @@ dax.base.dax module
     :undoc-members:
     :show-inheritance:
 
+.. autoclass:: dax.base.dax._DaxDataStore
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+.. autoclass:: dax.base.dax._DaxDataStoreInfluxDb
+    :members:
+    :undoc-members:
+    :show-inheritance:
+

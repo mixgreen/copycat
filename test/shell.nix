@@ -12,7 +12,7 @@ in
                 ps.scipy
                 ps.pyvcd
                 ps.natsort
-                ps.GitPython
+                ps.pygit2
                 # Packages required for testing
                 ps.mypy
                 ps.pycodestyle

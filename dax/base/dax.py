@@ -5,7 +5,7 @@ import functools
 import re
 import natsort
 import typing
-import git  # type: ignore
+import pygit2  # type: ignore
 import os
 import numbers
 import collections
@@ -1218,8 +1218,10 @@ class _DaxNameRegistry:
 class _DaxDataStore:
     """Base class for the DAX data store.
 
-    Data stores have methods that reflect the operations on ARTIQ
-    datasets: set, mutate, and append.
+    Data stores are used for long-term archiving of time series data and have
+    methods that reflect the operations on ARTIQ datasets: set, mutate, and append.
+    For system dataset methods, DAX automatically invokes the data store and
+    no user code is required.
 
     The base DAX data store does not store anything and can be used
     as a placeholder object since it is not an abstract base class.
@@ -1227,9 +1229,9 @@ class _DaxDataStore:
     override the :func:`set`, :func:`mutate`, and :func:`append` methods.
     """
 
-    _DAX_COMMIT = None
+    _DAX_COMMIT = None  # type: typing.Optional[str]
     """DAX commit hash."""
-    _CWD_COMMIT = None
+    _CWD_COMMIT = None  # type: typing.Optional[str]
     """Current working directory commit hash."""
 
     def __init__(self) -> None:  # Constructor return type required if no parameters are given
@@ -1265,27 +1267,17 @@ class _DaxDataStore:
 def __load_commit_hashes() -> None:
     """Load commit hash class attributes, only needs to be done once."""
 
-    # Obtain commit hash of DAX
-    try:
-        # Obtain repo
-        repo = git.Repo(os.path.dirname(__file__), search_parent_directories=True)
-    except git.InvalidGitRepositoryError:
-        # No repo was found
-        pass
-    else:
-        # Get commit hash
-        _DaxDataStore._DAX_COMMIT = repo.head.commit.hexsha
+    # Discover repository path of DAX
+    path = pygit2.discover_repository(os.path.dirname(__file__))
+    if path is not None:
+        # Store commit hash
+        _DaxDataStore._DAX_COMMIT = pygit2.Repository(path).head.target.hex
 
-    # Obtain commit hash of current working directory (if existing)
-    try:
-        # Obtain repo
-        repo = git.Repo(os.getcwd(), search_parent_directories=True)
-    except git.InvalidGitRepositoryError:
-        # No repo was found
-        pass
-    else:
-        # Get commit hash
-        _DaxDataStore._CWD_COMMIT = repo.head.commit.hexsha
+    # Discover repository path of current working directory
+    path = pygit2.discover_repository(os.getcwd())
+    if path is not None:
+        # Store commit hash
+        _DaxDataStore._CWD_COMMIT = pygit2.Repository(path).head.target.hex
 
 
 __load_commit_hashes()  # Load commit hashes into class attributes
@@ -1293,7 +1285,11 @@ del __load_commit_hashes  # Remove one-time function
 
 
 class _DaxDataStoreInfluxDb(_DaxDataStore):
-    """Influx DB DAX data store class."""
+    """Influx DB DAX data store class.
+
+    This data store connects to an Influx DB controller (see DAX comtools) to
+    push data to an Influx database.
+    """
 
     __F_T = typing.Union[numbers.Real, str]  # Field type variable for Influx DB supported types
     __P_T = typing.Dict[str, typing.Union[str, typing.Union[typing.Dict[str, __F_T]]]]  # Point type variable
