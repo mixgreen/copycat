@@ -26,14 +26,14 @@ test_conda:
   before_script:
     # Install ARTIQ and activate environment
     - wget https://raw.githubusercontent.com/m-labs/artiq/release-5/install-with-conda.py
-    - sed -i '/artiq-board/d' install-with-conda.py  # Remove ARTIQ board packages
+    - sed -i "/artiq-board/d" install-with-conda.py  # Remove ARTIQ board packages
     - python install-with-conda.py
     - rm install-with-conda.py
     - conda init
     - source ~/.bashrc
     - conda activate artiq
     # Install DAX dependencies
-    - conda install numpy scipy pyvcd natsort GitPython
+    - conda install numpy scipy "pyvcd<0.2" natsort GitPython
     # Install packages required for testing
     - conda install pycodestyle
   script:
