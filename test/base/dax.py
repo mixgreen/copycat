@@ -384,7 +384,7 @@ class DaxDataStoreTestCase(unittest.TestCase):
         # Callback function
         def callback(*args, **kwargs):
             # This code is supposed to be unreachable
-            self.assertTrue(False, 'Exception should have been raised earlier {} {}'.format(args, kwargs))
+            self.fail('Exception should have been raised earlier {} {}'.format(args, kwargs))
 
         # Special data store that skips actual writing
         self.ds = self.NoWriteDataStoreConnector(callback, self.s)

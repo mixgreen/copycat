@@ -18,7 +18,7 @@ test_nix:
     - nix-shell test/shell.nix --run "python --version"
     - nix-shell test/shell.nix --run "mypy --version; mypy dax/base/ dax/sim/ dax/util/"
     - nix-shell test/shell.nix --run "flake8 --version; flake8"
-    - nix-shell test/shell.nix --run "coverage --version; coverage run -m unittest"
+    - nix-shell test/shell.nix --run "coverage --version; coverage run -m unittest -v"
     - nix-shell test/shell.nix --run "coverage report"
 
 test_conda:
@@ -38,7 +38,8 @@ test_conda:
     - conda install pycodestyle
   script:
     # Run test commands
-    - python -m unittest
+    - python --version
+    - python -m unittest -v
 
 pages:
   extends: .nix_env
