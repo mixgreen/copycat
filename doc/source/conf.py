@@ -15,6 +15,8 @@
 import os
 import sys
 
+from dax import __version__ as dax_version
+
 sys.path.insert(0, os.path.abspath('../..'))
 
 # -- Project information -----------------------------------------------------
@@ -24,9 +26,9 @@ copyright = '2020, Duke University'
 author = 'Duke University'
 
 # The short X.Y version
-version = '0.1'
+version = dax_version.split('+', 1)[0]
 # The full version, including alpha/beta/rc tags
-release = '0.1'
+release = dax_version
 
 # -- General configuration ---------------------------------------------------
 

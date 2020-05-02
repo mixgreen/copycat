@@ -19,6 +19,7 @@ import artiq.coredevice.core  # type: ignore
 import artiq.coredevice.dma  # type: ignore
 import artiq.coredevice.cache  # type: ignore
 
+from dax import __version__
 from dax.sim.sim import DAX_SIM_CONFIG_KEY as _DAX_SIM_CONFIG_KEY
 from dax.sim.device import DaxSimDevice as _DaxSimDevice
 
@@ -815,6 +816,7 @@ class DaxSystem(_DaxModuleBase):
         # Store system information in local archive
         self.set_dataset(self.get_system_key('dax_system_id'), self.SYS_ID, archive=True)
         self.set_dataset(self.get_system_key('dax_system_version'), self.SYS_VER, archive=True)
+        self.set_dataset(self.get_system_key('dax_version'), __version__, archive=True)
 
         # Perform system initialization
         self.logger.debug('Starting DAX system initialization...')
@@ -1334,6 +1336,7 @@ class _DaxDataStoreInfluxDb(_DaxDataStore):
             'pipeline_name': str(scheduler.pipeline_name),
             'priority': int(scheduler.priority),
             'artiq_version': str(artiq.__version__),
+            'dax_version': str(__version__),
         }
 
         # Add expid items to fields if keys do not exist yet and the types are appropriate
