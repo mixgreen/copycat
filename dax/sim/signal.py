@@ -18,18 +18,22 @@ class DaxSignalManager(abc.ABC):
     @abc.abstractmethod
     def register(self, scope: str, name: str, type_: type,
                  size: typing.Optional[int] = None, init: typing.Any = None) -> __S_T:
+        """Method used by devices to register a signal."""
         pass
 
     @abc.abstractmethod
     def event(self, signal: __S_T, value: typing.Any, time: typing.Optional[np.int64] = None) -> None:
+        """Method used by devices to register events."""
         pass
 
     @abc.abstractmethod
     def flush(self) -> None:
+        """Flush the output of the signal manager."""
         pass
 
     @abc.abstractmethod
     def close(self) -> None:
+        """Close the signal manager."""
         pass
 
 
@@ -94,7 +98,7 @@ class VcdSignalManager(DaxSignalManager):
         Signals have to be registered before any events are committed.
 
         Possible types and expected arguments:
-        - `bool` (a register with bit values `0`,`1`,`X`,`Z`), provide a size of the register
+        - `bool` (a register with bit values `0`, `1`, `X`, `Z`), provide a size of the register
         - `int`, `np.int32`, `np.int64`
         - `float`
         - `str`
@@ -123,7 +127,7 @@ class VcdSignalManager(DaxSignalManager):
     def event(self, signal: __S_T, value: __V_T, time: typing.Optional[np.int64] = None) -> None:
         """Commit an event.
 
-        Bool type signals can have values `0`,`1`,`X`,`Z`.
+        Bool type signals can have values `0`, `1`, `X`, `Z`.
 
         Event (`object`) type signals represent timestamps and do not have a value.
         We recommend to always use value `True` for event type signals.
@@ -132,7 +136,7 @@ class VcdSignalManager(DaxSignalManager):
 
         :param signal: The signal that changed
         :param value: The new value of the signal
-        :param time: Optional time that the signal changed (:func:`now_mu()` if no time was provided)
+        :param time: Optional time that the signal changed (:func:`now_mu` if no time was provided)
         """
         # Add event to buffer
         self._event_buffer.append((artiq.language.core.now_mu() if time is None else time, signal, value))
@@ -154,6 +158,7 @@ class VcdSignalManager(DaxSignalManager):
         self._event_buffer.clear()
 
     def close(self) -> None:
+        """Close the VCD file."""
         # Close the VCD writer
         self._vcd.close(artiq.language.core.now_mu())
         # Close the file

@@ -52,7 +52,7 @@ def enable_dax_sim(enable: bool,
 
     If supported by a specific simulated device, extra simulation-specific arguments
     can be added by adding a `sim_args` dict to the device entry in the device DB.
-    The `arguments` dict of the device will be updated by the `sim_args` dict.
+    The `arguments` dict of the device will be updated with the content of the `sim_args` dict.
 
     :param enable: Flag to enable DAX simulation
     :param ddb: The device DB (will be updated if simulation is enabled)

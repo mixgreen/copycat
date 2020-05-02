@@ -9,6 +9,8 @@ _logger = logging.getLogger(__name__)
 
 
 class DaxSimConfig:
+    """Virtual device class that configures the simulation through the device DB."""
+
     def __init__(self, dmgr: typing.Any,
                  logging_level: typing.Union[int, str], timescale: float, output: bool):
         assert isinstance(logging_level, (int, str)), 'Logging level must be of type int or str'
@@ -45,9 +47,19 @@ class DaxSimConfig:
 
     @property
     def output_enabled(self) -> bool:
+        """Returns `True` if the user requested simulation output.
+
+        :return: True if the `output_enabled` flag was set
+        """
         return self.__output_enabled
 
     def get_output_file_name(self, ext: str, postfix: typing.Optional[str] = None) -> str:
+        """ Convenience function to generate uniformly styled output file names.
+
+        :param ext: The extension of the file
+        :param postfix: A postfix for the base file name
+        :return: A file name
+        """
         assert isinstance(ext, str), 'File extension must be of type str'
         assert isinstance(postfix, str) or postfix is None, 'Postfix must be of type str or None'
 
@@ -58,6 +70,9 @@ class DaxSimConfig:
 
     @staticmethod
     def close() -> None:
-        # Close the signal manager
+        """Close the simulation.
+
+        The signal manager will be closed.
+        """
         _logger.debug('Closing signal manager')
         get_signal_manager().close()
