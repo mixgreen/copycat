@@ -31,7 +31,7 @@ class Core(DaxSimDevice):
         self._ref_multiplier = np.int32(ref_multiplier)
 
         # Set initial call nesting level to zero
-        self._level = np.int32(0)
+        self._level = 0
         # Set the timescale of the core based on the simulation configuration
         self._timescale = self._sim_config.timescale  # type: float
 
@@ -39,6 +39,8 @@ class Core(DaxSimDevice):
         self._signal_manager = get_signal_manager()
         self._reset_signal = self._signal_manager.register(self.key, 'reset', bool, size=1)  # type: typing.Any
 
+        # Counter for context switches
+        self._context_switch_counter = 0
         # Counting dicts for function call profiling
         self._func_counter = collections.Counter()  # type: typing.Counter[typing.Any]
         self._func_time = collections.Counter()  # type: typing.Counter[typing.Any]
@@ -55,27 +57,29 @@ class Core(DaxSimDevice):
     def coarse_ref_period(self) -> float:
         return self._ref_period * self._ref_multiplier
 
-    def run(self, k_function: typing.Any,
-            k_args: typing.Tuple[typing.Any, ...], k_kwargs: typing.Dict[str, typing.Any]) -> typing.Any:
+    def run(self, function: typing.Any,
+            args: typing.Tuple[typing.Any, ...], kwargs: typing.Dict[str, typing.Any]) -> typing.Any:
         # Unpack function
-        func = k_function.artiq_embedded.function
+        kernel_func = function.artiq_embedded.function
 
         # Register the function call
-        self._func_counter[func] += 1
+        self._func_counter[kernel_func] += 1
         # Track current time
         t_start = now_mu()  # type: np.int64
 
         # Call the kernel function while increasing the level
         self._level += 1
-        result = func(*k_args, **k_kwargs)
+        result = kernel_func(*args, **kwargs)
         self._level -= 1
 
         # Accumulate the time spend in this function call
-        self._func_time[func] += now_mu() - t_start
+        self._func_time[kernel_func] += now_mu() - t_start
 
         if self._level == 0:
             # Flush signal manager if we are about to leave the kernel context
             self._signal_manager.flush()
+            # Increment the context switch counter
+            self._context_switch_counter += 1
 
         # Return the result
         return result
@@ -88,9 +92,16 @@ class Core(DaxSimDevice):
                 csv_writer = csv.writer(csv_file)
                 # Submit headers
                 csv_writer.writerow(['ncalls', 'cumtime_mu', 'cumtime_s', 'function'])
-                # Submit data
+                # Submit context switch data
+                csv_writer.writerow([self._context_switch_counter, None, None, 'Core.compile'])
+                # Submit profiling data
                 csv_writer.writerows((self._func_counter[func], time, self.mu_to_seconds(time), func.__qualname__)
                                      for func, time in self._func_time.items())
+
+    def compile(self, function: typing.Any, args: typing.Tuple[typing.Any, ...], kwargs: typing.Dict[str, typing.Any],
+                set_result: typing.Any = None, attribute_writeback: bool = True,
+                print_as_rpc: bool = True) -> typing.Any:
+        raise NotImplementedError('Simulated core does not implement the compile function')
 
     @portable
     def seconds_to_mu(self, seconds: float) -> np.int64:

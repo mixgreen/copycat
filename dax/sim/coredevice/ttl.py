@@ -57,17 +57,20 @@ class TTLInOut(TTLOut):
         FALLING = 2
         BOTH = 3
 
-    def __init__(self, dmgr, input_freq=0.0, **kwargs):
+    def __init__(self, dmgr, input_freq=0.0, input_prob=0.5, seed=None, **kwargs):
         assert isinstance(input_freq, float) and input_freq >= 0.0, 'Input frequency must be a positive float'
+        assert isinstance(input_prob, float), 'Input probability must be a float'
+        assert 0.0 <= input_freq <= 1.0, 'Input probability must be between 0.0 and 1.0'
 
         # Call super
         super(TTLInOut, self).__init__(dmgr, **kwargs)
 
         # Store simulation settings
         self._input_freq = input_freq
+        self._input_prob = input_prob
 
         # Random number generator for generating values
-        self._rng = random.Random()
+        self._rng = random.Random(seed)
 
         # Buffers to store simulated events
         self._edge_buffer = collections.deque()
@@ -182,7 +185,7 @@ class TTLInOut(TTLOut):
     @kernel
     def sample_input(self):
         # Sample at the current time and store result in the sample buffer
-        val = np.int32(self._rng.randint(0, 1))
+        val = np.int32(self._rng.random() < self._input_prob)
         self._sample_buffer.append(val)
         self._signal_manager.event(self._state, val)  # Sample value at current time
         self._signal_manager.event(self._state, 'x', now_mu() + 1)  # Return to X after sample

@@ -82,8 +82,7 @@ class AD9910(DaxSimDevice):
     @kernel
     def set_cfr1(self, power_down=0b0000, phase_autoclear=0,
                  drg_load_lrr=0, drg_autoclear=0,
-                 internal_profile=0, ram_destination=0, ram_enable=0,
-                 manual_osk_external=0, osk_enable=0, select_auto_osk=0):
+                 internal_profile=0, ram_destination=0, ram_enable=0):
         raise NotImplementedError
 
     @kernel

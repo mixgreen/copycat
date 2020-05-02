@@ -127,73 +127,87 @@ def _mutate_ddb_entry(key: str, value: typing.Any) -> typing.Any:
         if not isinstance(type_, str):
             raise TypeError('The type key of local device "{:s}" must be of type str'.format(key))
 
-        if type_ == 'local':  # If value type is 'local' this is a device we will simulate
-            # Get the module of the device
-            module = value.get('module')
-            if not isinstance(module, str):
-                raise TypeError('The module key of local device "{:s}" must be of type str'.format(key))
-
-            # Convert module name to a dax.sim module
-            module = '.'.join([_DAX_DEVICE_MODULE, module.rsplit('.', maxsplit=1)[-1]])
-
-            try:
-                # Check if the module exists by importing it
-                m = importlib.import_module(module)
-
-            except ImportError:
-                # Module was not found, fall back on generic device
-                value.update(_GENERIC_DEVICE)
-
-            else:
-                # Get the class of the device
-                class_ = value.get('class')
-                if not isinstance(class_, str):
-                    raise TypeError('The class key of local device "{:s}" must be of type str'.format(key))
-
-                if not hasattr(m, class_):
-                    # Class was not found in module, fall back on generic device
-                    value.update(_GENERIC_DEVICE)
-                else:
-                    # Both module and class were found, update module
-                    value['module'] = module
-
-            # Add key of the device to the device arguments
-            arguments = value.setdefault('arguments', {})
-            if not isinstance(arguments, dict):
-                raise TypeError('The arguments key of local device "{:s}" must be of type dict'.format(key))
-            arguments.update(_key=key)
-
-            # Add simulation arguments to normal arguments
-            sim_args = value.setdefault('sim_args', {})
-            if not isinstance(sim_args, dict):
-                raise TypeError('The sim_args key of local device "{:s}" must be of type dict'.format(key))
-            arguments.update(sim_args)
-
-            # Debug message
-            _logger.debug('Converted local device "{:s}" to class "{module:s}.{class:s}"'.format(key, **value))
-
-        elif type_ == 'controller':  # If value type is 'controller' this controller needs to be set to simulation mode
-            # Get the command of this controller
-            command = value.get('command')
-            if not isinstance(command, str):
-                raise TypeError('The command key of controller "{:s}" must be of type str'.format(key))
-
-            # Check if the controller was already set to simulation mode
-            if _SIMULATION_ARG not in command:
-                # Simulation argument not found, append it
-                _logger.debug('Added simulation argument to command for controller "{:s}"'.format(key))
-                value['command'] = ' '.join([command, _SIMULATION_ARG])
-            else:
-                # Debug message
-                _logger.debug('Controller "{:s}" was not modified'.format(key))
-
+        # Mutate entry
+        if type_ == 'local':
+            _mutate_local(key, value)
+        elif type_ == 'controller':
+            _mutate_controller(key, value)
         else:
-            # Debug message
             _logger.debug('Skipped entry "{:s}"'.format(key))
-
     else:
         # Value is not a dict, it can be ignored
         pass
 
     # Return the potentially modified value
     return value
+
+
+def _mutate_local(key: str, value: typing.Any) -> None:
+    """Mutate a device DB local entry to use it for simulation."""
+
+    # Get the module of the device
+    module = value.get('module')
+    if not isinstance(module, str):
+        raise TypeError('The module key of local device "{:s}" must be of type str'.format(key))
+
+    # Convert module name to a dax.sim module
+    module = '.'.join([_DAX_DEVICE_MODULE, module.rsplit('.', maxsplit=1)[-1]])
+
+    try:
+        # Check if the module exists by importing it
+        m = importlib.import_module(module)
+
+    except ImportError:
+        # Module was not found, fall back on generic device
+        value.update(_GENERIC_DEVICE)
+
+    else:
+        # Get the class of the device
+        class_ = value.get('class')
+        if not isinstance(class_, str):
+            raise TypeError('The class key of local device "{:s}" must be of type str'.format(key))
+
+        if not hasattr(m, class_):
+            # Class was not found in module, fall back on generic device
+            value.update(_GENERIC_DEVICE)
+        else:
+            # Both module and class were found, update module
+            value['module'] = module
+
+    # Add key of the device to the device arguments
+    arguments = value.setdefault('arguments', {})
+    if not isinstance(arguments, dict):
+        raise TypeError('The arguments key of local device "{:s}" must be of type dict'.format(key))
+    arguments.update(_key=key)
+
+    # Add simulation arguments to normal arguments
+    sim_args = value.setdefault('sim_args', {})
+    if not isinstance(sim_args, dict):
+        raise TypeError('The sim_args key of local device "{:s}" must be of type dict'.format(key))
+    arguments.update(sim_args)
+
+    # Debug message
+    _logger.debug('Converted local device "{:s}" to class "{module:s}.{class:s}"'.format(key, **value))
+
+
+def _mutate_controller(key: str, value: typing.Any) -> None:
+    """Mutate a device DB controller entry to use it for simulation."""
+
+    # Get the command of this controller
+    command = value.get('command')
+
+    if command is None:
+        # No command was set
+        _logger.debug('No command found for controller "{:s}"'.format(key))
+    elif isinstance(command, str):
+        # Check if the controller was already set to simulation mode
+        if _SIMULATION_ARG not in command:
+            # Simulation argument not found, append it
+            _logger.debug('Added simulation argument to command for controller "{:s}"'.format(key))
+            value['command'] = ' '.join([command, _SIMULATION_ARG])
+        else:
+            # Debug message
+            _logger.debug('Controller "{:s}" was not modified'.format(key))
+    else:
+        # Command was not of type str
+        raise TypeError('The command key of controller "{:s}" must be of type str'.format(key))

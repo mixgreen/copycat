@@ -62,18 +62,18 @@ class EdgeCounter(DaxSimDevice):
         self._count_buffer.append((now_mu(), num_events))
 
     @kernel
-    def gate_rising_mu(self, duration):
-        self._simulate_input_signal(duration, self._EdgeType.RISING)
+    def gate_rising_mu(self, duration_mu):
+        self._simulate_input_signal(duration_mu, self._EdgeType.RISING)
         return now_mu()
 
     @kernel
-    def gate_falling_mu(self, duration):
-        self._simulate_input_signal(duration, self._EdgeType.FALLING)
+    def gate_falling_mu(self, duration_mu):
+        self._simulate_input_signal(duration_mu, self._EdgeType.FALLING)
         return now_mu()
 
     @kernel
-    def gate_both_mu(self, duration):
-        self._simulate_input_signal(duration, self._EdgeType.BOTH)
+    def gate_both_mu(self, duration_mu):
+        self._simulate_input_signal(duration_mu, self._EdgeType.BOTH)
         return now_mu()
 
     @kernel

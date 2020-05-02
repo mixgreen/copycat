@@ -1,2 +1,6 @@
 class CounterOverflow(Exception):
     ...
+
+
+class EdgeCounter:
+    ...
