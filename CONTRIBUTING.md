@@ -10,10 +10,22 @@ We recommend the following naming conventions for branches:
 - `feature/*` for developing new features.
 - `fix/*` for bug fixes.
 
+## Testing
+
+DAX is shipped with unit tests and default configurations for mypy type checking and flake8 style checking.
+The unit tests can run without additional libraries.
+Mypy and flake8 need to be installed separately.
+Tests can be executed by using the following commands:
+
+```shell
+python3 -m unittest
+mypy dax/ test/
+flake8
+```
+
 ## Merging
 
-Test your code before merging.
-When merging a branch into master, we recommend to rebase first or to use the `--no-ff` flag when merging.
+When issuing a merge request into master, we recommend to rebase first or to use the `--no-ff` flag when merging.
 
 ## Releases
 

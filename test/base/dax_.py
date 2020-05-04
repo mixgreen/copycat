@@ -1,6 +1,7 @@
 import unittest
 import numpy as np
 import logging
+import itertools
 
 import artiq.coredevice.edge_counter  # type: ignore
 import artiq.coredevice.ttl  # type: ignore
@@ -290,18 +291,33 @@ class DaxNameRegistryTestCase(unittest.TestCase):
 
 
 class DaxDataStoreInfluxDbTestCase(unittest.TestCase):
-    class NoWriteDataStore(dax.base.dax.DaxDataStoreInfluxDb):
+    class MockDataStore(dax.base.dax.DaxDataStoreInfluxDb):
         """Data store connector that does not write but a callback instead."""
 
         def __init__(self, callback, *args, **kwargs):
             assert callable(callback), 'Callback must be a callable function'
             self.callback = callback
-            super(DaxDataStoreInfluxDbTestCase.NoWriteDataStore, self).__init__(*args, **kwargs)
+            super(DaxDataStoreInfluxDbTestCase.MockDataStore, self).__init__(*args, **kwargs)
+
+            # List of points that reached the callback
+            self.points = []
 
         def _get_driver(self, system: DaxSystem, key: str) -> None:
             pass  # Do not obtain the driver
 
+        def _get_key(self, point):
+            keys = [k for k in point['fields'] if k not in self._base_fields]
+            if len(keys) != 1:
+                raise LookupError('Could not find a unique data key in the point')
+            else:
+                return keys[0]
+
         def _write_points(self, points):
+            # Filter out keys
+            keys = (self._get_key(p) for p in points)
+            # Add converted points to list of points
+            self.points.extend((k, p['fields'][k], p['tags'].get('index')) for p, k in zip(points, keys))
+
             # Do not write points but do a callback instead
             self.callback(points)
 
@@ -318,7 +334,7 @@ class DaxDataStoreInfluxDbTestCase(unittest.TestCase):
         # Test system
         self.s = TestSystem(get_manager_or_parent(device_db))
         # Special data store that skips actual writing
-        self.ds = self.NoWriteDataStore(callback, self.s, 'dax_influx_db')
+        self.ds = self.MockDataStore(callback, self.s, 'dax_influx_db')
 
     def test_commit_hash(self):
         # Test if DAX commit hash was loaded, we can assume that the code was versioned (if not, the test fails)
@@ -386,16 +402,21 @@ class DaxDataStoreInfluxDbTestCase(unittest.TestCase):
             ('k', False),
         ]
 
-        for k, v in test_data:
+        for (k, v), count in zip(test_data, itertools.count(1)):
             with self.subTest(k=k, v=v):
                 # Test using the callback function
                 self.ds.set(k, v)
+                # Test if the number of registered points matches
+                self.assertEqual(count, len(self.ds.points),
+                                 'Number of registered points does not match number of written elements')
+                # Verify if the last point matches the data we wrote
+                self.assertTupleEqual((k, v, None), self.ds.points[-1], 'Submitted data does not match written point')
 
     def test_set_bad(self):
         # Callback function
         def callback(*args, **kwargs):
             # This code is supposed to be unreachable
-            self.fail('Bad type resulted in unwanted write {} {}'.format(args, kwargs))
+            self.fail('Bad type resulted in unwanted write (set) {} {}'.format(args, kwargs))
 
         # Replace callback function with a specific one for testing bad types
         self.ds.callback = callback
@@ -433,6 +454,13 @@ class DaxDataStoreInfluxDbTestCase(unittest.TestCase):
             with self.subTest(k=k, v=v):
                 # Test using the callback function
                 self.ds.set(k, v)
+                # Test if the number of points
+                self.assertEqual(len(v), len(self.ds.points), 'Number of written points does not match sequence length')
+                # Verify if the registered points are correct
+                self.assertListEqual([(k, item, str(index)) for item, index in zip(v, itertools.count())],
+                                     self.ds.points, 'Submitted data does not match point sequence')
+                # Clear the list for the next sub-test
+                self.ds.points.clear()
 
     def test_set_sequence_bad(self):
         # Callback function
@@ -463,10 +491,15 @@ class DaxDataStoreInfluxDbTestCase(unittest.TestCase):
             ('k', np.float(4)),
         ]
 
-        for k, v in test_data:
+        for (k, v), count in zip(test_data, itertools.count(1)):
             with self.subTest(k=k, v=v):
                 # Test using the callback function
                 self.ds.set(k, v)
+                # Test if the number of registered points matches
+                self.assertEqual(count, len(self.ds.points),
+                                 'Number of registered points does not match number of written elements')
+                # Verify the last point matches the data we wrote
+                self.assertTupleEqual((k, v, None), self.ds.points[-1], 'Submitted data does not match written point')
 
     def test_mutate(self):
         # Data to test against
@@ -476,10 +509,15 @@ class DaxDataStoreInfluxDbTestCase(unittest.TestCase):
             ('k', 'np.float(4)', -99),  # Negative indices are valid, though this is not specifically intended behavior
         ]
 
-        for k, v, i in test_data:
+        for (k, v, i), count in zip(test_data, itertools.count(1)):
             with self.subTest(k=k, v=v, i=i):
                 # Test using the callback function
                 self.ds.mutate(k, i, v)
+                # Test if the number of registered points matches
+                self.assertEqual(count, len(self.ds.points),
+                                 'Number of registered points does not match number of written elements')
+                # Verify the last point matches the data we wrote
+                self.assertTupleEqual((k, v, str(i)), self.ds.points[-1], 'Submitted data does not match written point')
 
     def test_mutate_index_np_type_conversion(self):
         # Data to test against
@@ -489,10 +527,14 @@ class DaxDataStoreInfluxDbTestCase(unittest.TestCase):
             ('k', True, np.int32(0)),
         ]
 
-        for k, v, i in test_data:
+        for (k, v, i), count in zip(test_data, itertools.count(1)):
             with self.subTest(k=k, v=v, i=i):
                 # Test using the callback function
                 self.ds.mutate(k, i, v)
+                # Test if the number of registered points matches
+                self.assertEqual(count, len(self.ds.points),
+                                 'Number of registered points does not match number of written elements')
+                self.assertTupleEqual((k, v, str(i)), self.ds.points[-1], 'Submitted data does not match written point')
 
     def test_append(self):
         # Key
@@ -510,12 +552,21 @@ class DaxDataStoreInfluxDbTestCase(unittest.TestCase):
         # Initialize list for appending
         init_list = [4]
         self.ds.set(key, init_list)
+        # Reset registered points
+        self.ds.points.clear()
+        # Track length of the list
         length = len(init_list)
 
-        for k, v in test_data:
+        for (k, v), count in zip(test_data, itertools.count(1)):
             with self.subTest(k=k, v=v):
                 # Test using the callback function
                 self.ds.append(k, v)
+                # Test if the number of registered points matches
+                self.assertEqual(count, len(self.ds.points),
+                                 'Number of registered points does not match number of written elements')
+                # Check written data
+                self.assertTupleEqual((k, v, str(length)), self.ds.points[-1],
+                                      'Submitted data does not match written point')
                 # Test increment
                 length += 1
                 self.assertEqual(self.ds._index_table[key], length, 'Cached index was not updated correctly')
@@ -524,7 +575,7 @@ class DaxDataStoreInfluxDbTestCase(unittest.TestCase):
         # Callback function
         def callback(*args, **kwargs):
             # This code is supposed to be unreachable
-            self.fail('Bad type resulted in unwanted write {} {}'.format(args, kwargs))
+            self.fail('Bad type resulted in unwanted write (append) {} {}'.format(args, kwargs))
 
         # Key
         key = 'k'
@@ -552,7 +603,7 @@ class DaxDataStoreInfluxDbTestCase(unittest.TestCase):
         # Callback function
         def callback(*args, **kwargs):
             # This code is supposed to be unreachable
-            self.fail('Bad type resulted in unwanted write {} {}'.format(args, kwargs))
+            self.fail('Not-cached sequence append resulted in unexpected write {} {}'.format(args, kwargs))
 
         # Replace callback function with a specific one for testing bad types
         self.ds.callback = callback
@@ -599,7 +650,7 @@ class DaxDataStoreInfluxDbTestCase(unittest.TestCase):
         # Callback function
         def callback(*args, **kwargs):
             # This code is supposed to be unreachable
-            self.fail('Empty list of values resulted in unwanted write {} {}'.format(args, kwargs))
+            self.fail('Set empty list resulted in unexpected write {} {}'.format(args, kwargs))
 
         # Replace callback function with a specific one for testing bad types
         self.ds.callback = callback

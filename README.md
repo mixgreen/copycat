@@ -31,10 +31,20 @@ Users can import DAX and the ARTIQ experiment environment at once using the foll
 from dax.experiment import *
 ```
 
+Users that would like to use DAX.sim can do so by annotating their device DB in the following way:
+
+```python
+from dax.sim import enable_dax_sim
+
+device_db = enable_dax_sim(enable=True, ddb={
+    # Your regular device db...
+})
+``` 
+
 ## Testing
 
 To run the DAX unit tests, execute the following command in the root directory of DAX:
 
-```bash
+```shell
 python3 -m unittest
 ```
