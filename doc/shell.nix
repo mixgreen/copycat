@@ -17,5 +17,6 @@ in
                 ps.sphinx
                 ps.sphinx_rtd_theme
             ]))
+            pkgs.git  # Required to set the correct copyright year
         ];
     }

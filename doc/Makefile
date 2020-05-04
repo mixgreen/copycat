@@ -8,7 +8,7 @@ SOURCEDIR     = source
 BUILDDIR      = build
 
 # Required to set the correct copyright year when using Nix
-SOURCE_DATE_EPOCH = $(shell git log -1 --format=%ct)
+SOURCE_DATE_EPOCH := $(shell git log -1 --format=%ct)
 
 # Put it first so that "make" without argument is like "make help".
 help:
