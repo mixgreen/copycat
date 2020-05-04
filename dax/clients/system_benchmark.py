@@ -6,6 +6,8 @@ import artiq.master.worker_db
 from dax.experiment import *
 import dax.util.units
 
+__all__ = ['SystemBenchmarkDaxInit']
+
 
 @dax_client_factory
 class SystemBenchmarkDaxInit(DaxClient, EnvExperiment):

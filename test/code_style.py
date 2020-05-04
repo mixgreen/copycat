@@ -12,7 +12,7 @@ class TestCodeStyle(unittest.TestCase):
         try:
             import pycodestyle  # type: ignore
         except ImportError:
-            self.skipTest('pycodestyle not available')
+            self.skipTest('pycodestyle library not available')
         else:
             # Get path to the root of DAX
             import dax

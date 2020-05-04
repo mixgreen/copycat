@@ -8,6 +8,8 @@ import artiq.master.worker_db
 import artiq.master.databases  # type: ignore
 import artiq.frontend.artiq_run  # type: ignore
 
+__all__ = ['get_manager_or_parent']
+
 
 def get_manager_or_parent(device_db: typing.Dict[str, typing.Any] = None) -> typing.Any:
     """Returns an object that can function as a `manager_or_parent` for ARTIQ HasEnvironment.
@@ -26,7 +28,7 @@ def get_manager_or_parent(device_db: typing.Dict[str, typing.Any] = None) -> typ
     device_db_file_name = os.path.join(tempfile.gettempdir(), 'dax_test_device_db.py')
     with open(device_db_file_name, 'w') as device_db_file:
         device_db_file.write('device_db=')
-        device_db_file.write(str(__device_db if device_db is None else device_db))
+        device_db_file.write(str(_device_db if device_db is None else device_db))
     device_mgr = artiq.master.worker_db.DeviceManager(
         artiq.master.databases.DeviceDB(device_db_file_name),
         virtual_devices={
@@ -46,7 +48,7 @@ def get_manager_or_parent(device_db: typing.Dict[str, typing.Any] = None) -> typ
 logging.basicConfig(level=logging.CRITICAL)
 
 # Default device db
-__device_db = {
+_device_db = {
     'core': {
         'type': 'local',
         'module': 'artiq.coredevice.core',

@@ -18,8 +18,8 @@ test_nix:
     - nix-shell test/shell.nix --run "python3 --version"
     - nix-shell test/shell.nix --run "coverage --version; coverage run -m unittest -v"
     - nix-shell test/shell.nix --run "coverage report"
-    - nix-shell test/shell.nix --run "mypy --version; mypy dax/base/ dax/sim/ dax/util/"
-    - nix-shell test/shell.nix --run "flake8 --version; flake8 --count"
+    - nix-shell test/shell.nix --run "mypy --version; mypy dax/ test/"
+    - nix-shell test/shell.nix --run "flake8 --version; flake8"
 
 test_conda:
   image: continuumio/miniconda3:latest

@@ -4,6 +4,8 @@ import numpy as np
 
 from artiq.language.units import *
 
+__all__ = ['DaxTimeManager']
+
 _MU_T = np.int64
 """The type of machine units (MU)."""
 

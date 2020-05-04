@@ -1,6 +1,13 @@
 import typing
 import numpy as np
 
+__all__ = ["kernel", "portable", "rpc", "syscall", "host_only",
+           "set_time_manager", "set_watchdog_factory",
+           "TerminationRequested",
+           "sequential", "parallel", "interleave",
+           "delay_mu", "now_mu", "at_mu", "delay",
+           "watchdog"]
+
 __F_T = typing.TypeVar('__F_T', bound=typing.Callable[..., typing.Any])
 
 
@@ -62,6 +69,14 @@ def at_mu(time: np.int64) -> None:
 
 
 def delay(duration: float) -> None:
+    ...
+
+
+def set_watchdog_factory(f: typing.Any) -> None:
+    ...
+
+
+def watchdog(timeout: float) -> typing.Any:
     ...
 
 

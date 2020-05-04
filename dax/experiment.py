@@ -1,2 +1,5 @@
-from .base import *  # Import DAX base
-from artiq.experiment import *  # Import artiq.experiment
+# Import DAX base
+from dax.base.dax import *
+
+# Import artiq.experiment
+from artiq.experiment import *

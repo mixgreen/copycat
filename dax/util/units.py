@@ -1,7 +1,9 @@
 import typing
 
-from artiq.language.core import *
+from artiq.language.core import host_only
 from artiq.language.units import *
+
+__all__ = ['time_to_str', 'str_to_time', 'freq_to_str', 'str_to_freq']
 
 
 @host_only

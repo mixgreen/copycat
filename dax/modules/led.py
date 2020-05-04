@@ -4,6 +4,8 @@ import artiq.coredevice.ttl  # type: ignore
 
 from dax.experiment import *
 
+__all__ = ['LedModule']
+
 
 class LedModule(DaxModule):
     """Module to control user LED's."""

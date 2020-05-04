@@ -5,6 +5,8 @@ import artiq.coredevice.ttl  # type: ignore
 from dax.experiment import *
 import dax.util.units
 
+__all__ = ['RtioBenchmarkModule', 'RtioLoopBenchmarkModule']
+
 
 class RtioBenchmarkModule(DaxModule):
     """Module to benchmark the RTIO output system."""

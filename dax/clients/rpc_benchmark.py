@@ -1,5 +1,8 @@
-from dax.modules.rpc_benchmark import *
+from dax.experiment import *
+from dax.modules.rpc_benchmark import RpcBenchmarkModule
 import dax.util.units
+
+__all__ = ['RpcBenchmarkLatency']
 
 
 @dax_client_factory

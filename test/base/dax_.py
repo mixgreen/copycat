@@ -2,14 +2,14 @@ import unittest
 import numpy as np
 import logging
 
+import artiq.coredevice.edge_counter  # type: ignore
+import artiq.coredevice.ttl  # type: ignore
+import artiq.coredevice.core  # type: ignore
+
 from dax.base.dax import *
 import dax.base.dax
-
+import dax.base.exceptions
 from dax.util.artiq_helpers import get_manager_or_parent
-
-from artiq.coredevice.edge_counter import EdgeCounter  # type: ignore
-from artiq.coredevice.ttl import TTLInOut, TTLOut  # type: ignore
-from artiq.coredevice.core import Core  # type: ignore
 
 """Device DB for testing"""
 
@@ -112,52 +112,41 @@ class TestServiceChild(TestService, TestInterface):
 class DaxHelpersTestCase(unittest.TestCase):
 
     def test_valid_name(self):
-        from dax.base.dax import _is_valid_name
-
         for n in ['foo', '_0foo', '_', '0', '_foo', 'FOO_', '0_foo']:
             # Test valid names
-            self.assertTrue(_is_valid_name(n))
+            self.assertTrue(dax.base.dax._is_valid_name(n))
 
     def test_invalid_name(self):
-        from dax.base.dax import _is_valid_name
-
         for n in ['', 'foo()', 'foo.bar', 'foo/', 'foo*', 'foo,', 'FOO+', 'foo-bar', 'foo/bar']:
             # Test illegal names
-            self.assertFalse(_is_valid_name(n))
+            self.assertFalse(dax.base.dax._is_valid_name(n))
 
     def test_valid_key(self):
-        from dax.base.dax import _is_valid_key
-
         for k in ['foo', '_0foo', '_', '0', 'foo.bar', 'foo.bar.baz', '_.0.A', 'foo0._bar']:
             # Test valid keys
-            self.assertTrue(_is_valid_key(k))
+            self.assertTrue(dax.base.dax._is_valid_key(k))
 
     def test_invalid_key(self):
-        from dax.base.dax import _is_valid_key
-
         for k in ['', 'foo()', 'foo,bar', 'foo/', '.foo', 'bar.', 'foo.bar.baz.']:
             # Test illegal keys
-            self.assertFalse(_is_valid_key(k))
+            self.assertFalse(dax.base.dax._is_valid_key(k))
 
     def test_unique_device_key(self):
-        from dax.base.dax import _get_unique_device_key
-
         # Test system and device DB
         s = TestSystem(get_manager_or_parent(device_db))
         d = s.get_device_db()
 
         # Test against various keys
-        self.assertEqual(_get_unique_device_key(d, 'ttl0'), 'ttl0', 'Unique device key not returned correctly')
-        self.assertEqual(_get_unique_device_key(d, 'alias_0'), 'ttl1',
+        self.assertEqual(dax.base.dax._get_unique_device_key(d, 'ttl0'), 'ttl0',
+                         'Unique device key not returned correctly')
+        self.assertEqual(dax.base.dax._get_unique_device_key(d, 'alias_0'), 'ttl1',
                          'Alias key key does not return correct unique key')
-        self.assertEqual(_get_unique_device_key(d, 'alias_1'), 'ttl1',
+        self.assertEqual(dax.base.dax._get_unique_device_key(d, 'alias_1'), 'ttl1',
                          'Multi-alias key does not return correct unique key')
-        self.assertEqual(_get_unique_device_key(d, 'alias_2'), 'ttl1',
+        self.assertEqual(dax.base.dax._get_unique_device_key(d, 'alias_2'), 'ttl1',
                          'Multi-alias key does not return correct unique key')
 
     def test_looped_device_key(self):
-        from dax.base.dax import _get_unique_device_key
-
         # Test system and device DB
         s = TestSystem(get_manager_or_parent(device_db))
         d = s.get_device_db()
@@ -166,11 +155,9 @@ class DaxHelpersTestCase(unittest.TestCase):
         loop_aliases = ['loop_alias_1', 'loop_alias_4']
         for key in loop_aliases:
             with self.assertRaises(LookupError, msg='Looped key alias did not raise'):
-                _get_unique_device_key(d, key)
+                dax.base.dax._get_unique_device_key(d, key)
 
     def test_unavailable_device_key(self):
-        from dax.base.dax import _get_unique_device_key
-
         # Test system and device DB
         s = TestSystem(get_manager_or_parent(device_db))
         d = s.get_device_db()
@@ -179,25 +166,23 @@ class DaxHelpersTestCase(unittest.TestCase):
         loop_aliases = ['not_existing_key_0', 'not_existing_key_1', 'dead_alias_2']
         for key in loop_aliases:
             with self.assertRaises(KeyError, msg='Non-existing key did not raise'):
-                _get_unique_device_key(d, key)
+                dax.base.dax._get_unique_device_key(d, key)
 
     def test_virtual_device_key(self):
-        from dax.base.dax import _get_unique_device_key
-
         # Test system and device DB
         s = TestSystem(get_manager_or_parent(device_db))
         d = s.get_device_db()
         # Test virtual devices
-        virtual_devices = ['scheduler', 'ccb']
+        virtual_devices = {'scheduler', 'ccb'}
+        self.assertSetEqual(virtual_devices, dax.base.dax._ARTIQ_VIRTUAL_DEVICES,
+                            'List of virtual devices in test does not match DAX base virtual device list')
         for k in virtual_devices:
-            self.assertEqual(_get_unique_device_key(d, k), k, 'Virtual device key not returned correctly')
+            self.assertEqual(dax.base.dax._get_unique_device_key(d, k), k, 'Virtual device key not returned correctly')
 
 
 class DaxNameRegistryTestCase(unittest.TestCase):
 
     def test_module(self):
-        from dax.base.dax import _DaxNameRegistry
-
         # Test system
         s = TestSystem(get_manager_or_parent(device_db))
         # Registry
@@ -221,7 +206,8 @@ class DaxNameRegistryTestCase(unittest.TestCase):
             r.find_module(TestModuleChild)
         self.assertListEqual(r.get_module_key_list(), [m.get_system_key() for m in [s, t0]],
                              'Module key list incorrect')
-        with self.assertRaises(_DaxNameRegistry._NonUniqueRegistrationError, msg='Adding module twice did not raise'):
+        with self.assertRaises(dax.base.exceptions.NonUniqueRegistrationError,
+                               msg='Adding module twice did not raise'):
             r.add_module(t0)
         with self.assertRaises(LookupError, msg='Adding module twice did not raise a LookupError'):
             r.add_module(t0)
@@ -249,12 +235,10 @@ class DaxNameRegistryTestCase(unittest.TestCase):
 
         # Test core devices, which should be existing
         self.assertListEqual(r.get_device_key_list(), core_devices, 'Core devices were not found in device list')
-        self.assertSetEqual(r.search_devices(Core), {'core'},
+        self.assertSetEqual(r.search_devices(artiq.coredevice.core.Core), {'core'},
                             'Search devices did not returned the expected set of results')
 
     def test_service(self):
-        from dax.base.dax import _DaxNameRegistry
-
         # Test system
         s = TestSystem(get_manager_or_parent(device_db))
         s0 = TestService(s)
@@ -262,7 +246,7 @@ class DaxNameRegistryTestCase(unittest.TestCase):
         r = s.registry
 
         # Test adding the service again
-        with self.assertRaises(_DaxNameRegistry._NonUniqueRegistrationError,
+        with self.assertRaises(dax.base.exceptions.NonUniqueRegistrationError,
                                msg='Double service registration did not raise'):
             r.add_service(s0)
 
@@ -306,7 +290,7 @@ class DaxNameRegistryTestCase(unittest.TestCase):
 
 
 class DaxDataStoreInfluxDbTestCase(unittest.TestCase):
-    class NoWriteDataStore(dax.base.dax._DaxDataStoreInfluxDb):
+    class NoWriteDataStore(dax.base.dax.DaxDataStoreInfluxDb):
         """Data store connector that does not write but a callback instead."""
 
         def __init__(self, callback, *args, **kwargs):
@@ -795,8 +779,6 @@ class DaxModuleBaseTestCase(unittest.TestCase):
         self.assertTrue(hasattr(s, 'foo'), 'setattr_device() with attribute name did not set attribute correctly')
 
     def test_get_device(self):
-        from dax.base.dax import _DaxNameRegistry
-
         # Test system
         s = TestSystem(get_manager_or_parent(device_db))
         # List of core devices
@@ -810,7 +792,7 @@ class DaxModuleBaseTestCase(unittest.TestCase):
         self.assertIn('ttl1', r.get_device_key_list(),
                       'Device registration did not found correct unique key for device alias')
         self.assertListEqual(r.get_device_key_list(), core_devices + ['ttl0', 'ttl1'], 'Device key list incorrect')
-        with self.assertRaises(_DaxNameRegistry._NonUniqueRegistrationError,
+        with self.assertRaises(dax.base.exceptions.NonUniqueRegistrationError,
                                msg='Double device registration did not raise when registered by unique name and alias'):
             s.get_device('alias_1')
 
@@ -818,10 +800,11 @@ class DaxModuleBaseTestCase(unittest.TestCase):
         s = TestSystem(get_manager_or_parent(device_db))
 
         with self.assertRaises(TypeError, msg='get_device() type check did not raise'):
-            s.get_device('ttl1', EdgeCounter)  # EdgeCounter does not match the device type of ttl1
+            s.get_device('ttl1', artiq.coredevice.edge_counter.EdgeCounter)
 
         # Correct type, should not raise
-        self.assertIsNotNone(s.get_device('ttl1', TTLOut), 'get_device() type check raised unexpectedly')
+        self.assertIsNotNone(s.get_device('ttl1', artiq.coredevice.ttl.TTLOut),
+                             'get_device() type check raised unexpectedly')
 
     def test_search_devices(self):
         s = TestSystem(get_manager_or_parent(device_db))
@@ -832,12 +815,12 @@ class DaxModuleBaseTestCase(unittest.TestCase):
         self.assertIsNotNone(s.get_device('alias_2'), 'Device request with alias failed')
 
         # Test if registry returns correct result
-        self.assertSetEqual(r.search_devices(TTLInOut), {'ttl0'},
+        self.assertSetEqual(r.search_devices(artiq.coredevice.ttl.TTLInOut), {'ttl0'},
                             'Search devices did not returned expected result')
-        self.assertSetEqual(r.search_devices(EdgeCounter), set(),
+        self.assertSetEqual(r.search_devices(artiq.coredevice.edge_counter.EdgeCounter), set(),
                             'Search devices did not returned expected result')
-        self.assertSetEqual(r.search_devices((TTLInOut, TTLOut)), {'ttl0', 'ttl1'},
-                            'Search devices did not returned expected result')
+        self.assertSetEqual(r.search_devices((artiq.coredevice.ttl.TTLInOut, artiq.coredevice.ttl.TTLOut)),
+                            {'ttl0', 'ttl1'}, 'Search devices did not returned expected result')
 
     def test_dataset(self):
         s = TestSystem(get_manager_or_parent(device_db))
@@ -921,8 +904,6 @@ class DaxModuleBaseTestCase(unittest.TestCase):
 class DaxServiceTestCase(unittest.TestCase):
 
     def test_init(self):
-        from dax.base.dax import _DaxNameRegistry
-
         s = TestSystem(get_manager_or_parent(device_db))
 
         class NoNameService(DaxService):
@@ -953,7 +934,7 @@ class DaxServiceTestCase(unittest.TestCase):
         class DuplicateNameService(NoNameService):
             SERVICE_NAME = 'service_name'
 
-        with self.assertRaises(_DaxNameRegistry._NonUniqueRegistrationError,
+        with self.assertRaises(dax.base.exceptions.NonUniqueRegistrationError,
                                msg='Duplicate service name registration did not raise'):
             DuplicateNameService(s)
 

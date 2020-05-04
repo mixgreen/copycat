@@ -11,7 +11,7 @@ import numbers
 import collections
 import numpy as np
 
-import artiq
+from artiq import __version__ as _artiq_version
 import artiq.experiment
 import artiq.master.worker_db
 
@@ -19,9 +19,13 @@ import artiq.coredevice.core  # type: ignore
 import artiq.coredevice.dma  # type: ignore
 import artiq.coredevice.cache  # type: ignore
 
-from dax import __version__
-from dax.sim.sim import DAX_SIM_CONFIG_KEY as _DAX_SIM_CONFIG_KEY
-from dax.sim.device import DaxSimDevice as _DaxSimDevice
+from dax import __version__ as _dax_version
+import dax.base.exceptions
+import dax.sim.sim
+import dax.sim.device
+
+__all__ = ['DaxModule', 'DaxSystem', 'DaxService', 'DaxInterface',
+           'DaxClient', 'dax_client_factory']
 
 # Workaround: Add Numpy ndarray as a sequence type (see https://github.com/numpy/numpy/issues/2776)
 collections.abc.Sequence.register(np.ndarray)
@@ -90,12 +94,8 @@ def _resolve_unique_device_key(d: typing.Dict[str, typing.Any], key: str, trace:
         raise TypeError('Key "{:s}" returned an unexpected type'.format(key))
 
 
-class _DaxBase(artiq.experiment.HasEnvironment, abc.ABC):
+class DaxBase(artiq.experiment.HasEnvironment, abc.ABC):
     """Base class for all DAX core classes."""
-
-    class __BuildError(RuntimeError):
-        """Raised when the original build error has already been logged."""
-        pass
 
     def __init__(self, managers_or_parent: typing.Any,
                  *args: typing.Any, **kwargs: typing.Any):
@@ -106,14 +106,14 @@ class _DaxBase(artiq.experiment.HasEnvironment, abc.ABC):
         self.logger.debug('Starting build...')
         try:
             # Call super, which will call build()
-            super(_DaxBase, self).__init__(managers_or_parent, *args, **kwargs)
-        except self.__BuildError:
+            super(DaxBase, self).__init__(managers_or_parent, *args, **kwargs)
+        except dax.base.exceptions.BuildError:
             raise  # Exception was already logged
         except Exception as e:
             # Log the exception to provide more context
             self.logger.exception(e)
             # Raise a different exception type to prevent that the caught exception is logged again by the parent
-            raise self.__BuildError(e) from None  # Do not duplicate full traceback again
+            raise dax.base.exceptions.BuildError(e) from None  # Do not duplicate full traceback again
         else:
             self.logger.debug('Build finished')
 
@@ -147,7 +147,7 @@ class _DaxBase(artiq.experiment.HasEnvironment, abc.ABC):
         pass
 
 
-class _DaxHasSystem(_DaxBase, abc.ABC):
+class DaxHasSystem(DaxBase, abc.ABC):
     """Intermediate base class for DAX classes that are dependent on a DAX system."""
 
     __D_T = typing.TypeVar('__D_T')  # Device type verification
@@ -157,12 +157,12 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
     __CORE_ATTRIBUTES = __CORE_DEVICES + ['data_store']
     """Attribute names of core objects created in build() or inherited from parents."""
 
-    def __init__(self, managers_or_parent: typing.Any, name: str, system_key: str, registry: '_DaxNameRegistry',
+    def __init__(self, managers_or_parent: typing.Any, name: str, system_key: str, registry: 'DaxNameRegistry',
                  *args: typing.Any, **kwargs: typing.Any):
 
         assert isinstance(name, str), 'Name must be a string'
         assert isinstance(system_key, str), 'System key must be a string'
-        assert isinstance(registry, _DaxNameRegistry), 'Registry must be a DAX name registry'
+        assert isinstance(registry, DaxNameRegistry), 'Registry must be a DAX name registry'
 
         # Check name and system key
         if not _is_valid_name(name):
@@ -176,7 +176,7 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
         self.__registry = registry
 
         # Call super, which will result in a call to build()
-        super(_DaxHasSystem, self).__init__(managers_or_parent, *args, **kwargs)
+        super(DaxHasSystem, self).__init__(managers_or_parent, *args, **kwargs)
 
         # Verify that all core attributes are available
         if not all(hasattr(self, n) for n in self.__CORE_ATTRIBUTES):
@@ -188,7 +188,7 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
         self.update_kernel_invariants(*self.__CORE_DEVICES)
 
     @property
-    def registry(self) -> '_DaxNameRegistry':
+    def registry(self) -> 'DaxNameRegistry':
         """Get the DAX registry.
 
         :return: The logger object
@@ -220,14 +220,14 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
         return self.__core_cache
 
     @property
-    def data_store(self) -> '_DaxDataStore':
+    def data_store(self) -> 'DaxDataStore':
         """Get the data store.
 
         :return: The data store object
         """
         return self.__data_store
 
-    def _take_parent_core_attributes(self, parent: '_DaxHasSystem') -> None:
+    def _take_parent_core_attributes(self, parent: 'DaxHasSystem') -> None:
         """Take core attributes from parent.
 
         If this object does not construct its own core attributes, it should take them from their parent.
@@ -237,7 +237,7 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
             self.__core = parent.core  # type: artiq.coredevice.core.Core
             self.__core_dma = parent.core_dma  # type: artiq.coredevice.dma.CoreDMA
             self.__core_cache = parent.core_cache  # type: artiq.coredevice.cache.CoreCache
-            self.__data_store = parent.data_store  # type: _DaxDataStore
+            self.__data_store = parent.data_store  # type: DaxDataStore
         except AttributeError:
             parent.logger.exception('Missing core attributes (super.build() was probably not called)')
             raise
@@ -373,9 +373,10 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
             raise KeyError('Device "{:s}" could not be found in the device DB'.format(key)) from e
 
         # Get the device using the initial key (let ARTIQ resolve the aliases)
-        device = super(_DaxHasSystem, self).get_device(key)
+        device = super(DaxHasSystem, self).get_device(key)
 
-        if type_ is not None and not isinstance(device, (type_, artiq.master.worker_db.DummyDevice, _DaxSimDevice)):
+        if type_ is not None and not isinstance(device, (type_, artiq.master.worker_db.DummyDevice,
+                                                         dax.sim.device.DaxSimDevice)):
             # Device has an unexpected type
             raise TypeError('Device "{:s}" does not match the expected type'.format(key))
 
@@ -604,24 +605,24 @@ class _DaxHasSystem(_DaxBase, abc.ABC):
         return '[{:s}]({:s})'.format(self.get_system_key(), self.__class__.__name__)
 
 
-class _DaxModuleBase(_DaxHasSystem, abc.ABC):
+class DaxModuleBase(DaxHasSystem, abc.ABC):
     """Base class for all DAX modules and systems."""
 
-    def __init__(self, managers_or_parent: typing.Any, module_name: str, module_key: str, registry: '_DaxNameRegistry',
+    def __init__(self, managers_or_parent: typing.Any, module_name: str, module_key: str, registry: 'DaxNameRegistry',
                  *args: typing.Any, **kwargs: typing.Any):
         """Initialize the DAX module base."""
 
         # Call super
-        super(_DaxModuleBase, self).__init__(managers_or_parent, module_name, module_key, registry, *args, **kwargs)
+        super(DaxModuleBase, self).__init__(managers_or_parent, module_name, module_key, registry, *args, **kwargs)
 
         # Register this module
         self.registry.add_module(self)
 
 
-class DaxModule(_DaxModuleBase, abc.ABC):
+class DaxModule(DaxModuleBase, abc.ABC):
     """Base class for DAX modules."""
 
-    def __init__(self, managers_or_parent: _DaxModuleBase, module_name: str,
+    def __init__(self, managers_or_parent: DaxModuleBase, module_name: str,
                  *args: typing.Any, **kwargs: typing.Any):
         """Initialize the DAX module.
 
@@ -635,7 +636,7 @@ class DaxModule(_DaxModuleBase, abc.ABC):
         if not _is_valid_name(module_name):
             raise ValueError('Invalid module name "{:s}"'.format(module_name))
         # Check parent type
-        if not isinstance(managers_or_parent, _DaxModuleBase):
+        if not isinstance(managers_or_parent, DaxModuleBase):
             raise TypeError('Parent of module "{:s}" is not a DAX module base'.format(module_name))
 
         # Take core attributes from parent
@@ -651,7 +652,7 @@ class DaxInterface(abc.ABC):
     pass
 
 
-class DaxSystem(_DaxModuleBase):
+class DaxSystem(DaxModuleBase):
     """Base class for DAX systems, which is a top-level module."""
 
     SYS_ID = ''  # type: str
@@ -698,7 +699,7 @@ class DaxSystem(_DaxModuleBase):
         assert self.SYS_VER >= 0, 'Invalid system version, set version number larger or equal to zero'
 
         # Call super, add names, add a new registry
-        super(DaxSystem, self).__init__(managers_or_parent, self.SYS_NAME, self.SYS_NAME, _DaxNameRegistry(self),
+        super(DaxSystem, self).__init__(managers_or_parent, self.SYS_NAME, self.SYS_NAME, DaxNameRegistry(self),
                                         *args, **kwargs)
 
     @property
@@ -726,7 +727,7 @@ class DaxSystem(_DaxModuleBase):
         return self.__core_cache
 
     @property
-    def data_store(self) -> '_DaxDataStore':
+    def data_store(self) -> 'DaxDataStore':
         """Get the data store.
 
         :return: The data store object
@@ -750,7 +751,7 @@ class DaxSystem(_DaxModuleBase):
 
         try:
             # Get the virtual simulation configuration device
-            self.get_device(_DAX_SIM_CONFIG_KEY)
+            self.get_device(dax.sim.sim.DAX_SIM_CONFIG_KEY)
         except KeyError:
             # Simulation disabled
             self.__sim_enabled = False
@@ -789,7 +790,7 @@ class DaxSystem(_DaxModuleBase):
         try:
             # Create an Influx DB data store
             self.logger.debug('Initializing Influx DB data store')
-            self.__data_store = _DaxDataStoreInfluxDb(self, self.DAX_INFLUX_DB_KEY)
+            self.__data_store = DaxDataStoreInfluxDb(self, self.DAX_INFLUX_DB_KEY)
         except KeyError:
             # Influx DB controller was not found in the device DB, fall back on base data store
             if not self.dax_sim_enabled:
@@ -797,10 +798,10 @@ class DaxSystem(_DaxModuleBase):
                 self.logger.warning('Influx DB controller "{:s}" not found in device DB'.format(self.DAX_INFLUX_DB_KEY))
             # Log a debug message
             self.logger.debug('Fall back on base data store')
-            self.__data_store = _DaxDataStore()
+            self.__data_store = DaxDataStore()
         except artiq.master.worker_db.DeviceError:
             # Failed to create Influx DB driver, fall back on base data store
-            self.__data_store = _DaxDataStore()
+            self.__data_store = DaxDataStore()
             self.logger.warning('Failed to create DAX Influx DB driver "{:s}"'.format(self.DAX_INFLUX_DB_KEY),
                                 exc_info=True)
 
@@ -816,7 +817,7 @@ class DaxSystem(_DaxModuleBase):
         # Store system information in local archive
         self.set_dataset(self.get_system_key('dax_system_id'), self.SYS_ID, archive=True)
         self.set_dataset(self.get_system_key('dax_system_version'), self.SYS_VER, archive=True)
-        self.set_dataset(self.get_system_key('dax_version'), __version__, archive=True)
+        self.set_dataset(self.get_system_key('dax_version'), _dax_version, archive=True)
 
         # Perform system initialization
         self.logger.debug('Starting DAX system initialization...')
@@ -831,13 +832,13 @@ class DaxSystem(_DaxModuleBase):
         pass
 
 
-class DaxService(_DaxHasSystem, abc.ABC):
+class DaxService(DaxHasSystem, abc.ABC):
     """Base class for system services."""
 
     SERVICE_NAME = ''  # type: str
     """The unique name of this service"""
 
-    def __init__(self, managers_or_parent: _DaxHasSystem,
+    def __init__(self, managers_or_parent: DaxHasSystem,
                  *args: typing.Any, **kwargs: typing.Any):
         """Initialize the DAX service base class.
 
@@ -869,7 +870,7 @@ class DaxService(_DaxHasSystem, abc.ABC):
         self.registry.add_service(self)
 
 
-class DaxClient(_DaxHasSystem, abc.ABC):
+class DaxClient(DaxHasSystem, abc.ABC):
     """Base class for DAX clients."""
 
     def __init__(self, managers_or_parent: typing.Any,
@@ -891,14 +892,10 @@ class DaxClient(_DaxHasSystem, abc.ABC):
         super(DaxClient, self).post_init()
 
 
-class _DaxNameRegistry:
+class DaxNameRegistry:
     """A class for unique name registration."""
 
-    class _NonUniqueRegistrationError(LookupError):
-        """Exception when a name is registered more then once."""
-        pass
-
-    __M_T = typing.TypeVar('__M_T', bound=_DaxModuleBase)  # Module base type variable
+    __M_T = typing.TypeVar('__M_T', bound=DaxModuleBase)  # Module base type variable
     __S_T = typing.TypeVar('__S_T', bound=DaxService)  # Service type variable
     __I_T = typing.TypeVar('__I_T', bound=DaxInterface)  # Interface type variable
 
@@ -918,9 +915,9 @@ class _DaxNameRegistry:
         self._sys_services_key = system.SYS_SERVICES  # Access attribute directly
 
         # A dict containing registered modules
-        self._modules = dict()  # type: typing.Dict[str, _DaxModuleBase]
+        self._modules = dict()  # type: typing.Dict[str, DaxModuleBase]
         # A dict containing registered devices
-        self._devices = dict()  # type: typing.Dict[str, typing.Tuple[typing.Any, _DaxHasSystem]]
+        self._devices = dict()  # type: typing.Dict[str, typing.Tuple[typing.Any, DaxHasSystem]]
         # A dict containing registered services
         self._services = dict()  # type: typing.Dict[str, DaxService]
 
@@ -931,7 +928,7 @@ class _DaxNameRegistry:
         :raises NonUniqueRegistrationError: Raised if the module key was already registered by another module
         """
 
-        assert isinstance(module, _DaxModuleBase), 'Module is not a DAX module base'
+        assert isinstance(module, DaxModuleBase), 'Module is not a DAX module base'
 
         # Get the module key
         key = module.get_system_key()
@@ -942,20 +939,20 @@ class _DaxNameRegistry:
         if reg_module is not None:
             # Key already in use by another module
             msg = 'Module key "{:s}" was already registered by module {:s}'.format(key, reg_module.get_identifier())
-            raise self._NonUniqueRegistrationError(msg)
+            raise dax.base.exceptions.NonUniqueRegistrationError(msg)
 
         # Add module key to the dict of registered modules
         self._modules[key] = module
 
     @typing.overload
-    def get_module(self, key: str) -> _DaxModuleBase:
+    def get_module(self, key: str) -> DaxModuleBase:
         ...
 
     @typing.overload
     def get_module(self, key: str, type_: typing.Type[__M_T]) -> __M_T:
         ...
 
-    def get_module(self, key: str, type_: typing.Type[_DaxModuleBase] = _DaxModuleBase) -> _DaxModuleBase:
+    def get_module(self, key: str, type_: typing.Type[DaxModuleBase] = DaxModuleBase) -> DaxModuleBase:
         """Return the requested module by key.
 
         :param key: The key of the module
@@ -1010,11 +1007,11 @@ class _DaxNameRegistry:
         :return: A dict with key-module pairs
         """
 
-        assert issubclass(type_, _DaxModuleBase), 'Provided type must be a subclass of DaxModuleBase'
+        assert issubclass(type_, DaxModuleBase), 'Provided type must be a subclass of DaxModuleBase'
 
         # Search for all modules matching the type
         results = {k: m for k, m in self._modules.items() if
-                   isinstance(m, type_)}  # type: typing.Dict[str, _DaxNameRegistry.__M_T]
+                   isinstance(m, type_)}  # type: typing.Dict[str, DaxNameRegistry.__M_T]
 
         # Return the list with results
         return results
@@ -1028,7 +1025,7 @@ class _DaxNameRegistry:
         module_key_list = natsort.natsorted(self._modules.keys())  # Natural sort the list
         return module_key_list
 
-    def add_device(self, key: str, device: typing.Any, parent: _DaxHasSystem) -> None:
+    def add_device(self, key: str, device: typing.Any, parent: DaxHasSystem) -> None:
         """Register a device.
 
         Devices are added to the registry to ensure every device is only owned by a single parent.
@@ -1041,7 +1038,7 @@ class _DaxNameRegistry:
         """
 
         assert isinstance(key, str), 'Device key must be a string'
-        assert isinstance(parent, _DaxHasSystem), 'Parent is not a DaxHasSystem type'
+        assert isinstance(parent, DaxHasSystem), 'Parent is not a DaxHasSystem type'
 
         if key in _ARTIQ_VIRTUAL_DEVICES:
             return  # Virtual devices always have unique names are excluded from the registry
@@ -1053,7 +1050,7 @@ class _DaxNameRegistry:
             # Device was already registered
             _, reg_parent = device_value  # Unpack tuple
             msg = 'Device "{:s}" was already registered by parent "{:s}"'.format(key, reg_parent.get_system_key())
-            raise self._NonUniqueRegistrationError(msg)
+            raise dax.base.exceptions.NonUniqueRegistrationError(msg)
 
         # Add unique device key to the dict of registered devices
         self._devices[key] = (device, parent)
@@ -1118,7 +1115,8 @@ class _DaxNameRegistry:
 
         if reg_service is not None:
             # Service name was already registered
-            raise self._NonUniqueRegistrationError('Service with name "{:s}" was already registered'.format(key))
+            raise dax.base.exceptions.NonUniqueRegistrationError(
+                'Service with name "{:s}" was already registered'.format(key))
 
         # Add service to the registry
         self._services[key] = service
@@ -1217,7 +1215,7 @@ class _DaxNameRegistry:
         return results  # type: ignore
 
 
-class _DaxDataStore:
+class DaxDataStore:
     """Base class for the DAX data store.
 
     Data stores are used for long-term archiving of time series data and have
@@ -1273,20 +1271,20 @@ def __load_commit_hashes() -> None:
     path = pygit2.discover_repository(os.path.dirname(__file__))
     if path is not None:
         # Store commit hash
-        _DaxDataStore._DAX_COMMIT = pygit2.Repository(path).head.target.hex
+        DaxDataStore._DAX_COMMIT = pygit2.Repository(path).head.target.hex
 
     # Discover repository path of current working directory
     path = pygit2.discover_repository(os.getcwd())
     if path is not None:
         # Store commit hash
-        _DaxDataStore._CWD_COMMIT = pygit2.Repository(path).head.target.hex
+        DaxDataStore._CWD_COMMIT = pygit2.Repository(path).head.target.hex
 
 
 __load_commit_hashes()  # Load commit hashes into class attributes
 del __load_commit_hashes  # Remove one-time function
 
 
-class _DaxDataStoreInfluxDb(_DaxDataStore):
+class DaxDataStoreInfluxDb(DaxDataStore):
     """Influx DB DAX data store class.
 
     This data store connects to an Influx DB controller (see DAX comtools) to
@@ -1310,7 +1308,7 @@ class _DaxDataStoreInfluxDb(_DaxDataStore):
         assert isinstance(key, str), 'The Influx DB controller key must be of type str'
 
         # Call super
-        super(_DaxDataStoreInfluxDb, self).__init__()
+        super(DaxDataStoreInfluxDb, self).__init__()
 
         # Get the Influx DB driver, this call can raise various exceptions
         self._get_driver(system, key)
@@ -1335,8 +1333,8 @@ class _DaxDataStoreInfluxDb(_DaxDataStore):
             'rid': int(scheduler.rid),
             'pipeline_name': str(scheduler.pipeline_name),
             'priority': int(scheduler.priority),
-            'artiq_version': str(artiq.__version__),
-            'dax_version': str(__version__),
+            'artiq_version': str(_artiq_version),
+            'dax_version': str(_dax_version),
         }
 
         # Add expid items to fields if keys do not exist yet and the types are appropriate

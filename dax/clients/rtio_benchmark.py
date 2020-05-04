@@ -1,7 +1,12 @@
 import numpy as np
 
-from dax.modules.rtio_benchmark import *
+from dax.experiment import *
+from dax.modules.rtio_benchmark import RtioBenchmarkModule, RtioLoopBenchmarkModule
 import dax.util.units
+
+__all__ = ['RtioBenchmarkEventThroughput', 'RtioBenchmarkEventBurst', 'RtioBenchmarkDmaThroughput',
+           'RtioBenchmarkLatencyCoreRtio', 'RtioBenchmarkInputBufferSize',
+           'RtioBenchmarkLatencyRtioCore', 'RtioBenchmarkLatencyRtt']
 
 
 @dax_client_factory

@@ -4,34 +4,23 @@ dax.base package
 dax.base.dax module
 -------------------
 
-.. autoclass:: dax.base.dax._DaxHasSystem
+.. autoclass:: dax.base.dax.DaxHasSystem
     :members:
     :undoc-members:
     :show-inheritance:
     :inherited-members:
 
-.. autoclass:: dax.base.dax._DaxModuleBase
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
 .. automodule:: dax.base.dax
     :members:
     :undoc-members:
     :show-inheritance:
+    :ignore-module-all:
+    :exclude-members: DaxHasSystem
 
-.. autoclass:: dax.base.dax._DaxNameRegistry
+dax.base.exceptions module
+--------------------------
+
+.. automodule:: dax.base.exceptions
     :members:
     :undoc-members:
     :show-inheritance:
-
-.. autoclass:: dax.base.dax._DaxDataStore
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
-.. autoclass:: dax.base.dax._DaxDataStoreInfluxDb
-    :members:
-    :undoc-members:
-    :show-inheritance:
-

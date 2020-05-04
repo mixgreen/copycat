@@ -4,6 +4,8 @@ import typing
 from dax.sim.time import DaxTimeManager
 from dax.sim.signal import set_signal_manager, get_signal_manager, VcdSignalManager
 
+__all__ = ['DaxSimConfig']
+
 _logger = logging.getLogger(__name__)
 """The logger for this file."""
 

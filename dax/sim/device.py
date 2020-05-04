@@ -3,6 +3,8 @@ import abc
 
 import artiq.coredevice.core  # type: ignore
 
+__all__ = ['DaxSimDevice']
+
 
 class DaxSimDevice(abc.ABC):
     """Abstract base class for simulated device drivers."""

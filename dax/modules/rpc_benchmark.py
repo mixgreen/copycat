@@ -3,6 +3,8 @@ import timeit
 
 from dax.experiment import *
 
+__all__ = ['RpcBenchmarkModule']
+
 
 class RpcBenchmarkModule(DaxModule):
     """Module to benchmark RPC performance."""

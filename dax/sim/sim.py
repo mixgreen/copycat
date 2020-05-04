@@ -4,6 +4,8 @@ import typing
 
 from artiq.language.units import *
 
+__all__ = ['DAX_SIM_CONFIG_KEY', 'enable_dax_sim']
+
 _logger = logging.getLogger(__name__)
 """The logger for this file."""
 

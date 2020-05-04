@@ -9,6 +9,9 @@ from artiq.language.units import *
 
 import dax.util.units
 
+__all__ = ['DaxSignalManager', 'NullSignalManager', 'VcdSignalManager',
+           'get_signal_manager', 'set_signal_manager']
+
 
 class DaxSignalManager(abc.ABC):
     """Abstract class for classes that manage simulated signals."""

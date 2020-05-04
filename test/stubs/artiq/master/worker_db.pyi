@@ -1,6 +1,7 @@
+import typing
 import logging
 
-logger = ...  # type: logging.Logger
+logger: logging.Logger = ...
 
 
 class DummyDevice:
@@ -12,7 +13,8 @@ class DeviceError(Exception):
 
 
 class DeviceManager:
-    def __init__(self, ddb, virtual_devices=dict()):
+    # noinspection PyDefaultArgument
+    def __init__(self, ddb: typing.Any, virtual_devices: typing.Dict[str, typing.Any] = dict()):
         ...
 
     def get_device_db(self):
@@ -29,7 +31,7 @@ class DeviceManager:
 
 
 class DatasetManager:
-    def __init__(self, ddb):
+    def __init__(self, ddb: typing.Any):
         ...
 
     def set(self, key, value, broadcast=False, persist=False, archive=True):

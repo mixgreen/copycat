@@ -6,6 +6,8 @@ import artiq.coredevice.suservo  # type: ignore
 from dax.experiment import *
 import dax.util.units
 
+__all__ = ['CpldInitModule']
+
 
 class CpldInitModule(DaxModule):
     """Module to automatically initialize CPLD devices.

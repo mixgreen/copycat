@@ -82,7 +82,7 @@ class IndvBeamMemsModule(DaxModule):
         # PID switches (self.pid_sw[beam])
         self.pid_sw = [self.get_device(self.PID_DEVICE_KEY.format(name=pid_sw, beam=b)) for b in range(num_beams)]
         # MEMS mirror module
-        self.mems_mirror = dax.modules.mems_mirror.MemsMirrorModule(self, 'mems_mirror', **kwargs)
+        self.mems_mirror = _MemsMirrorModule(self, 'mems_mirror', **kwargs)
 
         # Update kernel invariants
         self.update_kernel_invariants('num_beams', 'num_dpass_signals', 'dpass_aom', 'indv_aom', 'pid_sw')
