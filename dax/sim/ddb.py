@@ -44,7 +44,7 @@ def enable_dax_sim(enable: bool,
                    output: bool = True,
                    sim_config_module: str = 'dax.sim.config',
                    sim_config_class: str = 'DaxSimConfig',
-                   **signal_mgr_kwargs: typing.Any,
+                   **signal_mgr_kwargs: typing.Any  # No trailing comma, causes syntax error on Python 3.5
                    ) -> typing.Dict[str, typing.Any]:
     """Enable the DAX simulation package by applying this function on your device DB.
 
