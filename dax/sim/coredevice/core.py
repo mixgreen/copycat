@@ -1,13 +1,19 @@
 import typing
 import collections
 import csv
+import logging
 import numpy as np
 
 from artiq.language.core import *
 
 from dax.sim.device import DaxSimDevice
-from dax.sim.signal import get_signal_manager, DaxSignalManager
-from dax.sim.sim import DAX_SIM_CONFIG_KEY
+from dax.sim.signal import get_signal_manager
+from dax.sim.ddb import DAX_SIM_CONFIG_KEY
+from dax.sim.time import DaxTimeManager
+from dax.util.units import time_to_str
+
+_logger = logging.getLogger(__name__)
+"""The logger for this file."""
 
 
 class Core(DaxSimDevice):
@@ -28,16 +34,19 @@ class Core(DaxSimDevice):
         # Store arguments
         self._device_manager = dmgr
         self._ref_period = ref_period
-        self._ref_multiplier = np.int32(ref_multiplier)
+        self._ref_multiplier = ref_multiplier
+        self._coarse_ref_period = self._ref_period * self._ref_multiplier
 
-        # Set initial call nesting level to zero
-        self._level = 0
-        # Set the timescale of the core based on the simulation configuration
-        self._timescale = self._sim_config.timescale  # type: float
+        # Set the time manager in ARTIQ
+        _logger.debug('Initializing time manager with reference period {:s}'.format(time_to_str(self.ref_period)))
+        set_time_manager(DaxTimeManager(self.ref_period))
 
         # Get the signal manager and register signals
         self._signal_manager = get_signal_manager()
         self._reset_signal = self._signal_manager.register(self.key, 'reset', bool, size=1)  # type: typing.Any
+
+        # Set initial call nesting level to zero
+        self._level = 0
 
         # Counter for context switches
         self._context_switch_counter = 0
@@ -50,12 +59,12 @@ class Core(DaxSimDevice):
         return self._ref_period
 
     @property
-    def ref_multiplier(self) -> np.int32:
+    def ref_multiplier(self) -> int:
         return self._ref_multiplier
 
     @property
     def coarse_ref_period(self) -> float:
-        return self._ref_period * self._ref_multiplier
+        return self._coarse_ref_period
 
     def run(self, function: typing.Any,
             args: typing.Tuple[typing.Any, ...], kwargs: typing.Dict[str, typing.Any]) -> typing.Any:
@@ -77,7 +86,7 @@ class Core(DaxSimDevice):
 
         if self._level == 0:
             # Flush signal manager if we are about to leave the kernel context
-            self._signal_manager.flush()
+            self._signal_manager.flush(self.ref_period)
             # Increment the context switch counter
             self._context_switch_counter += 1
 
@@ -85,8 +94,10 @@ class Core(DaxSimDevice):
         return result
 
     def close(self) -> None:
+        # The SimConfig object will be available, even if it was closed earlier
         if self._sim_config.output_enabled:
             # Create a profiling report
+            _logger.debug('Writing profiling report')
             with open(self._sim_config.get_output_file_name('csv', postfix='profile'), 'w') as csv_file:
                 # Open CSV writer
                 csv_writer = csv.writer(csv_file)
@@ -105,13 +116,13 @@ class Core(DaxSimDevice):
 
     @portable
     def seconds_to_mu(self, seconds: float) -> np.int64:
-        # Simulation machine units are decided by the timescale, not by the reference period
-        return np.int64(seconds // self._timescale)
+        # Convert seconds to machine units using the reference period
+        return np.int64(seconds // self.ref_period)  # floor div, same as in ARTIQ Core
 
     @portable
     def mu_to_seconds(self, mu: np.int64) -> float:
-        # Simulation machine units are decided by the timescale, not by the reference period
-        return mu * self._timescale
+        # Convert machine units to seconds using the reference period
+        return mu * self.ref_period
 
     @kernel
     def wait_until_mu(self, cursor_mu: np.int64) -> None:

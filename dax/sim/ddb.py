@@ -40,11 +40,11 @@ DAX_SIM_CONFIG_KEY = '_dax_sim_config'
 
 def enable_dax_sim(enable: bool,
                    ddb: typing.Dict[str, typing.Any],
-                   timescale: float = ns,
                    logging_level: typing.Union[int, str] = logging.NOTSET,
                    output: bool = True,
                    sim_config_module: str = 'dax.sim.config',
                    sim_config_class: str = 'DaxSimConfig',
+                   **signal_mgr_kwargs: typing.Any,
                    ) -> typing.Dict[str, typing.Any]:
     """Enable the DAX simulation package by applying this function on your device DB.
 
@@ -58,17 +58,16 @@ def enable_dax_sim(enable: bool,
 
     :param enable: Flag to enable DAX simulation
     :param ddb: The device DB (will be updated if simulation is enabled)
-    :param timescale: The timescale of the simulation (i.e. time of a machine unit)
     :param logging_level: The logging level
     :param output: Flag to enable or disable simulation output
     :param sim_config_module: The module name of the simulation configuration class
     :param sim_config_class: The class name of the simulation configuration class
+    :param signal_mgr_kwargs: Arguments for the signal manager if output is enabled
     :return: The updated device DB
     """
 
     assert isinstance(enable, bool), 'The enable flag must be of type bool'
     assert isinstance(ddb, dict), 'The device DB argument must be a dict'
-    assert isinstance(timescale, float), 'Timescale must be of type float'
     assert isinstance(logging_level, int) or logging_level is None, 'Logging level must be of type int'
     assert isinstance(output, bool), 'Output flag must be of type bool'
     assert isinstance(sim_config_module, str), 'Simulation configuration module name must be of type str'
@@ -97,8 +96,8 @@ def enable_dax_sim(enable: bool,
             'type': 'local', 'module': sim_config_module, 'class': sim_config_class,
             # Simulation configuration is passed through the arguments
             'arguments': {'logging_level': logging_level,
-                          'timescale': timescale,
-                          'output': output, },
+                          'output': output,
+                          'signal_mgr_kwargs': signal_mgr_kwargs},
         }}
 
         # Add simulation configuration to device DB

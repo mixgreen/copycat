@@ -4,7 +4,7 @@ int64 = int
 
 
 # noinspection PyPep8Naming
-class integer:
+class integer(int):
     ...
 
 

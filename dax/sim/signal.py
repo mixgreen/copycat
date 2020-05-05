@@ -30,7 +30,7 @@ class DaxSignalManager(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def flush(self) -> None:
+    def flush(self, ref_period: float) -> None:
         """Flush the output of the signal manager."""
         pass
 
@@ -50,7 +50,7 @@ class NullSignalManager(DaxSignalManager):
     def event(self, signal: typing.Any, value: typing.Any, time: typing.Optional[np.int64] = None) -> None:
         pass
 
-    def flush(self) -> None:
+    def flush(self, ref_period: float) -> None:
         pass
 
     def close(self) -> None:
@@ -78,21 +78,22 @@ class VcdSignalManager(DaxSignalManager):
     }
     """Dict to convert Python types to VCD types."""
 
-    def __init__(self, output_file: str, timescale: float):
+    def __init__(self, output_file: str, timescale: float = ns):
         assert isinstance(output_file, str), 'Output file must be of type str'
         assert isinstance(timescale, float), 'Timescale must be of type float'
+        assert timescale > 0.0, 'Timescale must be > 0.0'
 
-        # Convert timescale
-        timescale_str = dax.util.units.time_to_str(timescale, precision=0)
+        # Store timescale
+        self._timescale = timescale
 
         # Open file
         self._output_file = open(output_file, mode='w')
 
         # Create VCD writer
-        self._vcd = vcd.writer.VCDWriter(self._output_file, timescale=timescale_str,
-                                         comment=output_file)
+        timescale_str = dax.util.units.time_to_str(timescale, precision=0)
+        self._vcd = vcd.writer.VCDWriter(self._output_file, timescale=timescale_str, comment=output_file)
         # Create event buffer to support reverting time
-        self._event_buffer = []  # type: typing.List[typing.Tuple[np.int64, VcdSignalManager.__S_T, typing.Any]]
+        self._event_buffer = []  # type: typing.List[typing.Tuple[int, VcdSignalManager.__S_T, typing.Any]]
 
     def register(self, scope: str, name: str, type_: __T_T,
                  size: typing.Optional[int] = None, init: typing.Any = None) -> __S_T:
@@ -144,10 +145,19 @@ class VcdSignalManager(DaxSignalManager):
         # Add event to buffer
         self._event_buffer.append((artiq.language.core.now_mu() if time is None else time, signal, value))
 
-    def flush(self) -> None:
-        """Commit all buffered events."""
+    def flush(self, ref_period: float) -> None:
+        """Commit all buffered events.
+
+        :param ref_period: The reference period (i.e. the time of one machine unit)
+        """
+
         # Sort the list of events (VCD writer can only handle a linear timeline)
         self._event_buffer.sort(key=operator.itemgetter(0))
+
+        if ref_period != self._timescale:
+            # Scale the timestamps if the reference period does not match the timescale
+            scalar = ref_period / self._timescale
+            self._event_buffer = [(int(time * scalar), signal, value) for time, signal, value in self._event_buffer]
 
         try:
             # Submit sorted events to the VCD writer
@@ -163,7 +173,7 @@ class VcdSignalManager(DaxSignalManager):
     def close(self) -> None:
         """Close the VCD file."""
         # Close the VCD writer
-        self._vcd.close(artiq.language.core.now_mu())
+        self._vcd.close()
         # Close the file
         self._output_file.close()
 

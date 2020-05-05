@@ -21,7 +21,7 @@ import artiq.coredevice.cache  # type: ignore
 
 from dax import __version__ as _dax_version
 import dax.base.exceptions
-import dax.sim.sim
+import dax.sim.ddb
 import dax.sim.device
 
 __all__ = ['DaxModule', 'DaxSystem', 'DaxService', 'DaxInterface',
@@ -751,7 +751,7 @@ class DaxSystem(DaxModuleBase):
 
         try:
             # Get the virtual simulation configuration device
-            self.get_device(dax.sim.sim.DAX_SIM_CONFIG_KEY)
+            self.get_device(dax.sim.ddb.DAX_SIM_CONFIG_KEY)
         except KeyError:
             # Simulation disabled
             self.__sim_enabled = False
@@ -767,7 +767,6 @@ class DaxSystem(DaxModuleBase):
             self.update_kernel_invariants('dax_sim_enabled')
 
         # Core devices
-        self.logger.debug('Requesting core device drivers')
         self.__core = self.get_device(self.CORE_KEY, artiq.coredevice.core.Core)
         self.__core_dma = self.get_device(self.CORE_DMA_KEY, artiq.coredevice.dma.CoreDMA)
         self.__core_cache = self.get_device(self.CORE_CACHE_KEY, artiq.coredevice.cache.CoreCache)
@@ -775,7 +774,6 @@ class DaxSystem(DaxModuleBase):
         # Verify existence of core log controller
         try:
             # Register the core log controller with the system
-            self.logger.debug('Requesting core log driver')
             self.get_device(self.CORE_LOG_KEY)
         except KeyError:
             # Core log controller was not found in the device DB
@@ -789,7 +787,6 @@ class DaxSystem(DaxModuleBase):
         # Instantiate the data store (needs to be done in build() since it requests a controller)
         try:
             # Create an Influx DB data store
-            self.logger.debug('Initializing Influx DB data store')
             self.__data_store = DaxDataStoreInfluxDb(self, self.DAX_INFLUX_DB_KEY)
         except KeyError:
             # Influx DB controller was not found in the device DB, fall back on base data store
@@ -818,6 +815,7 @@ class DaxSystem(DaxModuleBase):
         self.set_dataset(self.get_system_key('dax_system_id'), self.SYS_ID, archive=True)
         self.set_dataset(self.get_system_key('dax_system_version'), self.SYS_VER, archive=True)
         self.set_dataset(self.get_system_key('dax_version'), _dax_version, archive=True)
+        self.set_dataset(self.get_system_key('dax_sim_enabled'), self.dax_sim_enabled, archive=True)
 
         # Perform system initialization
         self.logger.debug('Starting DAX system initialization...')
@@ -1335,6 +1333,7 @@ class DaxDataStoreInfluxDb(DaxDataStore):
             'priority': int(scheduler.priority),
             'artiq_version': str(_artiq_version),
             'dax_version': str(_dax_version),
+            'dax_sim_enabled': str(system.dax_sim_enabled)
         }
 
         # Add expid items to fields if keys do not exist yet and the types are appropriate

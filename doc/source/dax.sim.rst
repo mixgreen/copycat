@@ -12,6 +12,30 @@ It will import the components required to enable and configure DAX.sim.
     :undoc-members:
     :show-inheritance:
 
+dax.sim.ddb module
+------------------
+
+.. automodule:: dax.sim.ddb
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+dax.sim.signal module
+---------------------
+
+.. automodule:: dax.sim.signal
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+dax.sim.time module
+-------------------
+
+.. automodule:: dax.sim.time
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 dax.sim.config module
 ---------------------
 
@@ -27,28 +51,3 @@ dax.sim.device module
     :members:
     :undoc-members:
     :show-inheritance:
-
-dax.sim.signal module
----------------------
-
-.. automodule:: dax.sim.signal
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
-dax.sim.sim module
-------------------
-
-.. automodule:: dax.sim.sim
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
-dax.sim.time module
--------------------
-
-.. automodule:: dax.sim.time
-    :members:
-    :undoc-members:
-    :show-inheritance:
-

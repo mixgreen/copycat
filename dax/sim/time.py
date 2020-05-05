@@ -47,15 +47,15 @@ class _ParallelTimeContext(_TimeContext):
 
 
 class DaxTimeManager:
-    def __init__(self, timescale: float):
-        assert isinstance(timescale, float), 'Timescale must be of type float'
+    def __init__(self, ref_period: float):
+        assert isinstance(ref_period, float), 'Reference period must be of type float'
 
-        if timescale <= 0.0:
-            # The timescale must be larger than zero
-            raise ValueError('The timescale must be larger than zero')
+        if ref_period <= 0.0:
+            # The reference period must be larger than zero
+            raise ValueError('The reference period must be larger than zero')
 
-        # Store timescale, this should also be the leading timescale for the core device
-        self._timescale = timescale
+        # Store reference period
+        self._ref_period = ref_period
 
         # Initialize time context stack
         self._stack = [_SequentialTimeContext(_MU_T(0))]  # type: typing.List[_TimeContext]
@@ -75,7 +75,7 @@ class DaxTimeManager:
     def exit(self) -> None:
         """Exit the last time context."""
         old_context = self._stack.pop()
-        self.take_time(old_context.block_duration)
+        self.take_time_mu(old_context.block_duration)
 
     def take_time_mu(self, duration: _MU_T) -> None:
         """Take time from the current context.
@@ -87,14 +87,14 @@ class DaxTimeManager:
     def take_time(self, duration: float) -> None:
         """Take time from the current context.
 
-        The duration will be converted to machine units based on the timescale
+        The duration will be converted to machine units based on the reference period
         before it is used. This might result in some rounding error.
 
         :param duration: The duration in natural time (float)
         """
 
-        # Divide duration by the timescale and convert to machine units
-        self.take_time_mu(_MU_T(duration / self._timescale))
+        # Divide duration by the reference period and convert to machine units
+        self.take_time_mu(_MU_T(duration // self._ref_period))  # floor div, same as in ARTIQ Core
 
     def get_time_mu(self) -> _MU_T:
         """Return the current time in machine units.

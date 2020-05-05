@@ -1,30 +1,29 @@
 import logging
 import typing
 
-from dax.sim.time import DaxTimeManager
 from dax.sim.signal import set_signal_manager, get_signal_manager, VcdSignalManager
 
 __all__ = ['DaxSimConfig']
 
-_logger = logging.getLogger(__name__)
-"""The logger for this file."""
+_logger = logging.getLogger(__package__)
+"""The logger for this file and the root logger for dax.sim."""
 
 
 class DaxSimConfig:
     """Virtual device class that configures the simulation through the device DB."""
 
     def __init__(self, dmgr: typing.Any,
-                 logging_level: typing.Union[int, str], timescale: float, output: bool):
+                 logging_level: typing.Union[int, str], output: bool,
+                 signal_mgr_kwargs: typing.Dict[str, typing.Any]):
         assert isinstance(logging_level, (int, str)), 'Logging level must be of type int or str'
-        assert isinstance(timescale, float), 'Timescale must be of type float'
         assert isinstance(output, bool), 'Output flag must be of type bool'
+        assert isinstance(signal_mgr_kwargs, dict), 'Signal manager kwargs must be of type dict'
 
-        # Set the logging level and report that simulation is enabled
+        # Set the dax.sim logging level and report that simulation is enabled
         _logger.setLevel(logging_level)
         _logger.info('DAX simulation enabled')
 
         # Store attributes
-        self.__timescale = timescale
         self.__output_enabled = output
 
         # Make base name for output files
@@ -33,19 +32,9 @@ class DaxSimConfig:
 
         if self.output_enabled:
             # Set the signal manager
-            set_signal_manager(VcdSignalManager(self.get_output_file_name('vcd', postfix='trace'), timescale))
+            _logger.debug('Initializing VCD signal manager...')
+            set_signal_manager(VcdSignalManager(self.get_output_file_name('vcd', postfix='trace'), **signal_mgr_kwargs))
             _logger.debug('VCD signal manager initialized')
-
-        # Set the time manager in ARTIQ
-        _logger.debug('Initializing DAX time manager...')
-        from artiq.language.core import set_time_manager
-        set_time_manager(DaxTimeManager(timescale))
-        _logger.debug('DAX time manager initialized')
-
-    @property
-    def timescale(self) -> float:
-        """Return the timescale of the simulation."""
-        return self.__timescale
 
     @property
     def output_enabled(self) -> bool:
