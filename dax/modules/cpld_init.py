@@ -56,7 +56,7 @@ class CpldInitModule(DaxModule):
             self._init()
 
     @kernel
-    def _init(self) -> None:
+    def _init(self):
         # Reset the core
         self.core.reset()
 

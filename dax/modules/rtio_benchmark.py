@@ -27,7 +27,8 @@ class RtioBenchmarkModule(DaxModule):
         self._dma_enabled = dma
 
         # TTL output device
-        self.setattr_device(ttl_out, 'ttl_out', (artiq.coredevice.ttl.TTLOut, artiq.coredevice.ttl.TTLInOut))
+        self.ttl_out = self.get_device(ttl_out, (artiq.coredevice.ttl.TTLOut, artiq.coredevice.ttl.TTLInOut))
+        self.update_kernel_invariants('ttl_out')
 
     def init(self):
         # Load parameters
@@ -54,7 +55,7 @@ class RtioBenchmarkModule(DaxModule):
             self._init()
 
     @kernel
-    def _record_dma_burst(self, burst_size):
+    def _record_dma_burst(self, burst_size: TInt32):
         # Initialize
         self._init()
 
@@ -162,7 +163,8 @@ class RtioBenchmarkModule(DaxModule):
             self.set_dataset_sys(self.EVENT_PERIOD_KEY, last_period)
 
     @kernel
-    def _benchmark_event_throughput(self, period_scan, num_samples, num_events, no_underflow_cutoff):
+    def _benchmark_event_throughput(self, period_scan, num_samples: TInt32, num_events: TInt32,
+                                    no_underflow_cutoff: TInt32):
         # Storage for last period
         last_period = 0.0
         # Count of last period without underflow
@@ -198,7 +200,7 @@ class RtioBenchmarkModule(DaxModule):
         self.set_dataset('last_period', last_period)
 
     @kernel
-    def _spawn_events(self, period, num_samples, num_events):
+    def _spawn_events(self, period: TFloat, num_samples: TInt32, num_events: TInt32):
         # Convert period to machine units
         period_mu = self.core.seconds_to_mu(period)
         # Scale number of events
@@ -300,8 +302,9 @@ class RtioBenchmarkModule(DaxModule):
         self.logger.info('Using period {:s}'.format(dax.util.units.time_to_str(current_period)))
 
     @kernel
-    def _benchmark_event_burst(self, num_events_min, num_events_max, num_events_step, num_samples, period_step,
-                               no_underflow_cutoff, num_step_cutoff):
+    def _benchmark_event_burst(self, num_events_min: TInt32, num_events_max: TInt32, num_events_step: TInt32,
+                               num_samples: TInt32, period_step: TFloat,
+                               no_underflow_cutoff: TInt32, num_step_cutoff: TInt32):
         # Storage for last number of events
         last_num_events = np.int32(0)
         # Count of last number of events without underflow
@@ -419,7 +422,8 @@ class RtioBenchmarkModule(DaxModule):
             self.set_dataset_sys(self.DMA_EVENT_PERIOD_KEY, last_period)
 
     @kernel
-    def _benchmark_dma_throughput(self, period_scan, num_samples, num_events, no_underflow_cutoff):
+    def _benchmark_dma_throughput(self, period_scan, num_samples: TInt32, num_events: TInt32,
+                                  no_underflow_cutoff: TInt32):
         # Storage for last period
         last_period = 0.0
         # Count of last period without underflow
@@ -471,7 +475,8 @@ class RtioBenchmarkModule(DaxModule):
         self.set_dataset('last_period', last_period)
 
     @kernel
-    def _spawn_dma_events(self, period, num_samples, num_events, dma_handle_on, dma_handle_off):
+    def _spawn_dma_events(self, period: TFloat, num_samples: TInt32, num_events: TInt32,
+                          dma_handle_on, dma_handle_off):
         # Convert period to machine units
         period_mu = self.core.seconds_to_mu(period)
         # Scale number of events
@@ -560,7 +565,8 @@ class RtioBenchmarkModule(DaxModule):
             self.set_dataset_sys(self.LATENCY_CORE_RTIO_KEY, last_latency)
 
     @kernel
-    def _benchmark_latency_core_rtio(self, latency_min, latency_max, latency_step, num_samples, no_underflow_cutoff):
+    def _benchmark_latency_core_rtio(self, latency_min: TFloat, latency_max: TFloat, latency_step: TFloat,
+                                     num_samples: TInt32, no_underflow_cutoff: TInt32):
         # Storage for last latency
         last_latency = 0.0
         # Count of last latency without underflow
@@ -634,10 +640,10 @@ class RtioLoopBenchmarkModule(RtioBenchmarkModule):
         # Call super
         super(RtioLoopBenchmarkModule, self).build(ttl_out, **kwargs)
         # TTL input device
-        self.setattr_device(ttl_in, 'ttl_in', artiq.coredevice.ttl.TTLInOut)
+        self.ttl_in = self.get_device(ttl_in, artiq.coredevice.ttl.TTLInOut)
 
         # Add edge delay to kernel invariants
-        self.update_kernel_invariants('EDGE_DELAY')
+        self.update_kernel_invariants('EDGE_DELAY', 'ttl_in')
 
     def init(self):
         # Call super
@@ -667,7 +673,7 @@ class RtioLoopBenchmarkModule(RtioBenchmarkModule):
         self.core.wait_until_mu(now_mu())
 
     @kernel
-    def test_loop_connection(self, retry=np.int32(1)):
+    def test_loop_connection(self, retry: TInt32 = np.int32(1)):
         """True if a loop connection was detected."""
 
         for _ in range(retry):
@@ -738,7 +744,7 @@ class RtioLoopBenchmarkModule(RtioBenchmarkModule):
             self.set_dataset_sys(self.INPUT_BUFFER_SIZE_KEY, num_events)
 
     @kernel
-    def _benchmark_input_buffer_size(self, min_events, max_events):
+    def _benchmark_input_buffer_size(self, min_events: TInt32, max_events: TInt32):
         # Counter for number of events posted
         num_events = np.int32(min_events)
         # Flag for overflow
@@ -828,7 +834,7 @@ class RtioLoopBenchmarkModule(RtioBenchmarkModule):
             self.set_dataset_sys(self.LATENCY_RTIO_CORE_KEY, rtio_core)
 
     @kernel
-    def _benchmark_latency_rtio_core(self, num_samples):
+    def _benchmark_latency_rtio_core(self, num_samples: TInt32):
         # Reset core
         self.core.reset()
 
@@ -927,7 +933,8 @@ class RtioLoopBenchmarkModule(RtioBenchmarkModule):
             self.set_dataset_sys(self.LATENCY_RTT_KEY, last_latency)
 
     @kernel
-    def _benchmark_latency_rtt(self, latency_min, latency_max, latency_step, num_samples, no_underflow_cutoff):
+    def _benchmark_latency_rtt(self, latency_min: TFloat, latency_max: TFloat, latency_step: TFloat,
+                               num_samples: TInt32, no_underflow_cutoff: TInt32):
         # Storage for last latency
         last_latency = 0.0
         # Count of last latency without underflow

@@ -61,7 +61,7 @@ class RpcBenchmarkModule(DaxModule):
         self.core.break_realtime()
 
     @kernel
-    def _benchmark_core_host_core(self, num_samples):
+    def _benchmark_core_host_core(self, num_samples: TInt32):
         # Reset core
         self.core.reset()
 
@@ -86,7 +86,7 @@ class RpcBenchmarkModule(DaxModule):
         pass
 
     @kernel
-    def _benchmark_core_host_core_async(self, num_samples):
+    def _benchmark_core_host_core_async(self, num_samples: TInt32):
         # Reset core
         self.core.reset()
 

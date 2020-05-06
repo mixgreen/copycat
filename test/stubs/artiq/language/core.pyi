@@ -19,7 +19,15 @@ def kernel(arg: __F_T) -> __F_T: ...
 
 
 @typing.overload
+def kernel(arg: str) -> typing.Callable[[__F_T], __F_T]: ...
+
+
+@typing.overload
 def kernel(flags: typing.Set[str]) -> typing.Callable[[__F_T], __F_T]: ...
+
+
+@typing.overload
+def kernel(arg: str, flags: typing.Set[str]) -> typing.Callable[[__F_T], __F_T]: ...
 
 
 @typing.overload

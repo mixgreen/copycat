@@ -34,7 +34,7 @@ class LedModule(DaxModule):
             self._init()
 
     @kernel
-    def _init(self) -> None:
+    def _init(self):
         # Reset the core
         self.core.reset()
 
@@ -50,23 +50,23 @@ class LedModule(DaxModule):
     """Module functionality"""
 
     @kernel
-    def set_o(self, o, index=np.int32(0)):
-        self.led[index].set_o(bool(o))
+    def set_o(self, o, index: TInt32 = np.int32(0)):
+        self.led[index].set_o(o)
 
     @kernel
-    def on(self, index=np.int32(0)):
+    def on(self, index: TInt32 = np.int32(0)):
         self.led[index].on()
 
     @kernel
-    def off(self, index=np.int32(0)):
+    def off(self, index: TInt32 = np.int32(0)):
         self.led[index].off()
 
     @kernel
-    def pulse(self, duration, index=np.int32(0)):
+    def pulse(self, duration: TFloat, index: TInt32 = np.int32(0)):
         self.led[index].pulse(duration)
 
     @kernel
-    def pulse_mu(self, duration, index=np.int32(0)):
+    def pulse_mu(self, duration: TInt64, index=np.int32(0)):
         self.led[index].pulse_mu(duration)
 
     @kernel
@@ -84,7 +84,7 @@ class LedModule(DaxModule):
             led.off()
 
     @kernel
-    def set_code(self, code):
+    def set_code(self, code: TInt32):
         """Visualize the lower bits of the code using the LED's."""
         for led in self.led:
             # Set LED (explicit casting required)
