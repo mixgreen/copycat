@@ -55,11 +55,13 @@ class EdgeCounter(DaxSimDevice):
 
         # Set the number of counts for the duration window (for graphical purposes)
         self._signal_manager.event(self._count, num_events)
-        delay_mu(duration)  # Move the cursor
-        self._signal_manager.event(self._count, 'z')
+        self._signal_manager.event(self._count, 'z', offset=duration)
 
-        # Store number of events and the timestamp in count buffer
-        self._count_buffer.append((now_mu(), num_events))
+        # Store number of events and the ending timestamp in count buffer
+        self._count_buffer.append((now_mu() + duration, num_events))
+
+        # Move the cursor (remember: in parallel context, delay functions do not move the cursor immediately!)
+        delay_mu(duration)
 
     @kernel
     def gate_rising_mu(self, duration_mu):

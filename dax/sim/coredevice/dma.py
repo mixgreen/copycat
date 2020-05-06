@@ -131,8 +131,8 @@ class CoreDMA(DaxSimDevice):
         self._signal_manager.event(self._dma_play, True)  # Represents the event of playing a trace
         self._signal_manager.event(self._dma_play_name, handle.name)  # Represents the duration of the event
 
-        # Forward time by the duration of the DMA trace
-        delay_mu(handle.duration)
+        # Record ending of DMA trace (shows up as Z in the graphical interface)
+        self._signal_manager.event(self._dma_play_name, None, offset=handle.duration)
 
-        # Record ending of DMA trace
-        self._signal_manager.event(self._dma_play_name, None)  # Shows up as Z in the graphical interface
+        # Forward time by the duration of the DMA trace
+        delay_mu(handle.duration)  # Delay in the end for parallel context

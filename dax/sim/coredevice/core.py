@@ -17,6 +17,8 @@ _logger = logging.getLogger(__name__)
 
 
 class Core(DaxSimDevice):
+    RESET_TIME_MU = 125000
+    """The reset time in machine units."""
 
     def __init__(self, dmgr: typing.Any,
                  ref_period: float, ref_multiplier: int = 8,
@@ -151,13 +153,13 @@ class Core(DaxSimDevice):
             if isinstance(d, DaxSimDevice):
                 d.core_reset()
 
-        # Move cursor
-        delay_mu(125000)
-
         # Reset signal back to 0
-        self._signal_manager.event(self._reset_signal, 0)
+        self._signal_manager.event(self._reset_signal, 0, offset=self.RESET_TIME_MU)
+
+        # Move cursor
+        delay_mu(self.RESET_TIME_MU)
 
     @kernel
     def break_realtime(self) -> None:
         # Move cursor
-        delay_mu(125000)
+        delay_mu(self.RESET_TIME_MU)

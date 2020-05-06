@@ -25,7 +25,8 @@ class DaxSignalManager(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def event(self, signal: __S_T, value: typing.Any, time: typing.Optional[np.int64] = None) -> None:
+    def event(self, signal: __S_T, value: typing.Any,
+              time: typing.Optional[np.int64] = None, offset: typing.Optional[np.int64] = None) -> None:
         """Method used by devices to register events."""
         pass
 
@@ -47,7 +48,8 @@ class NullSignalManager(DaxSignalManager):
                  size: typing.Optional[int] = None, init: typing.Any = None) -> typing.Any:
         pass
 
-    def event(self, signal: typing.Any, value: typing.Any, time: typing.Optional[np.int64] = None) -> None:
+    def event(self, signal: typing.Any, value: typing.Any,
+              time: typing.Optional[np.int64] = None, offset: typing.Optional[np.int64] = None) -> None:
         pass
 
     def flush(self, ref_period: float) -> None:
@@ -128,8 +130,13 @@ class VcdSignalManager(DaxSignalManager):
         # Register the signal with the VCD writer
         return self._vcd.register_var(scope, name, var_type=var_type, size=size, init=init)
 
-    def event(self, signal: __S_T, value: __V_T, time: typing.Optional[np.int64] = None) -> None:
+    def event(self, signal: __S_T, value: __V_T,
+              time: typing.Optional[np.int64] = None, offset: typing.Optional[np.int64] = None) -> None:
         """Commit an event.
+
+        Note that in a parallel context, :func:`delay` and :func:`delay_mu` do not directly
+        influence the time returned by :func:`now_mu`.
+        It is better to use the `time` or `offset` arguments to set events at different times.
 
         Bool type signals can have values `0`, `1`, `X`, `Z`.
 
@@ -140,10 +147,15 @@ class VcdSignalManager(DaxSignalManager):
 
         :param signal: The signal that changed
         :param value: The new value of the signal
-        :param time: Optional time that the signal changed (:func:`now_mu` if no time was provided)
+        :param time: Optional time in machine units when the event happened (:func:`now_mu` if no time was provided)
+        :param offset: Optional offset from :func:`now_mu` in machine units when the event happened (default is `0`)
         """
+        # Calculate time
+        time = artiq.language.core.now_mu() if time is None else time
+        time = time if offset is None else time + offset
+
         # Add event to buffer
-        self._event_buffer.append((artiq.language.core.now_mu() if time is None else time, signal, value))
+        self._event_buffer.append((time, signal, value))
 
     def flush(self, ref_period: float) -> None:
         """Commit all buffered events.

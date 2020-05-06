@@ -107,16 +107,15 @@ class TTLInOut(TTLOut):
         # Multiply by 2 to simulate a full duty cycle (rising and falling edge)
         num_events = int(self.core.mu_to_seconds(duration) * self._input_freq * 2)
 
-        # Generate timestamps for these events in machine units
-        now = now_mu()
-        timestamps = self._rng.sample(range(now, now + duration), num_events)
+        # Generate relative timestamps for these events in machine units
+        timestamps = self._rng.sample(range(duration), num_events)
 
         # Initialize the signal to 0 at the start of the window (for graphical purposes)
         self._signal_manager.event(self._state, 0)
 
         # Write the stream of input events to the signal manager
         for t, v in zip(timestamps, itertools.cycle((1, 0))):
-            self._signal_manager.event(self._state, v, t)
+            self._signal_manager.event(self._state, v, offset=t)
 
         if edge_type is self._EdgeType.RISING:
             # Store odd half of the event times in the event buffer
@@ -128,10 +127,11 @@ class TTLInOut(TTLOut):
             # Store all event times in the event buffer
             self._edge_buffer.extend(timestamps)
 
-        # Move the cursor
-        delay_mu(duration)
         # Return to Z after all signals were inserted
-        self._signal_manager.event(self._state, 'z')
+        self._signal_manager.event(self._state, 'z', offset=duration)  # Required for parallel context
+
+        # Move the cursor (remember: in parallel context, delay functions do not move the cursor immediately!)
+        delay_mu(duration)
 
     @kernel
     def gate_rising_mu(self, duration):
@@ -188,7 +188,7 @@ class TTLInOut(TTLOut):
         val = np.int32(self._rng.random() < self._input_prob)
         self._sample_buffer.append(val)
         self._signal_manager.event(self._state, val)  # Sample value at current time
-        self._signal_manager.event(self._state, 'x', now_mu() + 1)  # Return to X after sample
+        self._signal_manager.event(self._state, 'x', offset=1)  # Return to X 1 machine unit after sample
 
     @kernel
     def sample_get(self):
