@@ -80,7 +80,8 @@ class Core(DaxSimDevice):
 
         # Call the kernel function while increasing the level
         self._level += 1
-        result = kernel_func(*args, **kwargs)
+        with sequential:  # Every function is called in a sequential context for correct parallel behavior
+            result = kernel_func(*args, **kwargs)
         self._level -= 1
 
         # Accumulate the time spend in this function call

@@ -47,21 +47,26 @@ class EdgeCounter(DaxSimDevice):
     def _simulate_input_signal(self, duration: np.int64, edge_type: _EdgeType) -> None:
         """Simulate input signal for a given duration."""
 
-        # Calculate the number of events we expect to observe based on duration and frequency
-        num_events = int(self.core.mu_to_seconds(duration) * self._input_freq)
-        # Multiply by 2 in case we detect both edges
+        # Decide event frequency
+        event_freq = self._input_freq
         if edge_type is self._EdgeType.BOTH:
-            num_events *= 2
+            # Multiply by 2 in case we detect both edges
+            event_freq *= 2
+
+        # Calculate the number of events we expect to observe based on duration and frequency
+        num_events = int(self.core.mu_to_seconds(duration) * event_freq)
 
         # Set the number of counts for the duration window (for graphical purposes)
         self._signal_manager.event(self._count, num_events)
-        self._signal_manager.event(self._count, 'z', offset=duration)
+
+        # Move the cursor
+        delay_mu(duration)
+
+        # Return to Z at the end of the window
+        self._signal_manager.event(self._count, 'z')
 
         # Store number of events and the ending timestamp in count buffer
-        self._count_buffer.append((now_mu() + duration, num_events))
-
-        # Move the cursor (remember: in parallel context, delay functions do not move the cursor immediately!)
-        delay_mu(duration)
+        self._count_buffer.append((now_mu(), num_events))
 
     @kernel
     def gate_rising_mu(self, duration_mu):
