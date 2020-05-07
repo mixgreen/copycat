@@ -25,7 +25,7 @@ setup(
     author_email="",
     description="Duke ARTIQ Extensions",
     install_requires=requirements,
-    packages=find_packages(),
+    packages=find_packages(exclude=["*.test", "*.test.*", "test.*", "test"]),
     long_description=open("README.md", encoding="utf-8").read(),
     long_description_content_type="text/markdown",
 )
