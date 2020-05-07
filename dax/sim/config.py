@@ -1,6 +1,7 @@
 import logging
 import typing
 
+from dax import __version__ as _dax_version
 from dax.sim.signal import set_signal_manager, get_signal_manager, VcdSignalManager
 
 __all__ = ['DaxSimConfig']
@@ -21,7 +22,7 @@ class DaxSimConfig:
 
         # Set the dax.sim logging level and report that simulation is enabled
         _logger.setLevel(logging_level)
-        _logger.info('DAX simulation enabled')
+        _logger.info('DAX.sim enabled ({:s})'.format(_dax_version))
 
         # Store attributes
         self.__output_enabled = output

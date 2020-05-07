@@ -127,11 +127,11 @@ class TTLInOut(TTLOut):
             # Store all event times in the event buffer
             self._edge_buffer.extend(timestamps)
 
-        # Return to Z after all signals were inserted
-        self._signal_manager.event(self._state, 'z', offset=duration)  # Required for parallel context
-
-        # Move the cursor (remember: in parallel context, delay functions do not move the cursor immediately!)
+        # Move the cursor
         delay_mu(duration)
+
+        # Return to Z after all signals were inserted
+        self._signal_manager.event(self._state, 'z')
 
     @kernel
     def gate_rising_mu(self, duration):

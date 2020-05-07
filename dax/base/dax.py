@@ -745,6 +745,9 @@ class DaxSystem(DaxModuleBase):
     def build(self, *args: typing.Any, **kwargs: typing.Any) -> None:
         """Override this method to build your DAX system. (Do not forget to call `super.build()` first!)"""
 
+        # Log DAX version
+        self.logger.debug('DAX version {:s}'.format(_dax_version))
+
         if args or kwargs:
             # Warn if we find any dangling arguments
             self.logger.warning('Unused args "{}" / kwargs "{}" were passed to super.build()'.format(args, kwargs))
