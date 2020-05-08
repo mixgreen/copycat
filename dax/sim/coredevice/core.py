@@ -11,6 +11,7 @@ from dax.sim.signal import get_signal_manager
 from dax.sim.ddb import DAX_SIM_CONFIG_KEY
 from dax.sim.time import DaxTimeManager
 from dax.util.units import time_to_str
+from dax.sim.coredevice.comm_kernel import CommKernelDummy
 
 _logger = logging.getLogger(__name__)
 """The logger for this file."""
@@ -38,6 +39,9 @@ class Core(DaxSimDevice):
         self._ref_period = ref_period
         self._ref_multiplier = ref_multiplier
         self._coarse_ref_period = self._ref_period * self._ref_multiplier
+
+        # Setup dummy comm object
+        self._comm = CommKernelDummy()
 
         # Set the time manager in ARTIQ
         _logger.debug('Initializing time manager with reference period {:s}'.format(time_to_str(self.ref_period)))
@@ -67,6 +71,10 @@ class Core(DaxSimDevice):
     @property
     def coarse_ref_period(self) -> float:
         return self._coarse_ref_period
+
+    @property
+    def comm(self) -> CommKernelDummy:
+        return self._comm
 
     def run(self, function: typing.Any,
             args: typing.Tuple[typing.Any, ...], kwargs: typing.Dict[str, typing.Any]) -> typing.Any:

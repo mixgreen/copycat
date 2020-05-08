@@ -427,11 +427,13 @@ class DaxHasSystem(DaxBase, abc.ABC):
         self.update_kernel_invariants(attr_name)
 
     @artiq.experiment.rpc(flags={'async'})
-    def set_dataset_sys(self, key: str, value: typing.Any) -> None:
+    def set_dataset_sys(self, key: str, value: typing.Any, data_store: bool = True) -> None:
         """Sets the contents of a system dataset.
 
         :param key: The key of the system dataset
         :param value: The value to store
+        :param data_store: Flag to archive the value in the data store
+        :raises ValueError: Raised if the key has an invalid format
         """
 
         # Get the full system key
@@ -447,16 +449,18 @@ class DaxHasSystem(DaxBase, abc.ABC):
         # Restore original logging level of worker_db logger
         artiq.master.worker_db.logger.setLevel(logging.NOTSET)
 
-        # Archive value using the data store
-        self.data_store.set(system_key, value)
+        if data_store:
+            # Archive value using the data store
+            self.data_store.set(system_key, value)
 
     @artiq.experiment.rpc(flags={'async'})
-    def mutate_dataset_sys(self, key: str, index: typing.Any, value: typing.Any) -> None:
+    def mutate_dataset_sys(self, key: str, index: typing.Any, value: typing.Any, data_store: bool = True) -> None:
         """Mutate an existing system dataset at the given index.
 
         :param key: The key of the system dataset
         :param index: The array index to mutate, slicing and multi-dimensional indexing allowed
         :param value: The value to store
+        :param data_store: Flag to archive the value in the data store
         :raises KeyError: Raised if the key was not present
         :raises ValueError: Raised if the key has an invalid format
         """
@@ -468,15 +472,17 @@ class DaxHasSystem(DaxBase, abc.ABC):
         self.logger.debug('System dataset key "{:s}"[{}] mutate to value "{}"'.format(key, index, value))
         self.mutate_dataset(system_key, index, value)
 
-        # Archive value using the data store
-        self.data_store.mutate(system_key, index, value)
+        if data_store:
+            # Archive value using the data store
+            self.data_store.mutate(system_key, index, value)
 
     @artiq.experiment.rpc(flags={'async'})
-    def append_to_dataset_sys(self, key: str, value: typing.Any) -> None:
+    def append_to_dataset_sys(self, key: str, value: typing.Any, data_store: bool = True) -> None:
         """Append a value to a system dataset.
 
         :param key: The key of the system dataset
         :param value: The value to store
+        :param data_store: Flag to archive the value in the data store
         :raises KeyError: Raised if the key was not present
         :raises ValueError: Raised if the key has an invalid format
         """
@@ -488,8 +494,9 @@ class DaxHasSystem(DaxBase, abc.ABC):
         self.logger.debug('System dataset key "{:s}" append value "{}"'.format(key, value))
         self.append_to_dataset(system_key, value)
 
-        # Archive value using the data store
-        self.data_store.append(system_key, value)
+        if data_store:
+            # Archive value using the data store
+            self.data_store.append(system_key, value)
 
     def get_dataset_sys(self, key: str, default: typing.Any = artiq.experiment.NoDefault) -> typing.Any:
         """Returns the contents of a system dataset.
@@ -501,6 +508,7 @@ class DaxHasSystem(DaxBase, abc.ABC):
 
         The above behavior differs slightly from :func:`get_dataset` since it will write
         the default value to the dataset in case the key was not present.
+        If the default value is written to the dataset, it is also archived in the data store.
 
         Values that are retrieved using this method can not be added to the kernel invariants.
         The user is responsible for adding the attribute to the list of kernel invariants.
@@ -550,6 +558,9 @@ class DaxHasSystem(DaxBase, abc.ABC):
         This behavior was chosen to make sure initialization can always pass, even when keys are not available.
         Exceptions will be raised when an attribute is missing while being accessed in Python
         or when a kernel is compiled that needs the attribute.
+
+        An other difference from :func:`setattr_dataset` is that if the function falls back on the
+        default value, the default value will be written to the dataset and archived in the data store.
 
         The function :func:`hasattr` can be used for conditional initialization in case it is possible that a
         certain attribute is not present (i.e. when this function is used without a default value).
