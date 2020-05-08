@@ -13,6 +13,7 @@
 
 test_nix:
   extends: .nix_env
+  coverage: '/^TOTAL.+?(\d+\%)$/'
   script:
     # Run test commands in a Nix shell
     - nix-shell test/shell.nix --run "python3 --version"
@@ -50,5 +51,5 @@ pages:
   artifacts:
     paths:
       - public
-  only:
-    - master
+  rules:
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
