@@ -12,10 +12,10 @@ class CommKernelDummy(artiq.coredevice.comm_kernel.CommKernelDummy):
         pass
 
     def open(self, **kwargs):
-        raise NotImplementedError
+        pass
 
     def close(self):
-        raise NotImplementedError
+        pass
 
     def read(self, length):
         raise NotImplementedError

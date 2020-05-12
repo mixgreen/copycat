@@ -3,6 +3,8 @@ import typing
 import numpy as np
 
 from artiq.language.units import *
+from artiq.language.core import now_mu, set_watchdog_factory
+from artiq.coredevice.exceptions import WatchdogExpired
 
 __all__ = ['DaxTimeManager']
 
@@ -46,6 +48,46 @@ class _ParallelTimeContext(_TimeContext):
             self._block_duration = amount
 
 
+class _Watchdog:
+    """DAX.sim watchdog implementation."""
+
+    def __init__(self, watchdogs: typing.Set['_Watchdog'], timeout_mu: _MU_T):
+        # Store the watchdogs container
+        self._watchdogs = watchdogs
+        # Store the given timeout (relative time)
+        self._timeout_mu = timeout_mu
+        # Flag to check that a watchdog is only used once
+        self._used = False
+
+    def check_timeout(self, now_mu_: _MU_T):
+        """Let the watchdog check if it has timed out.
+
+        :param now_mu_: The current time
+        :raises WatchdogExpired: If the watchdog expired
+        """
+        if now_mu_ > self._timeout_mu:
+            # Raise exception if watchdog timed out
+            raise WatchdogExpired('Watchdog expired at time {}'.format(self._timeout_mu))
+
+    def __enter__(self):
+        if self._used:
+            # Watchdog was entered twice, which is not valid
+            raise RuntimeError('A watchdog object can only be used once')
+        else:
+            # Update used flag
+            self._used = True
+
+        # Update the timeout with the current time, which will give us the absolute timeout
+        self._timeout_mu += now_mu()
+
+        # Add this watchdog to the list such that it can be monitored
+        self._watchdogs.add(self)
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        # Remove ourselves from the active watchdogs
+        self._watchdogs.remove(self)
+
+
 class DaxTimeManager:
     def __init__(self, ref_period: float):
         assert isinstance(ref_period, float), 'Reference period must be of type float'
@@ -59,6 +101,26 @@ class DaxTimeManager:
 
         # Initialize time context stack
         self._stack = [_SequentialTimeContext(_MU_T(0))]  # type: typing.List[_TimeContext]
+
+        # Set of active watchdogs
+        self._watchdogs = set()  # type: typing.Set[_Watchdog]
+
+        # Set the watchdog factory
+        set_watchdog_factory(self._watchdog_factory)
+
+    """Helper functions"""
+
+    def _watchdog_factory(self, timeout: float):
+        """Function suitable for the ARTIQ watchdog factory."""
+        return _Watchdog(self._watchdogs, self._seconds_to_mu(timeout))
+
+    def _seconds_to_mu(self, seconds: float) -> _MU_T:
+        """Convert seconds to machine units.
+
+        :param seconds: The time in seconds
+        :return: The time converted to machine units
+        """
+        return _MU_T(seconds // self._ref_period)  # floor div, same as in ARTIQ Core
 
     """Functions that interface with the ARTIQ language core"""
 
@@ -82,7 +144,11 @@ class DaxTimeManager:
 
         :param duration: The duration in machine units
         """
+        # Take time from the current context
         self._stack[-1].take_time(duration)
+        # Check if any watchdog timed out
+        for w in self._watchdogs:
+            w.check_timeout(self.get_time_mu())
 
     def take_time(self, duration: float) -> None:
         """Take time from the current context.
@@ -94,7 +160,7 @@ class DaxTimeManager:
         """
 
         # Divide duration by the reference period and convert to machine units
-        self.take_time_mu(_MU_T(duration // self._ref_period))  # floor div, same as in ARTIQ Core
+        self.take_time_mu(self._seconds_to_mu(duration))
 
     def get_time_mu(self) -> _MU_T:
         """Return the current time in machine units.
