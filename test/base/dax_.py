@@ -39,14 +39,12 @@ device_db = {
         'module': 'artiq.coredevice.ttl',
         'class': 'TTLInOut',
         'arguments': {'channel': 0},
-        'comment': 'This is a fairly long comment, shown as tooltip.'
     },
     'ttl1': {
         'type': 'local',
         'module': 'artiq.coredevice.ttl',
         'class': 'TTLOut',
         'arguments': {'channel': 1},
-        'comment': 'Hello World'
     },
 
     # Aliases

@@ -176,13 +176,13 @@ def _mutate_local(key: str, value: typing.Any) -> None:
             value['module'] = module
 
     # Add key of the device to the device arguments
-    arguments = value.setdefault('arguments', {})
+    arguments = value.setdefault('arguments', dict())
     if not isinstance(arguments, dict):
         raise TypeError('The arguments key of local device "{:s}" must be of type dict'.format(key))
     arguments.update(_key=key)
 
     # Add simulation arguments to normal arguments
-    sim_args = value.setdefault('sim_args', {})
+    sim_args = value.setdefault('sim_args', dict())
     if not isinstance(sim_args, dict):
         raise TypeError('The sim_args key of local device "{:s}" must be of type dict'.format(key))
     arguments.update(sim_args)

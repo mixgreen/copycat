@@ -59,7 +59,7 @@ class _Watchdog:
         # Flag to check that a watchdog is only used once
         self._used = False
 
-    def check_timeout(self, now_mu_: _MU_T):
+    def check_timeout(self, now_mu_: _MU_T) -> None:
         """Let the watchdog check if it has timed out.
 
         :param now_mu_: The current time
@@ -69,7 +69,7 @@ class _Watchdog:
             # Raise exception if watchdog timed out
             raise WatchdogExpired('Watchdog expired at time {}'.format(self._timeout_mu))
 
-    def __enter__(self):
+    def __enter__(self) -> None:
         if self._used:
             # Watchdog was entered twice, which is not valid
             raise RuntimeError('A watchdog object can only be used once')
@@ -83,7 +83,7 @@ class _Watchdog:
         # Add this watchdog to the list such that it can be monitored
         self._watchdogs.add(self)
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, exc_type: typing.Any, exc_val: typing.Any, exc_tb: typing.Any) -> None:
         # Remove ourselves from the active watchdogs
         self._watchdogs.remove(self)
 
@@ -110,7 +110,7 @@ class DaxTimeManager:
 
     """Helper functions"""
 
-    def _watchdog_factory(self, timeout: float):
+    def _watchdog_factory(self, timeout: float) -> _Watchdog:
         """Function suitable for the ARTIQ watchdog factory."""
         return _Watchdog(self._watchdogs, self._seconds_to_mu(timeout))
 
