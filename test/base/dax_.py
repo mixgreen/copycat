@@ -534,6 +534,22 @@ class DaxDataStoreInfluxDbTestCase(unittest.TestCase):
                                  'Number of registered points does not match number of written elements')
                 self.assertTupleEqual((k, v, str(i)), self.ds.points[-1], 'Submitted data does not match written point')
 
+    def test_mutate_bad(self):
+        # Data to test against
+        test_data = [
+            ('k', complex(1, 3), 3),  # Unsupported value type
+            ('k', 4, (44, 4)),  # Slicing not supported by influx
+            ('k', 'np.float(4)', ((4, 5), (6, 7))),  # Multi-dimensional slicing not supported by influx
+        ]
+
+        for k, v, i in test_data:
+            with self.subTest(k=k, v=v, i=i):
+                with self.assertLogs(self.ds._logger, logging.WARNING):
+                    # Test for warnings
+                    self.ds.mutate(k, i, v)
+                # Test if no writes happened
+                self.assertEqual(0, len(self.ds.points), 'Unexpected write')
+
     def test_append(self):
         # Key
         key = 'k'
@@ -948,6 +964,80 @@ class DaxModuleBaseTestCase(unittest.TestCase):
     def test_identifier(self):
         s = TestSystem(get_manager_or_parent(device_db))
         self.assertTrue(isinstance(s.get_identifier(), str), 'get_identifier() did not returned a string')
+
+
+class DaxSystemTestCase(unittest.TestCase):
+    class InitTestSystem(DaxSystem):
+        SYS_ID = 'unittest_init_system'
+        SYS_VER = 0
+
+        def build(self, test_case=None, *args, **kwargs) -> None:  # Default value required for type checking
+            super(DaxSystemTestCase.InitTestSystem, self).build(*args, **kwargs)
+            assert test_case is not None
+
+            # Store reference to the test case
+            self._test_case = test_case
+
+            # Required for type checking
+            self.children = getattr(self, 'children', [])
+
+        def init(self) -> None:
+            # Check if the call order is correct
+            self._test_case.assertEqual(len(self.children), self._test_case.init_count,
+                                        'System init was not called last')
+            self._test_case.assertEqual(0, self._test_case.post_init_count,
+                                        'Some post_init was called before the last init call')
+            # Increment call counter
+            self._test_case.init_count += 1
+
+        def post_init(self) -> None:
+            # Check if the call order is correct
+            self._test_case.assertEqual(len(self.children) + 1, self._test_case.init_count,
+                                        'Init count changed unexpectedly')
+            self._test_case.assertEqual(len(self.children), self._test_case.post_init_count,
+                                        'System post_init was not called last')
+            # Increment call counter
+            self._test_case.post_init_count += 1
+
+    class InitTestModule(DaxModule):
+        def build(self, index, test_case):
+            # Remember own index
+            self._index = index
+            self._test_case = test_case
+
+        def init(self) -> None:
+            # Check if the call order is correct
+            self._test_case.assertEqual(self._index, self._test_case.init_count,
+                                        'Module init was not called in expected order')
+            # Increment call counter
+            self._test_case.init_count += 1
+
+        def post_init(self) -> None:
+            # Check if the call order is correct
+            self._test_case.assertEqual(self._index, self._test_case.post_init_count,
+                                        'Module init was not called in expected order')
+            # Increment call counter
+            self._test_case.post_init_count += 1
+
+    def setUp(self) -> None:
+        # Counters to track calls
+        self.init_count = 0
+        self.post_init_count = 0
+        self.num_modules = 10
+
+        # Assemble system and modules
+        self.system = self.InitTestSystem(get_manager_or_parent(device_db), self)
+        for i in range(self.num_modules):
+            self.InitTestModule(self.system, 'module_{:d}'.format(i), i, self)
+
+    def test_dax_init(self):
+        # Call DAX init
+        self.system.dax_init()
+
+        # Verify if the counters have the expected values
+        self.assertEqual(self.init_count, self.num_modules + 1, 'Number of init calls does not match expected number')
+        self.assertEqual(self.post_init_count, self.num_modules + 1,
+                         'Number of post_init calls does not match expected number')
 
 
 class DaxServiceTestCase(unittest.TestCase):
