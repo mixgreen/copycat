@@ -95,7 +95,7 @@ def _resolve_unique_device_key(d: typing.Dict[str, typing.Any], key: str, trace:
 
 
 class DaxBase(artiq.experiment.HasEnvironment, abc.ABC):
-    """Base class for all DAX core classes."""
+    """Base class for all DAX base classes."""
 
     def __init__(self, managers_or_parent: typing.Any,
                  *args: typing.Any, **kwargs: typing.Any):
@@ -159,6 +159,15 @@ class DaxHasSystem(DaxBase, abc.ABC):
 
     def __init__(self, managers_or_parent: typing.Any, name: str, system_key: str, registry: 'DaxNameRegistry',
                  *args: typing.Any, **kwargs: typing.Any):
+        """Constructor of a DAX base class.
+
+        :param managers_or_parent: The manager or parent object
+        :param name: The name of this object
+        :param system_key: The unique system key, used for object identification
+        :param registry: The shared registry object
+        :param args: Positional arguments forwarded to the :func:`build` function
+        :param kwargs: Keyword arguments forwarded to the :func:`build` function
+        """
 
         assert isinstance(name, str), 'Name must be a string'
         assert isinstance(system_key, str), 'System key must be a string'
@@ -621,8 +630,6 @@ class DaxModuleBase(DaxHasSystem, abc.ABC):
 
     def __init__(self, managers_or_parent: typing.Any, module_name: str, module_key: str, registry: 'DaxNameRegistry',
                  *args: typing.Any, **kwargs: typing.Any):
-        """Initialize the DAX module base."""
-
         # Call super
         super(DaxModuleBase, self).__init__(managers_or_parent, module_name, module_key, registry, *args, **kwargs)
 
@@ -759,9 +766,9 @@ class DaxSystem(DaxModuleBase):
         # Log DAX version
         self.logger.debug('DAX version {:s}'.format(_dax_version))
 
-        if args or kwargs:
-            # Warn if we find any dangling arguments
-            self.logger.warning('Unused args "{}" / kwargs "{}" were passed to super.build()'.format(args, kwargs))
+        # Call super and forward arguments, for compatibility with other libraries
+        # noinspection PyArgumentList
+        super(DaxSystem, self).build(*args, **kwargs)
 
         try:
             # Get the virtual simulation configuration device
@@ -883,7 +890,22 @@ class DaxService(DaxHasSystem, abc.ABC):
 
 
 class DaxClient(DaxHasSystem, abc.ABC):
-    """Base class for DAX clients."""
+    """Base class for DAX clients.
+
+    Clients are template experiments that will later be joined with a user-provided system.
+
+    The client class should be decorated using the :func:`dax_client_factory` decorator.
+    This decorator creates a factory function that allows users to provide their system
+    to be used with this experiment template.
+
+    Normally, a client would implement the :func:`prepare`, :func:`run`, and :func:`analyze`
+    functions to define execution flow.
+    Additionally, a :func:`build` function can be implemented to provide a user interface
+    for configuring the client.
+
+    Note that the :func:`build` function does not need to call super() since there is no knowledge about
+    the given system yet. The decorator will make sure all classes are build in the correct order.
+    """
 
     def __init__(self, managers_or_parent: typing.Any,
                  *args: typing.Any, **kwargs: typing.Any):
@@ -1518,12 +1540,15 @@ def dax_client_factory(c: typing.Type[__DCF_C_T]) -> typing.Callable[[typing.Typ
 
     # Use the wraps decorator, but do not inherit the docstring
     @functools.wraps(c, assigned=[e for e in functools.WRAPPER_ASSIGNMENTS if e != '__doc__'])
-    def wrapper(system_type: typing.Type[__DCF_S_T]) -> typing.Type[__DCF_C_T]:
+    def wrapper(system_type: typing.Type[__DCF_S_T],
+                *sys_args: typing.Any, **sys_kwargs: typing.Any) -> typing.Type[__DCF_C_T]:
         """Create a new DAX client class.
 
         This factory function will create a new client class for a given system type.
 
         :param system_type: The system type used by the client
+        :param sys_args: Positional arguments forwarded to the systems :func:`build` function
+        :param sys_kwargs: Keyword arguments forwarded to the systems :func:`build` function
         :return: A fusion of the client and system class which can be executed
         :raises TypeError: Raised if the provided `system_type` parameter is not a subclass of `DaxSystem`
         """
@@ -1543,10 +1568,11 @@ def dax_client_factory(c: typing.Type[__DCF_C_T]) -> typing.Callable[[typing.Typ
 
             def build(self, *args: typing.Any, **kwargs: typing.Any) -> None:
                 # First build the system (not using MRO) to fill the registry
-                system_type.build(self)
+                # The system build function will call super, but this does not call the client build function
+                system_type.build(self, *sys_args, *sys_kwargs)
 
                 # Then build the client which can use the registry
-                c.build(self, *args, **kwargs)
+                c.build(self, *args, **kwargs)  # The client is not expected to have a call to super
 
             def run(self) -> None:
                 # Now we are a DAX system, we need to initialize

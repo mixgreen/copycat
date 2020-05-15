@@ -3,6 +3,7 @@ import numpy as np
 import logging
 import itertools
 
+from artiq.experiment import HasEnvironment, EnvExperiment
 import artiq.coredevice.edge_counter  # type: ignore
 import artiq.coredevice.ttl  # type: ignore
 import artiq.coredevice.core  # type: ignore
@@ -1038,6 +1039,42 @@ class DaxSystemTestCase(unittest.TestCase):
         self.assertEqual(self.init_count, self.num_modules + 1, 'Number of init calls does not match expected number')
         self.assertEqual(self.post_init_count, self.num_modules + 1,
                          'Number of post_init calls does not match expected number')
+
+    def test_build_super(self):
+        class SomeBaseClass(HasEnvironment):
+            # noinspection PyUnusedLocal
+            def build(self, *args, **kwargs):
+                # super.build() here calls HasEnvironment, which is empty
+                # Set flag
+                self.base_build_was_called = True
+
+        # SomeBaseClass also inherits from HasEnvironment, making it higher in the MRO than HasEnvironment itself
+        class SuperTestSystem(TestSystem, SomeBaseClass):
+            def build(self, *args, **kwargs):
+                # Call super
+                super(SuperTestSystem, self).build(*args, **kwargs)
+                # Set flag
+                self.system_build_was_called = True
+
+            def run(self):
+                pass
+
+        # Create system, which will call build()
+        system = SuperTestSystem(get_manager_or_parent(device_db))
+
+        # Test if build of the super class and system class was called
+        self.assertTrue(hasattr(system, 'base_build_was_called'), 'System did not called build() of super class')
+        self.assertTrue(hasattr(system, 'system_build_was_called'), 'System did not called build() of itself')
+
+        # Inheriting the other way, build of SomeBaseClass will be called first, which does not call super
+        class SuperTestSystem(SomeBaseClass, TestSystem):
+            def run(self):
+                pass
+
+        with self.assertRaises(AttributeError, msg='build() of system was called unexpectedly'):
+            # Create system, which will call build()
+            # System build() will not be called, which raises an exception
+            SuperTestSystem(get_manager_or_parent(device_db))
 
 
 class DaxServiceTestCase(unittest.TestCase):
