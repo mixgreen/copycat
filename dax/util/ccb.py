@@ -25,6 +25,8 @@ class CcbTool:
 
     ARTIQ_APPLET = '${artiq_applet}'
     """The ARTIQ applet variable which can be used in CCB commands."""
+    DAX_APPLET = '${python} -m dax.applets.'
+    """The DAX applet starting command which can be used in CCB commands."""
 
     def __init__(self, ccb: typing.Any):
         """Construct a new CCB tool.
@@ -109,7 +111,9 @@ class CcbTool:
 
     def plot_xy(self, name: str, y: str, x: typing.Optional[str] = None,
                 error: typing.Optional[str] = None, fit: typing.Optional[str] = None,
+                sliding_window: typing.Optional[int] = None,
                 title: typing.Optional[str] = None,
+                x_label: typing.Optional[str] = None, y_label: typing.Optional[str] = None,
                 update_delay: typing.Optional[float] = None, group: typing.Optional[str] = None,
                 **kwargs: typing.Any) -> None:
         """Create a plot XY applet.
@@ -119,15 +123,18 @@ class CcbTool:
         :param x: X-value dataset
         :param error: Error dataset
         :param fit: Fit dataset
+        :param sliding_window: Set size of the sliding window, or `None` to disable
         :param title: Graph title
+        :param x_label: X-axis label
+        :param y_label: Y-axis label
         :param update_delay: Time to wait after a modification before updating graph
         :param group: Optional group of the applet
         :param kwargs: Other optional arguments for the applet
         """
         # Assemble command
-        command = '{:s}plot_xy {:s}'.format(self.ARTIQ_APPLET, y)
-        command = _generate_command(command, x=x, error=error, fit=fit, title=title, update_delay=update_delay,
-                                    **kwargs)
+        command = '{:s}plot_xy {:s}'.format(self.DAX_APPLET, y)
+        command = _generate_command(command, x=x, error=error, fit=fit, sliding_window=sliding_window, title=title,
+                                    x_label=x_label, y_label=y_label, update_delay=update_delay, **kwargs)
         # Create applet
         self.create_applet(name, command, group=group)
 
