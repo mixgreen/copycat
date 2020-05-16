@@ -14,6 +14,8 @@ __all__ = ['get_manager_or_parent']
 def get_manager_or_parent(device_db: typing.Dict[str, typing.Any] = None) -> typing.Any:
     """Returns an object that can function as a `manager_or_parent` for ARTIQ HasEnvironment.
 
+    This function is primarily used for testing purposes.
+
     :param device_db: A device DB as dict (optional)
     :return: A dummy ARTIQ manager object
     """
