@@ -436,7 +436,7 @@ class DaxHasSystem(DaxBase, abc.ABC):
         self.update_kernel_invariants(attr_name)
 
     @artiq.experiment.rpc(flags={'async'})
-    def set_dataset_sys(self, key: str, value: typing.Any, data_store: bool = True) -> None:
+    def set_dataset_sys(self, key, value, data_store=True):  # type: (str, typing.Any, bool) -> None
         """Sets the contents of a system dataset.
 
         :param key: The key of the system dataset
@@ -463,7 +463,8 @@ class DaxHasSystem(DaxBase, abc.ABC):
             self.data_store.set(system_key, value)
 
     @artiq.experiment.rpc(flags={'async'})
-    def mutate_dataset_sys(self, key: str, index: typing.Any, value: typing.Any, data_store: bool = True) -> None:
+    def mutate_dataset_sys(self, key, index, value,
+                           data_store=True):  # type: (str, typing.Any, typing.Any, bool) -> None
         """Mutate an existing system dataset at the given index.
 
         :param key: The key of the system dataset
@@ -486,7 +487,7 @@ class DaxHasSystem(DaxBase, abc.ABC):
             self.data_store.mutate(system_key, index, value)
 
     @artiq.experiment.rpc(flags={'async'})
-    def append_to_dataset_sys(self, key: str, value: typing.Any, data_store: bool = True) -> None:
+    def append_to_dataset_sys(self, key, value, data_store=True):  # type: (str, typing.Any, bool) -> None
         """Append a value to a system dataset.
 
         :param key: The key of the system dataset
@@ -582,7 +583,6 @@ class DaxHasSystem(DaxBase, abc.ABC):
         :param kernel_invariant: Flag to set the attribute as kernel invariant or not
         :raises KeyError: Raised if the key was not present
         :raises ValueError: Raised if the key has an invalid format
-        :raises AttributeError: Raised if the attribute name was already assigned
         """
 
         assert isinstance(kernel_invariant, bool), 'Kernel invariant flag must be of type bool'
@@ -594,9 +594,7 @@ class DaxHasSystem(DaxBase, abc.ABC):
             # The value was not available in the system dataset and no default was provided, attribute will not be set
             self.logger.debug('System attribute "{:s}" not set'.format(key))
         else:
-            # Set the value as attribute
-            if hasattr(self, key):
-                raise AttributeError('Attribute name "{:s}" was already assigned'.format(key))
+            # Set the value as attribute (reassigning is possible, required for re-loading attributes)
             setattr(self, key, value)
 
             if kernel_invariant:

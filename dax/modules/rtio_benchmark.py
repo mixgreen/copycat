@@ -20,7 +20,7 @@ class RtioBenchmarkModule(DaxModule):
     # Unique DMA tags
     DMA_BURST = 'rtio_benchmark_burst'
 
-    def build(self, ttl_out, dma=False):
+    def build(self, ttl_out: str, dma: bool = False) -> None:
         assert isinstance(dma, bool), 'DMA flag should be of type bool'
 
         # Store attributes
@@ -30,7 +30,7 @@ class RtioBenchmarkModule(DaxModule):
         self.ttl_out = self.get_device(ttl_out, (artiq.coredevice.ttl.TTLOut, artiq.coredevice.ttl.TTLInOut))
         self.update_kernel_invariants('ttl_out')
 
-    def init(self):
+    def init(self) -> None:
         # Load parameters
         self.setattr_dataset_sys(self.EVENT_PERIOD_KEY)
         self.setattr_dataset_sys(self.EVENT_BURST_KEY)
@@ -78,7 +78,7 @@ class RtioBenchmarkModule(DaxModule):
         # Wait until event is submitted
         self.core.wait_until_mu(now_mu())
 
-    def post_init(self):
+    def post_init(self) -> None:
         if self._dma_enabled:
             # Obtain DMA handle
             self.burst_dma_handle = self.core_dma.get_handle(self.DMA_BURST)
