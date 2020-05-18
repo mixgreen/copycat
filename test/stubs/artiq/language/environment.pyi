@@ -1,6 +1,8 @@
 import typing
 import numpy as np
 
+from .scan import Scannable
+
 __all__ = ["NoDefault",
            "PYONValue", "BooleanValue", "EnumerationValue",
            "NumberValue", "StringValue",
@@ -89,12 +91,12 @@ class HasEnvironment:
     def build(self, *args: typing.Any, **kwargs: typing.Any) -> None:
         ...
 
-    def get_argument(self, key: str, processor: _SimpleArgProcessor, group: typing.Optional[str] = None,
-                     tooltip: typing.Optional[str] = None) -> typing.Any:
+    def get_argument(self, key: str, processor: typing.Union[_SimpleArgProcessor, Scannable],
+                     group: typing.Optional[str] = None, tooltip: typing.Optional[str] = None) -> typing.Any:
         ...
 
-    def setattr_argument(self, key: str, processor: _SimpleArgProcessor, group: typing.Optional[str] = None,
-                         tooltip: typing.Optional[str] = None) -> None:
+    def setattr_argument(self, key: str, processor: typing.Union[_SimpleArgProcessor, Scannable],
+                         group: typing.Optional[str] = None, tooltip: typing.Optional[str] = None) -> None:
         ...
 
     def get_device_db(self) -> typing.Dict[str, typing.Any]:
