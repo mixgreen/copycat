@@ -1,6 +1,7 @@
 import abc
 import typing
 import collections
+import numpy as np
 
 import dax.base.dax
 from dax.experiment import *
@@ -9,6 +10,10 @@ __all__ = ['DaxScan']
 
 
 class DaxScan(dax.base.dax.DaxBase, abc.ABC):
+    """Scanning class for standardized scanning functionality.
+
+    Users can inherit from this class to implement their scanning experiments.
+    """
 
     def build(self, *args: typing.Any, **kwargs: typing.Any) -> None:
         """Build the scan object using the :func:`build_scan` function.
@@ -96,27 +101,41 @@ class DaxScan(dax.base.dax.DaxBase, abc.ABC):
             self.logger.warning('No scan points found, aborting experiment')
             return
 
-        try:
-            # One time host setup
-            self.logger.debug('Performing host setup')
-            self.host_setup()
+        # Index of current scan point
+        self._scan_index = np.int32(0)
 
-            # Run the scan
-            if _is_kernel(self.run_point):
-                self.logger.debug('Running scan on core device')
-                self._run_scan_in_kernel()
-            else:
-                self.logger.debug('Running scan on host')
-                self._run_scan()
+        try:
+            while self._scan_index < len(self._scan_points):
+                while self._scan_scheduler.check_pause():
+                    # Pause the scan
+                    self._scan_scheduler.pause()
+
+                try:
+                    # Coming from a host context, perform host setup
+                    self.logger.debug('Performing host setup')
+                    self.host_setup()
+
+                    # Run the scan
+                    if _is_kernel(self.run_point):
+                        self.logger.debug('Running scan on core device')
+                        self._run_scan_in_kernel()
+                    else:
+                        self.logger.debug('Running scan on host')
+                        self._run_scan()
+
+                finally:
+                    # One time host cleanup
+                    self.logger.debug('Performing host cleanup')
+                    self.host_cleanup()
 
         except TerminationRequested:
             # Scan was terminated
             self.logger.info('Scan was terminated by user request')
 
-        finally:
-            # One time host cleanup
-            self.logger.debug('Performing host cleanup')
-            self.host_cleanup()
+        else:
+            # Call the host exit code
+            self.logger.debug('Performing host exit procedure')
+            self.host_exit()
 
     @kernel
     def _run_scan_in_kernel(self):
@@ -127,27 +146,19 @@ class DaxScan(dax.base.dax.DaxBase, abc.ABC):
     def _run_scan(self):
         """Portable run scan function."""
         try:
-            for p in self._scan_points:
+            while self._scan_index < len(self._scan_points):
                 # Check for pause condition
                 if self._scan_scheduler.check_pause():
-                    self._pause_scan()
+                    break  # Break to exit the run scan function
 
                 # Run for one point
-                self.run_point(p)
+                self.run_point(self._scan_points[self._scan_index])
+                # Increment index
+                self._scan_index += 1
 
         finally:
             # Perform device cleanup
             self.device_cleanup()
-
-    def _pause_scan(self):
-        """Pause the scan."""
-
-        # Disconnect from the core device
-        self.core.comm.close()
-        # Pause
-        self.scheduler.pause()  # Can raise TerminationRequested exception
-        # Setup host again before resuming scan
-        self.host_setup()
 
     def host_setup(self) -> None:
         """1. Preparation on the host, called once at entry and after a pause."""
@@ -163,11 +174,15 @@ class DaxScan(dax.base.dax.DaxBase, abc.ABC):
 
     @portable
     def device_cleanup(self):
-        """3. Cleanup on the core device, called once."""
+        """3. Cleanup on the core device, called once after scanning and before a pause."""
         pass
 
     def host_cleanup(self) -> None:
-        """4. Cleanup on the host, called once."""
+        """4. Cleanup on the host, called once after scanning and before a pause."""
+        pass
+
+    def host_exit(self) -> None:
+        """5. Exit code on the host if the scan finished successfully."""
         pass
 
 

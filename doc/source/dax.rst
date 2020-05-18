@@ -22,6 +22,7 @@ Subpackages
     dax.clients
     dax.interfaces
     dax.modules
+    dax.scan
     dax.services
     dax.sim
     dax.util
