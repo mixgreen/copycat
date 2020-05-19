@@ -11,6 +11,8 @@ __all__ = ['PmtMonitor']
 class PmtMonitor(DaxClient, EnvExperiment):
     """PMT monitor utility to monitor a single PMT channel."""
 
+    APPLET_NAME = 'PMT monitor'
+
     def build(self):
         # Obtain the detection interface
         self.detection = self.registry.find_interface(DetectionInterface)
@@ -18,6 +20,10 @@ class PmtMonitor(DaxClient, EnvExperiment):
         self.pmt_array = self.detection.get_pmt_array()
         self.update_kernel_invariants('detection', 'pmt_array')
         self.logger.debug('Found PMT array with {:d} channel(s)'.format(len(self.pmt_array)))
+
+        # Get the scheduler and CCB tool
+        self.scheduler = self.get_device('scheduler')
+        self.ccb = get_ccb_tool(self)
 
         # Get max for PMT channel argument
         pmt_channel_max = len(self.pmt_array) - 1
@@ -35,7 +41,7 @@ class PmtMonitor(DaxClient, EnvExperiment):
                                              NumberValue(default=120 * s, unit='s', min=0, ndecimals=0, step=60),
                                              group='Dataset',
                                              tooltip='Data window size (use 0 for infinite window size)')
-        self.dataset_key = self.get_argument("Dataset key", StringValue(default="tmp.pmt_monitor_count"),
+        self.dataset_key = self.get_argument("Dataset key", StringValue(default="plot.pmt_monitor_count"),
                                              group='Dataset')
 
         # Applet specific arguments
@@ -45,6 +51,8 @@ class PmtMonitor(DaxClient, EnvExperiment):
         self.applet_update_delay = self.get_argument("Applet update delay",
                                                      NumberValue(default=0.5 * s, unit='s', min=0.0),
                                                      group='Applet')
+        self.applet_auto_close = self.get_argument("Close applet automatically", BooleanValue(default=False),
+                                                   group='Applet')
 
         # Update kernel invariants
         self.update_kernel_invariants("count_time", "count_delay", "pmt_channel")
@@ -67,10 +75,9 @@ class PmtMonitor(DaxClient, EnvExperiment):
 
         if self.create_applet:
             # Use the CCB to create an applet
-            ccb = get_ccb_tool(self)
             title = 'x{:d} count(s) per second'.format(self.count_scale)
-            ccb.plot_xy('PMT monitor', self.dataset_key, sliding_window=self.window_size, title=title,
-                        update_delay=self.applet_update_delay)
+            self.ccb.plot_xy(self.APPLET_NAME, self.dataset_key, sliding_window=self.window_size, title=title,
+                             update_delay=self.applet_update_delay)
 
         try:
             # Only stop when termination is requested
@@ -85,6 +92,11 @@ class PmtMonitor(DaxClient, EnvExperiment):
         except TerminationRequested:
             # Experiment was terminated, gracefully end the experiment
             self.logger.debug('Terminated gracefully')
+
+        finally:
+            if self.applet_auto_close:
+                # Disable the applet
+                self.ccb.disable_applet(self.APPLET_NAME)
 
     @kernel
     def monitor(self):

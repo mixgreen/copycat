@@ -13,6 +13,7 @@ class XYPlot(artiq.applets.plot_xy.XYPlot):
     """
 
     def data_changed(self, data, mods, title):
+        # Obtain input data
         try:
             y = data[self.args.y][1]
         except KeyError:
@@ -23,6 +24,7 @@ class XYPlot(artiq.applets.plot_xy.XYPlot):
         error = data.get(self.args.error, (False, None))[1]
         fit = data.get(self.args.fit, (False, None))[1]
 
+        # Verify input data
         if not len(y) or len(y) != len(x):
             return
         if error is not None and hasattr(error, "__len__"):
@@ -30,25 +32,27 @@ class XYPlot(artiq.applets.plot_xy.XYPlot):
                 error = None
             elif len(error) != len(y):
                 return
-        if fit is not None:
+        if fit is not None and hasattr(error, "__len__"):
             if not len(fit):
                 fit = None
             elif len(fit) != len(y):
                 return
 
+        # Handle sliding window
         if self.args.sliding_window is not None:
             # Get window size
-            window_size = int(self.args.sliding_window)
+            window_size = self.args.sliding_window
 
             if window_size != 0:
                 # Truncate input data based on the window size
-                y = y[:window_size]
-                x = x[:window_size]
+                y = y[-window_size:]
+                x = x[-window_size:]
                 if error is not None:
-                    error = error[:window_size]
+                    error = error[-window_size:]
                 if fit is not None:
-                    fit = fit[:window_size]
+                    fit = fit[-window_size:]
 
+        # Plot
         self.clear()
         self.plot(x, y, pen=None, symbol="x")
         self.setTitle(title)
@@ -75,11 +79,11 @@ def main():
     applet = artiq.applets.plot_xy.TitleApplet(XYPlot)
 
     # Add custom arguments
-    applet.argparser.add_argument("--x-label", default=None)
-    applet.argparser.add_argument("--y-label", default=None)
-    applet.argparser.add_argument("--sliding-window", default=None)
+    applet.argparser.add_argument("--x-label", default=None, type=str)
+    applet.argparser.add_argument("--y-label", default=None, type=str)
+    applet.argparser.add_argument("--sliding-window", default=None, type=int)
 
-    # Taken from ARTIQ code
+    # Add datasets
     applet.add_dataset("y", "Y values")
     applet.add_dataset("x", "X values", required=False)
     applet.add_dataset("error", "Error bars for each X value", required=False)
