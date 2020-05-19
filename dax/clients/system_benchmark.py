@@ -36,13 +36,13 @@ class SystemBenchmarkDaxInit(DaxClient, EnvExperiment):
         artiq.master.worker_db.logger.setLevel(logging.WARNING + 1)
 
         for _ in range(self.num_samples):
-            # Create a new experiment class which is an instance of the type of self
-            exp = type(self)(self)
+            # Create a new experiment class which is an instance of the system type
+            system = type(self.system)(self)
 
             # Record start time
             start = time.perf_counter()
             # Run DAX system initialization
-            exp.dax_init()
+            system.dax_init()
             # Record time
             stop = time.perf_counter()
 
