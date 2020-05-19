@@ -1123,30 +1123,29 @@ class DaxServiceTestCase(unittest.TestCase):
 class DaxClientTestCase(unittest.TestCase):
 
     def test_not_decorated(self):
-        s = TestSystem(get_manager_or_parent(device_db))
-
         class Client(DaxClient):
-            pass
+            def run(self) -> None:
+                pass
 
         with self.assertRaises(TypeError, msg='Using client without client factory decorator did not raise'):
-            Client(s)
+            Client(get_manager_or_parent(device_db))
 
     def test_load_super(self):
-        class System(TestSystem):
+        @dax_client_factory
+        class Client(DaxClient):
             def init(self) -> None:
                 self.is_initialized = True
 
-        @dax_client_factory
-        class Client(DaxClient):
-            pass
+            def run(self) -> None:
+                pass
 
-        class ImplementableClient(Client(System)):
+        class ImplementableClient(Client(TestSystem)):
             pass
 
         # Disabled one inspection, inspection does not handle the decorator correctly
         # noinspection PyArgumentList
         c = ImplementableClient(get_manager_or_parent(device_db))
-        c.init()  # Is supposed to call the init() function of the system
+        c.run()  # Is supposed to call the dax_init() function which will call the init() function of the client
 
         self.assertTrue(hasattr(c, 'is_initialized'), 'DAX system parent of client was not initialized correctly')
 

@@ -891,6 +891,10 @@ class DaxClient(DaxHasSystem, abc.ABC):
     """Base class for DAX clients.
 
     Clients are template experiments that will later be joined with a user-provided system.
+    When the template is instantiated, the client identifies itself as the system,
+    just like a regular experiment that inherits from a system would do.
+    Though the client is actually a child of the system and therefore does not share
+    a namespace with the system.
 
     The client class should be decorated using the :func:`dax_client_factory` decorator.
     This decorator creates a factory function that allows users to provide their system
@@ -901,27 +905,33 @@ class DaxClient(DaxHasSystem, abc.ABC):
     Additionally, a :func:`build` function can be implemented to provide a user interface
     for configuring the client.
 
-    Note that the :func:`build` function does not need to call super() since there is no knowledge about
-    the given system yet. The decorator will make sure all classes are build in the correct order.
+    Note that the :func:`build` function does not need to call super().
+    The decorator will make sure all classes are build in the correct order.
     """
 
     def __init__(self, managers_or_parent: typing.Any,
                  *args: typing.Any, **kwargs: typing.Any):
         # Check if the decorator was used
-        if not isinstance(self, DaxSystem):
+        if not isinstance(managers_or_parent, DaxSystem):
             raise TypeError('DAX client class {:s} must be decorated using '
                             '@dax_client_factory'.format(self.__class__.__name__))
 
-        # Call super
-        super(DaxClient, self).__init__(managers_or_parent, *args, **kwargs)
+        # Take attributes from the parent system
+        self._take_parent_core_attributes(managers_or_parent)
+
+        # Call super and identify with system name and system key
+        super(DaxClient, self).__init__(managers_or_parent, managers_or_parent.SYS_NAME, managers_or_parent.SYS_NAME,
+                                        managers_or_parent.registry, *args, **kwargs)
 
     def init(self) -> None:
-        # Call super (will be the user DAX system after the MRO lookup of the client wrapper class)
-        super(DaxClient, self).init()
+        pass
 
     def post_init(self) -> None:
-        # Call super (will be the user DAX system after the MRO lookup of the client wrapper class)
-        super(DaxClient, self).post_init()
+        pass
+
+    @abc.abstractmethod
+    def run(self) -> None:
+        pass
 
 
 class DaxNameRegistry:
@@ -1547,7 +1557,7 @@ def dax_client_factory(c: typing.Type[__DCF_C_T]) -> typing.Callable[[typing.Typ
         :param system_type: The system type used by the client
         :param sys_args: Positional arguments forwarded to the systems :func:`build` function
         :param sys_kwargs: Keyword arguments forwarded to the systems :func:`build` function
-        :return: A fusion of the client and system class which can be executed
+        :return: A fusion of the client and system class
         :raises TypeError: Raised if the provided `system_type` parameter is not a subclass of `DaxSystem`
         """
 
@@ -1556,26 +1566,24 @@ def dax_client_factory(c: typing.Type[__DCF_C_T]) -> typing.Callable[[typing.Typ
         if not issubclass(system_type, DaxSystem):
             raise TypeError('System type must be a subclass of DaxSystem')
 
-        class WrapperClass(c, system_type):  # type: ignore
+        class WrapperClass(c):  # type: ignore
             """The wrapper class that finalizes the client class.
 
-            The wrapper class first inherits from the client and then the system,
-            as if the client class was an extension of the system, just as a
-            custom experiment.
+            The wrapper class extends the client class by constructing the system
+            first and loading the client class afterwards using the system as the parent.
             """
 
-            def build(self, *args: typing.Any, **kwargs: typing.Any) -> None:
-                # First build the system (not using MRO) to fill the registry
-                # The system build function will call super, but this does not call the client build function
-                system_type.build(self, *sys_args, *sys_kwargs)
-
-                # Then build the client which can use the registry
-                c.build(self, *args, **kwargs)  # The client is not expected to have a call to super
+            def __init__(self, managers_or_parent: typing.Any,
+                         *args: typing.Any, **kwargs: typing.Any):
+                # Create the system
+                self.__system = system_type(managers_or_parent, *sys_args, **sys_kwargs)
+                # Call constructor of the client class and give it the system as parent
+                super(WrapperClass, self).__init__(self.__system, *args, **kwargs)
 
             def run(self) -> None:
-                # Now we are a DAX system, we need to initialize
-                self.dax_init()
-                # Call the run method (of the client class which is unaware of the system it is now)
+                # Initialize the system
+                self.__system.dax_init()
+                # Call the run method of the client class
                 super(WrapperClass, self).run()
 
         # The factory function returns the newly constructed wrapper class
