@@ -138,11 +138,61 @@ class CcbTool:
         # Create applet
         self.create_applet(name, command, group=group)
 
-    def plot_hist(self, name: str, y: str, x: typing.Optional[str] = None,
+    def plot_xy_nested(self, name: str, y: str, x: typing.Optional[str] = None,
+                       sliding_window: typing.Optional[int] = None,
+                       title: typing.Optional[str] = None,
+                       x_label: typing.Optional[str] = None, y_label: typing.Optional[str] = None,
+                       update_delay: typing.Optional[float] = None, group: typing.Optional[str] = None,
+                       **kwargs: typing.Any) -> None:
+        """Create a nested plot XY applet.
+
+        :param name: Name of the applet
+        :param y: Y-values dataset
+        :param x: X-value dataset
+        :param sliding_window: Set size of the sliding window, or `None` to disable
+        :param title: Graph title
+        :param x_label: X-axis label
+        :param y_label: Y-axis label
+        :param update_delay: Time to wait after a modification before updating graph
+        :param group: Optional group of the applet
+        :param kwargs: Other optional arguments for the applet
+        """
+        # Assemble command
+        command = '{:s}plot_xy_nested {:s}'.format(self.DAX_APPLET, y)
+        command = _generate_command(command, x=x, sliding_window=sliding_window, title=title,
+                                    x_label=x_label, y_label=y_label, update_delay=update_delay, **kwargs)
+        # Create applet
+        self.create_applet(name, command, group=group)
+
+    def plot_hist(self, name: str, y: str, index: typing.Optional[int] = None,
                   title: typing.Optional[str] = None,
+                  x_label: typing.Optional[str] = None, y_label: typing.Optional[str] = None,
                   update_delay: typing.Optional[float] = None, group: typing.Optional[str] = None,
                   **kwargs: typing.Any) -> None:
-        """Create a plot histogram applet.
+        """Create a plot histogram applet using DAX specific data formatting.
+
+        :param name: Name of the applet
+        :param y: Histogram dataset
+        :param index: The index of the results to plot (default plots all)
+        :param title: Graph title
+        :param x_label: X-axis label
+        :param y_label: Y-axis label
+        :param update_delay: Time to wait after a modification before updating graph
+        :param group: Optional group of the applet
+        :param kwargs: Other optional arguments for the applet
+        """
+        # Assemble command
+        command = '{:s}plot_hist {:s}'.format(self.DAX_APPLET, y)
+        command = _generate_command(command, index=index, title=title, x_label=x_label, y_label=y_label,
+                                    update_delay=update_delay, **kwargs)
+        # Create applet
+        self.create_applet(name, command, group=group)
+
+    def plot_hist_artiq(self, name: str, y: str, x: typing.Optional[str] = None,
+                        title: typing.Optional[str] = None,
+                        update_delay: typing.Optional[float] = None, group: typing.Optional[str] = None,
+                        **kwargs: typing.Any) -> None:
+        """Create an ARTIQ plot histogram applet.
 
         :param name: Name of the applet
         :param y: Y-value dataset
