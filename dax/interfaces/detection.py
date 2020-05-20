@@ -14,6 +14,14 @@ class DetectionInterface(DaxInterface, abc.ABC):
     def get_pmt_array(self) -> typing.List[artiq.coredevice.edge_counter.EdgeCounter]:
         """Get the array of PMT channels.
 
-        :return: A list with EdgeCounter objects.
+        :return: A list with EdgeCounter objects
+        """
+        pass
+
+    @abc.abstractmethod
+    def get_state_detection_threshold(self) -> int:
+        """Get the state detection threshold.
+
+        :return: State detection threshold
         """
         pass
