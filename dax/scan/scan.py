@@ -1,12 +1,32 @@
 import abc
 import typing
 import collections
+import re
 import numpy as np
 
 import dax.base.dax
 from dax.experiment import *
 
 __all__ = ['DaxScan']
+
+_KEY_RE = re.compile(r'\w+')
+"""Regex for matching valid keys."""
+
+
+def _is_valid_key(key: str) -> bool:
+    """Return true if the given key is valid."""
+    assert isinstance(key, str), 'The given key should be a string'
+    return bool(_KEY_RE.fullmatch(key))
+
+
+def _is_kernel(func: typing.Any) -> bool:
+    """Helper function to detect if a function is a kernel or not.
+
+    :param func: The function of interest
+    :return: True if the given function is a kernel
+    """
+    meta = getattr(func, 'artiq_embedded', None)
+    return False if meta is None else (meta.core_name is not None and not meta.portable)
 
 
 class DaxScan(dax.base.dax.DaxBase, abc.ABC):
@@ -39,7 +59,6 @@ class DaxScan(dax.base.dax.DaxBase, abc.ABC):
         self.logger.debug('Building scan')
         self.__in_build = True
         self.build_scan()
-        # TODO: add standard options (e.g. continuous looping?)
         self.__in_build = False
 
     @abc.abstractmethod
@@ -51,13 +70,14 @@ class DaxScan(dax.base.dax.DaxBase, abc.ABC):
         """
         pass
 
-    def add_scan(self, key: str, scannable: Scannable,
+    def add_scan(self, key: str, name: str, scannable: Scannable,
                  group: typing.Optional[str] = None, tooltip: typing.Optional[str] = None) -> None:
         """Register a scannable.
 
         Scannables are normal ARTIQ `Scannable` objects and will appear in the user interface.
 
-        :param key: Key of the scan
+        :param key: Unique key of the scan, used to obtain the value later
+        :param name: The name of the argument
         :param scannable: An ARTIQ `Scannable` object
         :param group: The argument group name
         :param tooltip: The shown tooltip
@@ -69,13 +89,16 @@ class DaxScan(dax.base.dax.DaxBase, abc.ABC):
 
         # Verify type of the given scannable
         if not isinstance(scannable, Scannable):
-            raise TypeError('The given processor must be a scannable')
+            raise TypeError('The given processor is not a scannable')
+
+        # Verify the key is valid and not in use
+        if not _is_valid_key(key):
+            raise ValueError('Provided key "{:s}" is not valid'.format(key))
+        if key in self._scannables:
+            raise LookupError('Provided key "{:s}" was already in use'.format(key))
 
         # Add argument to the list of scannables
-        self._scannables[key] = self.get_argument(key, scannable, group=group, tooltip=tooltip)
-
-    def add_result(self):
-        pass  # TODO
+        self._scannables[key] = self.get_argument(name, scannable, group=group, tooltip=tooltip)
 
     """Run functions"""
 
@@ -184,13 +207,3 @@ class DaxScan(dax.base.dax.DaxBase, abc.ABC):
     def host_exit(self) -> None:
         """5. Exit code on the host if the scan finished successfully."""
         pass
-
-
-def _is_kernel(func: typing.Any) -> bool:
-    """Helper function to detect if a function is a kernel or not.
-
-    :param func: The function of interest
-    :return: True if the given function is a kernel
-    """
-    meta = getattr(func, 'artiq_embedded', None)
-    return False if meta is None else (meta.core_name is not None and not meta.portable)
