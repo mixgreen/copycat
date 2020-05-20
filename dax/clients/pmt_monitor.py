@@ -41,7 +41,7 @@ class PmtMonitor(DaxClient, EnvExperiment):
                                              NumberValue(default=120 * s, unit='s', min=0, ndecimals=0, step=60),
                                              group='Dataset',
                                              tooltip='Data window size (use 0 for infinite window size)')
-        self.dataset_key = self.get_argument("Dataset key", StringValue(default="plot.pmt_monitor_count"),
+        self.dataset_key = self.get_argument("Dataset key", StringValue(default=".pmt_monitor_count"),
                                              group='Dataset')
 
         # Applet specific arguments
@@ -75,9 +75,9 @@ class PmtMonitor(DaxClient, EnvExperiment):
 
         if self.create_applet:
             # Use the CCB to create an applet
-            title = 'x{:d} count(s) per second'.format(self.count_scale)
-            self.ccb.plot_xy(self.APPLET_NAME, self.dataset_key, sliding_window=self.window_size, title=title,
-                             update_delay=self.applet_update_delay)
+            y_label = 'x{:d} count(s) per second'.format(self.count_scale)
+            self.ccb.plot_xy(self.APPLET_NAME, self.dataset_key, sliding_window=self.window_size,
+                             x_label='Sample', y_label=y_label, update_delay=self.applet_update_delay)
 
         try:
             # Only stop when termination is requested

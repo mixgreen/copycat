@@ -1,16 +1,22 @@
 #!/usr/bin/env python3
 
 import numpy as np
+import PyQt5  # type: ignore
+import pyqtgraph  # type: ignore
 
-import artiq.applets.plot_xy  # type: ignore
+import artiq.applets.simple  # type: ignore
 
 
-class XYPlot(artiq.applets.plot_xy.XYPlot):
+class XYPlot(pyqtgraph.PlotWidget):
     """Extended and backwards compatible version of the standard ARTIQ plot XY applet.
 
     Documentation about plotting functions can be found at:
     http://www.pyqtgraph.org/documentation/graphicsItems/plotitem.html#pyqtgraph.PlotItem.plot
     """
+
+    def __init__(self, args):
+        pyqtgraph.PlotWidget.__init__(self)
+        self.args = args
 
     def data_changed(self, data, mods, title):
         # Obtain input data
@@ -68,15 +74,13 @@ class XYPlot(artiq.applets.plot_xy.XYPlot):
             self.plot(x[xi], fit[xi])
 
         # Set labels
-        if self.args.x_label is not None:
-            self.setLabel('bottom', self.args.x_label)
-        if self.args.y_label is not None:
-            self.setLabel('left', self.args.y_label)
+        self.setLabel('bottom', self.args.x_label)
+        self.setLabel('left', self.args.y_label)
 
 
 def main():
     # Create applet object
-    applet = artiq.applets.plot_xy.TitleApplet(XYPlot)
+    applet = artiq.applets.simple.TitleApplet(XYPlot, default_update_delay=0.1)
 
     # Add custom arguments
     applet.argparser.add_argument("--x-label", default=None, type=str)
