@@ -11,6 +11,7 @@ import artiq.coredevice.core  # type: ignore
 from dax.base.dax import *
 import dax.base.dax
 import dax.base.exceptions
+import dax.base.interface
 from dax.util.artiq_helpers import get_manager_or_parent
 
 """Device DB for testing"""
@@ -98,7 +99,7 @@ class TestService(DaxService):
         pass
 
 
-class TestInterface(DaxInterface):
+class TestInterface(dax.base.interface.DaxInterface):
     pass
 
 

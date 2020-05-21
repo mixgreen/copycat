@@ -3,7 +3,7 @@ import typing
 
 import artiq.coredevice.edge_counter
 
-from dax.experiment import DaxInterface
+from dax.base.interface import DaxInterface
 
 __all__ = ['DetectionInterface']
 

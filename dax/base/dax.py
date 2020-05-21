@@ -21,10 +21,11 @@ import artiq.coredevice.cache  # type: ignore
 
 from dax import __version__ as _dax_version
 import dax.base.exceptions
+import dax.base.interface
 import dax.sim.ddb
 import dax.sim.device
 
-__all__ = ['DaxModule', 'DaxSystem', 'DaxService', 'DaxInterface',
+__all__ = ['DaxModule', 'DaxSystem', 'DaxService',
            'DaxClient', 'dax_client_factory']
 
 # Workaround: Add Numpy ndarray as a sequence type (see https://github.com/numpy/numpy/issues/2776)
@@ -663,11 +664,6 @@ class DaxModule(DaxModuleBase, abc.ABC):
                                         managers_or_parent.registry, *args, **kwargs)
 
 
-class DaxInterface(abc.ABC):
-    """Base class for interfaces."""
-    pass
-
-
 class DaxSystem(DaxModuleBase):
     """Base class for DAX systems, which is a top-level module."""
 
@@ -939,7 +935,7 @@ class DaxNameRegistry:
 
     __M_T = typing.TypeVar('__M_T', bound=DaxModuleBase)  # Module base type variable
     __S_T = typing.TypeVar('__S_T', bound=DaxService)  # Service type variable
-    __I_T = typing.TypeVar('__I_T', bound=DaxInterface)  # Interface type variable
+    __I_T = typing.TypeVar('__I_T', bound=dax.base.interface.DaxInterface)  # Interface type variable
 
     def __init__(self, system: DaxSystem):
         """Create a new DAX name registry.
@@ -1220,6 +1216,10 @@ class DaxNameRegistry:
     def find_interface(self, type_: typing.Type[__I_T]) -> __I_T:
         """Find a unique interface that matches the requested type.
 
+        Note: mypy type checker does not handle pure abstract base classes correctly.
+        A `# type: ignore` annotation of the line using this function is probably
+        required to pass type checking.
+
         :param type_: The type of the interface
         :return: The unique interface of the requested type
         :raises KeyError: Raised if no interfaces of the desired type were found
@@ -1243,11 +1243,15 @@ class DaxNameRegistry:
     def search_interfaces(self, type_: typing.Type[__I_T]) -> typing.Dict[str, __I_T]:
         """Search for interfaces that match the requested type and return results as a dict.
 
+        Note: mypy type checker does not handle pure abstract base classes correctly.
+        A `# type: ignore` annotation of the line using this function is probably
+        required to pass type checking.
+
         :param type_: The type of the interfaces
         :return: A dict with key-interface pairs
         """
 
-        assert issubclass(type_, DaxInterface), 'Provided type must be a subclass of DaxInterface'
+        assert issubclass(type_, dax.base.interface.DaxInterface), 'Provided type must be a subclass of DaxInterface'
 
         # Search for all modules and services matching the interface type
         iterator = itertools.chain(self._modules.values(), self._services.values())
