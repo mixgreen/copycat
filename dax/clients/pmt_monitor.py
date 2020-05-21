@@ -30,18 +30,21 @@ class PmtMonitor(DaxClient, EnvExperiment):
         assert pmt_channel_max >= 0, 'PMT array can not be empty'
 
         # Arguments
-        self.count_time = self.get_argument("PMT count window size", NumberValue(default=100 * ms, unit="ms", min=0.0))
-        self.count_delay = self.get_argument("PMT count delay", NumberValue(default=10 * ms, unit="ms", min=0.0))
+        self.detection_window = self.get_argument("PMT detection window size",
+                                                  NumberValue(default=100 * ms, unit="ms", min=0.0))
+        self.detection_delay = self.get_argument("PMT detection delay",
+                                                 NumberValue(default=10 * ms, unit="ms", min=0.0),
+                                                 tooltip="Delay before starting detection")
         self.pmt_channel = self.get_argument("PMT channel",
                                              NumberValue(default=0, step=1, min=0, max=pmt_channel_max, ndecimals=0))
 
         # Dataset related arguments
         self.reset_data = self.get_argument("Reset data", BooleanValue(default=True), group='Dataset')
-        self.window_size = self.get_argument("Data window size",
-                                             NumberValue(default=120 * s, unit='s', min=0, ndecimals=0, step=60),
-                                             group='Dataset',
-                                             tooltip='Data window size (use 0 for infinite window size)')
-        self.dataset_key = self.get_argument("Dataset key", StringValue(default=".pmt_monitor_count"),
+        self.sliding_window = self.get_argument("Data window size",
+                                                NumberValue(default=120 * s, unit='s', min=0, ndecimals=0, step=60),
+                                                group='Dataset',
+                                                tooltip='Data window size (use 0 for infinite window size)')
+        self.dataset_key = self.get_argument("Dataset key", StringValue(default='plot.dax.pmt_monitor_count'),
                                              group='Dataset')
 
         # Applet specific arguments
@@ -49,19 +52,19 @@ class PmtMonitor(DaxClient, EnvExperiment):
         self.count_scale = self.get_argument("PMT count scale", NumberValue(default=1000, min=1, ndecimals=0, step=100),
                                              group='Applet', tooltip='Scale for the Y-axis')
         self.applet_update_delay = self.get_argument("Applet update delay",
-                                                     NumberValue(default=0.5 * s, unit='s', min=0.0),
+                                                     NumberValue(default=0.1 * s, unit='s', min=0.0),
                                                      group='Applet')
         self.applet_auto_close = self.get_argument("Close applet automatically", BooleanValue(default=False),
                                                    group='Applet')
 
         # Update kernel invariants
-        self.update_kernel_invariants("count_time", "count_delay", "pmt_channel")
+        self.update_kernel_invariants("detection_window", "detection_delay", "pmt_channel")
 
     def prepare(self):
-        if self.window_size > 0 and self.count_time > 0.0:
+        if self.sliding_window > 0 and self.detection_window > 0.0:
             # Convert window size to dataset size
-            self.window_size = int(self.window_size / self.count_time)
-            self.logger.debug('Window size set to {:d}'.format(self.window_size))
+            self.sliding_window = int(self.sliding_window / self.detection_window)
+            self.logger.debug('Window size set to {:d}'.format(self.sliding_window))
 
     def run(self):
         # NOTE: there is no dax_init() in this experiment!
@@ -76,7 +79,7 @@ class PmtMonitor(DaxClient, EnvExperiment):
         if self.create_applet:
             # Use the CCB to create an applet
             y_label = 'x{:d} count(s) per second'.format(self.count_scale)
-            self.ccb.plot_xy(self.APPLET_NAME, self.dataset_key, sliding_window=self.window_size,
+            self.ccb.plot_xy(self.APPLET_NAME, self.dataset_key, sliding_window=self.sliding_window,
                              x_label='Sample', y_label=y_label, update_delay=self.applet_update_delay)
 
         try:
@@ -112,10 +115,10 @@ class PmtMonitor(DaxClient, EnvExperiment):
             self.core.break_realtime()
 
             # Insert delay
-            delay(self.count_delay)
+            delay(self.detection_delay)
 
             # Perform detection and get count
-            self.pmt_array[self.pmt_channel].gate_rising(self.count_time)
+            self.pmt_array[self.pmt_channel].gate_rising(self.detection_window)
             count = self.pmt_array[self.pmt_channel].fetch_count()
 
             # Store obtained count
@@ -124,7 +127,7 @@ class PmtMonitor(DaxClient, EnvExperiment):
     @rpc(flags={'async'})
     def store_count(self, count):
         # Calculate value to store
-        value = count / self.count_time / self.count_scale
+        value = count / self.detection_window / self.count_scale
 
         # Append data to datasets
         self.append_to_dataset(self.dataset_key, value)
