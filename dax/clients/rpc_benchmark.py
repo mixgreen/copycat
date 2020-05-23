@@ -9,18 +9,20 @@ __all__ = ['RpcBenchmarkLatency']
 class RpcBenchmarkLatency(DaxClient, EnvExperiment):
     """RPC latency benchmark."""
 
-    def build(self):
+    def build(self) -> None:  # type: ignore
         # Arguments
-        number_kwargs = {'scale': 1, 'step': 1, 'ndecimals': 0}
-        self.setattr_argument('num_samples', NumberValue(100, min=1, **number_kwargs))
+        self.num_samples = self.get_argument('num_samples', NumberValue(100, min=1, step=1, ndecimals=0))
 
         # Obtain RTIO benchmark module
         self.rpc_bench = self.registry.find_module(RpcBenchmarkModule)
 
-    def run(self):
+        # Update kernel invariants
+        self.update_kernel_invariants('num_samples', 'rpc_bench')
+
+    def run(self) -> None:
         self.rpc_bench.benchmark_latency(self.num_samples)
 
-    def analyze(self):
+    def analyze(self) -> None:
         # Report result
         hch = dax.util.units.time_to_str(self.rpc_bench.get_dataset_sys(self.rpc_bench.LATENCY_HOST_CORE_HOST_KEY))
         chc = dax.util.units.time_to_str(self.rpc_bench.get_dataset_sys(self.rpc_bench.LATENCY_CORE_HOST_CORE_KEY))

@@ -39,7 +39,7 @@ class BooleanValue(_SimpleArgProcessor):
 class EnumerationValue(_SimpleArgProcessor):
 
     # noinspection PyMissingConstructor
-    def __init__(self, choices: typing.List[str], default: typing.Union[str, typing.Type[NoDefault]] = NoDefault):
+    def __init__(self, choices: typing.Sequence[str], default: typing.Union[str, typing.Type[NoDefault]] = NoDefault):
         ...
 
 
@@ -71,8 +71,9 @@ class StringValue(_SimpleArgProcessor):
 class HasEnvironment:
     # Possible data types for basic dataset values
     __BDV_T = typing.Union[bool, int, float, str, np.int32, np.int64]
-    # Possible data types for dataset values
-    __DV_T = typing.Union[__BDV_T, typing.List[__BDV_T], np.ndarray]
+    # Possible data types for dataset values (recursive types are not supported, added a few manual levels)
+    __DV_T = typing.Union[__BDV_T, typing.Sequence[__BDV_T], typing.Sequence[typing.Sequence[__BDV_T]],
+                          typing.Sequence[typing.Sequence[typing.Sequence[typing.Any]]]]
     # Possible data types for dataset default values
     __DDV_T = typing.Union[__DV_T, typing.Type[NoDefault]]
 

@@ -13,16 +13,15 @@ __all__ = ['SystemBenchmarkDaxInit']
 class SystemBenchmarkDaxInit(DaxClient, EnvExperiment):
     """DAX system initialization benchmark."""
 
-    def build(self):
+    def build(self) -> None:  # type: ignore
         # Arguments
-        number_kwargs = {'scale': 1, 'step': 1, 'ndecimals': 0}
-        self.setattr_argument('num_samples', NumberValue(5, min=1, **number_kwargs))
+        self.num_samples = self.get_argument('num_samples', NumberValue(5, min=1, step=1, ndecimals=0))
 
-    def prepare(self):
+    def prepare(self) -> None:
         # Get the system (which is actually self after using the client factory)
         self.system = self.registry.find_module(DaxSystem)  # Not possible in build() because the system is `self`
 
-    def run(self):
+    def run(self) -> None:
         # Store input values in dataset
         self.set_dataset('num_samples', self.num_samples)
         # Prepare result dataset
@@ -60,7 +59,7 @@ class SystemBenchmarkDaxInit(DaxClient, EnvExperiment):
         init_time = total / self.num_samples
         self.system.set_dataset_sys(self.system.DAX_INIT_TIME_KEY, init_time)
 
-    def analyze(self):
+    def analyze(self) -> None:
         # Report result
         init_time = dax.util.units.time_to_str(self.system.get_dataset_sys(self.system.DAX_INIT_TIME_KEY))
         self.logger.info('Average execution time of dax_init() is {:s}'.format(init_time))

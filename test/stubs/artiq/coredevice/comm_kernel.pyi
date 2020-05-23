@@ -1,5 +1,8 @@
 import enum
 
+__all__ = ['Request', 'Reply', 'UnsupportedDevice', 'LoadError', 'RPCReturnValueError', 'RPCKeyword',
+           'CommKernelDummy', 'CommKernel']
+
 
 class Request(enum.Enum):
     SystemInfo = ...

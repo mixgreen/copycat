@@ -1217,7 +1217,7 @@ class DaxNameRegistry:
         """Find a unique interface that matches the requested type.
 
         Note: mypy type checker does not handle pure abstract base classes correctly.
-        A `# type: ignore` annotation of the line using this function is probably
+        A `# type: ignore` annotation on the line using this function is probably
         required to pass type checking.
 
         :param type_: The type of the interface
@@ -1244,7 +1244,7 @@ class DaxNameRegistry:
         """Search for interfaces that match the requested type and return results as a dict.
 
         Note: mypy type checker does not handle pure abstract base classes correctly.
-        A `# type: ignore` annotation of the line using this function is probably
+        A `# type: ignore` annotation on the line using this function is probably
         required to pass type checking.
 
         :param type_: The type of the interfaces
@@ -1525,7 +1525,7 @@ class DaxDataStoreInfluxDb(DaxDataStore):
         """
         self._influx = system.get_device(key)  # Get the Influx DB driver, this call can raise various exceptions
 
-    def _write_points(self, points: typing.List[__P_T]) -> None:
+    def _write_points(self, points: typing.Sequence[__P_T]) -> None:
         """Submit points to the Influx DB driver.
 
         This method was separated to allow testing without writing points.

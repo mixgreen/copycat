@@ -34,7 +34,7 @@ class LedModule(DaxModule):
             self._init()
 
     @kernel
-    def _init(self):
+    def _init(self):  # type: () -> None
         # Reset the core
         self.core.reset()
 
@@ -70,14 +70,14 @@ class LedModule(DaxModule):
         self.led[index].pulse_mu(duration)
 
     @kernel
-    def on_all(self):
+    def on_all(self):  # type: () -> None
         """Switch all LED's on."""
         for led in self.led:
             # Number of LED's does not exceed 8, hence they can all be set in parallel
             led.on()
 
     @kernel
-    def off_all(self):
+    def off_all(self):  # type: () -> None
         """Switch all LED's off."""
         for led in self.led:
             # Number of LED's does not exceed 8, hence they can all be set in parallel

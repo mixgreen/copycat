@@ -1,5 +1,7 @@
 import typing
 
+__all__ = ['natsorted']
+
 __E_T = typing.TypeVar('__E_T')
 
 

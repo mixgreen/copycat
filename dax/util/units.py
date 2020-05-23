@@ -7,7 +7,7 @@ __all__ = ['time_to_str', 'str_to_time', 'freq_to_str', 'str_to_freq']
 
 
 @host_only
-def _value_to_str(value: float, threshold: float, precision: int, scales: typing.List[str]) -> str:
+def _value_to_str(value: float, threshold: float, precision: int, scales: typing.Sequence[str]) -> str:
     assert isinstance(value, float), 'Input value must be of type float'
     assert isinstance(threshold, float), 'Threshold must be a float'
     assert isinstance(precision, int) and precision >= 0, 'Precision must be a positive int'

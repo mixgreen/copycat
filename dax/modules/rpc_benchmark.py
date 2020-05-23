@@ -56,7 +56,7 @@ class RpcBenchmarkModule(DaxModule):
         self.set_dataset_sys(self.LATENCY_CORE_HOST_CORE_ASYNC_KEY, time / num_samples)
 
     @kernel
-    def _empty_kernel(self):
+    def _empty_kernel(self):  # type: () -> None
         # Just break realtime to have minimal computation
         self.core.break_realtime()
 
@@ -112,5 +112,5 @@ class RpcBenchmarkModule(DaxModule):
         return t_total
 
     @rpc(flags={"async"})
-    def _empty_host_function_async(self):
+    def _empty_host_function_async(self):  # type: () -> None
         pass
