@@ -12,13 +12,20 @@ __all__ = ['PmtMonitor']
 class PmtMonitor(DaxClient, EnvExperiment):
     """PMT monitor utility to monitor a single PMT channel."""
 
-    APPLET_NAME = 'PMT monitor'
+    APPLET_NAME = 'pmt_monitor'
+    """Name of the applet in the dashboard."""
+    APPLET_GROUP = 'dax'
+    """Group of the applet."""
+
+    DEFAULT_DATASET = 'plot.dax.pmt_monitor_count'
+    """Default dataset for output."""
 
     COUNT_SCALES = collections.OrderedDict(GHz=GHz, MHz=MHz, kHz=kHz, Hz=Hz, mHz=mHz)
+    """Scales that can be used for the Y-axis."""
 
-    def build(self):
+    def build(self) -> None:  # type: ignore
         # Obtain the detection interface
-        self.detection = self.registry.find_interface(DetectionInterface)
+        self.detection = self.registry.find_interface(DetectionInterface)  # type: ignore
         # Obtain the PMT array
         self.pmt_array = self.detection.get_pmt_array()
         self.update_kernel_invariants('detection', 'pmt_array')
@@ -50,7 +57,7 @@ class PmtMonitor(DaxClient, EnvExperiment):
                                                 NumberValue(default=120 * s, unit='s', min=0, ndecimals=0, step=60),
                                                 group='Dataset',
                                                 tooltip='Data window size (use 0 for infinite window size)')
-        self.dataset_key = self.get_argument("Dataset key", StringValue(default='plot.dax.pmt_monitor_count'),
+        self.dataset_key = self.get_argument("Dataset key", StringValue(default=self.DEFAULT_DATASET),
                                              group='Dataset')
 
         # Applet specific arguments
@@ -64,7 +71,7 @@ class PmtMonitor(DaxClient, EnvExperiment):
         # Update kernel invariants
         self.update_kernel_invariants("detection_window", "detection_delay", "pmt_channel")
 
-    def prepare(self):
+    def prepare(self) -> None:
         if self.sliding_window > 0 and self.detection_window > 0.0:
             # Convert window size to dataset size
             self.sliding_window = int(self.sliding_window / self.detection_window)
@@ -73,7 +80,7 @@ class PmtMonitor(DaxClient, EnvExperiment):
         # Convert count scale
         self.count_scale = self.COUNT_SCALES[self.count_scale_label]
 
-    def run(self):
+    def run(self) -> None:
         # NOTE: there is no dax_init() in this experiment!
 
         # Initial value is reset to an empty list or try to obtain the previous value defaulting to an empty list
@@ -86,7 +93,8 @@ class PmtMonitor(DaxClient, EnvExperiment):
         if self.create_applet:
             # Use the CCB to create an applet
             y_label = 'Counts per second ({:s})'.format(self.count_scale_label)
-            self.ccb.plot_xy(self.APPLET_NAME, self.dataset_key, sliding_window=self.sliding_window,
+            self.ccb.plot_xy(self.APPLET_NAME, self.dataset_key, group=self.APPLET_GROUP,
+                             sliding_window=self.sliding_window,
                              x_label='Sample', y_label=y_label, update_delay=self.applet_update_delay)
 
         try:
@@ -106,10 +114,10 @@ class PmtMonitor(DaxClient, EnvExperiment):
         finally:
             if self.applet_auto_close:
                 # Disable the applet
-                self.ccb.disable_applet(self.APPLET_NAME)
+                self.ccb.disable_applet(self.APPLET_NAME, self.APPLET_GROUP)
 
     @kernel
-    def monitor(self):
+    def monitor(self):  # type: () -> None
         # Reset the core
         self.core.reset()
 
@@ -132,7 +140,7 @@ class PmtMonitor(DaxClient, EnvExperiment):
             self.store_count(count)
 
     @rpc(flags={'async'})
-    def store_count(self, count):
+    def store_count(self, count):  # type: (int) -> None
         # Calculate value to store
         value = count / self.detection_window / self.count_scale
 
