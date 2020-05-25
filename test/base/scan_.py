@@ -82,6 +82,27 @@ class _MockScanTerminate(_MockScan1):
         self.counter['run_point'] += 1
 
 
+class _MockScanStop(_MockScan1):
+    STOP = 5
+
+    def run_point(self, point):  # type: (typing.Any) -> None
+        if self.counter['run_point'] == self.STOP:
+            self.stop_scan()
+        self.counter['run_point'] += 1
+
+
+class _MockScanInfinite(_MockScan1):
+    INFINITE_SCAN_ARGUMENT = True
+    INFINITE_SCAN_DEFAULT = True
+
+    STOP = 100
+
+    def run_point(self, point):  # type: (typing.Any) -> None
+        if self.counter['run_point'] == self.STOP:
+            self.stop_scan()
+        self.counter['run_point'] += 1
+
+
 class Scan1TestCase(unittest.TestCase):
 
     def setUp(self) -> None:
@@ -189,6 +210,48 @@ class ScanTerminateTestCase(unittest.TestCase):
             'device_cleanup': 1,
             'host_cleanup': 1,
             # host_exit() was not called, hence the entry is not existing in the counter
+        }
+        self.assertDictEqual(self.scan.counter, counter_ref, 'Function counters did not match expected values')
+
+
+class ScanStopTestCase(unittest.TestCase):
+
+    def setUp(self) -> None:
+        self.scan = _MockScanStop(get_manager_or_parent())
+
+    def test_call_counters(self):
+        # Run the scan
+        self.scan.run()
+
+        # Verify counters
+        counter_ref = {
+            'host_setup': 1,
+            'device_setup': 1,
+            'run_point': self.scan.STOP + 1,  # The last point is finished, so plus 1
+            'device_cleanup': 1,
+            'host_cleanup': 1,
+            'host_exit': 1,  # host_exit() is called when using stop_scan()
+        }
+        self.assertDictEqual(self.scan.counter, counter_ref, 'Function counters did not match expected values')
+
+
+class InfiniteScanTestCase(unittest.TestCase):
+
+    def setUp(self) -> None:
+        self.scan = _MockScanInfinite(get_manager_or_parent())
+
+    def test_call_counters(self):
+        # Run the scan
+        self.scan.run()
+
+        # Verify counters
+        counter_ref = {
+            'host_setup': 1,
+            'device_setup': 1,
+            'run_point': self.scan.STOP + 1,  # The last point is finished, so plus 1
+            'device_cleanup': 1,
+            'host_cleanup': 1,
+            'host_exit': 1,  # host_exit() is called when using stop_scan()
         }
         self.assertDictEqual(self.scan.counter, counter_ref, 'Function counters did not match expected values')
 

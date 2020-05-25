@@ -677,18 +677,18 @@ class DaxSystem(DaxModuleBase):
     SYS_SERVICES = 'services'  # type: str
     """System services, used as top key for services."""
 
-    CORE_KEY = 'core'
+    CORE_KEY = 'core'  # type: str
     """Key of the core device."""
-    CORE_DMA_KEY = 'core_dma'
+    CORE_DMA_KEY = 'core_dma'  # type: str
     """Key of the core DMA device."""
-    CORE_CACHE_KEY = 'core_cache'
+    CORE_CACHE_KEY = 'core_cache'  # type: str
     """Key of the core cache device."""
-    CORE_LOG_KEY = 'core_log'
+    CORE_LOG_KEY = 'core_log'  # type: str
     """Key of the core log controller."""
-    DAX_INFLUX_DB_KEY = 'dax_influx_db'
+    DAX_INFLUX_DB_KEY = 'dax_influx_db'  # type: str
     """Key of the DAX Influx DB controller."""
 
-    DAX_INIT_TIME_KEY = 'dax_init_time'
+    DAX_INIT_TIME_KEY = 'dax_init_time'  # type: str
     """DAX initialization time dataset key."""
 
     def __init__(self, managers_or_parent: typing.Any,

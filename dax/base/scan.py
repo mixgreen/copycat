@@ -10,7 +10,7 @@ import dax.base.dax
 
 __all__ = ['DaxScan']
 
-_KEY_RE = re.compile(r'[a-zA-Z]\w+')
+_KEY_RE = re.compile(r'[a-zA-Z_]\w+')
 """Regex for matching valid keys."""
 
 
@@ -53,11 +53,27 @@ class DaxScan(dax.base.dax.DaxBase, abc.ABC):
     Finally, the :func:`host_exit` function can be overridden to implement any functionality
     executed just before leaving the :func:`run` function.
 
+    To exit a scan early, call the :func:`stop_scan` function.
+
+    By default, an infinite scan option is added to the arguments which allows infinite looping
+    over the available points.
+    An infinite scan can be stopped by using the :func:`stop_scan` function or by using
+    the "Terminate experiment" button in the dashboard.
+    It is possible to disable the infinite scan argument for an experiment by setting the
+    :attr:`INFINITE_SCAN_ARGUMENT` class attribute to `False`.
+    The default setting of the infinite scan argument can be modified by setting the
+    :attr:`INFINITE_SCAN_DEFAULT` class attribute.
+
     In case scanning is performed in a kernel, users are responsible for setting
     up the right devices to actually run a kernel.
     """
 
-    SCAN_ARCHIVE_KEY_FORMAT = 'scan.{key:s}'
+    INFINITE_SCAN_ARGUMENT = True  # type: bool
+    """Flag to enable the infinite scan argument."""
+    INFINITE_SCAN_DEFAULT = False  # type: bool
+    """Default setting of the infinite scan argument (if enabled)."""
+
+    SCAN_ARCHIVE_KEY_FORMAT = 'scan.{key:s}'  # type: str
     """Dataset key format for archiving independent scans."""
 
     def build(self, *args: typing.Any, **kwargs: typing.Any) -> None:
@@ -85,6 +101,17 @@ class DaxScan(dax.base.dax.DaxBase, abc.ABC):
         self.__in_build = True
         self.build_scan()
         self.__in_build = False
+
+        if self.INFINITE_SCAN_ARGUMENT:
+            # Add an argument for infinite scan
+            self._scan_infinite = self.get_argument('Infinite scan', BooleanValue(self.INFINITE_SCAN_DEFAULT),
+                                                    group='DAX.scan', tooltip='Loop infinitely over the scan points')
+        else:
+            # If infinite scan is disabled, the value is always False
+            self._scan_infinite = False
+
+        # Update kernel invariants
+        self.update_kernel_invariants('_scan_infinite')
 
     @abc.abstractmethod
     def build_scan(self) -> None:
@@ -226,12 +253,27 @@ class DaxScan(dax.base.dax.DaxBase, abc.ABC):
 
                 # Run for one point
                 self.run_point(self._scan_points[self._scan_index])
+
                 # Increment index
-                self._scan_index += 1
+                self._scan_index += np.int32(1)
+
+                # Handle infinite scan
+                if self._scan_infinite and self._scan_index == len(self._scan_points):
+                    self._scan_index = np.int32(0)
 
         finally:
             # Perform device cleanup
             self.device_cleanup()
+
+    @portable
+    def stop_scan(self):  # type: () -> None
+        """Stop the scan after the current point.
+
+        This function can only be called from the :func:`run_point` function.
+        """
+
+        # Stop the scan by moving the index to the end (+1 to differentiate with infinite scan)
+        self._scan_index = len(self._scan_points) + np.int32(1)
 
     """Functions to be implemented by the user"""
 
