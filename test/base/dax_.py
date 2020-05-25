@@ -16,7 +16,7 @@ from dax.util.artiq_helpers import get_manager_or_parent
 
 """Device DB for testing"""
 
-device_db = {
+_device_db = {
     # Core device
     'core': {
         'type': 'local',
@@ -70,12 +70,12 @@ device_db = {
 """Classes used for testing"""
 
 
-class TestSystem(DaxSystem):
+class _TestSystem(DaxSystem):
     SYS_ID = 'unittest_system'
     SYS_VER = 0
 
 
-class TestModule(DaxModule):
+class _TestModule(DaxModule):
     """Testing module."""
 
     def init(self):
@@ -85,11 +85,11 @@ class TestModule(DaxModule):
         pass
 
 
-class TestModuleChild(TestModule):
+class _TestModuleChild(_TestModule):
     pass
 
 
-class TestService(DaxService):
+class _TestService(DaxService):
     SERVICE_NAME = 'test_service'
 
     def init(self):
@@ -99,11 +99,11 @@ class TestService(DaxService):
         pass
 
 
-class TestInterface(dax.base.interface.DaxInterface):
+class _TestInterface(dax.base.interface.DaxInterface):
     pass
 
 
-class TestServiceChild(TestService, TestInterface):
+class _TestServiceChild(_TestService, _TestInterface):
     SERVICE_NAME = 'test_service_child'
 
 
@@ -134,7 +134,7 @@ class DaxHelpersTestCase(unittest.TestCase):
 
     def test_unique_device_key(self):
         # Test system and device DB
-        s = TestSystem(get_manager_or_parent(device_db))
+        s = _TestSystem(get_manager_or_parent(_device_db))
         d = s.get_device_db()
 
         # Test against various keys
@@ -149,7 +149,7 @@ class DaxHelpersTestCase(unittest.TestCase):
 
     def test_looped_device_key(self):
         # Test system and device DB
-        s = TestSystem(get_manager_or_parent(device_db))
+        s = _TestSystem(get_manager_or_parent(_device_db))
         d = s.get_device_db()
 
         # Test looped alias
@@ -160,7 +160,7 @@ class DaxHelpersTestCase(unittest.TestCase):
 
     def test_unavailable_device_key(self):
         # Test system and device DB
-        s = TestSystem(get_manager_or_parent(device_db))
+        s = _TestSystem(get_manager_or_parent(_device_db))
         d = s.get_device_db()
 
         # Test non-existing keys
@@ -171,7 +171,7 @@ class DaxHelpersTestCase(unittest.TestCase):
 
     def test_virtual_device_key(self):
         # Test system and device DB
-        s = TestSystem(get_manager_or_parent(device_db))
+        s = _TestSystem(get_manager_or_parent(_device_db))
         d = s.get_device_db()
         # Test virtual devices
         virtual_devices = {'scheduler', 'ccb'}
@@ -185,7 +185,7 @@ class DaxNameRegistryTestCase(unittest.TestCase):
 
     def test_module(self):
         # Test system
-        s = TestSystem(get_manager_or_parent(device_db))
+        s = _TestSystem(get_manager_or_parent(_device_db))
         # Registry
         r = s.registry
 
@@ -193,18 +193,18 @@ class DaxNameRegistryTestCase(unittest.TestCase):
         with self.assertRaises(KeyError, msg='Get non-existing module did not raise'):
             r.get_module('not_existing_key')
         with self.assertRaises(KeyError, msg='Find non-existing module did not raise'):
-            r.find_module(TestModule)
-        self.assertDictEqual(r.search_modules(TestModule), {}, 'Search result dict incorrect')
+            r.find_module(_TestModule)
+        self.assertDictEqual(r.search_modules(_TestModule), {}, 'Search result dict incorrect')
 
         # Test with one module
-        t0 = TestModule(s, 'test_module')
+        t0 = _TestModule(s, 'test_module')
         self.assertIs(r.get_module(t0.get_system_key()), t0, 'Returned module does not match expected module')
         with self.assertRaises(TypeError, msg='Type check in get_module() did not raise'):
-            r.get_module(t0.get_system_key(), TestModuleChild)
-        self.assertIs(r.find_module(TestModule), t0, 'Did not find the expected module')
+            r.get_module(t0.get_system_key(), _TestModuleChild)
+        self.assertIs(r.find_module(_TestModule), t0, 'Did not find the expected module')
         self.assertIs(r.find_module(DaxModule), t0, 'Did not find the expected module')
         with self.assertRaises(KeyError, msg='Search non-existing module did not raise'):
-            r.find_module(TestModuleChild)
+            r.find_module(_TestModuleChild)
         self.assertListEqual(r.get_module_key_list(), [m.get_system_key() for m in [s, t0]],
                              'Module key list incorrect')
         with self.assertRaises(dax.base.exceptions.NonUniqueRegistrationError,
@@ -214,21 +214,21 @@ class DaxNameRegistryTestCase(unittest.TestCase):
             r.add_module(t0)
 
         # Test with two modules
-        t1 = TestModuleChild(s, 'test_module_child')
+        t1 = _TestModuleChild(s, 'test_module_child')
         self.assertIs(r.get_module(t1.get_system_key()), t1, 'Returned module does not match expected module')
-        self.assertIs(r.get_module(t1.get_system_key(), TestModuleChild), t1,
+        self.assertIs(r.get_module(t1.get_system_key(), _TestModuleChild), t1,
                       'Type check in get_module() raised unexpectedly')
-        self.assertIs(r.find_module(TestModuleChild), t1, 'Did not find expected module')
+        self.assertIs(r.find_module(_TestModuleChild), t1, 'Did not find expected module')
         with self.assertRaises(LookupError, msg='Non-unique search did not raise'):
-            r.find_module(TestModule)
+            r.find_module(_TestModule)
         self.assertListEqual(r.get_module_key_list(), [m.get_system_key() for m in [s, t0, t1]],
                              'Module key list incorrect')
-        self.assertDictEqual(r.search_modules(TestModule), {m.get_system_key(): m for m in [t0, t1]},
+        self.assertDictEqual(r.search_modules(_TestModule), {m.get_system_key(): m for m in [t0, t1]},
                              'Search result dict incorrect')
 
     def test_device(self):
         # Test system
-        s = TestSystem(get_manager_or_parent(device_db))
+        s = _TestSystem(get_manager_or_parent(_device_db))
         # List of core devices
         core_devices = ['core', 'core_cache', 'core_dma']
         # Registry
@@ -241,8 +241,8 @@ class DaxNameRegistryTestCase(unittest.TestCase):
 
     def test_service(self):
         # Test system
-        s = TestSystem(get_manager_or_parent(device_db))
-        s0 = TestService(s)
+        s = _TestSystem(get_manager_or_parent(_device_db))
+        s0 = _TestService(s)
         # Registry
         r = s.registry
 
@@ -253,40 +253,40 @@ class DaxNameRegistryTestCase(unittest.TestCase):
 
         # Test with one service
         self.assertFalse(r.has_service('foo'), 'Non-existing service did not returned false')
-        self.assertFalse(r.has_service(TestServiceChild), 'Non-existing service did not returned false')
-        self.assertTrue(r.has_service(TestService.SERVICE_NAME), 'Did not returned true for existing service')
-        self.assertTrue(r.has_service(TestService), 'Did not returned true for existing service')
+        self.assertFalse(r.has_service(_TestServiceChild), 'Non-existing service did not returned false')
+        self.assertTrue(r.has_service(_TestService.SERVICE_NAME), 'Did not returned true for existing service')
+        self.assertTrue(r.has_service(_TestService), 'Did not returned true for existing service')
         self.assertIs(r.get_service(s0.get_name()), s0, 'Did not returned expected service')
-        self.assertIs(r.get_service(TestService), s0, 'Did not returned expected service')
+        self.assertIs(r.get_service(_TestService), s0, 'Did not returned expected service')
         with self.assertRaises(KeyError, msg='Retrieving non-existing service did not raise'):
-            r.get_service(TestServiceChild)
+            r.get_service(_TestServiceChild)
         self.assertListEqual(r.get_service_key_list(), [s.get_name() for s in [s0]],
                              'List of registered service keys incorrect')
 
         # Test with a second service
-        s1 = TestServiceChild(s)
-        self.assertTrue(r.has_service(TestServiceChild), 'Did not returned true for existing service')
-        self.assertTrue(r.has_service(TestServiceChild.SERVICE_NAME), 'Did not returned true for existing service')
+        s1 = _TestServiceChild(s)
+        self.assertTrue(r.has_service(_TestServiceChild), 'Did not returned true for existing service')
+        self.assertTrue(r.has_service(_TestServiceChild.SERVICE_NAME), 'Did not returned true for existing service')
         self.assertListEqual(r.get_service_key_list(), [s.get_name() for s in [s0, s1]],
                              'List of registered service keys incorrect')
 
     def test_interface(self):
         # Test system
-        s = TestSystem(get_manager_or_parent(device_db))
-        TestService(s)
+        s = _TestSystem(get_manager_or_parent(_device_db))
+        _TestService(s)
         # Registry
         r = s.registry
 
         # Confirm that interface can not be found before adding
         with self.assertRaises(KeyError, msg='Interface not available did not raise'):
-            r.find_interface(TestInterface)
-        self.assertDictEqual(r.search_interfaces(TestInterface), {},
+            r.find_interface(_TestInterface)
+        self.assertDictEqual(r.search_interfaces(_TestInterface), {},
                              'Interface not available did not return an empty dict')
 
         # Add and test interface features
-        itf = TestServiceChild(s)  # Class that implements the interface
-        self.assertIs(r.find_interface(TestInterface), itf, 'Find interface did not return expected object')
-        self.assertDictEqual(r.search_interfaces(TestInterface), {itf.get_system_key(): itf},
+        itf = _TestServiceChild(s)  # Class that implements the interface
+        self.assertIs(r.find_interface(_TestInterface), itf, 'Find interface did not return expected object')
+        self.assertDictEqual(r.search_interfaces(_TestInterface), {itf.get_system_key(): itf},
                              'Search interfaces did not return expected result')
 
 
@@ -332,7 +332,7 @@ class DaxDataStoreInfluxDbTestCase(unittest.TestCase):
                 self.assertIsInstance(d['tags'].get('index', ''), str, 'Index has invalid type (expected str)')
 
         # Test system
-        self.s = TestSystem(get_manager_or_parent(device_db))
+        self.s = _TestSystem(get_manager_or_parent(_device_db))
         # Special data store that skips actual writing
         self.ds = self.MockDataStore(callback, self.s, 'dax_influx_db')
 
@@ -697,16 +697,16 @@ class DaxModuleBaseTestCase(unittest.TestCase):
 
     def test_system_build(self):
         # A system that does not call super() in build()
-        class BadTestSystem(TestSystem):
+        class BadTestSystem(_TestSystem):
             def build(self):
                 pass  # No call to super(), which is bad
 
         # Test if an error occurs when super() is not called in build()
         with self.assertRaises(AttributeError, msg='Not calling super.build() in user system did not raise'):
-            BadTestSystem(get_manager_or_parent(device_db))
+            BadTestSystem(get_manager_or_parent(_device_db))
 
     def test_system_kernel_invariants(self):
-        s = TestSystem(get_manager_or_parent(device_db))
+        s = _TestSystem(get_manager_or_parent(_device_db))
 
         # No kernel invariants attribute yet
         self.assertTrue(hasattr(s, 'kernel_invariants'), 'Default kernel invariants not found')
@@ -719,7 +719,7 @@ class DaxModuleBaseTestCase(unittest.TestCase):
     def test_system_id(self):
         # Test if an error is raised when no ID is given to a system
         with self.assertRaises(AssertionError, msg='Not providing system id did not raise'):
-            DaxSystem(get_manager_or_parent(device_db))
+            DaxSystem(get_manager_or_parent(_device_db))
 
         # Systems with bad ID
         class TestSystemBadId1(DaxSystem):
@@ -739,7 +739,7 @@ class DaxModuleBaseTestCase(unittest.TestCase):
         for BadSystem in [TestSystemBadId1, TestSystemBadId2, TestSystemBadId3]:
             # Test if an error is raised when a bad ID is given to a system
             with self.assertRaises(AssertionError, msg='Providing bad system id did not raise'):
-                BadSystem(get_manager_or_parent(device_db))
+                BadSystem(get_manager_or_parent(_device_db))
 
     def test_system_ver(self):
         class TestSystemNoVer(DaxSystem):
@@ -747,7 +747,7 @@ class DaxModuleBaseTestCase(unittest.TestCase):
 
         # Test if an error is raised when no version is given to a system
         with self.assertRaises(AssertionError, msg='Not providing system version did not raise'):
-            TestSystemNoVer(get_manager_or_parent(device_db))
+            TestSystemNoVer(get_manager_or_parent(_device_db))
 
         # System with bad version
         class TestSystemBadVer1(DaxSystem):
@@ -767,7 +767,7 @@ class DaxModuleBaseTestCase(unittest.TestCase):
         for BadSystem in [TestSystemBadVer1, TestSystemBadVer2, TestSystemBadVer3]:
             # Test if an error is raised when a bad version is given to a system
             with self.assertRaises(AssertionError, msg='Providing bad system version did not raise'):
-                BadSystem(get_manager_or_parent(device_db))
+                BadSystem(get_manager_or_parent(_device_db))
 
         # System with version 0, which is fine
         class TestSystemVerZero(DaxSystem):
@@ -775,58 +775,58 @@ class DaxModuleBaseTestCase(unittest.TestCase):
             SYS_VER = 0
 
         # Test if it is possible to create a system with version 0
-        TestSystemVerZero(get_manager_or_parent(device_db))
+        TestSystemVerZero(get_manager_or_parent(_device_db))
 
     def test_init(self):
-        manager_or_parent = get_manager_or_parent(device_db)
-        s = TestSystem(get_manager_or_parent(device_db))
+        manager_or_parent = get_manager_or_parent(_device_db)
+        s = _TestSystem(get_manager_or_parent(_device_db))
 
         # Check constructor
         self.assertIsNotNone(s, 'Could not create DaxSystem')
-        self.assertIsNotNone(TestModule(s, 'module_name'), 'Could not create a test module')
+        self.assertIsNotNone(_TestModule(s, 'module_name'), 'Could not create a test module')
         with self.assertRaises(ValueError, msg='Invalid module name did not raise'):
-            TestModule(s, 'wrong!')
+            _TestModule(s, 'wrong!')
         with self.assertRaises(ValueError, msg='Invalid module name did not raise'):
-            TestModule(s, 'this.is.bad')
+            _TestModule(s, 'this.is.bad')
         with self.assertRaises(TypeError, msg='Providing non-DaxModuleBase parent to new module did not raise'):
-            TestModule(manager_or_parent, 'module_name')
+            _TestModule(manager_or_parent, 'module_name')
 
     def test_module_registration(self):
         # Check register
-        s = TestSystem(get_manager_or_parent(device_db))
-        t = TestModule(s, 'module_name')
+        s = _TestSystem(get_manager_or_parent(_device_db))
+        t = _TestModule(s, 'module_name')
         self.assertDictEqual(s.registry._modules, {m.get_system_key(): m for m in [s, t]},
                              'Dict with registered modules does not match expected content')
 
     def test_name(self):
-        s = TestSystem(get_manager_or_parent(device_db))
+        s = _TestSystem(get_manager_or_parent(_device_db))
 
-        self.assertEqual(s.get_name(), TestSystem.SYS_NAME, 'Returned name did not match expected name')
+        self.assertEqual(s.get_name(), _TestSystem.SYS_NAME, 'Returned name did not match expected name')
 
     def test_system_key(self):
-        s = TestSystem(get_manager_or_parent(device_db))
+        s = _TestSystem(get_manager_or_parent(_device_db))
 
-        self.assertEqual(s.get_system_key(), TestSystem.SYS_NAME, 'Returned key did not match expected key')
+        self.assertEqual(s.get_system_key(), _TestSystem.SYS_NAME, 'Returned key did not match expected key')
 
     def test_system_key_arguments(self):
-        s = TestSystem(get_manager_or_parent(device_db))
+        s = _TestSystem(get_manager_or_parent(_device_db))
 
-        self.assertEqual(s.get_system_key('a', 'b'), '.'.join([TestSystem.SYS_NAME, 'a', 'b']),
+        self.assertEqual(s.get_system_key('a', 'b'), '.'.join([_TestSystem.SYS_NAME, 'a', 'b']),
                          'Returned key did not match expected key based on multiple components')
         k = 'string_as_key_list'
-        self.assertEqual(s.get_system_key(*k), '.'.join([TestSystem.SYS_NAME, *k]),
+        self.assertEqual(s.get_system_key(*k), '.'.join([_TestSystem.SYS_NAME, *k]),
                          'Returned key did not match expected key based on multiple components')
 
         n = 'test_module_name'
-        t = TestModule(s, n)
-        self.assertEqual(t.get_system_key(), '.'.join([TestSystem.SYS_NAME, n]),
+        t = _TestModule(s, n)
+        self.assertEqual(t.get_system_key(), '.'.join([_TestSystem.SYS_NAME, n]),
                          'Key created for nested module did not match expected key')
         some_key = 'some_key'
-        self.assertEqual(t.get_system_key(some_key), '.'.join([TestSystem.SYS_NAME, n, some_key]),
+        self.assertEqual(t.get_system_key(some_key), '.'.join([_TestSystem.SYS_NAME, n, some_key]),
                          'System key creation derived from current module key failed')
 
     def test_bad_system_key_arguments(self):
-        s = TestSystem(get_manager_or_parent(device_db))
+        s = _TestSystem(get_manager_or_parent(_device_db))
 
         with self.assertRaises(ValueError, msg='Creating bad system key did not raise'):
             s.get_system_key('bad,key')
@@ -838,7 +838,7 @@ class DaxModuleBaseTestCase(unittest.TestCase):
             s.get_system_key(1)
 
     def test_setattr_device(self):
-        s = TestSystem(get_manager_or_parent(device_db))
+        s = _TestSystem(get_manager_or_parent(_device_db))
 
         self.assertIsNone(s.setattr_device('ttl0'), 'setattr_device() did not return None')
         self.assertTrue(hasattr(s, 'ttl0'), 'setattr_device() did not set the attribute correctly')
@@ -847,7 +847,7 @@ class DaxModuleBaseTestCase(unittest.TestCase):
 
     def test_get_device(self):
         # Test system
-        s = TestSystem(get_manager_or_parent(device_db))
+        s = _TestSystem(get_manager_or_parent(_device_db))
         # List of core devices
         core_devices = ['core', 'core_cache', 'core_dma']
         # Registry
@@ -864,7 +864,7 @@ class DaxModuleBaseTestCase(unittest.TestCase):
             s.get_device('alias_1')
 
     def test_get_device_type_check(self):
-        s = TestSystem(get_manager_or_parent(device_db))
+        s = _TestSystem(get_manager_or_parent(_device_db))
 
         with self.assertRaises(TypeError, msg='get_device() type check did not raise'):
             s.get_device('ttl1', artiq.coredevice.edge_counter.EdgeCounter)
@@ -874,7 +874,7 @@ class DaxModuleBaseTestCase(unittest.TestCase):
                              'get_device() type check raised unexpectedly')
 
     def test_search_devices(self):
-        s = TestSystem(get_manager_or_parent(device_db))
+        s = _TestSystem(get_manager_or_parent(_device_db))
         r = s.registry
 
         # Add devices
@@ -890,7 +890,7 @@ class DaxModuleBaseTestCase(unittest.TestCase):
                             {'ttl0', 'ttl1'}, 'Search devices did not returned expected result')
 
     def test_dataset(self):
-        s = TestSystem(get_manager_or_parent(device_db))
+        s = _TestSystem(get_manager_or_parent(_device_db))
 
         key = 'key1'
         value = [11, 12, 13]
@@ -900,7 +900,7 @@ class DaxModuleBaseTestCase(unittest.TestCase):
                              'get_dataset_sys() did not write the default value to the dataset')
 
     def test_setattr_dataset(self):
-        s = TestSystem(get_manager_or_parent(device_db))
+        s = _TestSystem(get_manager_or_parent(_device_db))
 
         key = 'key3'
         self.assertIsNone(s.setattr_dataset_sys(key, 10), 'setattr_dataset_sys() failed')
@@ -925,7 +925,7 @@ class DaxModuleBaseTestCase(unittest.TestCase):
 
     @unittest.expectedFailure
     def test_dataset_append(self):
-        s = TestSystem(get_manager_or_parent(device_db))
+        s = _TestSystem(get_manager_or_parent(_device_db))
 
         key = 'key2'
         self.assertIsNone(s.set_dataset_sys(key, []), 'Setting new system dataset failed')
@@ -936,7 +936,7 @@ class DaxModuleBaseTestCase(unittest.TestCase):
         # NOTE: This test fails for unknown reasons (ARTIQ library) while real-life tests show correct behavior
 
     def test_dataset_append_nonempty(self):
-        s = TestSystem(get_manager_or_parent(device_db))
+        s = _TestSystem(get_manager_or_parent(_device_db))
 
         key = 'key4'
         self.assertIsNone(s.set_dataset(key, [0]), 'Setting new dataset failed')
@@ -953,7 +953,7 @@ class DaxModuleBaseTestCase(unittest.TestCase):
                              'Appending to dataset has incorrect behavior')
 
     def test_dataset_mutate(self):
-        s = TestSystem(get_manager_or_parent(device_db))
+        s = _TestSystem(get_manager_or_parent(_device_db))
 
         key = 'key2'
         self.assertIsNone(s.set_dataset_sys(key, [0, 0, 0, 0]), 'Setting new system dataset failed')
@@ -964,7 +964,7 @@ class DaxModuleBaseTestCase(unittest.TestCase):
         self.assertListEqual(s.get_dataset_sys(key), [0, 9, 0, 99], 'Mutating system dataset has incorrect behavior')
 
     def test_identifier(self):
-        s = TestSystem(get_manager_or_parent(device_db))
+        s = _TestSystem(get_manager_or_parent(_device_db))
         self.assertTrue(isinstance(s.get_identifier(), str), 'get_identifier() did not returned a string')
 
 
@@ -1028,7 +1028,7 @@ class DaxSystemTestCase(unittest.TestCase):
         self.num_modules = 10
 
         # Assemble system and modules
-        self.system = self.InitTestSystem(get_manager_or_parent(device_db), self)
+        self.system = self.InitTestSystem(get_manager_or_parent(_device_db), self)
         for i in range(self.num_modules):
             self.InitTestModule(self.system, 'module_{:d}'.format(i), i, self)
 
@@ -1050,7 +1050,7 @@ class DaxSystemTestCase(unittest.TestCase):
                 self.base_build_was_called = True
 
         # SomeBaseClass also inherits from HasEnvironment, making it higher in the MRO than HasEnvironment itself
-        class SuperTestSystem(TestSystem, SomeBaseClass):
+        class SuperTestSystem(_TestSystem, SomeBaseClass):
             def build(self, *args, **kwargs):
                 # Call super
                 super(SuperTestSystem, self).build(*args, **kwargs)
@@ -1061,27 +1061,27 @@ class DaxSystemTestCase(unittest.TestCase):
                 pass
 
         # Create system, which will call build()
-        system = SuperTestSystem(get_manager_or_parent(device_db))
+        system = SuperTestSystem(get_manager_or_parent(_device_db))
 
         # Test if build of the super class and system class was called
         self.assertTrue(hasattr(system, 'base_build_was_called'), 'System did not called build() of super class')
         self.assertTrue(hasattr(system, 'system_build_was_called'), 'System did not called build() of itself')
 
         # Inheriting the other way, build of SomeBaseClass will be called first, which does not call super
-        class SuperTestSystem(SomeBaseClass, TestSystem):
+        class SuperTestSystem(SomeBaseClass, _TestSystem):
             def run(self):
                 pass
 
         with self.assertRaises(AttributeError, msg='build() of system was called unexpectedly'):
             # Create system, which will call build()
             # System build() will not be called, which raises an exception
-            SuperTestSystem(get_manager_or_parent(device_db))
+            SuperTestSystem(get_manager_or_parent(_device_db))
 
 
 class DaxServiceTestCase(unittest.TestCase):
 
     def test_init(self):
-        s = TestSystem(get_manager_or_parent(device_db))
+        s = _TestSystem(get_manager_or_parent(_device_db))
 
         class NoNameService(DaxService):
             def init(self) -> None:
@@ -1129,7 +1129,7 @@ class DaxClientTestCase(unittest.TestCase):
                 pass
 
         with self.assertRaises(TypeError, msg='Using client without client factory decorator did not raise'):
-            Client(get_manager_or_parent(device_db))
+            Client(get_manager_or_parent(_device_db))
 
     def test_load_super(self):
         @dax_client_factory
@@ -1140,12 +1140,12 @@ class DaxClientTestCase(unittest.TestCase):
             def run(self) -> None:
                 pass
 
-        class ImplementableClient(Client(TestSystem)):
+        class ImplementableClient(Client(_TestSystem)):
             pass
 
         # Disabled one inspection, inspection does not handle the decorator correctly
         # noinspection PyArgumentList
-        c = ImplementableClient(get_manager_or_parent(device_db))
+        c = ImplementableClient(get_manager_or_parent(_device_db))
         c.run()  # Is supposed to call the dax_init() function which will call the init() function of the client
 
         self.assertTrue(hasattr(c, 'is_initialized'), 'DAX system parent of client was not initialized correctly')

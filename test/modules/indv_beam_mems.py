@@ -6,29 +6,29 @@ from dax.modules.indv_beam_mems import IndvBeamMemsModule
 from dax.util.artiq_helpers import get_manager_or_parent
 
 
-class ModuleWrapper(IndvBeamMemsModule):
+class _ModuleWrapper(IndvBeamMemsModule):
     """Wrap class to initialize the module without devices"""
 
     def build(self, *args, **kwargs):
         try:
             # Build the module as normal, catch KeyError if a device can not be found
             # Necessary initialization was already done and we do not care about the devices
-            super(ModuleWrapper, self).build(*args, **kwargs)
+            super(_ModuleWrapper, self).build(*args, **kwargs)
         except KeyError:
             # We stop building when we experience key errors
             pass
 
 
-class TestSystem(DaxSystem):
+class _TestSystem(DaxSystem):
     SYS_ID = 'unittest_system'
     SYS_VER = 0
 
     def build(self, num_beams) -> None:  # type: ignore
-        super(TestSystem, self).build()
+        super(_TestSystem, self).build()
 
         # Only number of beams is relevant, rest are dummy values
-        self.m = ModuleWrapper(self, 'module', num_beams=num_beams,
-                               num_dpass_signals=1, dpass_aom='na', indv_aom='na', pid_sw='na')
+        self.m = _ModuleWrapper(self, 'module', num_beams=num_beams,
+                                num_dpass_signals=1, dpass_aom='na', indv_aom='na', pid_sw='na')
 
 
 class GetBeam2TestCase(unittest.TestCase):
@@ -41,7 +41,7 @@ class GetBeam2TestCase(unittest.TestCase):
 
     def setUp(self) -> None:
         assert self.N > 0, 'Number of beams N should be > 0'
-        self.s = TestSystem(get_manager_or_parent(), num_beams=self.N)
+        self.s = _TestSystem(get_manager_or_parent(), num_beams=self.N)
 
     def test_num_beams_bounds(self):
         # Keep track of returned indices
