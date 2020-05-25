@@ -17,6 +17,22 @@ dax.base.dax module
     :ignore-module-all:
     :exclude-members: DaxHasSystem
 
+dax.base.scan module
+--------------------
+
+.. automodule:: dax.base.scan
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+dax.base.interface module
+-------------------------
+
+.. automodule:: dax.base.interface
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 dax.base.exceptions module
 --------------------------
 

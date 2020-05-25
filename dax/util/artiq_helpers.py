@@ -1,9 +1,10 @@
 import os
 import tempfile
-
+import argparse
 import typing
 import logging
 
+import artiq.language.environment
 import artiq.master.worker_db
 import artiq.master.databases  # type: ignore
 import artiq.frontend.artiq_run  # type: ignore
@@ -36,14 +37,18 @@ def get_manager_or_parent(device_db: typing.Dict[str, typing.Any] = None) -> typ
         virtual_devices={
             "scheduler": scheduler,
             "ccb": artiq.frontend.artiq_run.DummyCCB()})
+
     # Dataset DB and manager for testing in tmp directory
     dataset_db_file_name = os.path.join(tempfile.gettempdir(), 'dax_test_dataset_db.pyon')
     dataset_db = artiq.master.databases.DatasetDB(dataset_db_file_name)
     dataset_mgr = artiq.master.worker_db.DatasetManager(dataset_db)
 
+    # Argument manager
+    argument_mgr = artiq.language.environment.ProcessArgumentManager({})
+
     # Return a tuple that is accepted as manager_or_parent
-    # DeviceManager, DatasetManager, ArgumentParser.parse_args(), dict
-    return device_mgr, dataset_mgr, None, dict()
+    # DeviceManager, DatasetManager, ProcessArgumentManager, dict
+    return device_mgr, dataset_mgr, argument_mgr, dict()
 
 
 # Disable ARTIQ logging by setting logging level to critical

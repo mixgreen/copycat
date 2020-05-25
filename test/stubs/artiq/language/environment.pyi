@@ -70,6 +70,22 @@ class StringValue(_SimpleArgProcessor):
     ...
 
 
+class TraceArgumentManager:
+    def __init__(self) -> None:
+        ...
+
+    def get(self, key: str, processor: _SimpleArgProcessor, group: str, tooltip: str) -> None:
+        ...
+
+
+class ProcessArgumentManager:
+    def __init__(self, unprocessed_arguments: typing.Any):
+        ...
+
+    def get(self, key: str, processor: _SimpleArgProcessor, group: str, tooltip: str) -> typing.Any:
+        ...
+
+
 class HasEnvironment:
     # Possible data types for basic dataset values
     __BDV_T = typing.Union[bool, int, float, str, np.int32, np.int64]

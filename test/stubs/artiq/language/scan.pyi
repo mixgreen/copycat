@@ -1,3 +1,5 @@
+import typing
+
 from .environment import NoDefault
 
 __all__ = ["ScanObject",
@@ -9,59 +11,65 @@ class ScanObject:
     ...
 
 
-class NoScan(ScanObject):
-    def __init__(self, value, repetitions=1):
+# Type variable for generics in scan classes
+__V_T = typing.TypeVar('__V_T')
+
+
+class NoScan(ScanObject, typing.Generic[__V_T]):
+    def __init__(self, value: __V_T, repetitions: int = 1):
         ...
 
-    def __iter__(self):
+    def __iter__(self) -> typing.Iterator[__V_T]:
         ...
 
-    def __len__(self):
+    def __len__(self) -> int:
         ...
 
-    def describe(self):
+    def describe(self) -> typing.Dict[str, typing.Any]:
         ...
 
 
 class RangeScan(ScanObject):
-    def __init__(self, start, stop, npoints, randomize=False, seed=None):
+    def __init__(self, start: float, stop: float, npoints: int,
+                 randomize: bool = False, seed: typing.Any = None):
         ...
 
-    def __iter__(self):
+    def __iter__(self) -> typing.Iterator[float]:
         ...
 
-    def __len__(self):
+    def __len__(self) -> int:
         ...
 
-    def describe(self):
+    def describe(self) -> typing.Dict[str, typing.Any]:
         ...
 
 
 class CenterScan(ScanObject):
-    def __init__(self, center, span, step, randomize=False, seed=None):
+    def __init__(self, center: float, span: float, step: float,
+                 randomize: bool = False, seed: typing.Any = None):
         ...
 
-    def __iter__(self):
+    def __iter__(self) -> typing.Iterator[float]:
         ...
 
-    def __len__(self):
+    def __len__(self) -> int:
         ...
 
-    def describe(self):
+    def describe(self) -> typing.Dict[str, typing.Any]:
         ...
 
 
-class ExplicitScan(ScanObject):
-    def __init__(self, sequence):
+class ExplicitScan(ScanObject, typing.Generic[__V_T]):
+    def __init__(self, sequence: typing.Sequence[__V_T]):
         ...
 
-    def __iter__(self):
+    def __iter__(self) -> typing.Iterator[__V_T]:
         ...
 
-    def __len__(self):
+    def __len__(self) -> int:
         ...
 
-    def describe(self):
+    def describe(self) -> typing.Dict[str, typing.Any]:
         ...
 
 
@@ -77,13 +85,13 @@ class Scannable:
     def process(self, x):
         ...
 
-    def describe(self):
+    def describe(self) -> typing.Dict[str, typing.Any]:
         ...
 
 
 class MultiScanManager:
-    def __init__(self, *args):
+    def __init__(self, *args: typing.Tuple[str, typing.Any]):
         ...
 
-    def __iter__(self):
+    def __iter__(self) -> typing.Iterator[typing.Any]:
         ...

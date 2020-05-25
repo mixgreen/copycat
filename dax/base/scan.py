@@ -4,12 +4,13 @@ import collections
 import re
 import numpy as np
 
+from artiq.experiment import *
+
 import dax.base.dax
-from dax.experiment import *
 
 __all__ = ['DaxScan']
 
-_KEY_RE = re.compile(r'\w+')
+_KEY_RE = re.compile(r'[a-zA-Z]\w+')
 """Regex for matching valid keys."""
 
 
@@ -33,7 +34,31 @@ class DaxScan(dax.base.dax.DaxBase, abc.ABC):
     """Scanning class for standardized scanning functionality.
 
     Users can inherit from this class to implement their scanning experiments.
+    The first step is to build the scan by overriding the :func:`build_scan` function.
+    Use the :func:`add_scan` function to add normal ARTIQ scannables to this scan object.
+    Other ARTIQ functions are available to obtain other arguments.
+
+    The scan class implements a :func:`run` function that controls the overall scanning flow.
+    The :func:`prepare` and :func:`analyze` functions are not implemented by the scan class, but users
+    are free to provide their own implementations.
+
+    The following functions can be overridden to define scanning behavior:
+
+    1. :func:`host_setup`
+    2. :func:`device_setup`
+    3. :func:`run_point` (must be implemented)
+    4. :func:`device_cleanup`
+    5. :func:`host_cleanup`
+
+    Finally, the :func:`host_exit` function can be overridden to implement any functionality
+    executed just before leaving the :func:`run` function.
+
+    In case scanning is performed in a kernel, users are responsible for setting
+    up the right devices to actually run a kernel.
     """
+
+    SCAN_ARCHIVE_KEY_FORMAT = 'scan.{key:s}'
+    """Dataset key format for archiving independent scans."""
 
     def build(self, *args: typing.Any, **kwargs: typing.Any) -> None:
         """Build the scan object using the :func:`build_scan` function.
@@ -50,7 +75,7 @@ class DaxScan(dax.base.dax.DaxBase, abc.ABC):
         super(DaxScan, self).build(*args, **kwargs)
 
         # Collection of scannables
-        self._scannables = collections.OrderedDict()  # type: typing.Dict[str, typing.Any]
+        self._scan_scannables = collections.OrderedDict()  # type: typing.Dict[str, typing.Iterable[typing.Any]]
 
         # The scheduler object
         self._scan_scheduler = self.get_device('scheduler')
@@ -94,11 +119,22 @@ class DaxScan(dax.base.dax.DaxBase, abc.ABC):
         # Verify the key is valid and not in use
         if not _is_valid_key(key):
             raise ValueError('Provided key "{:s}" is not valid'.format(key))
-        if key in self._scannables:
+        if key in self._scan_scannables:
             raise LookupError('Provided key "{:s}" was already in use'.format(key))
 
         # Add argument to the list of scannables
-        self._scannables[key] = self.get_argument(name, scannable, group=group, tooltip=tooltip)
+        self._scan_scannables[key] = self.get_argument(name, scannable, group=group, tooltip=tooltip)
+
+    @host_only
+    def get_scan_points(self) -> typing.Dict[str, typing.List[typing.Any]]:
+        """Get the scan points for analysis.
+
+        :return: A dict containing all the scan points on a per-key basis
+        """
+        if hasattr(self, '_scan_points'):
+            return {key: [getattr(point, key) for point in self._scan_points] for key in self._scan_scannables}
+        else:
+            raise AttributeError('Scan points can only be obtained after run() was called')
 
     """Run functions"""
 
@@ -111,18 +147,27 @@ class DaxScan(dax.base.dax.DaxBase, abc.ABC):
         """
 
         # Check if build() was called
-        assert hasattr(self, '_scannables'), 'DaxScan.build() was not called'
+        assert hasattr(self, '_scan_scannables'), 'DaxScan.build() was not called'
 
         # Make the multi-scan manager and construct the list with points
-        self._scan_points = list(MultiScanManager(*self._scannables.items())) if self._scannables else []
+        self._scan_points = list(
+            MultiScanManager(*self._scan_scannables.items())) if self._scan_scannables else []  # type: ignore
         self.update_kernel_invariants('_scan_points')
         self.logger.debug('Prepared {:d} scan point(s) with {:d} scan parameter(s)'.
-                          format(len(self._scan_points), len(self._scannables)))
+                          format(len(self._scan_points), len(self._scan_scannables)))
 
         if not self._scan_points:
             # There are no scan points
             self.logger.warning('No scan points found, aborting experiment')
             return
+
+        for key in self._scan_scannables:
+            # Archive product of all scan points (separate dataset for every key)
+            self.set_dataset(key, [getattr(point, key) for point in self._scan_points], archive=True)
+        if len(self._scan_scannables) > 1:
+            # Archive values of each independent scan if we have more than 1 scan
+            for key, scannable in self._scan_scannables.items():
+                self.set_dataset(self.SCAN_ARCHIVE_KEY_FORMAT.format(key=key), [e for e in scannable], archive=True)
 
         # Index of current scan point
         self._scan_index = np.int32(0)
@@ -131,7 +176,9 @@ class DaxScan(dax.base.dax.DaxBase, abc.ABC):
             while self._scan_index < len(self._scan_points):
                 while self._scan_scheduler.check_pause():
                     # Pause the scan
+                    self.logger.debug('Pausing scan')
                     self._scan_scheduler.pause()
+                    self.logger.debug('Resuming scan')
 
                 try:
                     # Coming from a host context, perform host setup
@@ -161,14 +208,17 @@ class DaxScan(dax.base.dax.DaxBase, abc.ABC):
             self.host_exit()
 
     @kernel
-    def _run_scan_in_kernel(self):
+    def _run_scan_in_kernel(self):  # type: () -> None
         """Run scan on the core device."""
         self._run_scan()
 
     @portable
-    def _run_scan(self):
+    def _run_scan(self):  # type: () -> None
         """Portable run scan function."""
         try:
+            # Perform device setup
+            self.device_setup()
+
             while self._scan_index < len(self._scan_points):
                 # Check for pause condition
                 if self._scan_scheduler.check_pause():
@@ -183,27 +233,42 @@ class DaxScan(dax.base.dax.DaxBase, abc.ABC):
             # Perform device cleanup
             self.device_cleanup()
 
+    """Functions to be implemented by the user"""
+
     def host_setup(self) -> None:
         """1. Preparation on the host, called once at entry and after a pause."""
         pass
 
+    @portable
+    def device_setup(self):  # type: () -> None
+        """2. Preparation on the core device, called once at entry and after a pause.
+
+        Can for example be used to reset the core.
+        """
+        pass
+
     @abc.abstractmethod
-    def run_point(self, point):
-        """2. Code to run for a single point, called as many times as there are points.
+    def run_point(self, point):  # type: (typing.Any) -> None
+        """3. Code to run for a single point, called as many times as there are points.
 
         :param point: Point object containing the current scan parameters
         """
         pass
 
     @portable
-    def device_cleanup(self):
-        """3. Cleanup on the core device, called once after scanning and before a pause."""
+    def device_cleanup(self):  # type: () -> None
+        """4. Cleanup on the core device, called once after scanning and before a pause.
+
+        In case the device cleanup function is a kernel, it is good to add a `self.core.break_realtime()`
+        at the start of this function to make sure operations can execute in case of an
+        underflow exception.
+        """
         pass
 
     def host_cleanup(self) -> None:
-        """4. Cleanup on the host, called once after scanning and before a pause."""
+        """5. Cleanup on the host, called once after scanning and before a pause."""
         pass
 
     def host_exit(self) -> None:
-        """5. Exit code on the host if the scan finished successfully."""
+        """6. Exit code on the host if the scan finished successfully."""
         pass
