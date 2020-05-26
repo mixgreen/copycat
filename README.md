@@ -14,9 +14,19 @@ Nix scripts for this project can be found in the
 
 More information about ARTIQ can be found in the [ARTIQ manual](https://m-labs.hk/artiq/manual/).
 
-A side-project of DAX is DAX.sim: a *functional simulator* for ARTIQ hardware that allows
+**DAX.sim**
+
+The DAX.sim sub-module is a *functional simulator* for ARTIQ hardware that allows
 users to run experiment code without the need of a physical core device.
 DAX.sim can help users to test, debug, and verify the functionality of their code.
+DAX.sim does not depend on other components of DAX and can be used by any ARTIQ project.
+
+**DAX.scan**
+
+The DAX.scan sub-module contains lightweight scanning tools that can be used for n-dimensional
+scanning type experiments. The scanning tool provides an experiment template for yielding a
+single point of data and automates the process of scanning over one or multiple parameters.
+DAX.scan is not dependent on other components of DAX and can be used by any ARTIQ project.
 
 ## Resources
 
@@ -39,7 +49,13 @@ from dax.sim import enable_dax_sim
 device_db = enable_dax_sim(enable=True, ddb={
     # Your regular device db...
 })
-``` 
+```
+
+The scanning tools in DAX.scan can be imported using the following import statement:
+
+```python
+from dax.scan import *
+```
 
 ## Testing
 
