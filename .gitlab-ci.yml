@@ -34,7 +34,7 @@ test_conda:
     - source ~/.bashrc
     - conda activate artiq
     # Install DAX dependencies
-    - conda install numpy scipy "pyvcd<0.2" natsort pygit2 pyqt5 pyqtgraph matplotlib
+    - conda install numpy scipy "pyvcd<0.2" natsort pygit2 "pyqt>=5" pyqtgraph matplotlib
     # Install packages required for testing
     - conda install pycodestyle
   script:
