@@ -1,13 +1,18 @@
 dax.modules package
 ===================
 
-Submodules
-----------
-
 dax.modules.cpld\_init module
 -----------------------------
 
 .. automodule:: dax.modules.cpld_init
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+dax.modules.hist\_context module
+--------------------------------
+
+.. automodule:: dax.modules.hist_context
     :members:
     :undoc-members:
     :show-inheritance:

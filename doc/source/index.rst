@@ -17,6 +17,7 @@ Project website: https://gitlab.com/duke-artiq/dax.
 
     dax.base
     dax.sim
+    dax.modules
     dax.util
     dax
 
