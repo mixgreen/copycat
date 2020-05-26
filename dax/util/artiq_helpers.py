@@ -24,7 +24,7 @@ def get_manager_or_parent(device_db: typing.Dict[str, typing.Any] = None) -> typ
     # Scheduler
     scheduler = artiq.frontend.artiq_run.DummyScheduler()
     # Fill in expid of scheduler
-    scheduler.expid = {'log_level': 20, 'file': 'file_name.py', 'class_name': 'TestExperiment', 'arguments': {},
+    scheduler.expid = {'log_level': 20, 'file': 'file_name.py', 'class_name': 'ArtiqHelperExperiment', 'arguments': {},
                        'repo_rev': 'N/A'}
 
     # Device DB for testing in the directory of this script

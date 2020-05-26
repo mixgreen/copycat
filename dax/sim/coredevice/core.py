@@ -110,7 +110,7 @@ class Core(DaxSimDevice):
         if self._sim_config.output_enabled:
             # Create an output file name
             scheduler = self._device_manager.get('scheduler')
-            output_file_name = get_file_name(scheduler, 'csv', postfix='profile')
+            output_file_name = get_file_name(scheduler, 'profile', 'csv')
 
             # Create a profiling report
             _logger.debug('Writing profiling report')

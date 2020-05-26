@@ -31,7 +31,7 @@ class DaxSimConfig:
         if self.output_enabled:
             # Generate output file name for the signal manager
             scheduler = dmgr.get('scheduler')
-            output_file_name = get_file_name(scheduler, 'vcd', postfix='trace')
+            output_file_name = get_file_name(scheduler, 'trace', 'vcd')
 
             # Set the signal manager
             _logger.debug('Initializing VCD signal manager...')

@@ -7,6 +7,7 @@ from dax.experiment import *
 from dax.modules.hist_context import *
 from dax.interfaces.detection import DetectionInterface
 from dax.util.artiq_helpers import get_manager_or_parent
+from dax.util.output import temp_dir
 
 
 class _MockDetectionModule(DaxModule, DetectionInterface):
@@ -240,14 +241,23 @@ class HistogramAnalyzerTestCase(unittest.TestCase):
         self.h = self.s.hist_context
 
     def test_histogram_analyzer_system(self):
-        HistogramAnalyzer(self.s)
+        # The histogram analyzer requests an output file which will trigger the creation of an experiment output dir
+        # To prevent unnecessary directories after testing, we switch to a temp dir
+        with temp_dir():
+            HistogramAnalyzer(self.s)
 
     def test_histogram_analyzer_module(self):
-        HistogramAnalyzer(self.h)
+        # The histogram analyzer requests an output file which will trigger the creation of an experiment output dir
+        # To prevent unnecessary directories after testing, we switch to a temp dir
+        with temp_dir():
+            HistogramAnalyzer(self.h)
 
     def test_histogram_analyzer_file(self):
-        with self.assertRaises(NotImplementedError, msg='Did not raise expected NotImplementedError'):
-            HistogramAnalyzer('file_name.h5')
+        # The histogram analyzer requests an output file which will trigger the creation of an experiment output dir
+        # To prevent unnecessary directories after testing, we switch to a temp dir
+        with temp_dir():
+            with self.assertRaises(NotImplementedError, msg='Did not raise expected NotImplementedError'):
+                HistogramAnalyzer('file_name.h5')
 
 
 if __name__ == '__main__':

@@ -105,7 +105,8 @@ class DaxScan(dax.base.dax.DaxBase, abc.ABC):
         if self.INFINITE_SCAN_ARGUMENT:
             # Add an argument for infinite scan
             self._scan_infinite = self.get_argument('Infinite scan', BooleanValue(self.INFINITE_SCAN_DEFAULT),
-                                                    group='DAX.scan', tooltip='Loop infinitely over the scan points')
+                                                    group='DAX.scan',
+                                                    tooltip='Loop infinitely over the scan points')  # type: bool
         else:
             # If infinite scan is disabled, the value is always False
             self._scan_infinite = False
@@ -121,6 +122,14 @@ class DaxScan(dax.base.dax.DaxBase, abc.ABC):
         Additionally, users can also add normal arguments using the standard ARTIQ functions.
         """
         pass
+
+    @property
+    def is_infinite_scan(self) -> bool:
+        """True if the scan was set to be an infinite scan."""
+        if hasattr(self, '_scan_infinite'):
+            return self._scan_infinite
+        else:
+            raise AttributeError('is_scan_infinite can only be obtained after build() was called')
 
     def add_scan(self, key: str, name: str, scannable: Scannable,
                  group: typing.Optional[str] = None, tooltip: typing.Optional[str] = None) -> None:

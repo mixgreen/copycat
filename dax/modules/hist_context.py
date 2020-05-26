@@ -400,7 +400,7 @@ class HistogramAnalyzer:
             ax.legend(loc=legend_loc)
 
             # Save figure
-            file_name = self._file_name_generator(ext, self.HISTOGRAM_PLOT_FILE_FORMAT.format(key=key, index=index))
+            file_name = self._file_name_generator(self.HISTOGRAM_PLOT_FILE_FORMAT.format(key=key, index=index), ext)
             fig.savefig(file_name, bbox_inches='tight')
 
     def plot_all_histograms(self, **kwargs: typing.Any) -> None:
@@ -458,7 +458,7 @@ class HistogramAnalyzer:
         ax.legend(loc=legend_loc)
 
         # Save figure
-        file_name = self._file_name_generator(ext, self.PROBABILITY_PLOT_FILE_FORMAT.format(key=key))
+        file_name = self._file_name_generator(self.PROBABILITY_PLOT_FILE_FORMAT.format(key=key), ext)
         fig.savefig(file_name, bbox_inches='tight')
 
     def plot_all_probabilities(self, **kwargs: typing.Any) -> None:
