@@ -111,7 +111,7 @@ class DaxScan(dax.base.dax.DaxBase, abc.ABC):
             self._scan_infinite = False
 
         # Update kernel invariants
-        self.update_kernel_invariants('_scan_infinite')
+        self.update_kernel_invariants('_scan_scheduler', '_scan_infinite')
 
     @abc.abstractmethod
     def build_scan(self) -> None:
@@ -154,7 +154,13 @@ class DaxScan(dax.base.dax.DaxBase, abc.ABC):
 
     @host_only
     def get_scan_points(self) -> typing.Dict[str, typing.List[typing.Any]]:
-        """Get the scan points for analysis.
+        """Get the scan points (including product) for analysis.
+
+        A list of values is returned on a per-key basis.
+        The values are returned in the same sequence as was provided to the actual run,
+        including the product of all scannables.
+
+        To get the values without applying the product, see :func:`get_scannables`.
 
         :return: A dict containing all the scan points on a per-key basis
         """
@@ -162,6 +168,41 @@ class DaxScan(dax.base.dax.DaxBase, abc.ABC):
             return {key: [getattr(point, key) for point in self._scan_points] for key in self._scan_scannables}
         else:
             raise AttributeError('Scan points can only be obtained after run() was called')
+
+    @host_only
+    def get_scannables(self) -> typing.Dict[str, typing.List[typing.Any]]:
+        """Get the scan points without product.
+
+        For every key, a list of scan values is returned.
+        These values are the individual values for each key, without applying the product.
+
+        To get the values including the product, see :func:`get_scan_points`.
+
+        :return: A dict containing the individual scan values on a per-key basis
+        """
+        return {key: list(scannable) for key, scannable in self._scan_scannables.items()}
+
+    @host_only
+    def _make_scan_points(self) -> typing.List[typing.Any]:
+        """Make and return the scan points
+
+        :return: A list of scan points
+        """
+        if self._scan_scannables:
+            # Make scan points using the ARTIQ multi scan manager
+            scan_points = list(MultiScanManager(*self._scan_scannables.items()))  # type: ignore
+
+            # For every scan point, mark the parameters as kernel invariant
+            keys = set(self._scan_scannables)
+            for point in scan_points:
+                setattr(point, 'kernel_invariants', keys)
+
+            # Return the scan points
+            return scan_points
+
+        else:
+            # Return an empty list
+            return []
 
     """Run functions"""
 
@@ -176,9 +217,8 @@ class DaxScan(dax.base.dax.DaxBase, abc.ABC):
         # Check if build() was called
         assert hasattr(self, '_scan_scannables'), 'DaxScan.build() was not called'
 
-        # Make the multi-scan manager and construct the list with points
-        self._scan_points = list(
-            MultiScanManager(*self._scan_scannables.items())) if self._scan_scannables else []  # type: ignore
+        # Make the scan points
+        self._scan_points = self._make_scan_points()
         self.update_kernel_invariants('_scan_points')
         self.logger.debug('Prepared {:d} scan point(s) with {:d} scan parameter(s)'.
                           format(len(self._scan_points), len(self._scan_scannables)))

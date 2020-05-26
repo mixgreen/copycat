@@ -140,6 +140,11 @@ class Scan1TestCase(unittest.TestCase):
         points = self.scan.get_scan_points()
         self.assertIn('foo', points)
 
+    def test_get_scannables(self):
+        scannables = self.scan.get_scannables()
+        self.assertIn('foo', scannables)
+        self.assertEqual(len(scannables['foo']), self.scan.FOO)
+
 
 class BuildScanTestCase(unittest.TestCase):
 
@@ -191,6 +196,15 @@ class Scan2TestCase(unittest.TestCase):
         points = self.scan.get_scan_points()
         self.assertIn('foo', points)
         self.assertIn('bar', points)
+        self.assertEqual(len(points['foo']), self.scan.FOO * self.scan.BAR)
+        self.assertEqual(len(points['bar']), self.scan.FOO * self.scan.BAR)
+
+    def test_get_scannables(self):
+        scannables = self.scan.get_scannables()
+        self.assertIn('foo', scannables)
+        self.assertIn('bar', scannables)
+        self.assertEqual(len(scannables['foo']), self.scan.FOO)
+        self.assertEqual(len(scannables['bar']), self.scan.BAR)
 
 
 class ScanTerminateTestCase(unittest.TestCase):

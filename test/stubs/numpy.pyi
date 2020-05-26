@@ -20,10 +20,11 @@ __SHAPE_T = typing.Union[int, typing.Tuple[int]]
 
 
 # noinspection PyPep8Naming
-class ndarray(list):
+class ndarray(collections.abc.Sequence, typing.Generic[__N_T]):
 
     # noinspection PyMissingConstructor
-    def __init__(self, shape: typing.Tuple[int], dtype: type = float, buffer: typing.Any = None, offset: int = 0,
+    def __init__(self, shape: typing.Tuple[int], dtype: type = float, buffer: typing.Any = None,
+                 offset: int = 0,
                  strides: typing.Optional[typing.Tuple[int]] = None, order: typing.Optional[str] = None):
         ...
 
@@ -77,6 +78,41 @@ class ndarray(list):
 
     @property
     def strides(self) -> typing.Tuple[int]:
+        ...
+
+    @typing.overload
+    def __getitem__(self, i: int) -> __N_T:
+        ...
+
+    @typing.overload
+    def __getitem__(self, s: slice) -> typing.Sequence[__N_T]:
+        ...
+
+    def __len__(self) -> int:
+        ...
+
+    def __add__(self, other: __N_T) -> ndarray:
+        ...
+
+    def __iadd__(self, other: __N_T) -> ndarray:
+        ...
+
+    def __sub__(self, other: __N_T) -> ndarray:
+        ...
+
+    def __isub__(self, other: __N_T) -> ndarray:
+        ...
+
+    def __mul__(self, other: __N_T) -> ndarray:
+        ...
+
+    def __imul__(self, other: __N_T) -> ndarray:
+        ...
+
+    def __truediv__(self, other: __N_T) -> ndarray:
+        ...
+
+    def __itruediv__(self, other: __N_T) -> ndarray:
         ...
 
 

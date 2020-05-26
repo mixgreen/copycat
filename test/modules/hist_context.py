@@ -53,12 +53,6 @@ class HistogramContextTestCase(unittest.TestCase):
 
         # Out of context
         self.assertFalse(self.h.in_context(), 'in_context() reported wrong value')
-        with self.h():  # With call, but still use default values
-            # In context
-            self.assertTrue(self.h.in_context(), 'in_context() reported wrong value')
-
-        # Out of context
-        self.assertFalse(self.h.in_context(), 'in_context() reported wrong value')
         # Open context manually
         self.h.open()
         # In context
@@ -76,8 +70,8 @@ class HistogramContextTestCase(unittest.TestCase):
     def test_call_in_context(self):
         # We can not call the histogram context out of context
         with self.h:
-            with self.assertRaises(HistogramContextError, msg='Call out of context did not raise'):
-                self.h()
+            with self.assertRaises(HistogramContextError, msg='Config in context did not raise'):
+                self.h.config()
 
     def test_nesting_exceptions(self):
         with self.assertRaises(HistogramContextError, msg='Close histogram out of context did not raise'):
@@ -105,7 +99,7 @@ class HistogramContextTestCase(unittest.TestCase):
             [3, 4],
         ]
 
-        with self.h():
+        with self.h:
             # Check buffer
             self.assertListEqual([], self.h._buffer, 'Buffer was not cleared when entering new context')
             for d in data:
@@ -114,7 +108,7 @@ class HistogramContextTestCase(unittest.TestCase):
             # Check buffer
             self.assertListEqual(data, self.h._buffer, 'Buffer did not contain expected data')
 
-        with self.h():
+        with self.h:
             # Check buffer
             self.assertListEqual([], self.h._buffer, 'Buffer was not cleared when entering new context')
 
@@ -131,7 +125,7 @@ class HistogramContextTestCase(unittest.TestCase):
         ]
 
         for _ in range(num_histograms):
-            with self.h():
+            with self.h:
                 for d in data:
                     self.h.append(d)
 
@@ -162,14 +156,17 @@ class HistogramContextTestCase(unittest.TestCase):
             [8, 5, 0],
         ]
 
+        # Store in a specific dataset
+        self.h.config(dataset_key)
         for _ in range(num_histograms):
-            with self.h(dataset_key):  # Store in a specific dataset
+            with self.h:
                 for d in data_0:
                     self.h.append(d)
 
-        # Store other data too
+        # Store other data too in the default dataset
+        self.h.config()
         for _ in range(num_histograms):
-            with self.h():
+            with self.h:
                 for d in data_1:
                     self.h.append(d)
 
@@ -197,7 +194,7 @@ class HistogramContextTestCase(unittest.TestCase):
         ]
 
         for _ in range(num_histograms):
-            with self.h():
+            with self.h:
                 for d in data:
                     self.h.append(d)
 
@@ -210,11 +207,47 @@ class HistogramContextTestCase(unittest.TestCase):
 
     def test_default_dataset_key(self):
         dataset_key = 'foo'
-        with self.h(dataset_key):
+        self.h.config(dataset_key)  # Store in a specific dataset
+        with self.h:
             self.assertEqual(self.h._dataset_key, dataset_key, 'Custom dataset key was not correctly stored')
         with self.h:
-            # Dataset key should be restored
-            self.assertEqual(self.h._dataset_key, self.h.DEFAULT_DATASET_KEY, 'Dataset key was not correctly reset')
+            # Dataset key should remain
+            self.assertEqual(self.h._dataset_key, dataset_key, 'Custom dataset key was not correctly saved')
+
+    def test_archive_keys(self):
+        keys = ['a', 'foo', 'bar', 'foobar']
+        for k in keys:
+            self.h.config(k)
+            with self.h:
+                pass
+
+        self.assertSetEqual(set(keys), set(self.h.get_keys()))
+
+    def test_applets(self):
+        # In simulation we can only call these functions, but nothing will happen
+        self.h.applet_plot_histogram()
+        self.h.applet_plot_probability()
+        self.h.applet_close_histogram()
+        self.h.applet_close_probability()
+        self.h.applet_close_all()
+
+
+class HistogramAnalyzerTestCase(unittest.TestCase):
+
+    def setUp(self) -> None:
+        self.s = _TestSystem(get_manager_or_parent())
+        self.s.dax_init()
+        self.h = self.s.hist_context
+
+    def test_histogram_analyzer_system(self):
+        HistogramAnalyzer(self.s)
+
+    def test_histogram_analyzer_module(self):
+        HistogramAnalyzer(self.h)
+
+    def test_histogram_analyzer_file(self):
+        with self.assertRaises(NotImplementedError, msg='Did not raise expected NotImplementedError'):
+            HistogramAnalyzer('file_name.h5')
 
 
 if __name__ == '__main__':

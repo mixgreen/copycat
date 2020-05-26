@@ -10,8 +10,9 @@ from dax.sim.device import DaxSimDevice
 from dax.sim.signal import get_signal_manager
 from dax.sim.ddb import DAX_SIM_CONFIG_KEY
 from dax.sim.time import DaxTimeManager
-from dax.util.units import time_to_str
 from dax.sim.coredevice.comm_kernel import CommKernelDummy
+from dax.util.units import time_to_str
+from dax.util.output import get_file_name
 
 _logger = logging.getLogger(__name__)
 """The logger for this file."""
@@ -107,9 +108,13 @@ class Core(DaxSimDevice):
     def close(self) -> None:
         # The SimConfig object will be available, even if it was closed earlier
         if self._sim_config.output_enabled:
+            # Create an output file name
+            scheduler = self._device_manager.get('scheduler')
+            output_file_name = get_file_name(scheduler, 'csv', postfix='profile')
+
             # Create a profiling report
             _logger.debug('Writing profiling report')
-            with open(self._sim_config.get_output_file_name('csv', postfix='profile'), 'w') as csv_file:
+            with open(output_file_name, 'w') as csv_file:
                 # Open CSV writer
                 csv_writer = csv.writer(csv_file)
                 # Submit headers

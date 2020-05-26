@@ -31,10 +31,10 @@ __all__ = ['DaxModule', 'DaxSystem', 'DaxService',
 # Workaround: Add Numpy ndarray as a sequence type (see https://github.com/numpy/numpy/issues/2776)
 collections.abc.Sequence.register(np.ndarray)
 
-_KEY_SEPARATOR = '.'
+_KEY_SEPARATOR = '.'  # type: str
 """Key separator for datasets."""
 
-_NAME_RE = re.compile(r'\w+')
+_NAME_RE = re.compile(r'\w+')  # type: typing.Pattern[str]
 """Regex for matching valid names."""
 
 
@@ -50,7 +50,7 @@ def _is_valid_key(key: str) -> bool:
     return all(_NAME_RE.fullmatch(n) for n in key.split(_KEY_SEPARATOR))
 
 
-_ARTIQ_VIRTUAL_DEVICES = {'scheduler', 'ccb'}
+_ARTIQ_VIRTUAL_DEVICES = {'scheduler', 'ccb'}  # type: typing.Set[str]
 """ARTIQ virtual devices."""
 
 

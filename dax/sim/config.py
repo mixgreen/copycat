@@ -3,6 +3,7 @@ import typing
 
 from dax import __version__ as _dax_version
 from dax.sim.signal import set_signal_manager, get_signal_manager, VcdSignalManager
+from dax.util.output import get_file_name
 
 __all__ = ['DaxSimConfig']
 
@@ -27,14 +28,14 @@ class DaxSimConfig:
         # Store attributes
         self.__output_enabled = output
 
-        # Make base name for output files
-        scheduler = dmgr.get('scheduler')
-        self.__base_name = '{:09d}-{}'.format(scheduler.rid, str(scheduler.expid.get("class_name")))
-
         if self.output_enabled:
+            # Generate output file name for the signal manager
+            scheduler = dmgr.get('scheduler')
+            output_file_name = get_file_name(scheduler, 'vcd', postfix='trace')
+
             # Set the signal manager
             _logger.debug('Initializing VCD signal manager...')
-            set_signal_manager(VcdSignalManager(self.get_output_file_name('vcd', postfix='trace'), **signal_mgr_kwargs))
+            set_signal_manager(VcdSignalManager(output_file_name, **signal_mgr_kwargs))
             _logger.debug('VCD signal manager initialized')
 
     @property
@@ -44,21 +45,6 @@ class DaxSimConfig:
         :return: True if the `output_enabled` flag was set
         """
         return self.__output_enabled
-
-    def get_output_file_name(self, ext: str, postfix: typing.Optional[str] = None) -> str:
-        """ Convenience function to generate uniformly styled output file names.
-
-        :param ext: The extension of the file
-        :param postfix: A postfix for the base file name
-        :return: A file name
-        """
-        assert isinstance(ext, str), 'File extension must be of type str'
-        assert isinstance(postfix, str) or postfix is None, 'Postfix must be of type str or None'
-
-        # Add postfix if provided
-        output_file_name = self.__base_name if postfix is None else '{:s}-{:s}'.format(self.__base_name, postfix)
-        # Return full file name
-        return '{:s}.{:s}'.format(output_file_name, ext)
 
     @staticmethod
     def close() -> None:

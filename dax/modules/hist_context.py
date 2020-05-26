@@ -1,12 +1,18 @@
 import typing
 import collections
+import itertools
 import numpy as np
+
+import dax.util.matplotlib_backend  # Workaround for QT error
+import matplotlib.pyplot as plt  # type: ignore
+import matplotlib.ticker  # type: ignore
 
 from dax.experiment import *
 from dax.interfaces.detection import DetectionInterface
 from dax.util.ccb import get_ccb_tool
+from dax.util.output import get_file_name_generator
 
-__all__ = ['HistogramContext', 'HistogramContextError']
+__all__ = ['HistogramContext', 'HistogramAnalyzer', 'HistogramContextError']
 
 
 class HistogramContext(DaxModule):
@@ -15,6 +21,8 @@ class HistogramContext(DaxModule):
     This module can be used as a sub-module of a service providing state measurement abilities.
     The HistogramContext object can directly be passed to the user which can use it as a context
     or call its additional functions.
+
+    Note that the histogram context requires a :class:`DetectionInterface` in your system.
 
     The histogram context objects manages all result values, but the user is responsible for tracking
     "input parameters".
@@ -81,6 +89,7 @@ class HistogramContext(DaxModule):
         No type checking is performed on the data.
 
         :param data: A list of ints representing the PMT counts of different ions.
+        :raises HistogramContextError: Raised if called outside the histogram context
         """
         if not self._in_context:
             # Called out of context
@@ -90,17 +99,20 @@ class HistogramContext(DaxModule):
         self._buffer.append(data)
 
     @rpc(flags={'async'})
-    def __call__(self, key=None,
-                 clear_probability_plot=False):  # type: (typing.Optional[str], bool) -> HistogramContext
-        """Optional configuration of the histogram context for the next run.
+    def config(self, key=None,
+               clear_probability_plot=False):  # type: (typing.Optional[str], bool) -> None
+        """Optional configuration of the histogram context (async RPC).
 
-        Set the dataset base key used for the next histogram data.
-        After every context exit, the dataset name resets to the default key.
+        Set the dataset base key used for the following histograms.
+        Use `None` to reset the dataset base key to its default value.
+
+        Clear the probability plot using the according flag.
 
         This function can not be used when already in context.
 
         :param key: Key for the result dataset
         :param clear_probability_plot: If true, clear the probability plot
+        :raises HistogramContextError: Raised if called inside the histogram context
         """
         assert isinstance(key, str) or key is None, 'Provided dataset key must be of type str or None'
         assert isinstance(clear_probability_plot, bool), 'Clear probability plot flag must be of type bool'
@@ -109,33 +121,42 @@ class HistogramContext(DaxModule):
             # Called in context
             raise HistogramContextError('Setting the target dataset can only be done when not in context')
 
-        if key is not None:
-            # Store the dataset key
-            self._dataset_key = key
+        # Update the dataset key
+        self._dataset_key = self.DEFAULT_DATASET_KEY if key is None else key
 
         if clear_probability_plot:
             # Clear the probability dataset
             self.set_dataset(self.PROBABILITY_PLOT_KEY, [], broadcast=True, archive=False)
 
-        # Return self to use in a `with` statement
-        return self
-
-    @rpc(flags={'async'})
+    @portable
     def __enter__(self):  # type: () -> None
         """Enter the histogram context.
 
         Entering the histogram context will prepare the target dataset and clear the buffer.
-        The earlier set target dataset will be used for the output.
-        In case no target dataset was configured, the default dataset key will be used.
+        Optionally, this context can be configured using the :func:`config` function before entering the context.
+        """
+        self.open()
+
+    @portable
+    def __exit__(self, exc_type, exc_val, exc_tb):  # type: (typing.Any, typing.Any, typing.Any) -> None
+        """Exit the histogram context."""
+        self.close()
+
+    @rpc(flags={'async'})
+    def open(self):  # type: () -> None
+        """Enter the histogram context manually.
+
+        Optionally, this context can be configured using the :func:`config` function.
+
+        This function can be used to manually enter the histogram context.
+        We strongly recommend to use the `with` statement instead.
+
+        :raises HistogramContextError: Raised if already in histogram context (nesting is not allowed)
         """
 
         if self._in_context:
             # Prevent nested context
             raise HistogramContextError('The histogram context can not be nested')
-
-        if self._dataset_key not in self._open_datasets:
-            # Initialize counter to 0
-            self._open_datasets[self._dataset_key] = 0
 
         # Clear histogram dataset
         self.set_dataset(self.HISTOGRAM_PLOT_KEY, [], broadcast=True, archive=False)
@@ -145,8 +166,14 @@ class HistogramContext(DaxModule):
         self._in_context += 1
 
     @rpc(flags={'async'})
-    def __exit__(self, exc_type, exc_val, exc_tb):  # type: (typing.Any, typing.Any, typing.Any) -> None
-        """Exit the histogram context."""
+    def close(self):  # type: () -> None
+        """Exit the histogram context manually.
+
+        This function can be used to manually exit the histogram context.
+        We strongly recommend to use the `with` statement instead.
+
+        :raises HistogramContextError: Raised if called outside the histogram context
+        """
 
         if not self._in_context:
             # Called exit out of context
@@ -185,8 +212,6 @@ class HistogramContext(DaxModule):
 
         # Update counter for this dataset key
         self._open_datasets[self._dataset_key] += 1
-        # Reset dataset key to default
-        self._dataset_key = self._default_dataset_key
         # Update context counter
         self._in_context -= 1
 
@@ -204,28 +229,6 @@ class HistogramContext(DaxModule):
         total = sum(counter.values())
         # Return probability
         return one / total
-
-    @rpc(flags={'async'})
-    def open(self, key=None, clear_probability_plot=False):  # type: (typing.Optional[str], bool) -> None
-        """Enter the histogram context manually.
-
-        This function can be used to manually configure and enter the histogram context.
-        We strongly recommend to use the `with` statement instead.
-
-        :param key: Key for the result dataset
-        :param clear_probability_plot: If true, clear the probability plot
-        """
-        self.__call__(key, clear_probability_plot)
-        self.__enter__()
-
-    @rpc(flags={'async'})
-    def close(self):  # type: () -> None
-        """Exit the histogram context manually.
-
-        This function can be used to manually exit the histogram context.
-        We strongly recommend to use the `with` statement instead.
-        """
-        self.__exit__(None, None, None)
 
     """Applet plotting functions"""
 
@@ -269,11 +272,21 @@ class HistogramContext(DaxModule):
         """Close all histogram context plots."""
         self._ccb.disable_applet_group(self.PLOT_GROUP)
 
-    """Data analysis functions"""
+    """Data access functions"""
 
     @host_only
-    def get_histograms(self,
-                       dataset_key: typing.Optional[str] = None) -> typing.List[typing.Sequence[collections.Counter]]:
+    def get_keys(self) -> typing.List[str]:
+        """Get the keys for which histogram data was recorded.
+
+        The returned keys can be used for the :func:`get_histograms` and :func:`get_probabilities` functions.
+
+        :return: A list with keys
+        """
+        return list(self._histogram_archive)
+
+    @host_only
+    def get_histograms(self, dataset_key: typing.Optional[str] = None) \
+            -> typing.List[typing.Sequence[collections.Counter]]:
         """Obtain all histogram objects recorded by this histogram context for a specific key.
 
         The data is formatted as a list of histograms per channel.
@@ -304,6 +317,157 @@ class HistogramContext(DaxModule):
         """
         return [[self._histogram_to_probability(h, state_detection_threshold) for h in histograms]
                 for histograms in self.get_histograms(dataset_key)]
+
+
+class HistogramAnalyzer:
+    """Basic automated analysis and offline plotting of data obtained by the histogram context."""
+
+    HISTOGRAM_PLOT_FILE_FORMAT = '{key:s}_{index:d}'
+    """File name format for histogram plot files."""
+    PROBABILITY_PLOT_FILE_FORMAT = '{key:s}_probability'
+    """File name format for probability plot files."""
+
+    def __init__(self, source: typing.Union[DaxSystem, HistogramContext, str],
+                 state_detection_threshold: typing.Optional[int] = None):
+        """Create a new histogram analyzer object.
+
+        :param source: The source of the histogram data
+        :param state_detection_threshold: The state detection threshold used to calculate state probabilities
+        """
+        assert isinstance(state_detection_threshold, int) or state_detection_threshold is None
+
+        if isinstance(source, DaxSystem):
+            # Obtain histogram context module
+            source = source.registry.find_module(HistogramContext)
+
+        if isinstance(source, HistogramContext):
+            # Get data from histogram context module
+            self.keys = source.get_keys()
+            self.histograms = {k: source.get_histograms(k) for k in self.keys}
+            self.probabilities = {k: source.get_probabilities(k, state_detection_threshold) for k in self.keys}
+
+            # Obtain the file name generator
+            self._file_name_generator = get_file_name_generator(source.get_device('scheduler'))
+
+        elif isinstance(source, str):
+            # Read and convert data from HDF5 file
+            raise NotImplementedError('Analysis from HDF5 source file is not yet implemented')
+
+        else:
+            raise TypeError('Unsupported source type')
+
+    def plot_histogram(self, key: str,
+                       x_label: typing.Optional[str] = 'Count', y_label: typing.Optional[str] = 'Frequency',
+                       width: float = 0.8,
+                       legend_loc: typing.Optional[typing.Union[str, typing.Tuple[float, float]]] = None,
+                       ext: str = 'pdf',
+                       **kwargs: typing.Any) -> None:
+        """Plot the histograms for a given key.
+
+        :param key: The key of the data to plot
+        :param x_label: X-axis label
+        :param y_label: Y-axis label
+        :param width: Total width of a bar
+        :param legend_loc: Location of the legend
+        :param ext: Output file extension
+        :param kwargs: Keyword arguments for the plot function
+        """
+        assert isinstance(key, str)
+        assert isinstance(x_label, str) or x_label is None
+        assert isinstance(y_label, str) or y_label is None
+        assert isinstance(width, float)
+        assert isinstance(ext, str)
+
+        # Get the histograms associated with the given key
+        histograms = self.histograms[key]
+
+        for h, index in zip(zip(*histograms), itertools.count()):
+            # Obtain X and Y values (for all channels)
+            x_values = np.arange(max(max(c) for c in h) + 1)
+            y_values = [[c[x] for x in x_values] for c in h]
+
+            # Plot
+            bar_width = width / len(h)
+            fig, ax = plt.subplots()
+            for c_values, i in zip(y_values, itertools.count()):
+                ax.bar(x_values + (bar_width * i) - (width / 2), c_values,
+                       width=bar_width, align='edge', label='Channel {:d}'.format(i), **kwargs)
+
+            # Formatting
+            ax.set_xlabel(x_label)
+            ax.set_ylabel(y_label)
+            ax.xaxis.set_major_locator(matplotlib.ticker.MaxNLocator(integer=True))  # Only integer ticks
+            ax.legend(loc=legend_loc)
+
+            # Save figure
+            file_name = self._file_name_generator(ext, self.HISTOGRAM_PLOT_FILE_FORMAT.format(key=key, index=index))
+            fig.savefig(file_name, bbox_inches='tight')
+
+    def plot_all_histograms(self, **kwargs: typing.Any) -> None:
+        """Plot histograms for all keys available in the data.
+
+        :param kwargs: Keyword arguments passed to :func:`plot_histogram`
+        """
+        for key in self.histograms:
+            self.plot_histogram(key, **kwargs)
+
+    def plot_probability(self, key: str,
+                         x_values: typing.Optional[typing.Sequence[typing.Union[float, int]]] = None,
+                         x_label: typing.Optional[str] = None, y_label: typing.Optional[str] = 'State probability',
+                         legend_loc: typing.Optional[typing.Union[str, typing.Tuple[float, float]]] = None,
+                         ext: str = 'pdf',
+                         **kwargs: typing.Any) -> None:
+        """Plot the probability graph for a given key.
+
+        :param key: The key of the data to plot
+        :param x_values: The sequence with X values for the graph
+        :param x_label: X-axis label
+        :param y_label: Y-axis label
+        :param legend_loc: Location of the legend
+        :param ext: Output file extension
+        :param kwargs: Keyword arguments for the plot function
+        """
+        assert isinstance(key, str)
+        assert isinstance(x_values, collections.abc.Sequence) or x_values is None
+        assert isinstance(x_label, str) or x_label is None
+        assert isinstance(y_label, str) or y_label is None
+        assert isinstance(ext, str)
+
+        # Get the probabilities associated with the provided key
+        probabilities = self.probabilities[key]
+
+        if not len(probabilities):
+            # No data to plot
+            return
+
+        if x_values is None:
+            # Generate generic X values
+            x_values = np.arange(len(probabilities[0]))
+
+        # Plotting defaults
+        kwargs.setdefault('marker', 'o')
+
+        # Plot
+        fig, ax = plt.subplots()
+        for p_values, i in zip(probabilities, itertools.count()):
+            ax.plot(x_values, p_values, label='Channel {:d}'.format(i), **kwargs)
+
+        # Plot formatting
+        ax.set_xlabel(x_label)
+        ax.set_ylabel(y_label)
+        ax.legend(loc=legend_loc)
+
+        # Save figure
+        file_name = self._file_name_generator(ext, self.PROBABILITY_PLOT_FILE_FORMAT.format(key=key))
+        fig.savefig(file_name, bbox_inches='tight')
+
+    def plot_all_probabilities(self, **kwargs: typing.Any) -> None:
+        """Plot probability graphs for all keys available in the data.
+
+        :param kwargs: Keyword arguments passed to :func:`plot_probability`
+        """
+        for key in self.histograms:
+            self.plot_probability(key, **kwargs)
 
 
 class HistogramContextError(RuntimeError):
