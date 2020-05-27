@@ -37,7 +37,7 @@ class HistogramPlot(pyqtgraph.PlotWidget):
             y = [y[self.args.index]]
 
         # Generate X values based on the length of the data (HDF5 dataset size is always homogeneous)
-        x = list(range(len(y[0]) + 1))
+        x = np.arange(len(y[0]) + 1, dtype=np.float) - 0.5  # View shift of -0.5 to align with x-axis labels
 
         # Plot
         self.clear()

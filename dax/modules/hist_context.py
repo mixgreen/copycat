@@ -35,7 +35,7 @@ class HistogramContext(DaxModule):
     PLOT_GROUP = 'dax.histogram_context'
     """Group to which the plot applets belong."""
 
-    DEFAULT_DATASET_KEY = 'pmt_histogram'
+    DEFAULT_DATASET_KEY = 'histogram'
     """The default name of the output dataset in archive."""
 
     DATASET_KEY_FORMAT = '{dataset_key:s}.{index:d}'

@@ -849,7 +849,7 @@ class DaxService(DaxHasSystem, abc.ABC):
     """Base class for system services."""
 
     SERVICE_NAME = ''  # type: str
-    """The unique name of this service"""
+    """The unique name of this service."""
 
     def __init__(self, managers_or_parent: DaxHasSystem,
                  *args: typing.Any, **kwargs: typing.Any):
