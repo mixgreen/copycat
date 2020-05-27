@@ -226,11 +226,11 @@ class HistogramContextTestCase(unittest.TestCase):
 
     def test_applets(self):
         # In simulation we can only call these functions, but nothing will happen
-        self.h.applet_plot_histogram()
-        self.h.applet_plot_probability()
-        self.h.applet_close_histogram()
-        self.h.applet_close_probability()
-        self.h.applet_close_all()
+        self.h.plot_histogram()
+        self.h.plot_probability()
+        self.h.disable_histogram_plot()
+        self.h.disable_probability_plot()
+        self.h.disable_all_plots()
 
 
 class HistogramAnalyzerTestCase(unittest.TestCase):

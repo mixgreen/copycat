@@ -23,7 +23,7 @@ DAX.sim does not depend on other components of DAX and can be used by any ARTIQ 
 
 **DAX.scan**
 
-The DAX.scan sub-module contains lightweight scanning tools that can be used for n-dimensional
+The DAX.scan sub-module contains *lightweight scanning tools* that can be used for n-dimensional
 scanning type experiments. The scanning tool provides an experiment template for yielding a
 single point of data and automates the process of scanning over one or multiple parameters.
 DAX.scan is not dependent on other components of DAX and can be used by any ARTIQ project.

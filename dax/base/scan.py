@@ -10,7 +10,7 @@ import dax.base.dax
 
 __all__ = ['DaxScan']
 
-_KEY_RE = re.compile(r'[a-zA-Z_]\w+')
+_KEY_RE = re.compile(r'[a-zA-Z_]\w*')
 """Regex for matching valid keys."""
 
 

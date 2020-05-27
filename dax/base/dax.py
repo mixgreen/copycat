@@ -639,7 +639,7 @@ class DaxModuleBase(DaxHasSystem, abc.ABC):
 class DaxModule(DaxModuleBase, abc.ABC):
     """Base class for DAX modules."""
 
-    def __init__(self, managers_or_parent: DaxModuleBase, module_name: str,
+    def __init__(self, managers_or_parent: DaxHasSystem, module_name: str,
                  *args: typing.Any, **kwargs: typing.Any):
         """Initialize the DAX module.
 
@@ -653,8 +653,8 @@ class DaxModule(DaxModuleBase, abc.ABC):
         if not _is_valid_name(module_name):
             raise ValueError('Invalid module name "{:s}"'.format(module_name))
         # Check parent type
-        if not isinstance(managers_or_parent, DaxModuleBase):
-            raise TypeError('Parent of module "{:s}" is not a DAX module base'.format(module_name))
+        if not isinstance(managers_or_parent, DaxHasSystem):
+            raise TypeError('Parent of module "{:s}" is not of type DaxHasSystem'.format(module_name))
 
         # Take core attributes from parent
         self._take_parent_core_attributes(managers_or_parent)

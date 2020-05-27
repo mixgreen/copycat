@@ -233,7 +233,7 @@ class HistogramContext(DaxModule):
     """Applet plotting functions"""
 
     @rpc(flags={'async'})
-    def applet_plot_histogram(self, **kwargs):  # type: (typing.Any) -> None
+    def plot_histogram(self, **kwargs):  # type: (typing.Any) -> None
         """Open the applet that shows a plot of the latest histogram.
 
         :param kwargs: Extra keyword arguments for the plot
@@ -246,7 +246,7 @@ class HistogramContext(DaxModule):
         self._ccb.plot_hist('histogram', self.HISTOGRAM_PLOT_KEY, group=self.PLOT_GROUP, **kwargs)
 
     @rpc(flags={'async'})
-    def applet_plot_probability(self, **kwargs):  # type: (typing.Any) -> None
+    def plot_probability(self, **kwargs):  # type: (typing.Any) -> None
         """Open the applet that shows a plot of state probabilities over multiple histograms.
 
         :param kwargs: Extra keyword arguments for the plot
@@ -258,17 +258,17 @@ class HistogramContext(DaxModule):
         self._ccb.plot_xy_nested('probability', self.PROBABILITY_PLOT_KEY, group=self.PLOT_GROUP, **kwargs)
 
     @rpc(flags={'async'})
-    def applet_close_histogram(self):  # type: () -> None
+    def disable_histogram_plot(self):  # type: () -> None
         """Close the histogram plot."""
         self._ccb.disable_applet(self.HISTOGRAM_PLOT_KEY, self.PLOT_GROUP)
 
     @rpc(flags={'async'})
-    def applet_close_probability(self):  # type: () -> None
+    def disable_probability_plot(self):  # type: () -> None
         """Close the probability plot."""
         self._ccb.disable_applet(self.PROBABILITY_PLOT_KEY, self.PLOT_GROUP)
 
     @rpc(flags={'async'})
-    def applet_close_all(self):  # type: () -> None
+    def disable_all_plots(self):  # type: () -> None
         """Close all histogram context plots."""
         self._ccb.disable_applet_group(self.PLOT_GROUP)
 
