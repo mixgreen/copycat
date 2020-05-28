@@ -7,6 +7,7 @@ import numpy as np
 import artiq.language.core
 from artiq.language.units import *
 
+from dax.sim.device import DaxSimDevice
 import dax.util.units
 
 __all__ = ['DaxSignalManager', 'NullSignalManager', 'VcdSignalManager',
@@ -19,7 +20,7 @@ class DaxSignalManager(abc.ABC, typing.Generic[_S_T]):
     """Abstract class for classes that manage simulated signals."""
 
     @abc.abstractmethod
-    def register(self, scope: str, name: str, type_: type,
+    def register(self, scope: DaxSimDevice, name: str, type_: type,
                  size: typing.Optional[int] = None, init: typing.Any = None) -> _S_T:
         """Method used by devices to register a signal."""
         pass
@@ -44,7 +45,7 @@ class DaxSignalManager(abc.ABC, typing.Generic[_S_T]):
 class NullSignalManager(DaxSignalManager[typing.Any]):
     """A signal manager that does nothing."""
 
-    def register(self, scope: str, name: str, type_: type,
+    def register(self, scope: DaxSimDevice, name: str, type_: type,
                  size: typing.Optional[int] = None, init: typing.Any = None) -> typing.Any:
         pass
 
@@ -99,7 +100,7 @@ class VcdSignalManager(DaxSignalManager[_VS_T]):
         # Create event buffer to support reverting time
         self._event_buffer = []  # type: typing.List[typing.Tuple[int, _VS_T, typing.Any]]
 
-    def register(self, scope: str, name: str, type_: __T_T,
+    def register(self, scope: DaxSimDevice, name: str, type_: __T_T,
                  size: typing.Optional[int] = None, init: typing.Any = None) -> _VS_T:
         """ Register a signal.
 
@@ -112,7 +113,7 @@ class VcdSignalManager(DaxSignalManager[_VS_T]):
         - `str`
         - `object` (an event type with no value)
 
-        :param scope: The scope of the signal, normally the device or module name
+        :param scope: The scope of the signal, which is the device object
         :param name: The name of the signal
         :param type_: The type of the signal
         :param size: The size of the data (only for type bool)
@@ -130,7 +131,7 @@ class VcdSignalManager(DaxSignalManager[_VS_T]):
             init = ''  # Shows up as `Z` instead of string value 'x'
 
         # Register the signal with the VCD writer
-        return self._vcd.register_var(scope, name, var_type=var_type, size=size, init=init)
+        return self._vcd.register_var(scope.key, name, var_type=var_type, size=size, init=init)
 
     def event(self, signal: _VS_T, value: __V_T,
               time: typing.Optional[np.int64] = None, offset: typing.Optional[np.int64] = None) -> None:

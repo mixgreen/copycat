@@ -26,8 +26,8 @@ class CPLD(DaxSimDevice):
 
         # Register signals
         self._signal_manager = get_signal_manager()
-        self._init = self._signal_manager.register(self.key, 'init', bool, size=1)
-        self._init_att = self._signal_manager.register(self.key, 'init_att', bool, size=1)
+        self._init = self._signal_manager.register(self, 'init', bool, size=1)
+        self._init_att = self._signal_manager.register(self, 'init_att', bool, size=1)
 
     @kernel
     def cfg_write(self, cfg):

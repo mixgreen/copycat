@@ -23,11 +23,11 @@ def get_manager_or_parent(device_db: typing.Dict[str, typing.Any] = None) -> typ
     # Scheduler
     scheduler = artiq.frontend.artiq_run.DummyScheduler()
     # Fill in expid of scheduler
-    scheduler.expid = {'log_level': 20, 'file': 'file_name.py', 'class_name': 'ArtiqHelperExperiment', 'arguments': {},
-                       'repo_rev': 'N/A'}
+    scheduler.expid = {'log_level': 20, 'file': 'file_name.py', 'class_name': 'DaxArtiqHelperExperiment',
+                       'arguments': {}, 'repo_rev': 'N/A'}
 
     # Device DB for testing in the directory of this script
-    device_db_file_name = os.path.join(tempfile.gettempdir(), 'dax_test_device_db.py')
+    device_db_file_name = os.path.join(tempfile.gettempdir(), 'dax_artiq_helper_device_db.py')
     with open(device_db_file_name, 'w') as device_db_file:
         device_db_file.write('device_db=')
         device_db_file.write(str(_device_db if device_db is None else device_db))
@@ -38,7 +38,7 @@ def get_manager_or_parent(device_db: typing.Dict[str, typing.Any] = None) -> typ
             "ccb": artiq.frontend.artiq_run.DummyCCB()})
 
     # Dataset DB and manager for testing in tmp directory
-    dataset_db_file_name = os.path.join(tempfile.gettempdir(), 'dax_test_dataset_db.pyon')
+    dataset_db_file_name = os.path.join(tempfile.gettempdir(), 'dax_artiq_helper_dataset_db.pyon')
     dataset_db = artiq.master.databases.DatasetDB(dataset_db_file_name)
     dataset_mgr = artiq.master.worker_db.DatasetManager(dataset_db)
 

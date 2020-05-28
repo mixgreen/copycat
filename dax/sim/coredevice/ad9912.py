@@ -19,11 +19,11 @@ class AD9912(DaxSimDevice):
 
         # Register signals
         self._signal_manager = get_signal_manager()
-        self._init = self._signal_manager.register(self.key, 'init', bool, size=1)
-        self._freq = self._signal_manager.register(self.key, 'freq', float)
-        self._phase = self._signal_manager.register(self.key, 'phase', float)
-        self._att = self._signal_manager.register(self.key, 'att', float)
-        self._sw = self._signal_manager.register(self.key, 'sw', bool, size=1)
+        self._init = self._signal_manager.register(self, 'init', bool, size=1)
+        self._freq = self._signal_manager.register(self, 'freq', float)
+        self._phase = self._signal_manager.register(self, 'phase', float)
+        self._att = self._signal_manager.register(self, 'att', float)
+        self._sw = self._signal_manager.register(self, 'sw', bool, size=1)
 
         # CPLD device
         self.cpld = dmgr.get(cpld_device)

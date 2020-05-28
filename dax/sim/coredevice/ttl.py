@@ -23,7 +23,7 @@ class TTLOut(DaxSimDevice):
 
         # Register signals
         self._signal_manager = get_signal_manager()
-        self._state = self._signal_manager.register(self.key, 'state', bool, size=1)
+        self._state = self._signal_manager.register(self, 'state', bool, size=1)
 
     @kernel
     def output(self):
@@ -81,8 +81,8 @@ class TTLInOut(TTLOut):
         self._sample_buffer = collections.deque()
 
         # Register signals
-        self._direction = self._signal_manager.register(self.key, 'direction', bool, size=1)
-        self._sensitivity = self._signal_manager.register(self.key, 'sensitivity', bool, size=1)
+        self._direction = self._signal_manager.register(self, 'direction', bool, size=1)
+        self._sensitivity = self._signal_manager.register(self, 'sensitivity', bool, size=1)
 
     def core_reset(self) -> None:
         # Clear buffers
@@ -231,7 +231,7 @@ class TTLClockGen(DaxSimDevice):
 
         # Register signals
         self._signal_manager = get_signal_manager()
-        self._freq = self._signal_manager.register(self.key, 'freq', float)
+        self._freq = self._signal_manager.register(self, 'freq', float)
 
     @portable
     def frequency_to_ftw(self, frequency):

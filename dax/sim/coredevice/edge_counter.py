@@ -43,7 +43,7 @@ class EdgeCounter(DaxSimDevice):
 
         # Register signals
         self._signal_manager = get_signal_manager()
-        self._count = self._signal_manager.register(self.key, 'count', int, init='z')
+        self._count = self._signal_manager.register(self, 'count', int, init='z')
 
     def core_reset(self) -> None:
         # Clear buffers

@@ -78,31 +78,36 @@ def enable_dax_sim(enable: bool,
         # Log that dax.sim was enabled
         _logger.info('DAX simulation enabled in device DB')
 
-        # Convert the device DB
-        _logger.debug('Converting device DB...')
-        try:
-            for k, v in ddb.items():
-                # Mutate every entry in-place
-                _mutate_ddb_entry(k, v)
-        except Exception as e:
-            # Log exception to provide more context
-            _logger.exception(e)
-            raise
+        if DAX_SIM_CONFIG_KEY not in ddb:
+            # Convert the device DB
+            _logger.debug('Converting device DB...')
+            try:
+                for k, v in ddb.items():
+                    # Mutate every entry in-place
+                    _mutate_ddb_entry(k, v)
+            except Exception as e:
+                # Log exception to provide more context
+                _logger.exception(e)
+                raise
 
-        # Prepare virtual device used for passing simulation configuration
-        sim_config = {DAX_SIM_CONFIG_KEY: {
-            'type': 'local', 'module': sim_config_module, 'class': sim_config_class,
-            # Simulation configuration is passed through the arguments
-            'arguments': {'logging_level': logging_level,
-                          'output': output,
-                          'signal_mgr_kwargs': signal_mgr_kwargs},
-        }}
+            # Prepare virtual device used for passing simulation configuration
+            sim_config = {DAX_SIM_CONFIG_KEY: {
+                'type': 'local', 'module': sim_config_module, 'class': sim_config_class,
+                # Simulation configuration is passed through the arguments
+                'arguments': {'logging_level': logging_level,
+                              'output': output,
+                              'signal_mgr_kwargs': signal_mgr_kwargs},
+            }}
 
-        # Add simulation configuration to device DB
-        ddb.update(sim_config)
+            # Add simulation configuration to device DB
+            ddb.update(sim_config)
+            _logger.debug('Device DB converted successfully')
 
-        # Return the updated device DB
-        _logger.debug('Device DB converted successfully')
+        else:
+            # Device DB was already converted
+            _logger.debug('Device DB was already converted')
+
+        # Return the device DB
         return ddb
 
     else:

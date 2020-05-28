@@ -69,9 +69,9 @@ class CoreDMA(DaxSimDevice):
 
         # Register signal
         self._signal_manager = get_signal_manager()
-        self._dma_record = self._signal_manager.register(self.key, 'record', str)  # type: typing.Any
-        self._dma_play = self._signal_manager.register(self.key, 'play', object)  # type: typing.Any
-        self._dma_play_name = self._signal_manager.register(self.key, 'play_name', str)  # type: typing.Any
+        self._dma_record = self._signal_manager.register(self, 'record', str)  # type: typing.Any
+        self._dma_play = self._signal_manager.register(self, 'play', object)  # type: typing.Any
+        self._dma_play_name = self._signal_manager.register(self, 'play_name', str)  # type: typing.Any
 
     @kernel
     def record(self, name: str) -> _DMARecordContext:

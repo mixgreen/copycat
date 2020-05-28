@@ -50,7 +50,7 @@ class Core(DaxSimDevice):
 
         # Get the signal manager and register signals
         self._signal_manager = get_signal_manager()
-        self._reset_signal = self._signal_manager.register(self.key, 'reset', bool, size=1)  # type: typing.Any
+        self._reset_signal = self._signal_manager.register(self, 'reset', bool, size=1)  # type: typing.Any
 
         # Set initial call nesting level to zero
         self._level = 0
