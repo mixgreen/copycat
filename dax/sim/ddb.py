@@ -39,7 +39,7 @@ DAX_SIM_CONFIG_KEY = '_dax_sim_config'
 def enable_dax_sim(enable: bool,
                    ddb: typing.Dict[str, typing.Any],
                    logging_level: typing.Union[int, str] = logging.NOTSET,
-                   output: bool = True,
+                   output: typing.Optional[str] = 'vcd',
                    sim_config_module: str = 'dax.sim.config',
                    sim_config_class: str = 'DaxSimConfig',
                    **signal_mgr_kwargs: typing.Any  # No trailing comma, causes syntax error on Python 3.5
@@ -57,7 +57,7 @@ def enable_dax_sim(enable: bool,
     :param enable: Flag to enable DAX simulation
     :param ddb: The device DB (will be updated if simulation is enabled)
     :param logging_level: The logging level
-    :param output: Flag to enable or disable simulation output
+    :param output: Simulation output type (`None`, `'vcd'`, or `'peek'`)
     :param sim_config_module: The module name of the simulation configuration class
     :param sim_config_class: The class name of the simulation configuration class
     :param signal_mgr_kwargs: Arguments for the signal manager if output is enabled
@@ -67,7 +67,7 @@ def enable_dax_sim(enable: bool,
     assert isinstance(enable, bool), 'The enable flag must be of type bool'
     assert isinstance(ddb, dict), 'The device DB argument must be a dict'
     assert isinstance(logging_level, int) or logging_level is None, 'Logging level must be of type int'
-    assert isinstance(output, bool), 'Output flag must be of type bool'
+    assert isinstance(output, str) or output is None, 'Invalid type for output parameter'
     assert isinstance(sim_config_module, str), 'Simulation configuration module name must be of type str'
     assert isinstance(sim_config_module, str), 'Simulation configuration class name must be of type str'
 

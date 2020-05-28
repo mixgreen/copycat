@@ -3,6 +3,7 @@ import typing
 import vcd.writer  # type: ignore
 import operator
 import numpy as np
+import numbers
 
 import artiq.language.core
 from artiq.language.units import *
@@ -10,7 +11,7 @@ from artiq.language.units import *
 from dax.sim.device import DaxSimDevice
 import dax.util.units
 
-__all__ = ['DaxSignalManager', 'NullSignalManager', 'VcdSignalManager',
+__all__ = ['DaxSignalManager', 'NullSignalManager', 'VcdSignalManager', 'PeekSignalManager',
            'get_signal_manager', 'set_signal_manager']
 
 _S_T = typing.TypeVar('_S_T')  # The abstract signal type
@@ -41,6 +42,14 @@ class DaxSignalManager(abc.ABC, typing.Generic[_S_T]):
         """Close the signal manager."""
         pass
 
+    @staticmethod
+    def _get_timestamp(time: typing.Optional[np.int64] = None,
+                       offset: typing.Optional[np.int64] = None) -> np.int64:
+        """Return the timestamp of an event."""
+        time = artiq.language.core.now_mu() if time is None else time
+        time = time if offset is None else time + offset
+        return time
+
 
 class NullSignalManager(DaxSignalManager[typing.Any]):
     """A signal manager that does nothing."""
@@ -63,14 +72,13 @@ class NullSignalManager(DaxSignalManager[typing.Any]):
 _VS_T = typing.Union[vcd.writer.RealVariable,
                      vcd.writer.ScalarVariable,
                      vcd.writer.StringVariable,
-                     vcd.writer.VectorVariable]  # The signal type
+                     vcd.writer.VectorVariable]  # The VCD signal type
+_VT_T = typing.Type[typing.Union[bool, int, np.int32, np.int64, float, str, object]]  # The VCD signal-type type
+_VV_T = typing.Union[bool, int, np.int32, np.int64, float, str, None]  # The VCD value types
 
 
 class VcdSignalManager(DaxSignalManager[_VS_T]):
     """VCD signal manager."""
-
-    __T_T = typing.Type[typing.Union[bool, int, np.int32, np.int64, float, str, object]]  # The signal-type type
-    __V_T = typing.Union[bool, int, np.int32, np.int64, float, str]  # The value types
 
     _CONVERT_TYPE = {
         bool: 'reg',
@@ -98,10 +106,10 @@ class VcdSignalManager(DaxSignalManager[_VS_T]):
         timescale_str = dax.util.units.time_to_str(timescale, precision=0)
         self._vcd = vcd.writer.VCDWriter(self._output_file, timescale=timescale_str, comment=output_file)
         # Create event buffer to support reverting time
-        self._event_buffer = []  # type: typing.List[typing.Tuple[int, _VS_T, typing.Any]]
+        self._event_buffer = []  # type: typing.List[typing.Tuple[int, _VS_T, _VV_T]]
 
-    def register(self, scope: DaxSimDevice, name: str, type_: __T_T,
-                 size: typing.Optional[int] = None, init: typing.Any = None) -> _VS_T:
+    def register(self, scope: DaxSimDevice, name: str, type_: _VT_T,
+                 size: typing.Optional[int] = None, init: _VV_T = None) -> _VS_T:
         """ Register a signal.
 
         Signals have to be registered before any events are committed.
@@ -121,7 +129,7 @@ class VcdSignalManager(DaxSignalManager[_VS_T]):
         :return: The signal object to use when committing events
         """
         if type_ not in self._CONVERT_TYPE:
-            raise TypeError('VCD signal manager can not handle type {}'.format(type_))
+            raise TypeError('VCD signal manager does not support signal type {}'.format(type_))
 
         # Get the var type
         var_type = self._CONVERT_TYPE[type_]
@@ -133,7 +141,7 @@ class VcdSignalManager(DaxSignalManager[_VS_T]):
         # Register the signal with the VCD writer
         return self._vcd.register_var(scope.key, name, var_type=var_type, size=size, init=init)
 
-    def event(self, signal: _VS_T, value: __V_T,
+    def event(self, signal: _VS_T, value: _VV_T,
               time: typing.Optional[np.int64] = None, offset: typing.Optional[np.int64] = None) -> None:
         """Commit an event.
 
@@ -153,12 +161,9 @@ class VcdSignalManager(DaxSignalManager[_VS_T]):
         :param time: Optional time in machine units when the event happened (:func:`now_mu` if no time was provided)
         :param offset: Optional offset from :func:`now_mu` in machine units when the event happened (default is `0`)
         """
-        # Calculate time
-        time = artiq.language.core.now_mu() if time is None else time
-        time = time if offset is None else time + offset
 
         # Add event to buffer
-        self._event_buffer.append((time, signal, value))
+        self._event_buffer.append((self._get_timestamp(time, offset), signal, value))
 
     def flush(self, ref_period: float) -> None:
         """Commit all buffered events.
@@ -191,6 +196,125 @@ class VcdSignalManager(DaxSignalManager[_VS_T]):
         self._vcd.close()
         # Close the file
         self._output_file.close()
+
+
+_ISINSTANCE_T = typing.Union[type, typing.Tuple[type, ...]]  # Type for isinstance() parameter
+_PS_T = typing.Tuple[DaxSimDevice, str]  # The peek signal manager signal type
+_PT_T = _VT_T  # The peek signal manager signal-type type
+_PV_T = _VV_T  # The peek signal manager signal type
+_PD_T = typing.Dict[DaxSimDevice,  # The peek signal manager device list type
+                    typing.Dict[str, typing.Tuple[_ISINSTANCE_T, typing.List[typing.Tuple[np.int64, _PV_T]]]]]
+
+
+class PeekSignalManager(DaxSignalManager[_PS_T]):
+    """Peek signal manager."""
+
+    _CONVERT_TYPE = {
+        bool: bool,
+        int: numbers.Integral,
+        np.int32: numbers.Integral,
+        np.int64: numbers.Integral,
+        float: float,
+        str: (str, type(None)),
+        object: bool,
+    }  # type: typing.Dict[type, _ISINSTANCE_T]
+    """Dict to convert Python types to peek signal manager type-checking types."""
+
+    _BOOL_SPECIAL_VALUES = ['x', 'X', 'z', 'Z']
+    """Special values for a bool type signal."""
+
+    def __init__(self) -> None:
+        # Registered devices and storage for signals
+        self._devices = {}  # type: _PD_T
+
+    def register(self, scope: DaxSimDevice, name: str, type_: _PT_T,
+                 size: typing.Optional[int] = None, init: _PV_T = None) -> _PS_T:
+        """ Register a signal.
+
+        Signals have to be registered before any events are committed.
+
+        Possible types and expected arguments:
+        - `bool` (a register with bit values `0`, `1`, `X`, `Z`), provide a size of the register
+        - `int`, `np.int32`, `np.int64`
+        - `float`
+        - `str`
+        - `object` (an event type with no value)
+
+        :param scope: The scope of the signal, which is the device object
+        :param name: The name of the signal
+        :param type_: The type of the signal
+        :param size: The size of the data (only for type bool)
+        :param init: Initial value (defaults to `X`)
+        :return: The signal object to use when committing events
+        """
+
+        # Get signals of the given device
+        signals = self._devices.setdefault(scope, dict())
+        # Check if signal was already registered
+        if name in signals:
+            raise LookupError('Signal "{:s}.{:s}" was already registered'.format(scope.key, name))
+
+        # Check if type is supported
+        if type_ not in self._CONVERT_TYPE:
+            raise ValueError('Peek signal manager does not support signal type {}'.format(type_))
+        # Check if size is provided for bool type signals
+        if type_ is bool and (size is None or size < 1):
+            raise TypeError('Provide a legal size for signal type bool')
+        # Convert provided type
+        peek_type = self._CONVERT_TYPE[type_]
+
+        if init is not None:
+            # Check init value
+            self._check_value(peek_type, init)
+
+        # Register and initialize signal
+        signals[name] = (peek_type, [] if init is None else [(0, init)])
+
+        # Return the signal object
+        return scope, name
+
+    def event(self, signal: _PS_T, value: _PV_T,
+              time: typing.Optional[np.int64] = None, offset: typing.Optional[np.int64] = None) -> None:
+        """Commit an event.
+
+        Note that in a parallel context, :func:`delay` and :func:`delay_mu` do not directly
+        influence the time returned by :func:`now_mu`.
+        It is better to use the `time` or `offset` arguments to set events at different times.
+
+        Bool type signals can have values `0`, `1`, `X`, `Z`.
+
+        Event (`object`) type signals represent timestamps and do not have a value.
+        We recommend to always use value `True` for event type signals.
+
+        String type signals can use value `None` which is equivalent to `Z`
+
+        :param signal: The signal that changed
+        :param value: The new value of the signal
+        :param time: Optional time in machine units when the event happened (:func:`now_mu` if no time was provided)
+        :param offset: Optional offset from :func:`now_mu` in machine units when the event happened (default is `0`)
+        """
+
+        # Unpack device list
+        device, name = signal
+        type_, events = self._devices[device][name]
+
+        # Check value
+        self._check_value(type_, value)
+
+        # Append value to event list (unsorted)
+        events.append((self._get_timestamp(time, offset), value))
+
+    def flush(self, ref_period: float) -> None:
+        pass
+
+    def close(self) -> None:
+        pass
+
+    def _check_value(self, type_: _ISINSTANCE_T, value: _PV_T) -> None:
+        if isinstance(value, type_) or (type_ is bool and value in self._BOOL_SPECIAL_VALUES):
+            return  # Value is correct
+        else:
+            raise ValueError('Invalid value {} for signal type {}'.format(value, type_))
 
 
 _signal_manager = NullSignalManager()  # type: DaxSignalManager[typing.Any]
