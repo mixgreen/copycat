@@ -11,7 +11,7 @@ from artiq.language.units import *
 from dax.sim.device import DaxSimDevice
 import dax.util.units
 
-__all__ = ['DaxSignalManager', 'NullSignalManager', 'VcdSignalManager', 'PeekSignalManager',
+__all__ = ['DaxSignalManager', 'NullSignalManager', 'VcdSignalManager', 'PeekSignalManager', 'SignalNotSet',
            'get_signal_manager', 'set_signal_manager']
 
 _S_T = typing.TypeVar('_S_T')  # The abstract signal type
@@ -46,8 +46,10 @@ class DaxSignalManager(abc.ABC, typing.Generic[_S_T]):
     def _get_timestamp(time: typing.Optional[np.int64] = None,
                        offset: typing.Optional[np.int64] = None) -> np.int64:
         """Return the timestamp of an event."""
-        time = artiq.language.core.now_mu() if time is None else time
-        time = time if offset is None else time + offset
+        if time is None:
+            time = artiq.language.core.now_mu()
+        if offset is not None:
+            time += offset
         return time
 
 
@@ -151,6 +153,8 @@ class VcdSignalManager(DaxSignalManager[_VS_T]):
 
         Bool type signals can have values `0`, `1`, `X`, `Z`.
 
+        Integer type variables can have any int value or any bool value.
+
         Event (`object`) type signals represent timestamps and do not have a value.
         We recommend to always use value `True` for event type signals.
 
@@ -203,7 +207,12 @@ _PS_T = typing.Tuple[DaxSimDevice, str]  # The peek signal manager signal type
 _PT_T = _VT_T  # The peek signal manager signal-type type
 _PV_T = _VV_T  # The peek signal manager signal type
 _PD_T = typing.Dict[DaxSimDevice,  # The peek signal manager device list type
-                    typing.Dict[str, typing.Tuple[_ISINSTANCE_T, typing.List[typing.Tuple[np.int64, _PV_T]]]]]
+                    typing.Dict[str, typing.Tuple[_ISINSTANCE_T, typing.Dict[np.int64, _PV_T]]]]
+
+
+class SignalNotSet:
+    """Class used to indicate that a signal was not set and no value could be returned."""
+    pass
 
 
 class PeekSignalManager(DaxSignalManager[_PS_T]):
@@ -220,12 +229,12 @@ class PeekSignalManager(DaxSignalManager[_PS_T]):
     }  # type: typing.Dict[type, _ISINSTANCE_T]
     """Dict to convert Python types to peek signal manager type-checking types."""
 
-    _BOOL_SPECIAL_VALUES = ['x', 'X', 'z', 'Z']
+    _BOOL_SPECIAL_VALUES = {'x', 'X', 'z', 'Z', 0, 1}
     """Special values for a bool type signal."""
 
     def __init__(self) -> None:
-        # Registered devices and storage for signals
-        self._devices = {}  # type: _PD_T
+        # Registered devices and buffer for signals/events
+        self._event_buffer = {}  # type: _PD_T
 
     def register(self, scope: DaxSimDevice, name: str, type_: _PT_T,
                  size: typing.Optional[int] = None, init: _PV_T = None) -> _PS_T:
@@ -249,7 +258,7 @@ class PeekSignalManager(DaxSignalManager[_PS_T]):
         """
 
         # Get signals of the given device
-        signals = self._devices.setdefault(scope, dict())
+        signals = self._event_buffer.setdefault(scope, dict())
         # Check if signal was already registered
         if name in signals:
             raise LookupError('Signal "{:s}.{:s}" was already registered'.format(scope.key, name))
@@ -268,7 +277,7 @@ class PeekSignalManager(DaxSignalManager[_PS_T]):
             self._check_value(peek_type, init)
 
         # Register and initialize signal
-        signals[name] = (peek_type, [] if init is None else [(0, init)])
+        signals[name] = (peek_type, {} if init is None else {0: init})
 
         # Return the signal object
         return scope, name
@@ -283,6 +292,8 @@ class PeekSignalManager(DaxSignalManager[_PS_T]):
 
         Bool type signals can have values `0`, `1`, `X`, `Z`.
 
+        Integer type variables can have any int value or any bool value.
+
         Event (`object`) type signals represent timestamps and do not have a value.
         We recommend to always use value `True` for event type signals.
 
@@ -296,13 +307,13 @@ class PeekSignalManager(DaxSignalManager[_PS_T]):
 
         # Unpack device list
         device, name = signal
-        type_, events = self._devices[device][name]
+        type_, events = self._event_buffer[device][name]
 
         # Check value
         self._check_value(type_, value)
 
-        # Append value to event list (unsorted)
-        events.append((self._get_timestamp(time, offset), value))
+        # Add value to event buffer (overwrites old values)
+        events[self._get_timestamp(time, offset)] = value
 
     def flush(self, ref_period: float) -> None:
         pass
@@ -311,10 +322,52 @@ class PeekSignalManager(DaxSignalManager[_PS_T]):
         pass
 
     def _check_value(self, type_: _ISINSTANCE_T, value: _PV_T) -> None:
-        if isinstance(value, type_) or (type_ is bool and value in self._BOOL_SPECIAL_VALUES):
+        """Check if value is valid, raise exception otherwise."""
+
+        if type_ in {bool, numbers.Integral} and (isinstance(value, type_) or value in self._BOOL_SPECIAL_VALUES):
+            return  # Value is correct
+        elif isinstance(value, type_):
             return  # Value is correct
         else:
+            # Value did not pass check
             raise ValueError('Invalid value {} for signal type {}'.format(value, type_))
+
+    """Peek signal manager specific functions"""
+
+    def peek(self, scope: DaxSimDevice, signal: str,
+             time: typing.Optional[np.int64] = None) -> typing.Union[_PV_T, typing.Type[SignalNotSet]]:
+        """Peek a value of a signal at a given time.
+
+        :param scope: The scope of the signal
+        :param signal: The signal name
+        :param time: The time of interest (now if no time is given)
+        :return: The value of the signal at the time of interest or :class:`SignalNotSet` if no value was found
+        """
+
+        assert isinstance(scope, DaxSimDevice), 'The given scope must be of type DaxSimDevice'
+        assert isinstance(signal, str), 'The signal name must be of type str'
+        assert isinstance(time, np.int64) or time is None
+
+        try:
+            # Get the device
+            device = self._event_buffer[scope]
+        except KeyError:
+            raise KeyError('Device "{:s}" could not be found in the device list'.format(scope.key)) from None
+        try:
+            # Get the signal
+            type_, events = device[signal]
+        except KeyError:
+            raise KeyError('Signal "{:s}.{:s}" could not be found'.format(scope.key, signal)) from None
+
+        if time is None:
+            # Use the default time if none was provided
+            time = artiq.language.core.now_mu()
+
+        # Return the last value before or at the given time stamp traversing the event list backwards
+        return next((v for t, v in sorted(events.items(), reverse=True) if t <= time), SignalNotSet)
+
+    def expect(self, scope: DaxSimDevice, signal: str, value: _PV_T, time: typing.Optional[np.int64] = None) -> None:
+        pass  # TODO
 
 
 _signal_manager = NullSignalManager()  # type: DaxSignalManager[typing.Any]

@@ -29,7 +29,7 @@ class DaxSimConfig:
             # Disable output
             self.__output_enabled = False
 
-        if output == 'vcd':
+        elif output == 'vcd':
             # Enable output
             self.__output_enabled = True
 
