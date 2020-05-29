@@ -23,7 +23,7 @@ class _MockScan1(DaxScan, _MockSystem):
         self.counter = collections.Counter()  # type: typing.Dict[str, int]
 
         # Scan
-        self.add_scan('foo', 'foo', Scannable(RangeScan(1, self.FOO, self.FOO, randomize=True)))
+        self.add_scan('foo', 'foo', Scannable(RangeScan(1, self.FOO, self.FOO, randomize=False)))
 
     def host_setup(self) -> None:
         self.counter['host_setup'] += 1
@@ -100,6 +100,27 @@ class _MockScanInfinite(_MockScan1):
     def run_point(self, point, index):  # type: (typing.Any, typing.Any) -> None
         if self.counter['run_point'] == self.STOP:
             self.stop_scan()
+        self.counter['run_point'] += 1
+
+
+class _MockScanDisableIndex(_MockScan1):
+    ENABLE_INDEX = False
+
+
+class _IndexAttributeError(AttributeError):
+    pass
+
+
+class _MockScanDisableIndexBad(_MockScan1):
+    ENABLE_INDEX = False
+
+    def run_point(self, point, index):  # type: (typing.Any, typing.Any) -> None
+        assert point.foo is not None
+        try:
+            assert index.foo is not None  # Will raise AttributeError
+        except AttributeError:
+            # Change the exception type to specifically recognize this case
+            raise _IndexAttributeError from AttributeError
         self.counter['run_point'] += 1
 
 
@@ -268,6 +289,42 @@ class InfiniteScanTestCase(unittest.TestCase):
             'host_exit': 1,  # host_exit() is called when using stop_scan()
         }
         self.assertDictEqual(self.scan.counter, counter_ref, 'Function counters did not match expected values')
+
+
+class DisableIndexScanTestCase(unittest.TestCase):
+
+    def test_scan_length(self):
+        # Create scan objects
+        scan_w_index = _MockScan1(get_manager_or_parent())
+        scan_wo_index = _MockScanDisableIndex(get_manager_or_parent())
+
+        # Run both scans
+        scan_w_index.run()
+        scan_wo_index.run()
+
+        # Verify if both scans had the same length and point values
+        self.assertDictEqual(scan_w_index.get_scan_points(), scan_wo_index.get_scan_points(),
+                             'Scan with index was not identical to scan without index')
+
+        # Verify counters
+        counter_ref = {
+            'host_setup': 1,
+            'device_setup': 1,
+            'run_point': scan_w_index.FOO,
+            'device_cleanup': 1,
+            'host_cleanup': 1,
+            'host_exit': 1,
+        }
+        self.assertDictEqual(scan_w_index.counter, counter_ref, 'Function counters did not match expected values')
+        self.assertDictEqual(scan_wo_index.counter, counter_ref, 'Function counters did not match expected values')
+
+    def test_index_disabled(self):
+        # Create scan object
+        bad_scan = _MockScanDisableIndexBad(get_manager_or_parent())
+
+        # Run the scan, expecting a specific exception
+        with self.assertRaises(_IndexAttributeError, msg='Accessing an index attribute did not raise'):
+            bad_scan.run()
 
 
 if __name__ == '__main__':

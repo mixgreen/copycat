@@ -98,7 +98,7 @@ class ScanProductGenerator:
         else:
             # Create one empty scan index
             si = self.ScanIndex()
-            for _ in np.prod((len(s) for s in self._scans)):  # type: ignore
+            for _ in range(np.prod([len(s) for s in self._scans])):  # type: ignore
                 # Yield the empty scan index object for all
                 yield si
 
@@ -141,6 +141,11 @@ class DaxScan(dax.base.dax.DaxBase, abc.ABC):
     :attr:`INFINITE_SCAN_ARGUMENT` class attribute to `False`.
     The default setting of the infinite scan argument can be modified by setting the
     :attr:`INFINITE_SCAN_DEFAULT` class attribute.
+
+    The :func:`run_point` function has access to a point and an index argument.
+    Users can disable the index argument to reduce the memory footprint of the experiment.
+    The :attr:`ENABLE_INDEX` attribute can be used to configure this behavior (default: `True`).
+    When the index is disabled, the passed `index` argument will be empty.
 
     In case scanning is performed in a kernel, users are responsible for setting
     up the right devices to actually run a kernel.
