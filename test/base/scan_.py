@@ -31,7 +31,7 @@ class _MockScan1(DaxScan, _MockSystem):
     def device_setup(self):  # type: () -> None
         self.counter['device_setup'] += 1
 
-    def run_point(self, point):  # type: (typing.Any) -> None
+    def run_point(self, point, index):  # type: (typing.Any, typing.Any) -> None
         self.counter['run_point'] += 1
 
     def device_cleanup(self):  # type: () -> None
@@ -76,7 +76,7 @@ class _MockScan2(_MockScan1):
 class _MockScanTerminate(_MockScan1):
     TERMINATE = 5
 
-    def run_point(self, point):  # type: (typing.Any) -> None
+    def run_point(self, point, index):  # type: (typing.Any, typing.Any) -> None
         if self.counter['run_point'] == self.TERMINATE:
             raise TerminationRequested
         self.counter['run_point'] += 1
@@ -85,7 +85,7 @@ class _MockScanTerminate(_MockScan1):
 class _MockScanStop(_MockScan1):
     STOP = 5
 
-    def run_point(self, point):  # type: (typing.Any) -> None
+    def run_point(self, point, index):  # type: (typing.Any, typing.Any) -> None
         if self.counter['run_point'] == self.STOP:
             self.stop_scan()
         self.counter['run_point'] += 1
@@ -97,7 +97,7 @@ class _MockScanInfinite(_MockScan1):
 
     STOP = 100
 
-    def run_point(self, point):  # type: (typing.Any) -> None
+    def run_point(self, point, index):  # type: (typing.Any, typing.Any) -> None
         if self.counter['run_point'] == self.STOP:
             self.stop_scan()
         self.counter['run_point'] += 1

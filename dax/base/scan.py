@@ -1,6 +1,7 @@
 import abc
 import typing
 import collections
+import itertools
 import re
 import numpy as np
 
@@ -28,6 +29,65 @@ def _is_kernel(func: typing.Any) -> bool:
     """
     meta = getattr(func, 'artiq_embedded', None)
     return False if meta is None else (meta.core_name is not None and not meta.portable)
+
+
+class ScanProductGenerator:
+    """Generator class for a product of scans.
+
+    This class is inspired by the ARTIQ MultiScanManager class.
+    """
+
+    # Iterator type
+    __I_T = typing.Iterator[typing.Tuple['ScanProductGenerator.ScanPoint', 'ScanProductGenerator.ScanIndex']]
+
+    class ScanItem:
+        def __init__(self, **kwargs: typing.Any):
+            # Mark all attributes as kernel invariant
+            self.kernel_invariants = set(kwargs)
+
+        def __repr__(self) -> str:
+            """Return a string representation of this object."""
+            attributes = ', '.join('{:s}={}'.format(k, getattr(self, k)) for k in self.kernel_invariants)
+            return self.__class__.__name__.format(attributes)
+
+    class ScanPoint(ScanItem):
+        def __init__(self, **kwargs: typing.Any):
+            # Call super
+            super(ScanProductGenerator.ScanPoint, self).__init__(**kwargs)
+            # Set the attributes of this object
+            for k, v in kwargs.items():
+                setattr(self, k, v)
+
+    class ScanIndex(ScanItem):
+        def __init__(self, **kwargs: int):
+            # Call super
+            super(ScanProductGenerator.ScanIndex, self).__init__(**kwargs)
+            # Set the attributes of this object
+            for k, v in kwargs.items():
+                setattr(self, k, np.int32(v))
+
+    def __init__(self, *scans: typing.Tuple[str, typing.Iterable[typing.Any]]):
+        """Create a new scan product generator.
+
+        :param scans: A list of tuples with the key and values of the scan
+        """
+        # Unpack scan tuples
+        self._keys, self._scans = tuple(zip(*scans))
+
+    def _point_generator(self) -> typing.Iterator['ScanProductGenerator.ScanPoint']:
+        """Returns a generator for scan points."""
+        for values in itertools.product(*self._scans):
+            yield self.ScanPoint(**{k: v for k, v in zip(self._keys, values)})
+
+    def _index_generator(self) -> typing.Iterator['ScanProductGenerator.ScanIndex']:
+        """Returns a generator for scan indices."""
+        for indices in itertools.product(*(range(len(s)) for s in self._scans)):
+            yield self.ScanIndex(**{k: v for k, v in zip(self._keys, indices)})
+
+    def __iter__(self) -> __I_T:
+        """Returns a generator that returns tuples of a scan point and a scan index."""
+        # Storing a list of tuples instead of two list hopefully results in better data locality
+        return zip(self._point_generator(), self._index_generator())
 
 
 class DaxScan(dax.base.dax.DaxBase, abc.ABC):
@@ -73,7 +133,7 @@ class DaxScan(dax.base.dax.DaxBase, abc.ABC):
     INFINITE_SCAN_DEFAULT = False  # type: bool
     """Default setting of the infinite scan argument (if enabled)."""
 
-    SCAN_ARCHIVE_KEY_FORMAT = 'scan.{key:s}'  # type: str
+    SCAN_ARCHIVE_KEY_FORMAT = '_scan.{key:s}'  # type: str
     """Dataset key format for archiving independent scans."""
 
     def build(self, *args: typing.Any, **kwargs: typing.Any) -> None:
@@ -143,6 +203,10 @@ class DaxScan(dax.base.dax.DaxBase, abc.ABC):
         :param group: The argument group name
         :param tooltip: The shown tooltip
         """
+        assert isinstance(key, str), 'Key must be of type str'
+        assert isinstance(name, str), 'Name must be of type str'
+        assert isinstance(group, str) or group is None, 'Group must be of type str or None'
+        assert isinstance(tooltip, str) or tooltip is None, 'Tooltip must be of type str or None'
 
         # Verify this function was called in the build_scan() function
         if not self.__in_build:
@@ -173,8 +237,8 @@ class DaxScan(dax.base.dax.DaxBase, abc.ABC):
 
         :return: A dict containing all the scan points on a per-key basis
         """
-        if hasattr(self, '_scan_points'):
-            return {key: [getattr(point, key) for point in self._scan_points] for key in self._scan_scannables}
+        if hasattr(self, '_scan_elements'):
+            return {key: [getattr(point, key) for point, _ in self._scan_elements] for key in self._scan_scannables}
         else:
             raise AttributeError('Scan points can only be obtained after run() was called')
 
@@ -191,28 +255,6 @@ class DaxScan(dax.base.dax.DaxBase, abc.ABC):
         """
         return {key: list(scannable) for key, scannable in self._scan_scannables.items()}
 
-    @host_only
-    def _make_scan_points(self) -> typing.List[typing.Any]:
-        """Make and return the scan points
-
-        :return: A list of scan points
-        """
-        if self._scan_scannables:
-            # Make scan points using the ARTIQ multi scan manager
-            scan_points = list(MultiScanManager(*self._scan_scannables.items()))  # type: ignore
-
-            # For every scan point, mark the parameters as kernel invariant
-            keys = set(self._scan_scannables)
-            for point in scan_points:
-                setattr(point, 'kernel_invariants', keys)
-
-            # Return the scan points
-            return scan_points
-
-        else:
-            # Return an empty list
-            return []
-
     """Run functions"""
 
     @host_only
@@ -226,30 +268,32 @@ class DaxScan(dax.base.dax.DaxBase, abc.ABC):
         # Check if build() was called
         assert hasattr(self, '_scan_scannables'), 'DaxScan.build() was not called'
 
-        # Make the scan points
-        self._scan_points = self._make_scan_points()
-        self.update_kernel_invariants('_scan_points')
+        # Make the scan elements
+        if self._scan_scannables:
+            self._scan_elements = list(ScanProductGenerator(*self._scan_scannables.items()))  # type: ignore
+        else:
+            self._scan_elements = []
+        self.update_kernel_invariants('_scan_elements')
         self.logger.debug('Prepared {:d} scan point(s) with {:d} scan parameter(s)'.
-                          format(len(self._scan_points), len(self._scan_scannables)))
+                          format(len(self._scan_elements), len(self._scan_scannables)))
 
-        if not self._scan_points:
+        if not self._scan_elements:
             # There are no scan points
             self.logger.warning('No scan points found, aborting experiment')
             return
 
         for key in self._scan_scannables:
             # Archive product of all scan points (separate dataset for every key)
-            self.set_dataset(key, [getattr(point, key) for point in self._scan_points], archive=True)
-        if len(self._scan_scannables) > 1:
-            # Archive values of each independent scan if we have more than 1 scan
-            for key, scannable in self._scan_scannables.items():
-                self.set_dataset(self.SCAN_ARCHIVE_KEY_FORMAT.format(key=key), [e for e in scannable], archive=True)
+            self.set_dataset(key, [getattr(point, key) for point, _ in self._scan_elements], archive=True)
+        # Archive values of each independent scan
+        for key, scannable in self._scan_scannables.items():
+            self.set_dataset(self.SCAN_ARCHIVE_KEY_FORMAT.format(key=key), [e for e in scannable], archive=True)
 
-        # Index of current scan point
+        # Index of current scan element
         self._scan_index = np.int32(0)
 
         try:
-            while self._scan_index < len(self._scan_points):
+            while self._scan_index < len(self._scan_elements):
                 while self._scan_scheduler.check_pause():
                     # Pause the scan
                     self.logger.debug('Pausing scan')
@@ -295,19 +339,20 @@ class DaxScan(dax.base.dax.DaxBase, abc.ABC):
             # Perform device setup
             self.device_setup()
 
-            while self._scan_index < len(self._scan_points):
+            while self._scan_index < len(self._scan_elements):
                 # Check for pause condition
                 if self._scan_scheduler.check_pause():
                     break  # Break to exit the run scan function
 
                 # Run for one point
-                self.run_point(self._scan_points[self._scan_index])
+                point, index = self._scan_elements[self._scan_index]
+                self.run_point(point, index)
 
                 # Increment index
                 self._scan_index += np.int32(1)
 
                 # Handle infinite scan
-                if self._scan_infinite and self._scan_index == len(self._scan_points):
+                if self._scan_infinite and self._scan_index == len(self._scan_elements):
                     self._scan_index = np.int32(0)
 
         finally:
@@ -322,7 +367,7 @@ class DaxScan(dax.base.dax.DaxBase, abc.ABC):
         """
 
         # Stop the scan by moving the index to the end (+1 to differentiate with infinite scan)
-        self._scan_index = len(self._scan_points) + np.int32(1)
+        self._scan_index = len(self._scan_elements) + np.int32(1)
 
     """Functions to be implemented by the user"""
 
@@ -339,10 +384,11 @@ class DaxScan(dax.base.dax.DaxBase, abc.ABC):
         pass
 
     @abc.abstractmethod
-    def run_point(self, point):  # type: (typing.Any) -> None
+    def run_point(self, point, index):  # type: (typing.Any, typing.Any) -> None
         """3. Code to run for a single point, called as many times as there are points.
 
-        :param point: Point object containing the current scan parameters
+        :param point: Point object containing the current scan parameter values
+        :param index: Index object containing the current scan parameter indices
         """
         pass
 
