@@ -66,13 +66,23 @@ class ScanProductGenerator:
             for k, v in kwargs.items():
                 setattr(self, k, np.int32(v))
 
-    def __init__(self, *scans: typing.Tuple[str, typing.Iterable[typing.Any]]):
+    def __init__(self, *scans: typing.Tuple[str, typing.Iterable[typing.Any]],
+                 enable_index: bool = True):
         """Create a new scan product generator.
 
+        The `enable_index` parameter dan be used to disable index objects,
+        potentially reducing the memory footprint of the scan.
+
         :param scans: A list of tuples with the key and values of the scan
+        :param enable_index: If false, empty index objects are returned
         """
+        assert isinstance(enable_index, bool), 'The enable index flag must be of type bool'
+
         # Unpack scan tuples
         self._keys, self._scans = tuple(zip(*scans))
+
+        # Store enable index flag
+        self._enable_index = enable_index
 
     def _point_generator(self) -> typing.Iterator['ScanProductGenerator.ScanPoint']:
         """Returns a generator for scan points."""
@@ -81,8 +91,16 @@ class ScanProductGenerator:
 
     def _index_generator(self) -> typing.Iterator['ScanProductGenerator.ScanIndex']:
         """Returns a generator for scan indices."""
-        for indices in itertools.product(*(range(len(s)) for s in self._scans)):
-            yield self.ScanIndex(**{k: v for k, v in zip(self._keys, indices)})
+        if self._enable_index:
+            for indices in itertools.product(*(range(len(s)) for s in self._scans)):
+                # Yield a scan index object for every set of indices
+                yield self.ScanIndex(**{k: v for k, v in zip(self._keys, indices)})
+        else:
+            # Create one empty scan index
+            si = self.ScanIndex()
+            for _ in np.prod((len(s) for s in self._scans)):  # type: ignore
+                # Yield the empty scan index object for all
+                yield si
 
     def __iter__(self) -> __I_T:
         """Returns a generator that returns tuples of a scan point and a scan index."""
@@ -132,6 +150,9 @@ class DaxScan(dax.base.dax.DaxBase, abc.ABC):
     """Flag to enable the infinite scan argument."""
     INFINITE_SCAN_DEFAULT = False  # type: bool
     """Default setting of the infinite scan argument (if enabled)."""
+
+    ENABLE_INDEX = True  # type: bool
+    """Flag to enable the index argument in the run_point() function."""
 
     SCAN_ARCHIVE_KEY_FORMAT = '_scan.{key:s}'  # type: str
     """Dataset key format for archiving independent scans."""
@@ -270,7 +291,8 @@ class DaxScan(dax.base.dax.DaxBase, abc.ABC):
 
         # Make the scan elements
         if self._scan_scannables:
-            self._scan_elements = list(ScanProductGenerator(*self._scan_scannables.items()))  # type: ignore
+            self._scan_elements = list(ScanProductGenerator(*self._scan_scannables.items(),  # type: ignore
+                                                            enable_index=self.ENABLE_INDEX))
         else:
             self._scan_elements = []
         self.update_kernel_invariants('_scan_elements')
