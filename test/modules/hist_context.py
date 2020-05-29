@@ -72,7 +72,7 @@ class HistogramContextTestCase(unittest.TestCase):
         # We can not call the histogram context out of context
         with self.h:
             with self.assertRaises(HistogramContextError, msg='Config in context did not raise'):
-                self.h.config()
+                self.h.config_dataset()
 
     def test_nesting_exceptions(self):
         with self.assertRaises(HistogramContextError, msg='Close histogram out of context did not raise'):
@@ -158,14 +158,14 @@ class HistogramContextTestCase(unittest.TestCase):
         ]
 
         # Store in a specific dataset
-        self.h.config(dataset_key)
+        self.h.config_dataset(dataset_key)
         for _ in range(num_histograms):
             with self.h:
                 for d in data_0:
                     self.h.append(d)
 
         # Store other data too in the default dataset
-        self.h.config()
+        self.h.config_dataset()
         for _ in range(num_histograms):
             with self.h:
                 for d in data_1:
@@ -208,7 +208,7 @@ class HistogramContextTestCase(unittest.TestCase):
 
     def test_default_dataset_key(self):
         dataset_key = 'foo'
-        self.h.config(dataset_key)  # Store in a specific dataset
+        self.h.config_dataset(dataset_key)  # Store in a specific dataset
         with self.h:
             self.assertEqual(self.h._dataset_key, dataset_key, 'Custom dataset key was not correctly stored')
         with self.h:
@@ -218,7 +218,7 @@ class HistogramContextTestCase(unittest.TestCase):
     def test_archive_keys(self):
         keys = ['a', 'foo', 'bar', 'foobar']
         for k in keys:
-            self.h.config(k)
+            self.h.config_dataset(k)
             with self.h:
                 pass
 

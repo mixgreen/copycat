@@ -37,6 +37,8 @@ class HistogramContext(DaxModule):
 
     DEFAULT_DATASET_KEY = 'histogram'
     """The default name of the output dataset in archive."""
+    HISTOGRAM_ARCHIVE_KEY_FORMAT = '_histogram.{key:s}'
+    """Dataset key format for archiving histogram information."""
 
     DATASET_KEY_FORMAT = '{dataset_key:s}.{index:d}'
     """Format string for sub-dataset keys."""
@@ -65,8 +67,8 @@ class HistogramContext(DaxModule):
         self._open_datasets = collections.Counter()  # type: typing.Dict[str, int]
 
     def init(self) -> None:
-        # Prepare the probability plot dataset
-        self.set_dataset(self.PROBABILITY_PLOT_KEY, [], broadcast=True, archive=False)
+        # Prepare the probability plot dataset by clearing it
+        self.clear_probability_plot()
 
     def post_init(self) -> None:
         # Obtain the state detection threshold
@@ -99,34 +101,32 @@ class HistogramContext(DaxModule):
         self._buffer.append(data)
 
     @rpc(flags={'async'})
-    def config(self, key=None,
-               clear_probability_plot=False):  # type: (typing.Optional[str], bool) -> None
-        """Optional configuration of the histogram context (async RPC).
+    def config_dataset(self, key=None, *args, **kwargs):  # type: (typing.Optional[str], typing.Any, typing.Any) -> None
+        """Optional configuration of the histogram context output dataset (async RPC).
 
         Set the dataset base key used for the following histograms.
         Use `None` to reset the dataset base key to its default value.
 
-        Clear the probability plot using the according flag.
+        Within ARTIQ kernels it is not possible to use string formatting functions.
+        Instead, the key can be a string that includes formatting annotations while
+        formatting parameters can be provided as positional and keyword arguments.
+        The formatting function will be called on the host.
 
         This function can not be used when already in context.
 
-        :param key: Key for the result dataset
-        :param clear_probability_plot: If true, clear the probability plot
+        :param key: Key for the result dataset using standard Python formatting notation
+        :param args: Python `str.format()` positional arguments
+        :param kwargs: Python `str.format()` keyword arguments
         :raises HistogramContextError: Raised if called inside the histogram context
         """
         assert isinstance(key, str) or key is None, 'Provided dataset key must be of type str or None'
-        assert isinstance(clear_probability_plot, bool), 'Clear probability plot flag must be of type bool'
 
         if self._in_context:
             # Called in context
             raise HistogramContextError('Setting the target dataset can only be done when not in context')
 
         # Update the dataset key
-        self._dataset_key = self.DEFAULT_DATASET_KEY if key is None else key
-
-        if clear_probability_plot:
-            # Clear the probability dataset
-            self.set_dataset(self.PROBABILITY_PLOT_KEY, [], broadcast=True, archive=False)
+        self._dataset_key = self._default_dataset_key if key is None else key.format(*args, **kwargs)
 
     @portable
     def __enter__(self):  # type: () -> None
@@ -212,6 +212,9 @@ class HistogramContext(DaxModule):
 
         # Update counter for this dataset key
         self._open_datasets[self._dataset_key] += 1
+        # Archive number of sub-datasets for current key
+        self.set_dataset(self.HISTOGRAM_ARCHIVE_KEY_FORMAT.format(key=self._dataset_key),
+                         self._open_datasets[self._dataset_key], archive=True)
         # Update context counter
         self._in_context -= 1
 
@@ -256,6 +259,12 @@ class HistogramContext(DaxModule):
         kwargs.setdefault('y_label', 'State probability')
         # Plot
         self._ccb.plot_xy_nested('probability', self.PROBABILITY_PLOT_KEY, group=self.PLOT_GROUP, **kwargs)
+
+    @rpc(flags={'async'})
+    def clear_probability_plot(self):  # type: () -> None
+        """Clear the probability plot."""
+        # Set the probability dataset to an empty list
+        self.set_dataset(self.PROBABILITY_PLOT_KEY, [], broadcast=True, archive=False)
 
     @rpc(flags={'async'})
     def disable_histogram_plot(self):  # type: () -> None
