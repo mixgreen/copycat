@@ -1,6 +1,7 @@
 import unittest
 import collections
 import typing
+import itertools
 
 from artiq.experiment import *
 
@@ -122,6 +123,35 @@ class _MockScanDisableIndexBad(_MockScan1):
             # Change the exception type to specifically recognize this case
             raise _IndexAttributeError from AttributeError
         self.counter['run_point'] += 1
+
+
+class _MockScan2ValueCheck(_MockScan2):
+    def build_scan(self) -> None:
+        super(_MockScan2ValueCheck, self).build_scan()
+
+        # Iterators to check the values
+        scan_values = self.get_scannables()
+        self.scan_foo = itertools.chain(*[itertools.repeat(v, self.BAR) for v in scan_values['foo']])
+        self.scan_bar = itertools.cycle(scan_values['bar'])
+
+        # Iterators to check indices
+        self.index_foo = itertools.chain(*[itertools.repeat(v, self.BAR) for v in range(self.FOO)])
+        self.index_bar = itertools.cycle(range(self.BAR))
+
+    def run_point(self, point, index):  # type: (typing.Any, typing.Any) -> None
+        super(_MockScan2ValueCheck, self).run_point(point, index)
+
+        # Check values of points
+        point_foo = next(self.scan_foo)
+        point_bar = next(self.scan_bar)
+        assert point.foo == point_foo, '{} != {}'.format(point.foo, point_foo)
+        assert point.bar == point_bar, '{} != {}'.format(point.bar, point_bar)
+
+        # Check indices
+        index_foo = next(self.index_foo)
+        index_bar = next(self.index_bar)
+        assert index.foo == index_foo, '{} != {}'.format(index.foo, index_foo)
+        assert index.bar == index_bar, '{} != {}'.format(index.bar, index_bar)
 
 
 class Scan1TestCase(unittest.TestCase):
@@ -325,6 +355,13 @@ class DisableIndexScanTestCase(unittest.TestCase):
         # Run the scan, expecting a specific exception
         with self.assertRaises(_IndexAttributeError, msg='Accessing an index attribute did not raise'):
             bad_scan.run()
+
+
+class ScanValueTestCase(Scan2TestCase):
+
+    def setUp(self) -> None:
+        # Exceptions are raised if values don't match
+        self.scan = _MockScan2ValueCheck(get_manager_or_parent())
 
 
 if __name__ == '__main__':

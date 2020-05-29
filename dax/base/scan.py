@@ -32,7 +32,7 @@ def _is_kernel(func: typing.Any) -> bool:
 
 
 class ScanProductGenerator:
-    """Generator class for a product of scans.
+    """Generator class for a cartesian product of scans.
 
     This class is inspired by the ARTIQ MultiScanManager class.
     """
@@ -115,6 +115,11 @@ class DaxScan(dax.base.dax.DaxBase, abc.ABC):
     The first step is to build the scan by overriding the :func:`build_scan` function.
     Use the :func:`add_scan` function to add normal ARTIQ scannables to this scan object.
     Other ARTIQ functions are available to obtain other arguments.
+
+    Adding multiple scans results automatically in a multi-dimensional scan by scanning over
+    all value combinations in the cartesian product of the scans.
+    The first scan added represents the dimension which is only scanned once.
+    All next scans are repeatedly performed to form the cartesian product.
 
     The scan class implements a :func:`run` function that controls the overall scanning flow.
     The :func:`prepare` and :func:`analyze` functions are not implemented by the scan class, but users
@@ -221,6 +226,10 @@ class DaxScan(dax.base.dax.DaxBase, abc.ABC):
                  group: typing.Optional[str] = None, tooltip: typing.Optional[str] = None) -> None:
         """Register a scannable.
 
+        The first scan added represents the dimension which is only scanned once.
+        All next scans are repeatedly performed to form the cartesian product.
+        Hence, the last added scan will be repeated the most times.
+
         Scannables are normal ARTIQ `Scannable` objects and will appear in the user interface.
 
         :param key: Unique key of the scan, used to obtain the value later
@@ -253,11 +262,11 @@ class DaxScan(dax.base.dax.DaxBase, abc.ABC):
 
     @host_only
     def get_scan_points(self) -> typing.Dict[str, typing.List[typing.Any]]:
-        """Get the scan points (including product) for analysis.
+        """Get the cartesian product of scan points for analysis.
 
         A list of values is returned on a per-key basis.
         The values are returned in the same sequence as was provided to the actual run,
-        including the product of all scannables.
+        as the cartesian product of all scannables.
 
         To get the values without applying the product, see :func:`get_scannables`.
 
@@ -310,7 +319,7 @@ class DaxScan(dax.base.dax.DaxBase, abc.ABC):
             return
 
         for key in self._scan_scannables:
-            # Archive product of all scan points (separate dataset for every key)
+            # Archive cartesian product of all scan points (separate dataset for every key)
             self.set_dataset(key, [getattr(point, key) for point, _ in self._scan_elements], archive=True)
         # Archive values of each independent scan
         for key, scannable in self._scan_scannables.items():
