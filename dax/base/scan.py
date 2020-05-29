@@ -1,9 +1,9 @@
 import abc
 import typing
-import collections
 import itertools
 import re
 import numpy as np
+from collections import OrderedDict
 
 from artiq.experiment import *
 
@@ -182,7 +182,7 @@ class DaxScan(dax.base.dax.DaxBase, abc.ABC):
         super(DaxScan, self).build(*args, **kwargs)
 
         # Collection of scannables
-        self._scan_scannables = collections.OrderedDict()  # type: typing.Dict[str, typing.Iterable[typing.Any]]
+        self._scan_scannables = OrderedDict()  # type: OrderedDict[str, typing.Iterable[typing.Any]]
 
         # The scheduler object
         self._scan_scheduler = self.get_device('scheduler')
@@ -230,7 +230,12 @@ class DaxScan(dax.base.dax.DaxBase, abc.ABC):
         All next scans are repeatedly performed to form the cartesian product.
         Hence, the last added scan will be repeated the most times.
 
+        Note that scans can be reordered using the :func:`set_scan_order` function.
+        The order in the ARTIQ dashboard will not change, but the product will be generated differently.
+
         Scannables are normal ARTIQ `Scannable` objects and will appear in the user interface.
+
+        This function can only be called in the :func:`build_scan` function.
 
         :param key: Unique key of the scan, used to obtain the value later
         :param name: The name of the argument
@@ -261,6 +266,28 @@ class DaxScan(dax.base.dax.DaxBase, abc.ABC):
         self._scan_scannables[key] = self.get_argument(name, scannable, group=group, tooltip=tooltip)
 
     @host_only
+    def set_scan_order(self, *keys: str) -> None:
+        """Set the scan order given a sequence of keys.
+
+        The given sequence of scan keys will determine the new order of the scans.
+        In the list of scans, the given keys will be moved to the end of the list in the given order.
+        Keys of scans that are not in the new scan order will remain in their relative position.
+        For more information about the order of scans and the cartesian product, see :func:`add_scan`.
+
+        This function can only be called in the :func:`build_scan` function.
+
+        :param keys: The scan keys in the desired order
+        """
+
+        # Verify this function was called in the build_scan() function
+        if not self.__in_build:
+            raise TypeError('set_scan_order() can only be called in the build_scan() method')
+
+        for k in keys:
+            # Move key to the end of the list
+            self._scan_scannables.move_to_end(k)
+
+    @host_only
     def get_scan_points(self) -> typing.Dict[str, typing.List[typing.Any]]:
         """Get the cartesian product of scan points for analysis.
 
@@ -269,6 +296,8 @@ class DaxScan(dax.base.dax.DaxBase, abc.ABC):
         as the cartesian product of all scannables.
 
         To get the values without applying the product, see :func:`get_scannables`.
+
+        This function can only be used after the :func:`run` function was called.
 
         :return: A dict containing all the scan points on a per-key basis
         """
