@@ -2,13 +2,14 @@ import unittest
 import logging
 import typing
 import collections
+import numpy as np
 
-from artiq.experiment import HasEnvironment
+from artiq.experiment import HasEnvironment, now_mu
 from artiq.master.databases import device_db_from_file  # type: ignore
 
 from dax.util.artiq_helpers import get_manager_or_parent
 from dax.sim import enable_dax_sim
-from dax.sim.signal import get_signal_manager
+from dax.sim.signal import get_signal_manager, PeekSignalManager, SignalNotSet
 
 __all__ = ['PeekTestCase']
 
@@ -33,7 +34,9 @@ class PeekTestCase(unittest.TestCase):
         :param env_class: The environment class to construct
         :param device_db: The device DB to use (defaults to :attr:`DEFAULT_DEVICE_DB`)
         :param logging_level: The desired logging level
-        :param env_kwargs: Keyword arguments passed to the constructed environment
+        :param build_args: Positional arguments passed to the build function of the environment
+        :param build_kwargs: Keyword arguments passed to the build function of the environment
+        :param env_kwargs: Keyword arguments passed to the argument parser of the environment
         :return: The constructed ARTIQ environment object
         """
 
@@ -66,13 +69,45 @@ class PeekTestCase(unittest.TestCase):
         env = env_class(get_manager_or_parent(ddb, expid, **env_kwargs), *build_args, **build_kwargs)
 
         # Store the new signal manager
-        self.__signal_manager = get_signal_manager()
+        self.__signal_manager = typing.cast(PeekSignalManager, get_signal_manager())
+        assert isinstance(self.__signal_manager, PeekSignalManager), 'Did not obtained correct signal manager type'
 
         # Return the environment
         return env
 
-    def peek(self) -> typing.Any:
-        pass
+    def peek(self, scope: typing.Any, signal: str) -> typing.Any:
+        """Peek a signal of a device at the current time.
 
-    def expect(self) -> None:
-        pass
+        :param scope: The scope (device) of the signal
+        :param signal: The name of the signal
+        :return: The value of the signal at the current time.
+        """
+        # TODO, check the scope type
+        # TODO, value matching (e.g. x and X)
+        # TODO, disable info message from ddb
+        # TODO, handle signal not set
+        # Return the value
+        return self.__signal_manager.peek(scope, signal)
+
+    def expect(self, scope: typing.Any, signal: str, value: typing.Any, msg: typing.Optional[str] = None) -> None:
+        """Test if a signal holds a given value at the current time.
+
+        :param scope: The scope (device) of the signal
+        :param signal: The name of the signal
+        :param value: The expected value
+        :param msg: Message to show when this assertion fails
+        """
+        # Get the value and the type
+        peek, type_ = self.__signal_manager.peek_and_type(scope, signal)
+
+        if type_ in {object, str}:
+            # Raise if the signal has an invalid type
+            raise TypeError('Signal "{:s}.{:s}" type "{}" can not be tested'.format(scope.key, signal, type_))
+
+        # Match with special values for supported types
+        if type_ in {bool, int, np.int32, np.int64}:
+            if any(value in s and peek in s for s in [{'x', 'X', SignalNotSet}, {'z', 'Z'}]):  # type: ignore
+                return  # We have a match on a special value
+
+        # Assert if the values are equal
+        self.assertEqual(value, self.peek(scope, signal), msg=msg)
