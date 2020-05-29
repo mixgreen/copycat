@@ -11,26 +11,44 @@ import artiq.frontend.artiq_run  # type: ignore
 __all__ = ['get_manager_or_parent']
 
 
-def get_manager_or_parent(device_db: typing.Dict[str, typing.Any] = None) -> typing.Any:
+def get_manager_or_parent(device_db: typing.Union[typing.Dict[str, typing.Any], str, None] = None,
+                          expid: typing.Optional[typing.Dict[str, typing.Any]] = None,
+                          **arguments: typing.Any) -> typing.Any:
     """Returns an object that can function as a `manager_or_parent` for ARTIQ HasEnvironment.
 
     This function is primarily used for testing purposes.
 
-    :param device_db: A device DB as dict (optional)
+    :param device_db: A device DB as dict or a file name (optional)
+    :param expid: Dict for the scheduler expid attribute (optional)
+    :param arguments: Arguments for the ProcessArgumentManager object
     :return: A dummy ARTIQ manager object
     """
+    assert isinstance(expid, dict) or expid is None
+    assert isinstance(arguments, dict)
 
     # Scheduler
     scheduler = artiq.frontend.artiq_run.DummyScheduler()
-    # Fill in expid of scheduler
-    scheduler.expid = {'log_level': 20, 'file': 'file_name.py', 'class_name': 'DaxArtiqHelperExperiment',
-                       'arguments': {}, 'repo_rev': 'N/A'}
+    # Construct expid of scheduler and add default values
+    scheduler.expid = dict() if expid is None else expid
+    for k, v in _EXPID_DEFAULTS.items():
+        scheduler.expid.setdefault(k, v)
+    # Set arguments (overwrites any arguments in the expid)
+    scheduler.expid['arguments'] = arguments
 
-    # Device DB for testing in the directory of this script
-    device_db_file_name = os.path.join(tempfile.gettempdir(), 'dax_artiq_helper_device_db.py')
-    with open(device_db_file_name, 'w') as device_db_file:
-        device_db_file.write('device_db=')
-        device_db_file.write(str(_device_db if device_db is None else device_db))
+    if isinstance(device_db, dict) or device_db is None:
+        # Create a temporally device DB file
+        device_db_file_name = os.path.join(tempfile.gettempdir(), 'dax_artiq_helper_device_db.py')
+        with open(device_db_file_name, 'w') as device_db_file:
+            device_db_file.write('device_db=')
+            device_db_file.write(str(_DEVICE_DB if device_db is None else device_db))
+    elif isinstance(device_db, str):
+        # The provided string is supposed to be a filename
+        device_db_file_name = device_db
+    else:
+        # Unsupported device DB type
+        raise TypeError('Unsupported type for device DB parameter')
+
+    # Create the device manager
     device_mgr = artiq.master.worker_db.DeviceManager(
         artiq.master.databases.DeviceDB(device_db_file_name),
         virtual_devices={
@@ -43,7 +61,7 @@ def get_manager_or_parent(device_db: typing.Dict[str, typing.Any] = None) -> typ
     dataset_mgr = artiq.master.worker_db.DatasetManager(dataset_db)
 
     # Argument manager
-    argument_mgr = artiq.language.environment.ProcessArgumentManager({})
+    argument_mgr = artiq.language.environment.ProcessArgumentManager(arguments)
 
     # Return a tuple that is accepted as manager_or_parent
     # DeviceManager, DatasetManager, ProcessArgumentManager, dict
@@ -54,7 +72,7 @@ def get_manager_or_parent(device_db: typing.Dict[str, typing.Any] = None) -> typ
 logging.basicConfig(level=logging.CRITICAL)
 
 # Default device db
-_device_db = {
+_DEVICE_DB = {
     'core': {
         'type': 'local',
         'module': 'artiq.coredevice.core',
@@ -72,3 +90,9 @@ _device_db = {
         'class': 'CoreDMA'
     },
 }  # type: typing.Dict[str, typing.Any]
+
+# Default expid values
+_EXPID_DEFAULTS = {'log_level': logging.CRITICAL,
+                   'file': 'dax_artiq_helper_file.py',
+                   'class_name': 'DaxArtiqHelperExperiment',
+                   'repo_rev': 'N/A'}  # type: typing.Dict[str, typing.Any]

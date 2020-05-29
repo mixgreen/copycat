@@ -47,6 +47,8 @@ class DaxSimConfig:
             self.__output_enabled = False
 
             # Set the peek signal manager
+            if signal_mgr_kwargs:
+                raise TypeError('PeekSignalManager() takes no arguments')
             set_signal_manager(PeekSignalManager())
 
         else:

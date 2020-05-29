@@ -66,10 +66,10 @@ def enable_dax_sim(enable: bool,
 
     assert isinstance(enable, bool), 'The enable flag must be of type bool'
     assert isinstance(ddb, dict), 'The device DB argument must be a dict'
-    assert isinstance(logging_level, int) or logging_level is None, 'Logging level must be of type int'
+    assert isinstance(logging_level, (int, str)), 'Logging level must be of type int or str'
     assert isinstance(output, str) or output is None, 'Invalid type for output parameter'
     assert isinstance(sim_config_module, str), 'Simulation configuration module name must be of type str'
-    assert isinstance(sim_config_module, str), 'Simulation configuration class name must be of type str'
+    assert isinstance(sim_config_class, str), 'Simulation configuration class name must be of type str'
 
     # For this file, set logging level to INFO if it was not set
     _logger.setLevel(logging_level if logging_level != logging.NOTSET else logging.INFO)
@@ -80,7 +80,7 @@ def enable_dax_sim(enable: bool,
 
         if DAX_SIM_CONFIG_KEY not in ddb:
             # Convert the device DB
-            _logger.debug('Converting device DB...')
+            _logger.debug('Converting device DB')
             try:
                 for k, v in ddb.items():
                     # Mutate every entry in-place
@@ -89,23 +89,22 @@ def enable_dax_sim(enable: bool,
                 # Log exception to provide more context
                 _logger.exception(e)
                 raise
-
-            # Prepare virtual device used for passing simulation configuration
-            sim_config = {DAX_SIM_CONFIG_KEY: {
-                'type': 'local', 'module': sim_config_module, 'class': sim_config_class,
-                # Simulation configuration is passed through the arguments
-                'arguments': {'logging_level': logging_level,
-                              'output': output,
-                              'signal_mgr_kwargs': signal_mgr_kwargs},
-            }}
-
-            # Add simulation configuration to device DB
-            ddb.update(sim_config)
-            _logger.debug('Device DB converted successfully')
-
         else:
             # Device DB was already converted
             _logger.debug('Device DB was already converted')
+
+        # Prepare virtual device used for passing simulation configuration
+        sim_config = {DAX_SIM_CONFIG_KEY: {
+            'type': 'local', 'module': sim_config_module, 'class': sim_config_class,
+            # Simulation configuration is passed through the arguments
+            'arguments': {'logging_level': logging_level,
+                          'output': output,
+                          'signal_mgr_kwargs': signal_mgr_kwargs},
+        }}
+
+        # Add simulation configuration to device DB
+        _logger.debug('Updating simulation configuration in device DB')
+        ddb.update(sim_config)
 
         # Return the device DB
         return ddb
