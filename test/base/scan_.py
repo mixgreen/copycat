@@ -402,6 +402,10 @@ class ScanValueReorderedTestCase(Scan2TestCase):
         # Exceptions are raised if values don't match
         self.scan = _MockScan2ValueCheckReordered(get_manager_or_parent())
 
+    def test_raise_scan_order(self):
+        with self.assertRaises(TypeError, msg='Reordering scan outside build did not raise'):
+            self.scan.set_scan_order()
+
 
 if __name__ == '__main__':
     unittest.main()
