@@ -71,8 +71,8 @@ def enable_dax_sim(enable: bool,
     assert isinstance(sim_config_module, str), 'Simulation configuration module name must be of type str'
     assert isinstance(sim_config_class, str), 'Simulation configuration class name must be of type str'
 
-    # For this file, set logging level to INFO if it was not set
-    _logger.setLevel(logging_level if logging_level != logging.NOTSET else logging.INFO)
+    # Set the logging level to the given value
+    _logger.setLevel(logging_level)
 
     if enable:
         # Log that dax.sim was enabled

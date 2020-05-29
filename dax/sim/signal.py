@@ -235,8 +235,8 @@ class PeekSignalManager(DaxSignalManager[_PS_T]):
     }  # type: typing.Dict[_PT_T, typing.Union[type, typing.Tuple[type, ...]]]
     """Dict to convert Python types to peek signal manager type-checking types."""
 
-    _BOOL_SPECIAL_VALUES = {'x', 'X', 'z', 'Z', 0, 1, False, True}
-    """Special values for a bool type signal."""
+    _SPECIAL_VALUES = {'x', 'X', 'z', 'Z', 0, 1, False, True}
+    """Special values for a bool or int type signal."""
 
     def __init__(self) -> None:
         # Registered devices and buffer for signals/events
@@ -339,7 +339,7 @@ class PeekSignalManager(DaxSignalManager[_PS_T]):
         check_type = self._CHECK_TYPE[type_]
 
         # noinspection PyTypeHints
-        if check_type in {bool, numbers.Integral} and value in self._BOOL_SPECIAL_VALUES:
+        if check_type in {bool, numbers.Integral} and value in self._SPECIAL_VALUES:
             return  # Value is legal (special bool values)
         elif isinstance(value, check_type):  # PyCharm inspection wrongly flags a type hint error
             return  # Value is legal (expected type)

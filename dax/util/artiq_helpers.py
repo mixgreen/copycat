@@ -5,7 +5,7 @@ import logging
 
 import artiq.language.environment
 import artiq.master.worker_db
-import artiq.master.databases  # type: ignore
+import artiq.master.databases
 import artiq.frontend.artiq_run  # type: ignore
 
 __all__ = ['get_manager_or_parent']
@@ -71,7 +71,7 @@ def get_manager_or_parent(device_db: typing.Union[typing.Dict[str, typing.Any], 
 # Disable ARTIQ logging by setting logging level to critical
 logging.basicConfig(level=logging.CRITICAL)
 
-# Default device db
+# Default device DB
 _DEVICE_DB = {
     'core': {
         'type': 'local',

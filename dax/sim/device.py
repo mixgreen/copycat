@@ -61,3 +61,7 @@ class DaxSimDevice(abc.ABC):
         By default this function does nothing.
         """
         pass
+
+    def __repr__(self) -> str:
+        """Representation is the key of this device."""
+        return self.key
