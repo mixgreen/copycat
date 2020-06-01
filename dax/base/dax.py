@@ -427,7 +427,7 @@ class DaxHasSystem(DaxBase, abc.ABC):
         assert isinstance(attr_name, str) or attr_name is None, 'Attribute name must be of type str or None'
 
         # Get the device
-        device = self.get_device(key, type_)  # type: ignore
+        device = self.get_device(key, type_)  # type: ignore[arg-type]
 
         if attr_name is None:
             # Set attribute name to key if no attribute name was given
@@ -1224,7 +1224,7 @@ class DaxNameRegistry:
         """Find a unique interface that matches the requested type.
 
         Note: mypy type checker does not handle pure abstract base classes correctly.
-        A `# type: ignore` annotation on the line using this function is probably
+        A `# type: ignore[misc]` annotation on the line using this function is probably
         required to pass type checking.
 
         :param type_: The type of the interface
@@ -1251,7 +1251,7 @@ class DaxNameRegistry:
         """Search for interfaces that match the requested type and return results as a dict.
 
         Note: mypy type checker does not handle pure abstract base classes correctly.
-        A `# type: ignore` annotation on the line using this function is probably
+        A `# type: ignore[misc]` annotation on the line using this function is probably
         required to pass type checking.
 
         :param type_: The type of the interfaces
@@ -1265,7 +1265,7 @@ class DaxNameRegistry:
         results = {itf.get_system_key(): itf for itf in iterator if isinstance(itf, type_)}
 
         # Return the list with results
-        return results  # type: ignore
+        return typing.cast(typing.Dict[str, DaxNameRegistry.__I_T], results)
 
 
 class DaxDataStore:
@@ -1344,10 +1344,11 @@ class DaxDataStoreInfluxDb(DaxDataStore):
     push data to an Influx database.
     """
 
-    __F_T = typing.Union[numbers.Real, str]  # Field type variable for Influx DB supported types
-    __P_T = typing.Dict[str, typing.Union[str, typing.Union[typing.Dict[str, __F_T]]]]  # Point type variable
+    __F_T = typing.Union[bool, float, int, np.int32, np.int64, str]  # Field type variable for Influx DB supported types
+    __FD_T = typing.Dict[str, __F_T]  # Field dict type variable
+    __P_T = typing.Dict[str, typing.Union[str, __FD_T]]  # Point type variable
 
-    _FIELD_TYPES = (numbers.Real, str)  # numbers.Real includes bool, float, int, and NumPy int (for runtime checks)
+    _FIELD_TYPES = (bool, float, int, np.int32, np.int64, str)
     """Legal field types for Influx DB."""
 
     def __init__(self, system: DaxSystem, key: str):
@@ -1379,7 +1380,7 @@ class DaxDataStoreInfluxDb(DaxDataStore):
         # Prepare base tags
         self._base_tags = {
             'system_version': str(system.SYS_VER),  # Convert int version to str since tags are strings
-        }  # type: typing.Dict[str, str]
+        }  # type: DaxDataStoreInfluxDb.__FD_T
 
         # Prepare base fields
         self._base_fields = {
@@ -1389,7 +1390,7 @@ class DaxDataStoreInfluxDb(DaxDataStore):
             'artiq_version': str(_artiq_version),
             'dax_version': str(_dax_version),
             'dax_sim_enabled': str(system.dax_sim_enabled)
-        }
+        }  # type: DaxDataStoreInfluxDb.__FD_T
 
         # Add expid items to fields if keys do not exist yet and the types are appropriate
         self._base_fields.update((k, v) for k, v in scheduler.expid.items()
@@ -1523,7 +1524,7 @@ class DaxDataStoreInfluxDb(DaxDataStore):
         }
 
         # Return point
-        return point  # type: ignore
+        return typing.cast(DaxDataStoreInfluxDb.__P_T, point)
 
     def _get_driver(self, system: DaxSystem, key: str) -> None:
         """Get the required driver.
@@ -1577,7 +1578,7 @@ def dax_client_factory(c: typing.Type[__DCF_C_T]) -> typing.Callable[[typing.Typ
         if not issubclass(system_type, DaxSystem):
             raise TypeError('System type must be a subclass of DaxSystem')
 
-        class WrapperClass(c):  # type: ignore
+        class WrapperClass(c):  # type: ignore[valid-type,misc]
             """The wrapper class that finalizes the client class.
 
             The wrapper class extends the client class by constructing the system

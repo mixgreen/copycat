@@ -1,3 +1,7 @@
+# mypy: disallow_untyped_defs = False
+# mypy: disallow_incomplete_defs = False
+# mypy: check_untyped_defs = False
+
 import random
 import collections
 import itertools

@@ -1,3 +1,5 @@
+# mypy: ignore-errors
+
 import typing
 import numpy as np
 
@@ -28,7 +30,7 @@ class RtioBenchmarkModule(DaxModule):
         self._dma_enabled = dma
 
         # TTL output device
-        self.ttl_out = self.get_device(ttl_out, (artiq.coredevice.ttl.TTLOut, artiq.coredevice.ttl.TTLInOut))
+        self.ttl_out = self.get_device(ttl_out, artiq.coredevice.ttl.TTLInOut)
         self.update_kernel_invariants('ttl_out')
 
     def init(self) -> None:
@@ -111,7 +113,7 @@ class RtioBenchmarkModule(DaxModule):
 
     """Benchmark event throughput"""
 
-    def benchmark_event_throughput(self, period_scan: typing.Sequence[float],
+    def benchmark_event_throughput(self, period_scan: typing.Union[typing.List[float], np.ndarray[float]],
                                    num_samples: int, num_events: int, no_underflow_cutoff: int) -> None:
         # Convert types of arguments
         num_samples = np.int32(num_samples)
@@ -372,7 +374,7 @@ class RtioBenchmarkModule(DaxModule):
 
     """Benchmark DMA throughput"""
 
-    def benchmark_dma_throughput(self, period_scan: typing.Sequence[float],
+    def benchmark_dma_throughput(self, period_scan: typing.Union[typing.List[float], np.ndarray[float]],
                                  num_samples: int, num_events: int, no_underflow_cutoff: int) -> None:
         # Convert types of arguments
         num_samples = np.int32(num_samples)

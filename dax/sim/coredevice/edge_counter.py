@@ -1,3 +1,8 @@
+# mypy: disallow_untyped_defs = False
+# mypy: disallow_incomplete_defs = False
+# mypy: check_untyped_defs = False
+
+import typing
 import collections
 import enum
 import numpy as np
@@ -34,7 +39,7 @@ class EdgeCounter(DaxSimDevice):
         self._input_freq = input_freq
 
         # Buffers to store counts
-        self._count_buffer = collections.deque()
+        self._count_buffer = collections.deque()  # type: typing.Deque[typing.Tuple[np.int64, int]]
 
         # Register signals
         self._signal_manager = get_signal_manager()

@@ -1,3 +1,4 @@
+import typing
 import numpy as np
 
 from artiq.coredevice.exceptions import DMAError
@@ -11,7 +12,7 @@ from dax.sim.signal import get_signal_manager
 
 class _DMARecordContext:
 
-    def __init__(self, core, name: str, epoch: int, record_signal):
+    def __init__(self, core: typing.Any, name: str, epoch: int, record_signal: typing.Any):
         # Store attributes
         self._core = core
         self._name = name
@@ -25,7 +26,7 @@ class _DMARecordContext:
         self._duration = np.int64(0)  # type: np.int64
 
     @property
-    def core(self):
+    def core(self) -> typing.Any:
         return self._core
 
     @property
@@ -41,14 +42,14 @@ class _DMARecordContext:
         return self._duration
 
     @kernel
-    def __enter__(self):
+    def __enter__(self) -> None:
         # Save current time
         self._duration = now_mu()
         # Set record signal
         self._signal_manager.event(self._record_signal, self.name)
 
     @kernel
-    def __exit__(self, type_, value, traceback):
+    def __exit__(self, type_: typing.Any, value: typing.Any, traceback: typing.Any) -> None:
         # Store duration
         self._duration = now_mu() - self.duration
         # Reset record signal
@@ -57,23 +58,23 @@ class _DMARecordContext:
 
 class CoreDMA(DaxSimDevice):
 
-    def __init__(self, dmgr, **kwargs):
+    def __init__(self, dmgr: typing.Any, **kwargs: typing.Any):
         # Call super
         super(CoreDMA, self).__init__(dmgr, **kwargs)
 
         # Initialize epoch to zero
         self._epoch = 0  # type: int
         # Dict for DMA traces
-        self._dma_traces = dict()
+        self._dma_traces = dict()  # type: typing.Dict[str, _DMARecordContext]
 
         # Register signal
         self._signal_manager = get_signal_manager()
-        self._dma_record = self._signal_manager.register(self.key, 'record', str)
-        self._dma_play = self._signal_manager.register(self.key, 'play', object)
-        self._dma_play_name = self._signal_manager.register(self.key, 'play_name', str)
+        self._dma_record = self._signal_manager.register(self.key, 'record', str)  # type: typing.Any
+        self._dma_play = self._signal_manager.register(self.key, 'play', object)  # type: typing.Any
+        self._dma_play_name = self._signal_manager.register(self.key, 'play_name', str)  # type: typing.Any
 
     @kernel
-    def record(self, name: str):
+    def record(self, name: str) -> _DMARecordContext:
         assert isinstance(name, str), 'DMA trace name must be of type str'
 
         # Increment epoch
@@ -87,7 +88,7 @@ class CoreDMA(DaxSimDevice):
         return recorder
 
     @kernel
-    def erase(self, name):
+    def erase(self, name: str) -> None:
         assert isinstance(name, str), 'DMA trace name must be of type str'
 
         if name not in self._dma_traces:
@@ -98,7 +99,7 @@ class CoreDMA(DaxSimDevice):
         self._epoch += 1
 
     @kernel
-    def playback(self, name: str):
+    def playback(self, name: str) -> None:
         assert isinstance(name, str), 'DMA trace name must be of type str'
 
         # Get handle
@@ -109,7 +110,7 @@ class CoreDMA(DaxSimDevice):
         self.playback_handle(self._dma_traces[name])
 
     @kernel
-    def get_handle(self, name: str):
+    def get_handle(self, name: str) -> _DMARecordContext:
         assert isinstance(name, str), 'DMA trace name must be of type str'
 
         if name not in self._dma_traces:
@@ -119,7 +120,7 @@ class CoreDMA(DaxSimDevice):
         return self._dma_traces[name]
 
     @kernel
-    def playback_handle(self, handle: _DMARecordContext):
+    def playback_handle(self, handle: _DMARecordContext) -> None:
         assert isinstance(handle, _DMARecordContext), 'DMA handle has an incorrect type'
 
         # Verify handle

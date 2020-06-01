@@ -25,7 +25,7 @@ class PmtMonitor(DaxClient, EnvExperiment):
 
     def build(self) -> None:  # type: ignore
         # Obtain the detection interface
-        self.detection = self.registry.find_interface(DetectionInterface)  # type: ignore
+        self.detection = self.registry.find_interface(DetectionInterface)  # type: ignore[misc]
         # Obtain the PMT array
         self.pmt_array = self.detection.get_pmt_array()
         self.update_kernel_invariants('detection', 'pmt_array')

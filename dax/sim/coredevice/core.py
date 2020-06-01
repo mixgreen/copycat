@@ -33,7 +33,7 @@ class Core(DaxSimDevice):
         self._sim_config = dmgr.get(DAX_SIM_CONFIG_KEY)
 
         # Call super
-        super(Core, self).__init__(dmgr, _core=self, **kwargs)  # type: ignore
+        super(Core, self).__init__(dmgr, _core=self, **kwargs)  # type: ignore[arg-type]
 
         # Store arguments
         self._device_manager = dmgr

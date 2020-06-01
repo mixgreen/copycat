@@ -72,7 +72,7 @@ class HistogramContext(DaxModule):
 
     def post_init(self) -> None:
         # Obtain the state detection threshold
-        detection = self.registry.find_interface(DetectionInterface)  # type: ignore
+        detection = self.registry.find_interface(DetectionInterface)  # type: ignore[misc]
         self._state_detection_threshold = detection.get_state_detection_threshold()
         self.update_kernel_invariants('_state_detection_threshold')
 

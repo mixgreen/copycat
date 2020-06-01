@@ -1,3 +1,4 @@
+import typing
 import enum
 
 __all__ = ['Request', 'Reply', 'UnsupportedDevice', 'LoadError', 'RPCReturnValueError', 'RPCKeyword',
@@ -40,19 +41,19 @@ RPCKeyword = ...
 
 
 class CommKernelDummy:
-    def __init__(self):
+    def __init__(self) -> None:
         ...
 
-    def load(self, kernel_library):
+    def load(self, kernel_library: typing.Any) -> None:
         ...
 
-    def run(self):
+    def run(self) -> None:
         ...
 
-    def serve(self, embedding_map, symbolizer, demangler):
+    def serve(self, embedding_map: typing.Any, symbolizer: typing.Any, demangler: typing.Any) -> None:
         ...
 
-    def check_system_info(self):
+    def check_system_info(self) -> None:
         ...
 
 

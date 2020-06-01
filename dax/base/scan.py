@@ -98,7 +98,7 @@ class ScanProductGenerator:
         else:
             # Create one empty scan index
             si = self.ScanIndex()
-            for _ in range(np.prod([len(s) for s in self._scans])):  # type: ignore
+            for _ in range(np.prod([len(s) for s in self._scans])):  # type: ignore[attr-defined]
                 # Yield the empty scan index object for all
                 yield si
 
@@ -334,7 +334,7 @@ class DaxScan(dax.base.dax.DaxBase, abc.ABC):
 
         # Make the scan elements
         if self._scan_scannables:
-            self._scan_elements = list(ScanProductGenerator(*self._scan_scannables.items(),  # type: ignore
+            self._scan_elements = list(ScanProductGenerator(*self._scan_scannables.items(),  # type: ignore[arg-type]
                                                             enable_index=self.ENABLE_INDEX))
         else:
             self._scan_elements = []

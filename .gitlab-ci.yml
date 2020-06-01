@@ -4,7 +4,7 @@
     # Setup Nix channels
     - nix-channel --add https://nixbld.m-labs.hk/channel/custom/artiq/full/artiq-full
     - nix-channel --remove nixpkgs
-    - nix-channel --add https://nixos.org/channels/nixos-19.09 nixpkgs
+    - nix-channel --add https://nixos.org/channels/nixos-20.03 nixpkgs
     - nix-channel --update
     # Add M-Lab public key
     - mkdir -p ~/.config/nix/
@@ -19,7 +19,7 @@ test_nix:
     - nix-shell test/shell.nix --run "python3 --version"
     - nix-shell test/shell.nix --run "coverage --version; coverage run -m unittest -v"
     - nix-shell test/shell.nix --run "coverage report"
-    - nix-shell test/shell.nix --run "mypy --version; mypy dax/ test/"
+    - nix-shell test/shell.nix --run "mypy --version; mypy"
     - nix-shell test/shell.nix --run "flake8 --version; flake8"
 
 test_conda:

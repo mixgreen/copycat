@@ -80,6 +80,14 @@ class ndarray(collections.abc.Sequence, typing.Generic[__N_T]):
     def strides(self) -> typing.Tuple[int]:
         ...
 
+    def sort(self, axis: typing.Optional[int] = -1, kind: typing.Optional[str] = None,
+             order: typing.Union[None, str, typing.List[str]] = None):
+        ...
+
+    def mean(self, axis: typing.Optional[__SHAPE_T] = None, dtype: typing.Optional[type] = None,
+             out: typing.Optional['ndarray'] = None, keepdims: bool = False):
+        ...
+
     @typing.overload
     def __getitem__(self, i: int) -> __N_T:
         ...
