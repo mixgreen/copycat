@@ -17,6 +17,14 @@ dax.util.ccb module
     :undoc-members:
     :show-inheritance:
 
+dax.util.introspect module
+--------------------------
+
+.. automodule:: dax.util.introspect
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 dax.util.matplotlib\_backend module
 -----------------------------------
 

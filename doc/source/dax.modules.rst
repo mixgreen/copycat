@@ -48,12 +48,3 @@ dax.modules.rtio\_benchmark module
     :members:
     :undoc-members:
     :show-inheritance:
-
-
-Module contents
----------------
-
-.. automodule:: dax.modules
-    :members:
-    :undoc-members:
-    :show-inheritance:

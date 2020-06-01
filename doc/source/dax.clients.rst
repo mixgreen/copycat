@@ -1,8 +1,21 @@
 dax.clients package
 ===================
 
-Submodules
-----------
+dax.clients.introspect module
+-----------------------------
+
+.. automodule:: dax.clients.introspect
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+dax.clients.pmt\_monitor module
+-------------------------------
+
+.. automodule:: dax.clients.pmt_monitor
+    :members:
+    :undoc-members:
+    :show-inheritance:
 
 dax.clients.rpc\_benchmark module
 ---------------------------------
@@ -24,15 +37,6 @@ dax.clients.system\_benchmark module
 ------------------------------------
 
 .. automodule:: dax.clients.system_benchmark
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
-
-Module contents
----------------
-
-.. automodule:: dax.clients
     :members:
     :undoc-members:
     :show-inheritance:

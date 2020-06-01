@@ -16,6 +16,7 @@ in
                 ps.pyqt5
                 artiq-full.pyqtgraph-qt5
                 ps.matplotlib
+                ps.graphviz
                 # Packages required for testing
                 ps.mypy
                 ps.pycodestyle
