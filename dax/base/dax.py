@@ -147,6 +147,13 @@ class DaxBase(artiq.experiment.HasEnvironment, abc.ABC):
     def get_identifier(self) -> str:
         pass
 
+    def __repr__(self) -> str:
+        """Returns a string representation of the object.
+
+        :return: The object identifier string.
+        """
+        return self.get_identifier()
+
 
 class DaxHasSystem(DaxBase, abc.ABC):
     """Intermediate base class for DAX classes that are dependent on a DAX system."""
@@ -1055,7 +1062,7 @@ class DaxNameRegistry:
         return results
 
     def get_module_key_list(self) -> typing.List[str]:
-        """Return a list of registered module keys.
+        """Return a sorted list of registered module keys.
 
         :return: A list with module keys
         """
@@ -1107,7 +1114,7 @@ class DaxNameRegistry:
         return results
 
     def get_device_key_list(self) -> typing.List[str]:
-        """Return a list of registered device keys.
+        """Return a sorted list of registered device keys.
 
         :return: A list of device keys that were registered
         """
@@ -1205,7 +1212,7 @@ class DaxNameRegistry:
             raise KeyError('Service "{:s}" is not available'.format(service_key)) from None
 
     def get_service_key_list(self) -> typing.List[str]:
-        """Return a list of registered service keys.
+        """Return a sorted list of registered service keys.
 
         :return: A list of service keys that were registered
         """

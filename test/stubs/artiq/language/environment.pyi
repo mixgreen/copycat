@@ -1,5 +1,6 @@
 import typing
 import numpy as np
+import abc
 
 from .scan import Scannable
 
@@ -96,7 +97,7 @@ class HasEnvironment:
     __DDV_T = typing.Union[__DV_T, typing.Type[NoDefault]]
 
     def __init__(self, managers_or_parent: typing.Any, *args: typing.Any, **kwargs: typing.Any):
-        ...
+        self.children = ...  # type: typing.List['HasEnvironment']
 
     def register_child(self, child: HasEnvironment) -> None:
         ...
@@ -145,11 +146,12 @@ class HasEnvironment:
         ...
 
 
-class Experiment:
+class Experiment(abc.ABC):
 
     def prepare(self) -> None:
         ...
 
+    @abc.abstractmethod
     def run(self) -> None:
         ...
 
@@ -157,5 +159,14 @@ class Experiment:
         ...
 
 
-class EnvExperiment(Experiment, HasEnvironment):
+class EnvExperiment(Experiment, HasEnvironment, abc.ABC):
+    def prepare(self) -> None:
+        ...
+
+    @abc.abstractmethod
+    def run(self) -> None:
+        ...
+
+
+def is_experiment(o: typing.Any) -> bool:
     ...
