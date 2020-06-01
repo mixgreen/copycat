@@ -4,6 +4,7 @@ import graphviz
 import dax.base.dax
 import dax.util.introspect
 from dax.util.artiq_helpers import get_manager_or_parent
+from dax.util.output import temp_dir
 
 
 class _TestSystem(dax.base.dax.DaxSystem):
@@ -47,14 +48,16 @@ class IntrospectTestCase(unittest.TestCase):
         self.sys = _TestSystem(get_manager_or_parent())
 
     def test_component_graphviz(self):
-        # We can not really test the contents of the graph at this moment
-        g = dax.util.introspect.ComponentGraphviz(self.sys)
-        self.assertIsInstance(g, graphviz.Digraph)
+        with temp_dir():
+            # We can not really test the contents of the graph at this moment
+            g = dax.util.introspect.ComponentGraphviz(self.sys)
+            self.assertIsInstance(g, graphviz.Digraph)
 
     def test_relation_graphviz(self):
-        # We can not really test the contents of the graph at this moment
-        g = dax.util.introspect.RelationGraphviz(self.sys)
-        self.assertIsInstance(g, graphviz.Digraph)
+        with temp_dir():
+            # We can not really test the contents of the graph at this moment
+            g = dax.util.introspect.RelationGraphviz(self.sys)
+            self.assertIsInstance(g, graphviz.Digraph)
 
 
 if __name__ == '__main__':
