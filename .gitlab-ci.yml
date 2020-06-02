@@ -36,16 +36,6 @@ test_nix:
     - nix-shell test/shell.nix --run "mypy --version; mypy"
     - nix-shell test/shell.nix --run "flake8 --version; flake8"
 
-test_nix_scripts:
-  extends: .nix_env
-  script:
-    # Obtain nix-scripts repo
-    - nix-env -i git
-    - git clone git@gitlab.com:duke-artiq/nix-scripts.git ~/nix-scripts
-    # Run DAX nix-scripts
-    - echo $HOME
-    - pwd
-
 test_conda:
   extends: .conda_env
   script:
