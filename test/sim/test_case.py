@@ -1,5 +1,4 @@
 import unittest
-import typing
 import numpy as np
 
 import artiq.coredevice.ttl  # type: ignore

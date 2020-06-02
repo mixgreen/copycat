@@ -2,7 +2,7 @@ import unittest
 import typing
 import numpy as np
 
-from artiq.language.core import now_mu, at_mu, delay, delay_mu, parallel, sequential
+from artiq.language.core import now_mu, delay, delay_mu, parallel, sequential
 from artiq.language.units import *
 import artiq.coredevice.ttl  # type: ignore
 import artiq.coredevice.edge_counter

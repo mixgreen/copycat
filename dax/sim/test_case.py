@@ -4,7 +4,7 @@ import typing
 import collections
 import numpy as np
 
-from artiq.experiment import HasEnvironment, now_mu
+from artiq.experiment import HasEnvironment
 from artiq.master.databases import device_db_from_file
 
 from dax.util.artiq_helpers import get_manager_or_parent
