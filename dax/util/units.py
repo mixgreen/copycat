@@ -1,9 +1,11 @@
 import typing
+import string
 
 from artiq.language.core import host_only
 from artiq.language.units import *  # noqa: F401
 
-__all__ = ['time_to_str', 'str_to_time', 'freq_to_str', 'str_to_freq']
+__all__ = ['time_to_str', 'str_to_time', 'freq_to_str', 'str_to_freq',
+           'UnitsFormatter']
 
 
 @host_only
@@ -41,32 +43,47 @@ def freq_to_str(frequency: float, threshold: float = 1.0, precision: int = 2) ->
 
 
 @host_only
-def _str_to_value(string: str, units: typing.Set[str]) -> float:
-    assert isinstance(string, str), 'Input must be of type str'
+def _str_to_value(string_: str, units: typing.Set[str]) -> float:
+    assert isinstance(string_, str), 'Input must be of type str'
 
     try:
         # Split the string
-        value, unit = string.split()
+        value, unit = string_.split()
     except ValueError as e:
-        raise ValueError('String "{:s}" can not be tokenized correctly (missing a space?)'.format(string)) from e
+        raise ValueError('String "{:s}" can not be tokenized correctly (missing a space?)'.format(string_)) from e
 
     if unit not in units:
-        raise ValueError('String "{:s}" does not contain a valid unit for this conversion'.format(string))
+        raise ValueError('String "{:s}" does not contain a valid unit for this conversion'.format(string_))
 
     try:
         # Return the scaled value
         return float(value) * float(globals()[unit])
     except ValueError as e:
-        raise ValueError('String "{:s}" does not contain a valid number'.format(string)) from e
+        raise ValueError('String "{:s}" does not contain a valid number'.format(string_)) from e
 
 
 @host_only
-def str_to_time(string: str) -> float:
+def str_to_time(string_: str) -> float:
     """Convert a string to a time."""
-    return _str_to_value(string, {'s', 'ms', 'us', 'ns', 'ps'})
+    return _str_to_value(string_, {'s', 'ms', 'us', 'ns', 'ps'})
 
 
 @host_only
-def str_to_freq(string: str) -> float:
+def str_to_freq(string_: str) -> float:
     """Convert a string to a frequency."""
-    return _str_to_value(string, {'GHz', 'MHz', 'kHz', 'Hz', 'mHz'})
+    return _str_to_value(string_, {'GHz', 'MHz', 'kHz', 'Hz', 'mHz'})
+
+
+class UnitsFormatter(string.Formatter):
+    """String formatter supporting extended conversions.
+
+    Conversion available for time `t` and frequency `f`.
+    """
+
+    def convert_field(self, value: typing.Any, conversion: str) -> typing.Any:
+        if conversion == 't':
+            return time_to_str(value, precision=6)
+        if conversion == 'f':
+            return freq_to_str(value, precision=6)
+        else:
+            return super(UnitsFormatter, self).convert_field(value, conversion)

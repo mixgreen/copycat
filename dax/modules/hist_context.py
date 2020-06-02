@@ -11,6 +11,7 @@ from dax.experiment import *
 from dax.interfaces.detection import DetectionInterface
 from dax.util.ccb import get_ccb_tool
 from dax.util.output import get_file_name_generator
+from dax.util.units import UnitsFormatter
 
 __all__ = ['HistogramContext', 'HistogramAnalyzer', 'HistogramContextError']
 
@@ -52,6 +53,8 @@ class HistogramContext(DaxModule):
 
         # Get CCB tool
         self._ccb = get_ccb_tool(self)
+        # Units formatter
+        self._formatter = UnitsFormatter()
 
         # By default we are not in context
         self._in_context = np.int32(0)
@@ -112,6 +115,15 @@ class HistogramContext(DaxModule):
         formatting parameters can be provided as positional and keyword arguments.
         The formatting function will be called on the host.
 
+        The formatter uses an extended format and it is possible to convert float values
+        to human-readable format using conversion flags `{!t}` and `{!f}`.
+        Note that the formatter has the default precision of 6 digits which might not be
+        sufficient for unique keys.
+        For frequency, conversion seems to be dangerous as it potentially reduces
+        precision with high float values.
+        For time, conversion is in general safe and sometimes even desired since float values
+        are low and formatting increases practical precision.
+
         This function can not be used when already in context.
 
         :param key: Key for the result dataset using standard Python formatting notation
@@ -126,7 +138,7 @@ class HistogramContext(DaxModule):
             raise HistogramContextError('Setting the target dataset can only be done when not in context')
 
         # Update the dataset key
-        self._dataset_key = self._default_dataset_key if key is None else key.format(*args, **kwargs)
+        self._dataset_key = self._default_dataset_key if key is None else self._formatter.format(key, *args, **kwargs)
 
     @portable
     def __enter__(self):  # type: () -> None

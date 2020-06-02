@@ -39,5 +39,40 @@ class UnitsTestCase(unittest.TestCase):
         self.assertRaises(ValueError, str_to_freq, '4.6 khz')
 
 
+class UnitsFormatterTestCase(unittest.TestCase):
+    def setUp(self) -> None:
+        from dax.util.units import UnitsFormatter
+        self.f = UnitsFormatter()
+
+    def test_time_format(self):
+        test_data = [
+            ('no formatting', [], {}, 'no formatting'),
+            ('aa{}', [1], {}, 'aa1'),
+            ('{!t}', [3 * ns], {}, '3.000000 ns'),
+            ('{!t}', [3000 * us], {}, '3.000000 ms'),
+            ('{!t}', [5.33333333333 * us], {}, '5.333333 us'),
+            ('{a!t}-{b!t}', [], dict(a=5.33333333333 * us, b=4.5000066 * ns), '5.333333 us-4.500007 ns'),
+        ]
+
+        for fstring, args, kwargs, ref in test_data:
+            with self.subTest(input=fstring):
+                self.assertEqual(self.f.format(fstring, *args, **kwargs), ref)
+
+    def test_freq_format(self):
+        test_data = [
+            ('no formatting', [], {}, 'no formatting'),
+            ('aa{}', [1], {}, 'aa1'),
+            ('{!f}', [3 * MHz], {}, '3.000000 MHz'),
+            ('{!f}', [3000 * MHz], {}, '3.000000 GHz'),
+            ('{!f}', [5.333333333333 * kHz], {}, '5.333333 kHz'),
+            ('{!f}-{!f}', [5.33333333333 * kHz, 4.5000066 * MHz], {}, '5.333333 kHz-4.500007 MHz'),
+            ('{a!f}-{b!f}', [], dict(a=5.3333333 * kHz, b=4.5000066 * MHz), '5.333333 kHz-4.500007 MHz'),
+        ]
+
+        for fstring, args, kwargs, ref in test_data:
+            with self.subTest(input=fstring):
+                self.assertEqual(self.f.format(fstring, *args, **kwargs), ref)
+
+
 if __name__ == '__main__':
     unittest.main()
