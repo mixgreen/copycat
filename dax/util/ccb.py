@@ -4,6 +4,20 @@ from artiq.experiment import HasEnvironment
 
 __all__ = ['get_ccb_tool']
 
+_G_T = typing.Union[str, typing.List[str]]  # Type of a group
+
+
+def _convert_group(group: typing.Optional[_G_T]) -> typing.Optional[_G_T]:
+    """Convert a group string to the desired format for ARTIQ applet hierarchies.
+
+    Enables users to define group hierarchies using the dot "." character,
+    similar as with datasets.
+
+    :param group: The group name as a single string or None
+    """
+    # Strings are split to enable applet group hierarchies in the dashboard
+    return group.split('.') if isinstance(group, str) else group
+
 
 def _generate_command(base_command: str, **kwargs: typing.Any) -> str:
     """Generate a command string.
@@ -46,7 +60,7 @@ class CcbTool:
         """
         self.ccb.issue(action, *args, **kwargs)
 
-    def create_applet(self, name: str, command: str, group: typing.Optional[str] = None,
+    def create_applet(self, name: str, command: str, group: typing.Optional[_G_T] = None,
                       code: typing.Optional[str] = None) -> None:
         """Create an applet.
 
@@ -55,27 +69,27 @@ class CcbTool:
         :param group: Optional group of the applet
         :param code: Optional source code of the applet
         """
-        self.issue('create_applet', name, command, group=group, code=code)
+        self.issue('create_applet', name, command, group=_convert_group(group), code=code)
 
-    def disable_applet(self, name: str, group: typing.Optional[str] = None) -> None:
+    def disable_applet(self, name: str, group: typing.Optional[_G_T] = None) -> None:
         """Disable an applet.
 
         :param name: Name of the applet
         :param group: Optional group of the applet
         """
-        self.issue('disable_applet', name, group=group)
+        self.issue('disable_applet', name, group=_convert_group(group))
 
-    def disable_applet_group(self, group: str) -> None:
+    def disable_applet_group(self, group: _G_T) -> None:
         """Disable an applet group.
 
         :param group: Group name of the applets
         """
-        self.issue('disable_applet_groups', group)
+        self.issue('disable_applet_groups', _convert_group(group))
 
     """Functions that directly create standard ARTIQ applets"""
 
     def big_number(self, name: str, dataset: str, digit_count: typing.Optional[int] = None,
-                   update_delay: typing.Optional[float] = None, group: typing.Optional[str] = None,
+                   update_delay: typing.Optional[float] = None, group: typing.Optional[_G_T] = None,
                    **kwargs: typing.Any) -> None:
         """Create a big number applet.
 
@@ -93,7 +107,7 @@ class CcbTool:
         self.create_applet(name, command, group=group)
 
     def image(self, name: str, img: str,
-              update_delay: typing.Optional[float] = None, group: typing.Optional[str] = None,
+              update_delay: typing.Optional[float] = None, group: typing.Optional[_G_T] = None,
               **kwargs: typing.Any) -> None:
         """Create an image applet.
 
@@ -114,7 +128,7 @@ class CcbTool:
                 sliding_window: typing.Optional[int] = None,
                 title: typing.Optional[str] = None,
                 x_label: typing.Optional[str] = None, y_label: typing.Optional[str] = None,
-                update_delay: typing.Optional[float] = None, group: typing.Optional[str] = None,
+                update_delay: typing.Optional[float] = None, group: typing.Optional[_G_T] = None,
                 **kwargs: typing.Any) -> None:
         """Create a plot XY applet.
 
@@ -142,7 +156,7 @@ class CcbTool:
                        sliding_window: typing.Optional[int] = None,
                        title: typing.Optional[str] = None,
                        x_label: typing.Optional[str] = None, y_label: typing.Optional[str] = None,
-                       update_delay: typing.Optional[float] = None, group: typing.Optional[str] = None,
+                       update_delay: typing.Optional[float] = None, group: typing.Optional[_G_T] = None,
                        **kwargs: typing.Any) -> None:
         """Create a nested plot XY applet.
 
@@ -167,7 +181,7 @@ class CcbTool:
     def plot_hist(self, name: str, y: str, index: typing.Optional[int] = None,
                   title: typing.Optional[str] = None,
                   x_label: typing.Optional[str] = None, y_label: typing.Optional[str] = None,
-                  update_delay: typing.Optional[float] = None, group: typing.Optional[str] = None,
+                  update_delay: typing.Optional[float] = None, group: typing.Optional[_G_T] = None,
                   **kwargs: typing.Any) -> None:
         """Create a plot histogram applet using DAX specific data formatting.
 
@@ -190,7 +204,7 @@ class CcbTool:
 
     def plot_hist_artiq(self, name: str, y: str, x: typing.Optional[str] = None,
                         title: typing.Optional[str] = None,
-                        update_delay: typing.Optional[float] = None, group: typing.Optional[str] = None,
+                        update_delay: typing.Optional[float] = None, group: typing.Optional[_G_T] = None,
                         **kwargs: typing.Any) -> None:
         """Create an ARTIQ plot histogram applet.
 
@@ -209,7 +223,7 @@ class CcbTool:
         self.create_applet(name, command, group=group)
 
     def plot_xy_hist(self, name: str, xs: str, histogram_bins: str, histogram_counts: str,
-                     update_delay: typing.Optional[float] = None, group: typing.Optional[str] = None,
+                     update_delay: typing.Optional[float] = None, group: typing.Optional[_G_T] = None,
                      **kwargs: typing.Any) -> None:
         """Create a 2D histogram applet.
 

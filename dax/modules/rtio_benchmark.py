@@ -113,7 +113,7 @@ class RtioBenchmarkModule(DaxModule):
 
     """Benchmark event throughput"""
 
-    def benchmark_event_throughput(self, period_scan: typing.Union[typing.List[float], np.ndarray[float]],
+    def benchmark_event_throughput(self, period_scan: typing.Union[typing.List[float], np.ndarray],
                                    num_samples: int, num_events: int, no_underflow_cutoff: int) -> None:
         # Convert types of arguments
         num_samples = np.int32(num_samples)
@@ -374,7 +374,7 @@ class RtioBenchmarkModule(DaxModule):
 
     """Benchmark DMA throughput"""
 
-    def benchmark_dma_throughput(self, period_scan: typing.Union[typing.List[float], np.ndarray[float]],
+    def benchmark_dma_throughput(self, period_scan: typing.Union[typing.List[float], np.ndarray],
                                  num_samples: int, num_events: int, no_underflow_cutoff: int) -> None:
         # Convert types of arguments
         num_samples = np.int32(num_samples)
