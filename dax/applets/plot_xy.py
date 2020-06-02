@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 import numpy as np
-import PyQt5  # type: ignore
+import PyQt5  # type: ignore  # noqa: F401
 import pyqtgraph  # type: ignore
 
 import artiq.applets.simple  # type: ignore
@@ -18,7 +18,7 @@ class XYPlot(pyqtgraph.PlotWidget):
         pyqtgraph.PlotWidget.__init__(self)
         self.args = args
 
-    def data_changed(self, data, mods, title):
+    def data_changed(self, data, mods, title):  # noqa: C901
         # Obtain input data
         try:
             y = data[self.args.y][1]

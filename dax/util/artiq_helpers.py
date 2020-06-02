@@ -1,6 +1,5 @@
 import os
 import tempfile
-import argparse
 import typing
 import logging
 

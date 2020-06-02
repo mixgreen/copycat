@@ -1,4 +1,3 @@
-import numpy as np
 import collections
 
 from dax.experiment import *

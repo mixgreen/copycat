@@ -24,7 +24,7 @@ from misoc.targets.kasli import soc_kasli_args
 class EURIQA(StandaloneBase):
     """EURIQA Kasli setup."""
 
-    def __init__(self, description, hw_rev=None, **kwargs):
+    def __init__(self, description, hw_rev=None, **kwargs):  # noqa: C901
         """Build like regular Kasli, just replace some DIOs with sandia dac spi."""
         add_sandia_dac_spi = kwargs.pop("sandia_dac_spi", False)
         if hw_rev is None:

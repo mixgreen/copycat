@@ -1,5 +1,5 @@
 # Import DAX base
-from dax.base.dax import *
+from dax.base.dax import *  # noqa: F401
 
 # Import artiq.experiment
-from artiq.experiment import *
+from artiq.experiment import *  # noqa: F401

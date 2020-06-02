@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# flake8: noqa
 
 import numpy as np
 # make sure pyqtgraph imports Qt5

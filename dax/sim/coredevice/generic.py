@@ -1,7 +1,5 @@
 import typing
 
-from artiq.language.core import *
-
 from dax.sim.device import DaxSimDevice
 from dax.sim.signal import get_signal_manager, DaxSignalManager
 
@@ -9,7 +7,8 @@ from dax.sim.signal import get_signal_manager, DaxSignalManager
 class _GenericBase:
 
     def __init__(self, attr_name: typing.Optional[str],
-                 signal_manager: DaxSignalManager, signal_call: typing.Any, signal_function: typing.Any):
+                 signal_manager: DaxSignalManager[typing.Any],
+                 signal_call: typing.Any, signal_function: typing.Any):
         assert isinstance(attr_name, str) or attr_name is None, 'Attribute name must be of type str or None'
 
         # Store attributes

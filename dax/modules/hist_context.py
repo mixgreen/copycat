@@ -3,7 +3,7 @@ import collections
 import itertools
 import numpy as np
 
-import dax.util.matplotlib_backend  # Workaround for QT error
+import dax.util.matplotlib_backend  # Workaround for QT error  # noqa: F401
 import matplotlib.pyplot as plt  # type: ignore
 import matplotlib.ticker  # type: ignore
 

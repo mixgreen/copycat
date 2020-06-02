@@ -3,7 +3,7 @@ import numpy as np
 import logging
 import itertools
 
-from artiq.experiment import HasEnvironment, EnvExperiment
+from artiq.experiment import HasEnvironment
 import artiq.coredevice.edge_counter  # type: ignore
 import artiq.coredevice.ttl  # type: ignore
 import artiq.coredevice.core  # type: ignore

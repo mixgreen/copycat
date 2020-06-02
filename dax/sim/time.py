@@ -2,7 +2,7 @@ import abc
 import typing
 import numpy as np
 
-from artiq.language.units import *
+from artiq.language.units import *  # noqa: F401
 from artiq.language.core import now_mu, set_watchdog_factory
 from artiq.coredevice.exceptions import WatchdogExpired
 

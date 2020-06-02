@@ -12,20 +12,20 @@ import dax.util.units
 __all__ = ['DaxSignalManager', 'NullSignalManager', 'VcdSignalManager',
            'get_signal_manager', 'set_signal_manager']
 
+_S_T = typing.TypeVar('_S_T')  # The abstract signal type
 
-class DaxSignalManager(abc.ABC):
+
+class DaxSignalManager(abc.ABC, typing.Generic[_S_T]):
     """Abstract class for classes that manage simulated signals."""
-
-    __S_T = typing.TypeVar('__S_T')  # The abstract signal type
 
     @abc.abstractmethod
     def register(self, scope: str, name: str, type_: type,
-                 size: typing.Optional[int] = None, init: typing.Any = None) -> __S_T:
+                 size: typing.Optional[int] = None, init: typing.Any = None) -> _S_T:
         """Method used by devices to register a signal."""
         pass
 
     @abc.abstractmethod
-    def event(self, signal: __S_T, value: typing.Any,
+    def event(self, signal: _S_T, value: typing.Any,
               time: typing.Optional[np.int64] = None, offset: typing.Optional[np.int64] = None) -> None:
         """Method used by devices to register events."""
         pass
@@ -41,7 +41,7 @@ class DaxSignalManager(abc.ABC):
         pass
 
 
-class NullSignalManager(DaxSignalManager):
+class NullSignalManager(DaxSignalManager[typing.Any]):
     """A signal manager that does nothing."""
 
     def register(self, scope: str, name: str, type_: type,
@@ -59,13 +59,15 @@ class NullSignalManager(DaxSignalManager):
         pass
 
 
-class VcdSignalManager(DaxSignalManager):
+_VS_T = typing.Union[vcd.writer.RealVariable,
+                     vcd.writer.ScalarVariable,
+                     vcd.writer.StringVariable,
+                     vcd.writer.VectorVariable]  # The signal type
+
+
+class VcdSignalManager(DaxSignalManager[_VS_T]):
     """VCD signal manager."""
 
-    __S_T = typing.Union[vcd.writer.RealVariable,
-                         vcd.writer.ScalarVariable,
-                         vcd.writer.StringVariable,
-                         vcd.writer.VectorVariable]  # The signal type
     __T_T = typing.Type[typing.Union[bool, int, np.int32, np.int64, float, str, object]]  # The signal-type type
     __V_T = typing.Union[bool, int, np.int32, np.int64, float, str]  # The value types
 
@@ -95,10 +97,10 @@ class VcdSignalManager(DaxSignalManager):
         timescale_str = dax.util.units.time_to_str(timescale, precision=0)
         self._vcd = vcd.writer.VCDWriter(self._output_file, timescale=timescale_str, comment=output_file)
         # Create event buffer to support reverting time
-        self._event_buffer = []  # type: typing.List[typing.Tuple[int, VcdSignalManager.__S_T, typing.Any]]
+        self._event_buffer = []  # type: typing.List[typing.Tuple[int, _VS_T, typing.Any]]
 
     def register(self, scope: str, name: str, type_: __T_T,
-                 size: typing.Optional[int] = None, init: typing.Any = None) -> __S_T:
+                 size: typing.Optional[int] = None, init: typing.Any = None) -> _VS_T:
         """ Register a signal.
 
         Signals have to be registered before any events are committed.
@@ -130,7 +132,7 @@ class VcdSignalManager(DaxSignalManager):
         # Register the signal with the VCD writer
         return self._vcd.register_var(scope, name, var_type=var_type, size=size, init=init)
 
-    def event(self, signal: __S_T, value: __V_T,
+    def event(self, signal: _VS_T, value: __V_T,
               time: typing.Optional[np.int64] = None, offset: typing.Optional[np.int64] = None) -> None:
         """Commit an event.
 
@@ -190,11 +192,11 @@ class VcdSignalManager(DaxSignalManager):
         self._output_file.close()
 
 
-_signal_manager = NullSignalManager()  # type: DaxSignalManager
+_signal_manager = NullSignalManager()  # type: DaxSignalManager[typing.Any]
 """Singleton instance of the signal manager."""
 
 
-def get_signal_manager() -> DaxSignalManager:
+def get_signal_manager() -> DaxSignalManager[typing.Any]:
     """Get the signal manager instance.
 
     The signal manager is used by simulated devices to register and change signals during simulation.
@@ -204,7 +206,7 @@ def get_signal_manager() -> DaxSignalManager:
     return _signal_manager
 
 
-def set_signal_manager(signal_manager: DaxSignalManager) -> None:
+def set_signal_manager(signal_manager: DaxSignalManager[typing.Any]) -> None:
     """Set a new signal manager.
 
     The old signal manager will be closed.

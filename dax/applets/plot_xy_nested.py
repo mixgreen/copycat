@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 import numpy as np
-import PyQt5  # type: ignore
+import PyQt5  # type: ignore  # noqa: F401
 import pyqtgraph  # type: ignore
 
 import artiq.applets.simple  # type: ignore

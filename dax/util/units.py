@@ -1,7 +1,7 @@
 import typing
 
 from artiq.language.core import host_only
-from artiq.language.units import *
+from artiq.language.units import *  # noqa: F401
 
 __all__ = ['time_to_str', 'str_to_time', 'freq_to_str', 'str_to_freq']
 
