@@ -39,8 +39,10 @@ test_nix:
 test_nix_scripts:
   extends: .nix_env
   script:
-    # Run DAX nix-scripts
+    # Obtain nix-scripts repo
+    - nix-env -i git
     - git clone git@gitlab.com:duke-artiq/nix-scripts.git ~/nix-scripts
+    # Run DAX nix-scripts
     - echo $HOME
     - pwd
 
