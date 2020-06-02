@@ -1,3 +1,5 @@
 # flake8: noqa
-from .dax import *
-from .scan import *
+
+# Trailing underscore required to avoid some nix build issues
+from .dax_ import *
+from .scan_ import *
