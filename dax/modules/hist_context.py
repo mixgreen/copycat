@@ -466,9 +466,10 @@ class HistogramAnalyzer:
         ax.set_ylabel(y_label)
         ax.legend(loc=legend_loc)
 
-        # Save figure
+        # Save and close figure
         file_name = self._file_name_generator(self.PROBABILITY_PLOT_FILE_FORMAT.format(key=key), ext)
         fig.savefig(file_name, bbox_inches='tight')
+        plt.close(fig)
 
     def plot_all_probabilities(self, **kwargs: typing.Any) -> None:
         """Plot probability graphs for all keys available in the data.
