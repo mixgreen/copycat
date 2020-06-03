@@ -24,10 +24,10 @@ def _value_to_str(value: float, threshold: float, precision: int, scales: typing
         scaled_value = value / globals()[s]
         if abs(scaled_value) >= threshold:
             # Return value as string
-            return '{{:.{:d}f}} {{:s}}'.format(precision).format(scaled_value, s)
+            return '{value:.{precision:d}f} {unit:s}'.format(value=scaled_value, precision=precision, unit=s)
 
     # Using last scaling without rounding
-    return '{:f} {:s}'.format(scaled_value, scales[-1])
+    return '{value:f} {unit:s}'.format(value=scaled_value, unit=scales[-1])
 
 
 @host_only

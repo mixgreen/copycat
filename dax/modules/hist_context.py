@@ -54,7 +54,7 @@ class HistogramContext(DaxModule):
         # Get CCB tool
         self._ccb = get_ccb_tool(self)
         # Units formatter
-        self._formatter = UnitsFormatter()
+        self._units_fmt = UnitsFormatter()
 
         # By default we are not in context
         self._in_context = np.int32(0)
@@ -134,7 +134,7 @@ class HistogramContext(DaxModule):
             raise HistogramContextError('Setting the target dataset can only be done when not in context')
 
         # Update the dataset key
-        self._dataset_key = self._default_dataset_key if key is None else self._formatter.format(key, *args, **kwargs)
+        self._dataset_key = self._default_dataset_key if key is None else self._units_fmt.vformat(key, args, kwargs)
 
     @portable
     def __enter__(self):  # type: () -> None

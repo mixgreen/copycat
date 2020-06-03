@@ -130,6 +130,10 @@ class VcdSignalManager(DaxSignalManager[_VS_T]):
         :param init: Initial value (defaults to `X`)
         :return: The signal object to use when committing events
         """
+        assert isinstance(scope, DaxSimDevice), 'The scope of the signal must be of type DaxSimDevice'
+        assert isinstance(name, str), 'The name of the signal must be of type str'
+        assert isinstance(size, int) or size is None, 'The size must be an int or None'
+
         if type_ not in self._CONVERT_TYPE:
             raise TypeError('VCD signal manager does not support signal type {}'.format(type_))
 
@@ -141,7 +145,8 @@ class VcdSignalManager(DaxSignalManager[_VS_T]):
             init = ''  # Shows up as `Z` instead of string value 'x'
 
         # Register the signal with the VCD writer
-        return self._vcd.register_var(scope.key, name, var_type=var_type, size=size, init=init)
+        return self._vcd.register_var(scope.key, name, var_type=var_type, size=size, init=init,
+                                      ident='{:s}.{:s}'.format(scope.key, name))
 
     def event(self, signal: _VS_T, value: _VV_T,
               time: typing.Optional[np.int64] = None, offset: typing.Optional[np.int64] = None) -> None:
