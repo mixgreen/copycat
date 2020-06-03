@@ -117,12 +117,8 @@ class HistogramContext(DaxModule):
 
         The formatter uses an extended format and it is possible to convert float values
         to human-readable format using conversion flags `{!t}` and `{!f}`.
-        Note that the formatter has the default precision of 6 digits which might not be
-        sufficient for unique keys.
-        For frequency, conversion seems to be dangerous as it potentially reduces
-        precision with high float values.
-        For time, conversion is in general safe and sometimes even desired since float values
-        are low and formatting increases practical precision.
+        Note that the formatter has the default precision of 6 digits which is not likely
+        to generate unique keys. An other field can be added to make sure the keys are unique.
 
         This function can not be used when already in context.
 
