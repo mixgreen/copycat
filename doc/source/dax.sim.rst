@@ -51,3 +51,18 @@ dax.sim.device module
     :members:
     :undoc-members:
     :show-inheritance:
+
+
+dax.sim.test_case package
+=========================
+
+This module contains test case classes that can be used for unit testing.
+This module is intended to be imported by users and will import the test case classes.
+
+dax.sim.test\_case.peek module
+------------------------------
+
+.. automodule:: dax.sim.test_case.peek
+    :members:
+    :undoc-members:
+    :show-inheritance:
