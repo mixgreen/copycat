@@ -6,6 +6,7 @@ from artiq.language.core import now_mu, delay, delay_mu, parallel, sequential
 from artiq.language.units import *
 import artiq.coredevice.ttl  # type: ignore
 import artiq.coredevice.edge_counter
+import artiq.coredevice.ad9910  # type: ignore
 import artiq.coredevice.ad9912  # type: ignore
 
 from dax.experiment import DaxSystem
@@ -195,6 +196,27 @@ class PeekSignalManagerTestCase(unittest.TestCase):
                     with self.assertRaises(ValueError, msg='Bad event value for signal did not raise'):
                         self.sm.event(signal, v)
 
+    def test_bool_array(self):
+        test_data = {
+            self.sys.ad9910._phase_mode: [True, 1, 2, 3, 0, False, np.int64(2), 'x', 'z'],  # bool array
+        }
+
+        for signal, values in test_data.items():
+            for v in values:
+                with self.subTest(signal=signal, value=v):
+                    self.assertIsNone(self.sm.event(signal, v))
+
+    def test_bool_array_bad(self):
+        test_data = {
+            self.sys.ad9910._phase_mode: ['foo', 0.3, object, complex(6, 7), None, 4, 9, -1, 1.0],  # bool array
+        }
+
+        for signal, values in test_data.items():
+            for v in values:
+                with self.subTest(signal=signal, value=v):
+                    with self.assertRaises(ValueError, msg='Bad event value for signal did not raise'):
+                        self.sm.event(signal, v)
+
 
 class _TestSystem(DaxSystem):
     SYS_ID = 'unittest_system'
@@ -209,6 +231,7 @@ class _TestSystem(DaxSystem):
 
         self.ec = self.get_device('ec', artiq.coredevice.edge_counter.EdgeCounter)
 
+        self.ad9910 = self.get_device('ad9910', artiq.coredevice.ad9910.AD9910)
         self.ad9912 = self.get_device('ad9912', artiq.coredevice.ad9912.AD9912)
 
 
@@ -262,6 +285,16 @@ _DEVICE_DB = {
             "refclk": 1e9,
             "clk_sel": 1,
             "clk_div": 3
+        }
+    },
+    "ad9910": {
+        "type": "local",
+        "module": "artiq.coredevice.ad9910",
+        "class": "AD9910",
+        "arguments": {
+            "pll_en": 0,
+            "chip_select": 4,
+            "cpld_device": "cpld",
         }
     },
     "ad9912": {

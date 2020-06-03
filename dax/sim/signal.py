@@ -206,7 +206,7 @@ _PS_T = typing.Tuple[DaxSimDevice, str]  # The peek signal manager signal type
 _PT_T = _VT_T  # The peek signal manager signal-type type
 _PV_T = _VV_T  # The peek signal manager signal type
 _PD_T = typing.Dict[DaxSimDevice,  # The peek signal manager device list type
-                    typing.Dict[str, typing.Tuple[_PT_T, typing.Dict[np.int64, _PV_T]]]]
+                    typing.Dict[str, typing.Tuple[_PT_T, typing.Optional[int], typing.Dict[np.int64, _PV_T]]]]
 
 
 class _Meta(type):
@@ -244,16 +244,16 @@ class PeekSignalManager(DaxSignalManager[_PS_T]):
     }  # type: typing.Dict[_PT_T, type]
     """Dict to convert internal types to peek signal manager type-checking types."""
 
-    _SPECIAL_BOOL_VALUES = {'x', 'X', 'z', 'Z', 0, 1, False, True}
+    _SPECIAL_BOOL_VALUES = {'x', 'X', 'z', 'Z'}  # type: typing.Set[str]
     """Special values for a bool or int type signal."""
 
     _SPECIAL_VALUES = {
         bool: _SPECIAL_BOOL_VALUES,
         int: _SPECIAL_BOOL_VALUES,
-        float: {},
+        float: set(),
         str: {None},
-        object: {},
-    }
+        object: set(),
+    }  # type: typing.Dict[_PT_T, typing.Set[typing.Any]]
     """Dict with special allowed values for internal types."""
 
     def __init__(self) -> None:
@@ -283,6 +283,7 @@ class PeekSignalManager(DaxSignalManager[_PS_T]):
 
         assert isinstance(scope, DaxSimDevice), 'The scope of the signal must be of type DaxSimDevice'
         assert isinstance(name, str), 'The name of the signal must be of type str'
+        assert isinstance(size, int) or size is None, 'The size must be an int or None'
 
         # Check if type is supported and convert type if it is
         if type_ not in self._CONVERT_TYPE:
@@ -295,16 +296,20 @@ class PeekSignalManager(DaxSignalManager[_PS_T]):
         if name in signals:
             raise LookupError('Signal "{:s}.{:s}" was already registered'.format(scope.key, name))
 
-        # Check if size is provided for bool type signals
-        if type_ is bool and (size is None or size < 1):
-            raise TypeError('Provide a legal size for signal type bool')
+        # Check size
+        if type_ is bool:
+            if size is None or size < 1:
+                raise TypeError('Provide a legal size for signal type bool')
+        else:
+            if size is not None:
+                raise TypeError('Size not supported for signal type "{}"'.format(type_))
 
         if init is not None:
             # Check init value
-            self._check_value(type_, init)
+            self._check_value(type_, size, init)
 
         # Register and initialize signal
-        signals[name] = (type_, {} if init is None else {0: init})
+        signals[name] = (type_, size, {} if init is None else {0: init})
 
         # Return the signal object
         return scope, name
@@ -338,10 +343,10 @@ class PeekSignalManager(DaxSignalManager[_PS_T]):
 
         # Unpack device list
         device, name = signal
-        type_, events = self._event_buffer[device][name]
+        type_, size, events = self._event_buffer[device][name]
 
         # Check value
-        self._check_value(type_, value)
+        self._check_value(type_, size, value)
 
         # Add value to event buffer (overwrites old values)
         events[self._get_timestamp(time, offset)] = value
@@ -352,12 +357,14 @@ class PeekSignalManager(DaxSignalManager[_PS_T]):
     def close(self) -> None:
         pass
 
-    def _check_value(self, type_: _PT_T, value: _PV_T) -> None:
+    def _check_value(self, type_: _PT_T, size: typing.Optional[int], value: _PV_T) -> None:
         """Check if value is valid, raise exception otherwise."""
 
         # noinspection PyTypeHints
         if value in self._SPECIAL_VALUES[type_]:
             return  # Value is legal (special value)
+        elif size is not None and isinstance(value, numbers.Integral) and 0 <= value <= 2 ** size - 1:
+            return  # Value is legal (within given size)
         elif isinstance(value, self._CHECK_TYPE[type_]):  # PyCharm inspection wrongly flags a type hint error
             return  # Value is legal (expected type)
 
@@ -384,7 +391,7 @@ class PeekSignalManager(DaxSignalManager[_PS_T]):
             # Get the device
             device = self._event_buffer[scope]
             # Get the signal
-            type_, events = device[signal]
+            type_, _, events = device[signal]
         except KeyError:
             raise KeyError('Signal "{:s}.{:s}" could not be found'.format(scope.key, signal)) from None
 

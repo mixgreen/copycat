@@ -1448,7 +1448,7 @@ class DaxDataStoreInfluxDb(DaxDataStore):
                 self._write_points([self._make_point(key, value, index)])
             else:
                 # Non-integer index is not supported, do not raise but warn user instead
-                self._logger.warning('Could not mutate value for key "{:s}", multi-dimensional index "{}" '
+                self._logger.warning('Could not mutate value for key "{:s}", index "{}" '
                                      'not supported'.format(key, index))
         else:
             # Unsupported type, do not raise but warn user instead

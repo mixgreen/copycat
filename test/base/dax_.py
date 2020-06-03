@@ -541,6 +541,9 @@ class DaxDataStoreInfluxDbTestCase(unittest.TestCase):
         test_data = [
             ('k', complex(1, 3), 3),  # Unsupported value type
             ('k', 4, (44, 4)),  # Slicing not supported by influx
+            ('k', 4, 1.1),  # Wrong index type
+            ('k', 4, 1.0),  # Wrong index type
+            ('k', 4, 4.0),  # Wrong index type
             ('k', 'np.float(4)', ((4, 5), (6, 7))),  # Multi-dimensional slicing not supported by influx
         ]
 
