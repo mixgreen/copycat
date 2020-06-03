@@ -5,7 +5,7 @@ import artiq.coredevice.ttl  # type: ignore
 import artiq.coredevice.edge_counter
 import artiq.coredevice.ad9912  # type: ignore
 
-from dax.experiment import DaxSystem
+from dax.experiment import *
 from dax.sim.signal import SignalNotSet
 from dax.sim.test_case import PeekTestCase
 
@@ -15,6 +15,70 @@ class PeekTestCaseTestCase(PeekTestCase):
     def setUp(self) -> None:
         # Construct environment
         self.sys = self.construct_env(_TestSystem, device_db=_DEVICE_DB)
+
+    def test_expect_bool(self):
+        test_data = [
+            (0, False),
+            (0, 0),
+            (1, True),
+            (True, 1),
+            (True, True),
+            (np.int32(0), False),
+        ]
+
+        # Device and scope
+        scope = self.sys.ttl0
+        signal = 'state'
+
+        # Test starting values
+        self.expect(scope, signal, 'x')
+        self.expect(scope, signal, 'X')
+        self.expect(scope, 'direction', 'X')
+        self.expect(scope, 'sensitivity', 'x')
+
+        # Initialize device
+        scope.output()
+        self.expect(scope, signal, 'x')
+        self.expect(scope, signal, 'X')
+        self.expect(scope, 'direction', 1)
+        self.expect(scope, 'sensitivity', 'z')
+
+        for val, ref in test_data:
+            with self.subTest(value=val, reference=ref):
+                # Set new value
+                delay(1 * us)
+                scope.set_o(val)
+                # Test value
+                self.expect(scope, signal, ref)
+                delay(1 * us)
+                self.expect(scope, signal, ref)
+
+    def test_expect_float(self):
+        test_data = [
+            (1.0, True),
+            (0.0, False),
+            (1.0, 1),
+            (99.2, 99.2),
+            (-99.2, -99.2),
+            (np.float(3), 3),
+        ]
+
+        # Device and scope
+        scope = self.sys.ad9912
+        signal = 'freq'
+
+        # Test starting values
+        self.expect(scope, signal, SignalNotSet)
+
+        for val, ref in test_data:
+            with self.subTest(value=val, reference=ref):
+                # Set new value
+                delay(1 * us)
+                scope.set(val)
+                # Test value
+                self.expect(scope, signal, ref)
+                delay(1 * us)
+                self.expect(scope, signal, ref)
 
     def test_expect_assertion(self):
         test_data = {
@@ -61,6 +125,45 @@ class PeekTestCaseTestCase(PeekTestCase):
             for v in values:
                 with self.subTest(scope=scope, signal=signal, value=v):
                     self.assertIsNone(self.expect(scope, signal, v))
+
+    def test_sequential(self):
+        test_data = [
+            1.0,
+            0.0,
+            1.0,
+            99.2,
+            -99.2,
+            np.float(3),
+        ]
+
+        # Device and scope
+        scope = self.sys.ad9912
+        signal = 'freq'
+
+        # Test starting values
+        self.expect(scope, signal, SignalNotSet)
+
+        with parallel:
+            with sequential:
+                for val in test_data:
+                    # Set new value
+                    delay(1 * us)
+                    scope.set(val)
+
+            with sequential:
+                for val in test_data:
+                    with self.subTest(msg='Test in parallel on exact time', value=val):
+                        # Test value
+                        delay(1 * us)
+                        self.expect(scope, signal, val)
+
+            with sequential:
+                delay(0.5 * us)  # Shift time
+                for val in test_data:
+                    with self.subTest(msg='Test in parallel with delayed time', value=val):
+                        # Test value
+                        delay(1 * us)
+                        self.expect(scope, signal, val)
 
 
 class _TestSystem(DaxSystem):

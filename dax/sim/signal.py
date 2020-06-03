@@ -335,13 +335,10 @@ class PeekSignalManager(DaxSignalManager[_PS_T]):
     def _check_value(self, type_: _PT_T, value: _PV_T) -> None:
         """Check if value is valid, raise exception otherwise."""
 
-        # Get type for type checking
-        check_type = self._CHECK_TYPE[type_]
-
         # noinspection PyTypeHints
-        if check_type in {bool, numbers.Integral} and value in self._SPECIAL_VALUES:
+        if type_ in {bool, int, np.int32, np.int64} and value in self._SPECIAL_VALUES:
             return  # Value is legal (special bool values)
-        elif isinstance(value, check_type):  # PyCharm inspection wrongly flags a type hint error
+        elif isinstance(value, self._CHECK_TYPE[type_]):  # PyCharm inspection wrongly flags a type hint error
             return  # Value is legal (expected type)
 
         # Value did not pass check

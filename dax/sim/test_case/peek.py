@@ -4,7 +4,7 @@ import typing
 import collections
 import numpy as np
 
-from artiq.experiment import HasEnvironment
+from artiq.experiment import HasEnvironment, now_mu
 from artiq.master.databases import device_db_from_file
 
 from dax.util.artiq_helpers import get_manager_or_parent
@@ -19,6 +19,15 @@ _logger = logging.getLogger(__name__)
 
 
 class PeekTestCase(unittest.TestCase):
+    """An extension of the `unittest.TestCase` class with functions for peek-testing.
+
+    Users can inherit from this class to create their own test cases,
+    similar as someone would make test cases for normal software.
+    This class behaves like a normal `unittest.TestCase` class but has a few extra functions
+    that are useful for peek-testing of a simulated ARTIQ environment.
+    Users are allowed to combine regular unittest constructs with peek-testing features.
+    """
+
     DEFAULT_DEVICE_DB = 'device_db.py'  # type: str
     """The path of the default device DB used to construct environments."""
 
@@ -31,6 +40,8 @@ class PeekTestCase(unittest.TestCase):
                       build_kwargs: typing.Dict[str, typing.Any] = None,
                       **env_kwargs: typing.Any) -> __E_T:
         """Construct an ARTIQ environment based on the given class.
+
+        The constructed environment can be used as a Device Under Testing (DUT).
 
         :param env_class: The environment class to construct
         :param device_db: The device DB to use (defaults to file configured in :attr:`DEFAULT_DEVICE_DB`)
@@ -91,13 +102,15 @@ class PeekTestCase(unittest.TestCase):
         """
         # Peek the value using the signal manager
         value = self.__signal_manager.peek(scope, signal)
-        _logger.info('PEEK {}.{:s} = {}'.format(scope, signal, value))
+        _logger.info('PEEK {}.{:s} -> {}'.format(scope, signal, value))
 
         # Return the value
         return value
 
     def expect(self, scope: typing.Any, signal: str, value: typing.Any, msg: typing.Optional[str] = None) -> None:
         """Test if a signal holds a given value at the current time.
+
+        If the signal does not match the value, the test will fail.
 
         :param scope: The scope (device) of the signal
         :param signal: The name of the signal
@@ -106,6 +119,7 @@ class PeekTestCase(unittest.TestCase):
         """
         # Get the value and the type
         peek, type_ = self.__signal_manager.peek_and_type(typing.cast(DaxSimDevice, scope), signal)
+        _logger.info('EXPECT {}.{:s} -> {} == {}'.format(scope, signal, value, peek))
 
         if type_ in {object, str}:
             # Raise if the signal has an invalid type
@@ -116,5 +130,9 @@ class PeekTestCase(unittest.TestCase):
             if any(value in s and peek in s for s in [{'x', 'X', SignalNotSet}, {'z', 'Z'}]):  # type: ignore
                 return  # We have a match on a special value
 
-        # Assert if the values are equal
-        self.assertEqual(value, self.peek(scope, signal), msg=msg)
+        if msg is None:
+            # Set default error message
+            msg = 'at {:d} mu'.format(now_mu())
+
+        # Assert if values are not equal
+        self.assertEqual(value, peek, msg=msg)

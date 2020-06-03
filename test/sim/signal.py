@@ -190,8 +190,8 @@ class PeekSignalManagerTestCase(unittest.TestCase):
         }
 
         for signal, values in test_data.items():
-            with self.subTest(signal=signal):
-                for v in values:
+            for v in values:
+                with self.subTest(signal=signal, value=v):
                     with self.assertRaises(ValueError, msg='Bad event value for signal did not raise'):
                         self.sm.event(signal, v)
 
