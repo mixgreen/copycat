@@ -2,7 +2,6 @@ import unittest
 import logging
 import typing
 import collections
-import numpy as np
 
 from artiq.experiment import HasEnvironment, now_mu
 from artiq.master.databases import device_db_from_file
@@ -121,12 +120,12 @@ class PeekTestCase(unittest.TestCase):
         peek, type_ = self.__signal_manager.peek_and_type(typing.cast(DaxSimDevice, scope), signal)
         _logger.info('EXPECT {}.{:s} -> {} == {}'.format(scope, signal, value, peek))
 
-        if type_ in {object, str}:
-            # Raise if the signal has an invalid type
-            raise TypeError('Signal "{:s}.{:s}" type "{}" can not be tested'.format(scope.key, signal, type_))
+        if type_ not in {bool, int, float}:
+            # Raise if the signal has an unsupported
+            raise TypeError('Signal "{:s}.{:s}" of type "{}" can not be tested'.format(scope.key, signal, type_))
 
         # Match with special values for supported types
-        if type_ in {bool, int, np.int32, np.int64}:
+        if type_ in {bool, int}:
             if any(value in s and peek in s for s in [{'x', 'X', SignalNotSet}, {'z', 'Z'}]):  # type: ignore
                 return  # We have a match on a special value
 
