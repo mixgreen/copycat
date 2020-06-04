@@ -2,6 +2,8 @@ import unittest
 import numpy as np
 import logging
 import itertools
+import os
+import pygit2  # type: ignore
 
 from artiq.experiment import HasEnvironment
 import artiq.coredevice.edge_counter  # type: ignore
@@ -207,6 +209,7 @@ class DaxNameRegistryTestCase(unittest.TestCase):
             r.find_module(_TestModuleChild)
         self.assertListEqual(r.get_module_key_list(), [m.get_system_key() for m in [s, t0]],
                              'Module key list incorrect')
+        self.assertListEqual(r.get_module_list(), [s, t0], 'Module list incorrect')
         with self.assertRaises(dax.base.exceptions.NonUniqueRegistrationError,
                                msg='Adding module twice did not raise'):
             r.add_module(t0)
@@ -223,6 +226,7 @@ class DaxNameRegistryTestCase(unittest.TestCase):
             r.find_module(_TestModule)
         self.assertListEqual(r.get_module_key_list(), [m.get_system_key() for m in [s, t0, t1]],
                              'Module key list incorrect')
+        self.assertListEqual(r.get_module_list(), [s, t0, t1], 'Module list incorrect')
         self.assertDictEqual(r.search_modules(_TestModule), {m.get_system_key(): m for m in [t0, t1]},
                              'Search result dict incorrect')
 
@@ -262,6 +266,7 @@ class DaxNameRegistryTestCase(unittest.TestCase):
             r.get_service(_TestServiceChild)
         self.assertListEqual(r.get_service_key_list(), [s.get_name() for s in [s0]],
                              'List of registered service keys incorrect')
+        self.assertListEqual(r.get_service_list(), [s0], 'List of registered services incorrect')
 
         # Test with a second service
         s1 = _TestServiceChild(s)
@@ -269,6 +274,7 @@ class DaxNameRegistryTestCase(unittest.TestCase):
         self.assertTrue(r.has_service(_TestServiceChild.SERVICE_NAME), 'Did not returned true for existing service')
         self.assertListEqual(r.get_service_key_list(), [s.get_name() for s in [s0, s1]],
                              'List of registered service keys incorrect')
+        self.assertListEqual(r.get_service_list(), [s0, s1], 'List of registered services incorrect')
 
     def test_interface(self):
         # Test system
@@ -336,12 +342,27 @@ class DaxDataStoreInfluxDbTestCase(unittest.TestCase):
         # Special data store that skips actual writing
         self.ds = self.MockDataStore(callback, self.s, 'dax_influx_db')
 
-    def test_commit_hash(self):
-        # Test if DAX commit hash was loaded, we can assume that the code was versioned (if not, the test fails)
+    def test_dax_commit_hash(self):
+        self.assertIsInstance(self.ds._DAX_COMMIT, (str, type(None)), 'Unexpected type for DAX commit hash')
+
+        if pygit2.discover_repository(os.path.dirname(__file__)) is None:
+            # DAX is not in a git repository at this moment, skipping test
+            self.skipTest('DAX currently not in a git repo')
+
+        # Test if DAX commit hash was loaded
         self.assertIsNotNone(self.ds._DAX_COMMIT, 'DAX commit hash was not loaded')
         self.assertIsInstance(self.ds._DAX_COMMIT, str, 'Unexpected type for DAX commit hash')
-        # We are not sure if CWD is loaded, depends on where the test was initiated from
-        self.assertIsInstance(self.ds._CWD_COMMIT, (str, type(None)), 'Unexpected type for cwd commit hash')
+
+    def test_cwd_commit_hash(self):
+        self.assertIsInstance(self.ds._CWD_COMMIT, (str, type(None)), 'Unexpected type for CWD commit hash')
+
+        if pygit2.discover_repository(os.getcwd()) is None:
+            # DAX is not in a git repository at this moment, skipping test
+            self.skipTest('CWD currently not in a git repo')
+
+        # Test if CWD commit hash was loaded
+        self.assertIsNotNone(self.ds._CWD_COMMIT, 'CWD commit hash was not loaded')
+        self.assertIsInstance(self.ds._CWD_COMMIT, str, 'Unexpected type for CWD commit hash')
 
     def test_make_point(self):
         # Data to test against
@@ -1110,6 +1131,7 @@ class DaxServiceTestCase(unittest.TestCase):
                       'get_service() did not returned expected object')
         self.assertIn(GoodNameService.SERVICE_NAME, s.registry.get_service_key_list(),
                       'Could not find service name key in registry')
+        self.assertIn(service, s.registry.get_service_list(), 'Could not find service in registry')
 
         class DuplicateNameService(NoNameService):
             SERVICE_NAME = 'service_name'

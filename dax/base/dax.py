@@ -1069,9 +1069,15 @@ class DaxNameRegistry:
 
         :return: A list with module keys
         """
-
         module_key_list = natsort.natsorted(self._modules.keys())  # Natural sort the list
         return module_key_list
+
+    def get_module_list(self) -> typing.List[DaxModuleBase]:
+        """Return the list of registered modules.
+
+        :return: A list with module objects
+        """
+        return list(self._modules.values())
 
     def add_device(self, key: str, device: typing.Any, parent: DaxHasSystem) -> None:
         """Register a device.
@@ -1219,9 +1225,15 @@ class DaxNameRegistry:
 
         :return: A list of service keys that were registered
         """
-
         service_key_list = natsort.natsorted(self._services.keys())  # Natural sort the list
         return service_key_list
+
+    def get_service_list(self) -> typing.List[DaxService]:
+        """Return the list of registered services.
+
+        :return: A list with service objects
+        """
+        return list(self._services.values())
 
     def find_interface(self, type_: typing.Type[__I_T]) -> __I_T:
         """Find a unique interface that matches the requested type.

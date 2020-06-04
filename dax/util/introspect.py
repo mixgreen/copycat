@@ -59,16 +59,16 @@ class GraphvizBase(graphviz.Digraph):
                            **(self.SYSTEM_EDGE_ATTR if isinstance(module, dax.base.dax.DaxSystem)
                               else self.MODULE_EDGE_ATTR))
 
+        # Inspect attributes of this module for modules
+        attr_modules = {attr for attr in _get_attributes(module) if isinstance(attr, dax.base.dax.DaxModuleBase)}
+
+        # Check if there are any unexpected attributes
+        unexpected_modules = attr_modules - child_modules
+        if unexpected_modules:
+            _logger.warning('Found {:d} unexpected module(s) in module '
+                            '"{:s}"'.format(len(unexpected_modules), module.get_system_key()))
+
         if to_module_edges:
-            # Inspect attributes of this module for modules
-            attr_modules = {attr for attr in _get_attributes(module) if isinstance(attr, dax.base.dax.DaxModuleBase)}
-
-            # Check if there are any unexpected attributes
-            unexpected_modules = attr_modules - child_modules
-            if unexpected_modules:
-                _logger.warning('Found {:d} unexpected module(s) in module '
-                                '"{:s}"'.format(len(unexpected_modules), module.get_system_key()))
-
             for m in unexpected_modules:
                 # Add edge
                 graph.edge(module.get_system_key(), m.get_system_key(), style='dashed',
@@ -192,7 +192,7 @@ class ComponentGraphviz(GraphvizBase):
         super(ComponentGraphviz, self).__init__(**kwargs)
 
         # List of all service objects
-        services = [system.registry.get_service(k) for k in system.registry.get_service_key_list()]
+        services = system.registry.get_service_list()
         # Service cluster
         service_cluster = graphviz.Digraph(name='cluster_services',
                                            graph_attr={'label': 'Services'})
@@ -229,7 +229,7 @@ class RelationGraphviz(GraphvizBase):
         super(RelationGraphviz, self).__init__(**kwargs)
 
         # List of all service objects
-        services = [system.registry.get_service(k) for k in system.registry.get_service_key_list()]
+        services = system.registry.get_service_list()
         # Service cluster
         service_cluster = graphviz.Digraph(name='cluster_services',
                                            graph_attr={'label': 'Services', 'labelloc': 'b'})
