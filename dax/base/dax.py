@@ -912,6 +912,9 @@ class DaxClient(DaxHasSystem, abc.ABC):
     The decorator will make sure all classes are build in the correct order.
     """
 
+    DAX_INIT = True  # type: bool
+    """Flag if dax_init() should run for this client."""
+
     def __init__(self, managers_or_parent: typing.Any,
                  *args: typing.Any, **kwargs: typing.Any):
         # Check if the decorator was used
@@ -1593,8 +1596,9 @@ def dax_client_factory(c: typing.Type[__DCF_C_T]) -> typing.Callable[[typing.Typ
                 super(WrapperClass, self).__init__(self.__system, *args, **kwargs)
 
             def run(self) -> None:
-                # Initialize the system
-                self.__system.dax_init()
+                if self.DAX_INIT:
+                    # Initialize the system
+                    self.__system.dax_init()
                 # Call the run method of the client class
                 super(WrapperClass, self).run()
 

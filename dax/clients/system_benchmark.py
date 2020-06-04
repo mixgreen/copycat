@@ -13,6 +13,9 @@ __all__ = ['SystemBenchmarkDaxInit']
 class SystemBenchmarkDaxInit(DaxClient, EnvExperiment):
     """DAX system initialization benchmark."""
 
+    # DAX init does not have to run at client startup
+    DAX_INIT = False
+
     def build(self) -> None:  # type: ignore
         # Arguments
         self.num_samples = self.get_argument('num_samples', NumberValue(5, min=1, step=1, ndecimals=0))

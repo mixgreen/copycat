@@ -1151,7 +1151,28 @@ class DaxClientTestCase(unittest.TestCase):
         c = ImplementableClient(get_manager_or_parent(_device_db))
         c.run()  # Is supposed to call the dax_init() function which will call the init() function of the client
 
-        self.assertTrue(hasattr(c, 'is_initialized'), 'DAX system parent of client was not initialized correctly')
+        self.assertTrue(hasattr(c, 'is_initialized'), 'DAX system of client was not initialized correctly')
+
+    def test_disable_dax_init(self):
+        @dax_client_factory
+        class Client(DaxClient):
+            DAX_INIT = False
+
+            def init(self) -> None:
+                self.is_initialized = True
+
+            def run(self) -> None:
+                pass
+
+        class ImplementableClient(Client(_TestSystem)):
+            pass
+
+        # Disabled one inspection, inspection does not handle the decorator correctly
+        # noinspection PyArgumentList
+        c = ImplementableClient(get_manager_or_parent(_device_db))
+        c.run()  # Is not supposed to call the dax_init() function
+
+        self.assertFalse(hasattr(c, 'is_initialized'), 'DAX system of client was initialized unexpectedly')
 
 
 if __name__ == '__main__':
