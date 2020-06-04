@@ -209,7 +209,7 @@ class DaxNameRegistryTestCase(unittest.TestCase):
             r.find_module(_TestModuleChild)
         self.assertListEqual(r.get_module_key_list(), [m.get_system_key() for m in [s, t0]],
                              'Module key list incorrect')
-        self.assertListEqual(r.get_module_list(), [s, t0], 'Module list incorrect')
+        self.assertSetEqual(set(r.get_module_list()), {s, t0}, 'Module list incorrect')
         with self.assertRaises(dax.base.exceptions.NonUniqueRegistrationError,
                                msg='Adding module twice did not raise'):
             r.add_module(t0)
@@ -226,7 +226,7 @@ class DaxNameRegistryTestCase(unittest.TestCase):
             r.find_module(_TestModule)
         self.assertListEqual(r.get_module_key_list(), [m.get_system_key() for m in [s, t0, t1]],
                              'Module key list incorrect')
-        self.assertListEqual(r.get_module_list(), [s, t0, t1], 'Module list incorrect')
+        self.assertSetEqual(set(r.get_module_list()), {s, t0, t1}, 'Module list incorrect')
         self.assertDictEqual(r.search_modules(_TestModule), {m.get_system_key(): m for m in [t0, t1]},
                              'Search result dict incorrect')
 
@@ -266,7 +266,7 @@ class DaxNameRegistryTestCase(unittest.TestCase):
             r.get_service(_TestServiceChild)
         self.assertListEqual(r.get_service_key_list(), [s.get_name() for s in [s0]],
                              'List of registered service keys incorrect')
-        self.assertListEqual(r.get_service_list(), [s0], 'List of registered services incorrect')
+        self.assertSetEqual(set(r.get_service_list()), {s0}, 'List of registered services incorrect')
 
         # Test with a second service
         s1 = _TestServiceChild(s)
@@ -274,7 +274,7 @@ class DaxNameRegistryTestCase(unittest.TestCase):
         self.assertTrue(r.has_service(_TestServiceChild.SERVICE_NAME), 'Did not returned true for existing service')
         self.assertListEqual(r.get_service_key_list(), [s.get_name() for s in [s0, s1]],
                              'List of registered service keys incorrect')
-        self.assertListEqual(r.get_service_list(), [s0, s1], 'List of registered services incorrect')
+        self.assertSetEqual(set(r.get_service_list()), {s0, s1}, 'List of registered services incorrect')
 
     def test_interface(self):
         # Test system
