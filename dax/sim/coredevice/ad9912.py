@@ -13,7 +13,7 @@ from dax.sim.signal import get_signal_manager
 
 class AD9912(DaxSimDevice):
 
-    def __init__(self, dmgr, cpld_device, sw_device=None, pll_n=10, **kwargs):
+    def __init__(self, dmgr, cpld_device, chip_select=None, sw_device=None, pll_n=10, **kwargs):
         # Call super
         super(AD9912, self).__init__(dmgr, **kwargs)
 
@@ -27,6 +27,8 @@ class AD9912(DaxSimDevice):
 
         # CPLD device
         self.cpld = dmgr.get(cpld_device)
+        # Chip select
+        self.chip_select = chip_select
         # Switch device
         if sw_device:
             self.sw = dmgr.get(sw_device)

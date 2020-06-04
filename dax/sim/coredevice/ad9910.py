@@ -19,12 +19,14 @@ PHASE_MODE_TRACKING = 2
 
 class AD9910(DaxSimDevice):
 
-    def __init__(self, dmgr, cpld_device, sw_device=None, pll_n=40, pll_en=1, **kwargs):
+    def __init__(self, dmgr, cpld_device, chip_select=None, sw_device=None, pll_n=40, pll_en=1, **kwargs):
         # Call super
         super(AD9910, self).__init__(dmgr, **kwargs)
 
         # CPLD device
         self.cpld = dmgr.get(cpld_device)
+        # Chip select
+        self.chip_select = chip_select
         # Switch device
         if sw_device:
             self.sw = dmgr.get(sw_device)
