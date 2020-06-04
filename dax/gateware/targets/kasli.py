@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
+# type: ignore
+
 """Build ARTIQ for EURIQA's hardware based on the ARTIQ Kasli."""
+
 import argparse
 import json
 

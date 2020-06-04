@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# type: ignore
 
 from artiq.gateware.targets.kc705 import *
 from artiq.gateware.targets.kc705 import _RTIOCRG, _StandaloneBase
