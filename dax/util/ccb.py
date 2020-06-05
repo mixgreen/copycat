@@ -86,7 +86,7 @@ class CcbTool:
         """
         self.issue('disable_applet_groups', _convert_group(group))
 
-    """Functions that directly create standard ARTIQ applets"""
+    """Functions that directly create ARTIQ applets"""
 
     def big_number(self, name: str, dataset: str, digit_count: typing.Optional[int] = None,
                    update_delay: typing.Optional[float] = None, group: typing.Optional[_G_T] = None,
@@ -125,6 +125,7 @@ class CcbTool:
 
     def plot_xy(self, name: str, y: str, x: typing.Optional[str] = None,
                 error: typing.Optional[str] = None, fit: typing.Optional[str] = None,
+                v_lines: typing.Optional[str] = None, h_lines: typing.Optional[str] = None,
                 sliding_window: typing.Optional[int] = None,
                 title: typing.Optional[str] = None,
                 x_label: typing.Optional[str] = None, y_label: typing.Optional[str] = None,
@@ -137,6 +138,8 @@ class CcbTool:
         :param x: X-value dataset
         :param error: Error dataset
         :param fit: Fit dataset
+        :param v_lines: Vertical lines dataset
+        :param h_lines: Horizontal lines dataset
         :param sliding_window: Set size of the sliding window, or `None` to disable
         :param title: Graph title
         :param x_label: X-axis label
@@ -147,23 +150,30 @@ class CcbTool:
         """
         # Assemble command
         command = '{:s}plot_xy {:s}'.format(self.DAX_APPLET, y)
-        command = _generate_command(command, x=x, error=error, fit=fit, sliding_window=sliding_window, title=title,
+        command = _generate_command(command, x=x, error=error, fit=fit,
+                                    v_lines=v_lines, h_lines=h_lines,
+                                    sliding_window=sliding_window, title=title,
                                     x_label=x_label, y_label=y_label, update_delay=update_delay, **kwargs)
         # Create applet
         self.create_applet(name, command, group=group)
 
-    def plot_xy_nested(self, name: str, y: str, x: typing.Optional[str] = None,
-                       sliding_window: typing.Optional[int] = None,
-                       title: typing.Optional[str] = None,
-                       x_label: typing.Optional[str] = None, y_label: typing.Optional[str] = None,
-                       update_delay: typing.Optional[float] = None, group: typing.Optional[_G_T] = None,
-                       **kwargs: typing.Any) -> None:
-        """Create a nested plot XY applet.
+    def plot_xy_multi(self, name: str, y: str, x: typing.Optional[str] = None,
+                      v_lines: typing.Optional[str] = None, h_lines: typing.Optional[str] = None,
+                      sliding_window: typing.Optional[int] = None,
+                      plot_names: typing.Optional[str] = None,
+                      title: typing.Optional[str] = None,
+                      x_label: typing.Optional[str] = None, y_label: typing.Optional[str] = None,
+                      update_delay: typing.Optional[float] = None, group: typing.Optional[_G_T] = None,
+                      **kwargs: typing.Any) -> None:
+        """Create a plot XY applet with multiple plots.
 
         :param name: Name of the applet
         :param y: Y-values dataset
         :param x: X-value dataset
+        :param v_lines: Vertical lines dataset
+        :param h_lines: Horizontal lines dataset
         :param sliding_window: Set size of the sliding window, or `None` to disable
+        :param plot_names: Base name of the plots in the legend (numbered automatically)
         :param title: Graph title
         :param x_label: X-axis label
         :param y_label: Y-axis label
@@ -172,13 +182,15 @@ class CcbTool:
         :param kwargs: Other optional arguments for the applet
         """
         # Assemble command
-        command = '{:s}plot_xy_nested {:s}'.format(self.DAX_APPLET, y)
-        command = _generate_command(command, x=x, sliding_window=sliding_window, title=title,
+        command = '{:s}plot_xy_multi {:s}'.format(self.DAX_APPLET, y)
+        command = _generate_command(command, x=x, v_lines=v_lines, h_lines=h_lines,
+                                    sliding_window=sliding_window, plot_names=plot_names, title=title,
                                     x_label=x_label, y_label=y_label, update_delay=update_delay, **kwargs)
         # Create applet
         self.create_applet(name, command, group=group)
 
     def plot_hist(self, name: str, y: str, index: typing.Optional[int] = None,
+                  plot_names: typing.Optional[str] = None,
                   title: typing.Optional[str] = None,
                   x_label: typing.Optional[str] = None, y_label: typing.Optional[str] = None,
                   update_delay: typing.Optional[float] = None, group: typing.Optional[_G_T] = None,
@@ -188,6 +200,7 @@ class CcbTool:
         :param name: Name of the applet
         :param y: Histogram dataset
         :param index: The index of the results to plot (default plots all)
+        :param plot_names: Base name of the plots in the legend (numbered automatically)
         :param title: Graph title
         :param x_label: X-axis label
         :param y_label: Y-axis label
@@ -197,7 +210,8 @@ class CcbTool:
         """
         # Assemble command
         command = '{:s}plot_hist {:s}'.format(self.DAX_APPLET, y)
-        command = _generate_command(command, index=index, title=title, x_label=x_label, y_label=y_label,
+        command = _generate_command(command, index=index, plot_names=plot_names, title=title,
+                                    x_label=x_label, y_label=y_label,
                                     update_delay=update_delay, **kwargs)
         # Create applet
         self.create_applet(name, command, group=group)

@@ -1,54 +1,46 @@
 #!/usr/bin/env python3
 
 import numpy as np
-import PyQt5  # type: ignore  # noqa: F401
+import itertools
 import pyqtgraph  # type: ignore
 
 import artiq.applets.simple  # type: ignore
 
+from dax.applets.widget import PlotWidget
 
-class HistogramPlot(pyqtgraph.PlotWidget):
+
+class HistogramPlot(PlotWidget):
     """Plot histogram applet.
 
     This applet is not compatible with ARTIQ's plot histogram applet and reads a custom data structure.
-
-    The expected data structure is organized as `[counts_0, counts_1, ...]`.
-    Each counts structure is a list of frequencies starting from count 0.
-
-    Documentation about plotting functions can be found at:
-    http://www.pyqtgraph.org/documentation/graphicsItems/plotitem.html#pyqtgraph.PlotItem.plot
     """
 
-    def __init__(self, args):
-        pyqtgraph.PlotWidget.__init__(self)
-        self.args = args
-
-    def data_changed(self, data, mods, title):
+    def update_applet(self, args):
         # Obtain data
-        try:
-            y = data[self.args.y][1]
-            if not y:
-                return  # Skip empty data
-        except KeyError:
-            return
+        y = self.get_dataset(args.y)
 
-        if self.args.index is not None:
+        if args.index is not None:
             # Index was provided, just plot one element
-            y = [y[self.args.index]]
+            y = [y[args.index]]
 
         # Generate X values based on the length of the data (HDF5 dataset size is always homogeneous)
         x = np.arange(len(y[0]) + 1, dtype=np.float) - 0.5  # View shift of -0.5 to align with x-axis labels
 
+        # Enable legend (has to be done before plotting)
+        self.addLegend()
+
         # Plot
         self.clear()
-        for counts in y:
+        for counts, i in zip(y, itertools.count()):
+            # Name of the plot
+            name = '{:s} {:d}'.format(args.plot_names, i)
             # Convert dict to plot values and plot
-            self.plot(x, counts, stepMode=True, fillLevel=0, brush=(0, 0, 255, 150))
+            color = pyqtgraph.intColor(i)
+            self.plot(x, counts, stepMode=True, fillLevel=0, brush=color, name=name)
 
         # Set title and labels
-        self.setTitle(title)
-        self.setLabel('bottom', self.args.x_label)
-        self.setLabel('left', self.args.y_label)
+        self.setLabel('bottom', args.x_label)
+        self.setLabel('left', args.y_label)
 
 
 def main():
@@ -59,9 +51,10 @@ def main():
     applet.argparser.add_argument("--x-label", default=None, type=str)
     applet.argparser.add_argument("--y-label", default=None, type=str)
     applet.argparser.add_argument("--index", default=None, type=int)
+    applet.argparser.add_argument("--plot-names", default='Plot', type=str)
 
     # Add datasets
-    applet.add_dataset("y", "dataset with histograms")
+    applet.add_dataset("y", "Dataset with histograms")
     applet.run()
 
 

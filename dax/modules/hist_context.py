@@ -266,7 +266,7 @@ class HistogramContext(DaxModule):
         # Set default label
         kwargs.setdefault('y_label', 'State probability')
         # Plot
-        self._ccb.plot_xy_nested('probability', self.PROBABILITY_PLOT_KEY, group=self.PLOT_GROUP, **kwargs)
+        self._ccb.plot_xy_multi('probability', self.PROBABILITY_PLOT_KEY, group=self.PLOT_GROUP, **kwargs)
 
     @rpc(flags={'async'})
     def clear_probability_plot(self):  # type: () -> None
