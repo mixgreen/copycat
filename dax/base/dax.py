@@ -1436,7 +1436,7 @@ class DaxDataStoreInfluxDb(DaxDataStore):
         elif isinstance(value, collections.abc.Sequence) and all(isinstance(e, self._FIELD_TYPES) for e in value):
             if len(value):
                 # If the list is not empty, write a list of points
-                self._write_points([self._make_point(key, v, i) for v, i in zip(value, itertools.count(0))])
+                self._write_points([self._make_point(key, v, i) for i, v in enumerate(value)])
             # Store the length of the sequence for emulated appending later
             self._index_table[key] = len(value)
         else:

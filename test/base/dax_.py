@@ -1,7 +1,6 @@
 import unittest
 import numpy as np
 import logging
-import itertools
 import os
 import pygit2  # type: ignore
 
@@ -423,7 +422,7 @@ class DaxDataStoreInfluxDbTestCase(unittest.TestCase):
             ('k', False),
         ]
 
-        for (k, v), count in zip(test_data, itertools.count(1)):
+        for count, (k, v) in enumerate(test_data, 1):
             with self.subTest(k=k, v=v):
                 # Test using the callback function
                 self.ds.set(k, v)
@@ -478,7 +477,7 @@ class DaxDataStoreInfluxDbTestCase(unittest.TestCase):
                 # Test if the number of points
                 self.assertEqual(len(v), len(self.ds.points), 'Number of written points does not match sequence length')
                 # Verify if the registered points are correct
-                self.assertListEqual([(k, item, str(index)) for item, index in zip(v, itertools.count())],
+                self.assertListEqual([(k, item, str(index)) for index, item in enumerate(v)],
                                      self.ds.points, 'Submitted data does not match point sequence')
                 # Clear the list for the next sub-test
                 self.ds.points.clear()
@@ -512,7 +511,7 @@ class DaxDataStoreInfluxDbTestCase(unittest.TestCase):
             ('k', np.float(4)),
         ]
 
-        for (k, v), count in zip(test_data, itertools.count(1)):
+        for count, (k, v) in enumerate(test_data, 1):
             with self.subTest(k=k, v=v):
                 # Test using the callback function
                 self.ds.set(k, v)
@@ -530,7 +529,7 @@ class DaxDataStoreInfluxDbTestCase(unittest.TestCase):
             ('k', 'np.float(4)', -99),  # Negative indices are valid, though this is not specifically intended behavior
         ]
 
-        for (k, v, i), count in zip(test_data, itertools.count(1)):
+        for count, (k, v, i) in enumerate(test_data, 1):
             with self.subTest(k=k, v=v, i=i):
                 # Test using the callback function
                 self.ds.mutate(k, i, v)
@@ -548,7 +547,7 @@ class DaxDataStoreInfluxDbTestCase(unittest.TestCase):
             ('k', True, np.int32(0)),
         ]
 
-        for (k, v, i), count in zip(test_data, itertools.count(1)):
+        for count, (k, v, i) in enumerate(test_data, 1):
             with self.subTest(k=k, v=v, i=i):
                 # Test using the callback function
                 self.ds.mutate(k, i, v)
@@ -597,7 +596,7 @@ class DaxDataStoreInfluxDbTestCase(unittest.TestCase):
         # Track length of the list
         length = len(init_list)
 
-        for (k, v), count in zip(test_data, itertools.count(1)):
+        for count, (k, v) in enumerate(test_data, 1):
             with self.subTest(k=k, v=v):
                 # Test using the callback function
                 self.ds.append(k, v)

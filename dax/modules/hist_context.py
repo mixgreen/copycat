@@ -1,6 +1,5 @@
 import typing
 import collections
-import itertools
 import numpy as np
 
 import dax.util.matplotlib_backend  # Workaround for QT error  # noqa: F401
@@ -31,8 +30,14 @@ class HistogramContext(DaxModule):
 
     HISTOGRAM_PLOT_KEY = 'plot.dax.histogram_context.histogram'
     """Dataset name for plotting latest histogram."""
+    HISTOGRAM_PLOT_NAME = 'histogram'
+    """Name of the histogram plot applet."""
+
     PROBABILITY_PLOT_KEY = 'plot.dax.histogram_context.probability'
     """Dataset name for plotting latest probability graph."""
+    PROBABILITY_PLOT_NAME = 'probability'
+    """Name of the probability plot applet."""
+
     PLOT_GROUP = 'dax.histogram_context'
     """Group to which the plot applets belong."""
 
@@ -159,15 +164,13 @@ class HistogramContext(DaxModule):
         This function can be used to manually enter the histogram context.
         We strongly recommend to use the `with` statement instead.
 
-        :raises HistogramContextError: Raised if already in histogram context (nesting is not allowed)
+        :raises HistogramContextError: Raised if already in histogram context (context non-reentrant)
         """
 
         if self._in_context:
-            # Prevent nested context
-            raise HistogramContextError('The histogram context can not be nested')
+            # Prevent context reentry
+            raise HistogramContextError('The histogram context is non-reentrant')
 
-        # Clear histogram dataset
-        self.set_dataset(self.HISTOGRAM_PLOT_KEY, [], broadcast=True, archive=False)
         # Create a new buffer (clearing it might result in data loss due to how the dataset manager works)
         self._buffer = []
         # Increment in context counter
@@ -254,7 +257,7 @@ class HistogramContext(DaxModule):
         kwargs.setdefault('x_label', 'Number of counts')
         kwargs.setdefault('y_label', 'Frequency')
         # Plot
-        self._ccb.plot_hist('histogram', self.HISTOGRAM_PLOT_KEY, group=self.PLOT_GROUP, **kwargs)
+        self._ccb.plot_hist(self.HISTOGRAM_PLOT_NAME, self.HISTOGRAM_PLOT_KEY, group=self.PLOT_GROUP, **kwargs)
 
     @rpc(flags={'async'})
     def plot_probability(self, **kwargs):  # type: (typing.Any) -> None
@@ -266,7 +269,7 @@ class HistogramContext(DaxModule):
         # Set default label
         kwargs.setdefault('y_label', 'State probability')
         # Plot
-        self._ccb.plot_xy_multi('probability', self.PROBABILITY_PLOT_KEY, group=self.PLOT_GROUP, **kwargs)
+        self._ccb.plot_xy_multi(self.PROBABILITY_PLOT_NAME, self.PROBABILITY_PLOT_KEY, group=self.PLOT_GROUP, **kwargs)
 
     @rpc(flags={'async'})
     def clear_probability_plot(self):  # type: () -> None
@@ -277,12 +280,12 @@ class HistogramContext(DaxModule):
     @rpc(flags={'async'})
     def disable_histogram_plot(self):  # type: () -> None
         """Close the histogram plot."""
-        self._ccb.disable_applet(self.HISTOGRAM_PLOT_KEY, self.PLOT_GROUP)
+        self._ccb.disable_applet(self.HISTOGRAM_PLOT_NAME, self.PLOT_GROUP)
 
     @rpc(flags={'async'})
     def disable_probability_plot(self):  # type: () -> None
         """Close the probability plot."""
-        self._ccb.disable_applet(self.PROBABILITY_PLOT_KEY, self.PLOT_GROUP)
+        self._ccb.disable_applet(self.PROBABILITY_PLOT_NAME, self.PLOT_GROUP)
 
     @rpc(flags={'async'})
     def disable_all_plots(self):  # type: () -> None
@@ -398,7 +401,7 @@ class HistogramAnalyzer:
         # Get the histograms associated with the given key
         histograms = self.histograms[key]
 
-        for h, index in zip(zip(*histograms), itertools.count()):
+        for index, h in enumerate(zip(*histograms)):
             # Obtain X and Y values (for all channels)
             x_values = np.arange(max(max(c) for c in h) + 1)
             y_values = [[c[x] for x in x_values] for c in h]
@@ -406,7 +409,7 @@ class HistogramAnalyzer:
             # Plot
             bar_width = width / len(h)
             fig, ax = plt.subplots()
-            for c_values, i in zip(y_values, itertools.count()):
+            for i, c_values in enumerate(y_values):
                 ax.bar(x_values + (bar_width * i) - (width / 2), c_values,
                        width=bar_width, align='edge', label='Channel {:d}'.format(i), **kwargs)
 
@@ -419,6 +422,7 @@ class HistogramAnalyzer:
             # Save figure
             file_name = self._file_name_generator(self.HISTOGRAM_PLOT_FILE_FORMAT.format(key=key, index=index), ext)
             fig.savefig(file_name, bbox_inches='tight')
+            plt.close(fig)
 
     def plot_all_histograms(self, **kwargs: typing.Any) -> None:
         """Plot histograms for all keys available in the data.
@@ -466,7 +470,7 @@ class HistogramAnalyzer:
 
         # Plot
         fig, ax = plt.subplots()
-        for p_values, i in zip(probabilities, itertools.count()):
+        for i, p_values in enumerate(probabilities):
             ax.plot(x_values, p_values, label='Channel {:d}'.format(i), **kwargs)
 
         # Plot formatting

@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 
 import numpy as np
-import itertools
 import pyqtgraph  # type: ignore
 
 import artiq.applets.simple  # type: ignore
@@ -19,6 +18,10 @@ class HistogramPlot(PlotWidget):
         # Obtain data
         y = self.get_dataset(args.y)
 
+        # Verify input data
+        if not len(y):
+            return
+
         if args.index is not None:
             # Index was provided, just plot one element
             y = [y[args.index]]
@@ -31,7 +34,7 @@ class HistogramPlot(PlotWidget):
 
         # Plot
         self.clear()
-        for counts, i in zip(y, itertools.count()):
+        for i, counts in enumerate(y):
             # Name of the plot
             name = '{:s} {:d}'.format(args.plot_names, i)
             # Convert dict to plot values and plot

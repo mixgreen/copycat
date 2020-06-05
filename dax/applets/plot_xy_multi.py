@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 
 import numpy as np
-import itertools
 import pyqtgraph  # type: ignore
 
 import artiq.applets.simple  # type: ignore
@@ -14,14 +13,21 @@ class MultiXYPlot(PlotWidget):
 
     def update_applet(self, args):
         # Obtain input data
-        y = self.get_dataset(args.y)
-        x = self.get_dataset(args.x, np.arange(len(y)))
+        y = np.asarray(self.get_dataset(args.y))
+        x = np.asarray(self.get_dataset(args.x, np.arange(len(y))))
         h_lines = self.get_dataset(args.h_lines, [])
         v_lines = self.get_dataset(args.v_lines, [])
 
         # Verify input data
-        if not len(y) or len(y) != len(x):
+        if not len(y) or len(y) > len(x):
             return
+
+        # Trim x data
+        x = x[:len(y)]
+        # Sort based on x data
+        ind = x.argsort()
+        x = x[ind]
+        y = y[ind]
 
         # Handle sliding window
         if args.sliding_window > 0:
@@ -38,7 +44,7 @@ class MultiXYPlot(PlotWidget):
 
         # Plot
         self.clear()
-        for y_values, i in zip(zip(*y), itertools.count()):
+        for i, y_values in enumerate(zip(*y)):
             # Name of the plot
             name = '{:s} {:d}'.format(args.plot_names, i)
             # Transform to a list of Y-values and plot
@@ -67,7 +73,7 @@ def main():
     applet.argparser.add_argument("--plot-names", default='Plot', type=str)
 
     # Add datasets
-    applet.add_dataset("y", "Y data (nested)")
+    applet.add_dataset("y", "Y data (multiple graphs)")
     applet.add_dataset("x", "X values", required=False)
     applet.add_dataset("v-lines", "Vertical lines", required=False)
     applet.add_dataset("h-lines", "Horizontal lines", required=False)

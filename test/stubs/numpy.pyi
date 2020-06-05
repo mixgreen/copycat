@@ -84,6 +84,10 @@ class ndarray(collections.abc.Sequence, typing.Generic[__N_T]):
              order: typing.Union[None, str, typing.List[str]] = None):
         ...
 
+    def argsort(self, axis: typing.Optional[int] = -1, kind: typing.Optional[str] = None,
+                order: typing.Union[None, str, typing.Sequence[str]] = None):
+        ...
+
     def mean(self, axis: typing.Optional[__SHAPE_T] = None, dtype: typing.Optional[type] = None,
              out: typing.Optional['ndarray'] = None, keepdims: bool = False):
         ...
@@ -161,4 +165,8 @@ def linspace(start: __N_T, stop: __N_T, num: int = 50, endpoint: bool = True, re
 
 
 def logspace(start, stop, num=50, endpoint=True, base=10.0, dtype=None, axis=0) -> ndarray:
+    ...
+
+
+def asarray(a: typing.Sequence[typing.Any], dtype: type = None, order: typing.Optional[str] = None) -> ndarray:
     ...
