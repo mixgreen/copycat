@@ -21,7 +21,7 @@ class XYPlot(PlotWidget):
         v_lines = self.get_dataset(args.v_lines, [])
 
         # Verify input data
-        if not len(y) or len(y) != len(x):
+        if not len(y) or len(y) > len(x):
             return
         if error is not None and hasattr(error, "__len__"):
             if not len(error):
@@ -36,6 +36,10 @@ class XYPlot(PlotWidget):
                 fit = None
             elif len(fit) != len(y):
                 return
+
+        if len(x) > len(y):
+            # Trim x data
+            x = x[:len(y)]
 
         # Handle sliding window
         if args.sliding_window > 0:

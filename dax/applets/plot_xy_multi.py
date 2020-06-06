@@ -22,8 +22,10 @@ class MultiXYPlot(PlotWidget):
         if not len(y) or len(y) > len(x):
             return
 
-        # Trim x data
-        x = x[:len(y)]
+        if len(x) > len(y):
+            # Trim x data
+            x = x[:len(y)]
+
         # Sort based on x data
         ind = x.argsort()
         x = x[ind]
