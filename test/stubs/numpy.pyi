@@ -170,3 +170,11 @@ def logspace(start, stop, num=50, endpoint=True, base=10.0, dtype=None, axis=0) 
 
 def asarray(a: typing.Sequence[typing.Any], dtype: type = None, order: typing.Optional[str] = None) -> ndarray:
     ...
+
+
+def column_stack(tup: typing.Sequence[ndarray]) -> ndarray:
+    ...
+
+
+def concatenate(*arrays: typing.Sequence[typing.Any], axis: int = 0, out: typing.Optional[ndarray] = None) -> ndarray:
+    ...

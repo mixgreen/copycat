@@ -98,7 +98,7 @@ class HistogramContext(DaxModule):
         This function is intended to be fast to allow high input data throughput.
         No type checking is performed on the data.
 
-        :param data: A list of ints representing the PMT counts of different ions.
+        :param data: A list of ints representing the PMT counts of different ions
         :raises HistogramContextError: Raised if called outside the histogram context
         """
         if not self._in_context:
@@ -195,6 +195,10 @@ class HistogramContext(DaxModule):
                                                          index=self._open_datasets[self._dataset_key])
 
         if len(self._buffer):
+            # Check consistency of data in the buffer
+            if any(len(b) != len(self._buffer[0]) for b in self._buffer):
+                self.logger.error('Data in the buffer is not consistent, incomplete data is dropped')
+
             # Transform buffer data to pack counts per ion and convert into histograms
             histograms = [collections.Counter(c) for c in zip(*self._buffer)]
             # Store histograms in the archive
