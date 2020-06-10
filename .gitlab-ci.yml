@@ -1,0 +1,58 @@
+.nix_env:
+  image: nixos/nix:latest
+  before_script:
+    # Setup Nix channels
+    - nix-channel --add https://nixbld.m-labs.hk/channel/custom/artiq/full/artiq-full
+    - nix-channel --remove nixpkgs
+    - nix-channel --add https://nixos.org/channels/nixos-20.03 nixpkgs
+    - nix-channel --update
+    # Add M-Lab public key
+    - mkdir -p ~/.config/nix/
+    - echo "substituters = https://cache.nixos.org https://nixbld.m-labs.hk" > ~/.config/nix/nix.conf
+    - echo "trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= nixbld.m-labs.hk-1:5aSRVA5b320xbNvu30tqxVPXpld73bhtOeH6uAjRyHc=" >> ~/.config/nix/nix.conf
+
+.conda_env:
+  image: continuumio/miniconda3:latest
+  before_script:
+    # Install ARTIQ and activate environment
+    - wget https://raw.githubusercontent.com/m-labs/artiq/release-5/install-with-conda.py
+    - sed -i "/artiq-board/d" install-with-conda.py  # Remove ARTIQ board packages
+    - python3 install-with-conda.py
+    - rm install-with-conda.py
+    - conda init
+    - source ~/.bashrc
+    - conda activate artiq
+    # Install DAX dependencies
+    - conda install numpy scipy "pyvcd<0.2" natsort pygit2 "pyqt>=5" pyqtgraph matplotlib python-graphviz
+
+test_nix:
+  extends: .nix_env
+  coverage: '/^TOTAL.+?(\d+\%)$/'
+  script:
+    # Run test commands in a Nix shell
+    - nix-shell test/shell.nix --run "python3 --version"
+    - nix-shell test/shell.nix --run "coverage --version; coverage run -m unittest -v"
+    - nix-shell test/shell.nix --run "coverage report"
+    - nix-shell test/shell.nix --run "mypy --version; mypy"
+    - nix-shell test/shell.nix --run "flake8 --version; flake8"
+
+test_conda:
+  extends: .conda_env
+  script:
+    # Install packages required for testing
+    - conda install pycodestyle
+    # Run test commands
+    - python3 --version
+    - python3 -m unittest -v
+
+pages:
+  extends: .nix_env
+  script:
+    # Generate documentation
+    - nix-shell doc/shell.nix --run "cd doc; make html"
+    - mv doc/build/html/ public/
+  artifacts:
+    paths:
+      - public
+  rules:
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'

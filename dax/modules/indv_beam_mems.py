@@ -1,9 +1,8 @@
 import numpy as np
 
-import artiq.coredevice.ttl
+import artiq.coredevice.ttl  # type: ignore
 
 from dax.experiment import *
-from dax.modules.interfaces.indv_beam_if import *
 
 
 class _MemsMirrorModule(DaxModule):
@@ -23,7 +22,7 @@ class _MemsMirrorModule(DaxModule):
         pass
 
 
-class IndvBeamMemsModule(DaxModule, IndvBeamInterface):
+class IndvBeamMemsModule(DaxModule):
     """Module for individual beam path controlled with MEMS mirrors."""
 
     DPASS_AOM_DEVICE_KEY = '{name:s}_{beam:d}_{signal:d}'
@@ -83,7 +82,7 @@ class IndvBeamMemsModule(DaxModule, IndvBeamInterface):
         # PID switches (self.pid_sw[beam])
         self.pid_sw = [self.get_device(self.PID_DEVICE_KEY.format(name=pid_sw, beam=b)) for b in range(num_beams)]
         # MEMS mirror module
-        self.mems_mirror = dax.modules.mems_mirror.MemsMirrorModule(self, 'mems_mirror', **kwargs)
+        self.mems_mirror = _MemsMirrorModule(self, 'mems_mirror', **kwargs)
 
         # Update kernel invariants
         self.update_kernel_invariants('num_beams', 'num_dpass_signals', 'dpass_aom', 'indv_aom', 'pid_sw')

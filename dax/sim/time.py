@@ -1,104 +1,180 @@
-from operator import itemgetter
+import abc
+import typing
+import numpy as np
 
-import vcd
-import vcd.writer
+from artiq.language.units import *  # noqa: F401
+from artiq.language.core import now_mu, set_watchdog_factory
+from artiq.coredevice.exceptions import WatchdogExpired
 
-import artiq.language.core
-from artiq.language.units import *
+__all__ = ['DaxTimeManager']
 
-import dax.util.units
-
-
-class SequentialTimeContext:
-    def __init__(self, current_time):
-        self.current_time = current_time
-        self.block_duration = 0.0
-
-    def take_time(self, amount):
-        self.current_time += amount
-        self.block_duration += amount
+_MU_T = np.int64
+"""The type of machine units (MU)."""
 
 
-class ParallelTimeContext(SequentialTimeContext):
-    def take_time(self, amount):
-        if amount > self.block_duration:
-            self.block_duration = amount
+class _TimeContext(abc.ABC):
+    """Abstract time context class."""
+
+    def __init__(self, current_time: _MU_T):
+        self._current_time = current_time
+        self._block_duration = _MU_T(0)
+
+    @property
+    def current_time(self) -> _MU_T:
+        return self._current_time
+
+    @property
+    def block_duration(self) -> _MU_T:
+        return self._block_duration
+
+    @abc.abstractmethod
+    def take_time(self, amount: _MU_T) -> None:
+        pass
 
 
-class Manager:
-    def __init__(self, file_name='out.vcd'):
-        # TODO, name should preferably be configurable but with a default
-        # TODO, timescale configurable?
+class _SequentialTimeContext(_TimeContext):
+    """Sequential time context class."""
 
-        # Initialize stack
-        self.stack = [SequentialTimeContext(0.0)]
+    def take_time(self, amount: _MU_T) -> None:
+        self._current_time += amount
+        self._block_duration += amount
 
-        # Initialize timeline and timescale
-        self._timeline = list()
-        self._timescale = ns
 
-        # Open file and instantiate VCD writer
-        self._vcd_file = open(file_name, mode='w')
-        self._vcd_writer = vcd.VCDWriter(self._vcd_file,
-                                         timescale=dax.util.units.time_to_str(self._timescale, precision=0))
+class _ParallelTimeContext(_TimeContext):
+    """Parallel time context class."""
 
-    def enter_sequential(self):
-        new_context = SequentialTimeContext(self.get_time_mu())
-        self.stack.append(new_context)
+    def take_time(self, amount: _MU_T) -> None:
+        if amount > self._block_duration:
+            self._block_duration = amount
 
-    def enter_parallel(self):
-        new_context = ParallelTimeContext(self.get_time_mu())
-        self.stack.append(new_context)
 
-    def exit(self):
-        old_context = self.stack.pop()
-        self.take_time(old_context.block_duration)
+class _Watchdog:
+    """DAX.sim watchdog implementation."""
 
-    def take_time_mu(self, duration):
-        self.stack[-1].take_time(duration)
+    def __init__(self, watchdogs: typing.Set['_Watchdog'], timeout_mu: _MU_T):
+        # Store the watchdogs container
+        self._watchdogs = watchdogs
+        # Store the given timeout (relative time)
+        self._timeout_mu = timeout_mu
+        # Flag to check that a watchdog is only used once
+        self._used = False
 
-    def get_time_mu(self):
-        return self.stack[-1].current_time
+    def check_timeout(self, now_mu_: _MU_T) -> None:
+        """Let the watchdog check if it has timed out.
 
-    def set_time_mu(self, t):
+        :param now_mu_: The current time
+        :raises WatchdogExpired: If the watchdog expired
+        """
+        if now_mu_ > self._timeout_mu:
+            # Raise exception if watchdog timed out
+            raise WatchdogExpired('Watchdog expired at time {}'.format(self._timeout_mu))
+
+    def __enter__(self) -> None:
+        if self._used:
+            # Watchdog was entered twice, which is not valid
+            raise RuntimeError('A watchdog object can only be used once')
+        else:
+            # Update used flag
+            self._used = True
+
+        # Update the timeout with the current time, which will give us the absolute timeout
+        self._timeout_mu += now_mu()
+
+        # Add this watchdog to the list such that it can be monitored
+        self._watchdogs.add(self)
+
+    def __exit__(self, exc_type: typing.Any, exc_val: typing.Any, exc_tb: typing.Any) -> None:
+        # Remove ourselves from the active watchdogs
+        self._watchdogs.remove(self)
+
+
+class DaxTimeManager:
+    def __init__(self, ref_period: float):
+        assert isinstance(ref_period, float), 'Reference period must be of type float'
+
+        if ref_period <= 0.0:
+            # The reference period must be larger than zero
+            raise ValueError('The reference period must be larger than zero')
+
+        # Store reference period
+        self._ref_period = ref_period
+
+        # Initialize time context stack
+        self._stack = [_SequentialTimeContext(_MU_T(0))]  # type: typing.List[_TimeContext]
+
+        # Set of active watchdogs
+        self._watchdogs = set()  # type: typing.Set[_Watchdog]
+
+        # Set the watchdog factory
+        set_watchdog_factory(self._watchdog_factory)
+
+    """Helper functions"""
+
+    def _watchdog_factory(self, timeout: float) -> _Watchdog:
+        """Function suitable for the ARTIQ watchdog factory."""
+        return _Watchdog(self._watchdogs, self._seconds_to_mu(timeout))
+
+    def _seconds_to_mu(self, seconds: float) -> _MU_T:
+        """Convert seconds to machine units.
+
+        :param seconds: The time in seconds
+        :return: The time converted to machine units
+        """
+        return _MU_T(seconds // self._ref_period)  # floor div, same as in ARTIQ Core
+
+    """Functions that interface with the ARTIQ language core"""
+
+    def enter_sequential(self) -> None:
+        """Add a new sequential time context to the stack."""
+        new_context = _SequentialTimeContext(self.get_time_mu())
+        self._stack.append(new_context)
+
+    def enter_parallel(self) -> None:
+        """Add a new parallel time context to the stack."""
+        new_context = _ParallelTimeContext(self.get_time_mu())
+        self._stack.append(new_context)
+
+    def exit(self) -> None:
+        """Exit the last time context."""
+        old_context = self._stack.pop()
+        self.take_time_mu(old_context.block_duration)
+
+    def take_time_mu(self, duration: _MU_T) -> None:
+        """Take time from the current context.
+
+        :param duration: The duration in machine units
+        """
+        # Take time from the current context
+        self._stack[-1].take_time(duration)
+        # Check if any watchdog timed out
+        for w in self._watchdogs:
+            w.check_timeout(self.get_time_mu())
+
+    def take_time(self, duration: float) -> None:
+        """Take time from the current context.
+
+        The duration will be converted to machine units based on the reference period
+        before it is used. This might result in some rounding error.
+
+        :param duration: The duration in natural time (float)
+        """
+
+        # Divide duration by the reference period and convert to machine units
+        self.take_time_mu(self._seconds_to_mu(duration))
+
+    def get_time_mu(self) -> _MU_T:
+        """Return the current time in machine units.
+
+        :return: Current time in machine units
+        """
+        return self._stack[-1].current_time
+
+    def set_time_mu(self, t: _MU_T) -> None:
+        """Set the time to a specific point.
+
+        :param t: The specific point in time (machine units) to set the current time to
+        """
+
+        # Take time to match the given time point
         dt = t - self.get_time_mu()
-        if dt < 0.0:
-            # Going back in time is not allowed by the VCD writer
-            raise ValueError("Attempted to go back in time")
         self.take_time_mu(dt)
-
-    def take_time(self, duration):
-        self.take_time_mu(duration // self._timescale)
-
-    @artiq.language.core.rpc(flags={"async"})  # Added for accuracy, but does not imply an actual RPC call
-    def event(self, var, value):
-        self._timeline.append((self.get_time_mu(), var, value))
-
-    def register(self, scope, name, var_type, size=None, init=None, ident=None):
-        return self._vcd_writer.register_var(scope, name, var_type, size, init, ident)
-
-    def format_timeline(self, ref_period):
-        ref_timescale = ref_period // self._timescale  # TODO, ref_timescale actually does not change
-        for time, var, value in sorted(self._timeline, key=itemgetter(0)):
-            # Add events to the VCD file after time conversion
-            self._vcd_writer.change(var, time * ref_timescale, value)
-
-        # Flush the VCD file
-        self._vcd_writer.flush()
-
-        # Clear events from timeline
-        self._timeline.clear()
-
-    def __del__(self):
-        # TODO, this function is maybe not actually called (and __delete__ neither)
-        # Close the VCD file
-        self._vcd_writer.close()
-        self._vcd_file.close()
-
-
-# TODO, implement the manager singleton in a more elegant way
-# TODO, make a more elegant way to access the manager for registering signals (in a flavour matching with ARTIQ)
-
-# Set the time manager
-manager = Manager()
-artiq.language.core.set_time_manager(manager)

@@ -1,7 +1,12 @@
 import numpy as np
 
-from dax.modules.rtio_benchmark import *
+from dax.experiment import *
+from dax.modules.rtio_benchmark import RtioBenchmarkModule, RtioLoopBenchmarkModule
 import dax.util.units
+
+__all__ = ['RtioBenchmarkEventThroughput', 'RtioBenchmarkEventBurst', 'RtioBenchmarkDmaThroughput',
+           'RtioBenchmarkLatencyCoreRtio', 'RtioBenchmarkInputBufferSize',
+           'RtioBenchmarkLatencyRtioCore', 'RtioBenchmarkLatencyRtt']
 
 
 @dax_client_factory
@@ -20,7 +25,7 @@ class RtioBenchmarkEventThroughput(DaxClient, EnvExperiment):
         self.setattr_argument('no_underflow_cutoff', NumberValue(5, min=1, **number_kwargs))
 
         # Obtain RTIO benchmark module
-        self.rtio_bench = self.registry.search_module(RtioBenchmarkModule)
+        self.rtio_bench = self.registry.find_module(RtioBenchmarkModule)
 
     def prepare(self):
         # Additional check if arguments are valid
@@ -54,16 +59,16 @@ class RtioBenchmarkEventBurst(DaxClient, EnvExperiment):
         # Arguments
         number_kwargs = {'scale': 1, 'step': 1, 'ndecimals': 0}
         time_kwargs = {'unit': 'ns', 'scale': 1, 'step': 1, 'ndecimals': 0}
-        self.setattr_argument('num_events_min', NumberValue(10, min=1, **number_kwargs))
-        self.setattr_argument('num_events_max', NumberValue(1000, min=1, **number_kwargs))
-        self.setattr_argument('num_events_step', NumberValue(10, min=1, **number_kwargs))
+        self.setattr_argument('num_events_min', NumberValue(1000, min=1, **number_kwargs))
+        self.setattr_argument('num_events_max', NumberValue(100000, min=1, **number_kwargs))
+        self.setattr_argument('num_events_step', NumberValue(100, min=1, **number_kwargs))
         self.setattr_argument('num_samples', NumberValue(5, min=1, **number_kwargs))
         self.setattr_argument('period_step', NumberValue(1, min=1, **time_kwargs))
         self.setattr_argument('no_underflow_cutoff', NumberValue(5, min=1, **number_kwargs))
         self.setattr_argument('num_step_cutoff', NumberValue(5, min=0, **number_kwargs))
 
         # Obtain RTIO benchmark module
-        self.rtio_bench = self.registry.search_module(RtioBenchmarkModule)
+        self.rtio_bench = self.registry.find_module(RtioBenchmarkModule)
 
     def prepare(self):
         # Scale period step
@@ -96,7 +101,7 @@ class RtioBenchmarkDmaThroughput(DaxClient, EnvExperiment):
         self.setattr_argument('no_underflow_cutoff', NumberValue(5, min=1, **number_kwargs))
 
         # Obtain RTIO benchmark module
-        self.rtio_bench = self.registry.search_module(RtioBenchmarkModule)
+        self.rtio_bench = self.registry.find_module(RtioBenchmarkModule)
 
     def prepare(self):
         # Additional check if arguments are valid
@@ -137,7 +142,7 @@ class RtioBenchmarkLatencyCoreRtio(DaxClient, EnvExperiment):
         self.setattr_argument('no_underflow_cutoff', NumberValue(5, min=1, **number_kwargs))
 
         # Obtain RTIO benchmark module
-        self.rtio_bench = self.registry.search_module(RtioBenchmarkModule)
+        self.rtio_bench = self.registry.find_module(RtioBenchmarkModule)
 
     def prepare(self):
         # Scale latencies
@@ -166,7 +171,7 @@ class RtioBenchmarkInputBufferSize(DaxClient, EnvExperiment):
         self.setattr_argument('max_events', NumberValue(5000, min=1, **number_kwargs))
 
         # Obtain RTIO benchmark module
-        self.rtio_bench = self.registry.search_module(RtioLoopBenchmarkModule)
+        self.rtio_bench = self.registry.find_module(RtioLoopBenchmarkModule)
 
     def prepare(self):
         # Additional check if arguments are valid
@@ -194,7 +199,7 @@ class RtioBenchmarkLatencyRtioCore(DaxClient, EnvExperiment):
         self.setattr_argument('num_samples', NumberValue(100, min=1, **number_kwargs))
 
         # Obtain RTIO benchmark module
-        self.rtio_bench = self.registry.search_module(RtioLoopBenchmarkModule)
+        self.rtio_bench = self.registry.find_module(RtioLoopBenchmarkModule)
 
     def run(self):
         self.rtio_bench.benchmark_latency_rtio_core(self.num_samples)
@@ -222,7 +227,7 @@ class RtioBenchmarkLatencyRtt(DaxClient, EnvExperiment):
         self.setattr_argument('no_underflow_cutoff', NumberValue(5, min=1, **number_kwargs))
 
         # Obtain RTIO benchmark module
-        self.rtio_bench = self.registry.search_module(RtioLoopBenchmarkModule)
+        self.rtio_bench = self.registry.find_module(RtioLoopBenchmarkModule)
 
     def prepare(self):
         # Scale latencies

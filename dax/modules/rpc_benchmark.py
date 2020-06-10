@@ -3,6 +3,8 @@ import timeit
 
 from dax.experiment import *
 
+__all__ = ['RpcBenchmarkModule']
+
 
 class RpcBenchmarkModule(DaxModule):
     """Module to benchmark RPC performance."""
@@ -12,18 +14,18 @@ class RpcBenchmarkModule(DaxModule):
     LATENCY_CORE_HOST_CORE_KEY = 'latency_core_host_core'
     LATENCY_CORE_HOST_CORE_ASYNC_KEY = 'latency_core_host_core_async'
 
-    def init(self):
+    def init(self) -> None:
         # Load parameters
         self.setattr_dataset_sys(self.LATENCY_HOST_CORE_HOST_KEY)
         self.setattr_dataset_sys(self.LATENCY_CORE_HOST_CORE_KEY)
         self.setattr_dataset_sys(self.LATENCY_CORE_HOST_CORE_ASYNC_KEY)
 
-    def post_init(self):
+    def post_init(self) -> None:
         pass
 
     """Benchmark RPC latency"""
 
-    def benchmark_latency(self, num_samples):
+    def benchmark_latency(self, num_samples: int) -> None:
         # Convert types of arguments
         num_samples = np.int32(num_samples)
 
@@ -54,12 +56,12 @@ class RpcBenchmarkModule(DaxModule):
         self.set_dataset_sys(self.LATENCY_CORE_HOST_CORE_ASYNC_KEY, time / num_samples)
 
     @kernel
-    def _empty_kernel(self):
+    def _empty_kernel(self):  # type: () -> None
         # Just break realtime to have minimal computation
         self.core.break_realtime()
 
     @kernel
-    def _benchmark_core_host_core(self, num_samples):
+    def _benchmark_core_host_core(self, num_samples: TInt32):
         # Reset core
         self.core.reset()
 
@@ -84,7 +86,7 @@ class RpcBenchmarkModule(DaxModule):
         pass
 
     @kernel
-    def _benchmark_core_host_core_async(self, num_samples):
+    def _benchmark_core_host_core_async(self, num_samples: TInt32):
         # Reset core
         self.core.reset()
 
@@ -110,5 +112,5 @@ class RpcBenchmarkModule(DaxModule):
         return t_total
 
     @rpc(flags={"async"})
-    def _empty_host_function_async(self):
+    def _empty_host_function_async(self):  # type: () -> None
         pass
