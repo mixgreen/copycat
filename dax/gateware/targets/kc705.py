@@ -9,7 +9,7 @@ from misoc.targets.kc705 import soc_kc705_args, soc_kc705_argdict
 from misoc.integration.builder import builder_args, builder_argdict
 
 from artiq.gateware import rtio
-from artiq.gateware.rtio.phy import ttl_simple, ttl_serdes_7series, spi2
+from artiq.gateware.rtio.phy import ttl_simple, ttl_serdes_7series, spi2, edge_counter
 from artiq.build_soc import build_artiq_soc
 # noinspection PyProtectedMember
 from artiq.gateware.targets.kc705 import _RTIOCRG, _StandaloneBase
@@ -108,7 +108,10 @@ class EURIQA(_StandaloneBase):
             # segment to prevent accidentally adding x100 DAC comm/pins
             platform.add_extension(euriqa.x100_dac_spi)
 
-        rtio_channels = list()
+        # List of RTIO channels
+        rtio_channels = []
+        # List of candidate phys for edge counters
+        ec_phys = []
 
         # Note: prints were used instead of a logger because the logger gets disabled for unknown reasons
 
@@ -133,7 +136,6 @@ class EURIQA(_StandaloneBase):
 
         # Output GPIO/TTL Banks
         for bank, i in itertools.product(["out1", "out2", "out3", "out4"], range(8)):
-            # out1-0, out1-1, ..., out3-7
             print("{:s}-{:d} at channel {:d}".format(bank, i, len(rtio_channels)))
             if add_sandia_dac_spi and bank == "out2" and i == 7:
                 # add unused dummy channel. to keep channel #s same.
@@ -143,30 +145,37 @@ class EURIQA(_StandaloneBase):
                 phy = ttl_serdes_7series.Output_8X(platform.request(bank, i))
             self.submodules += phy
             rtio_channels.append(rtio.Channel.from_phy(phy))
-        print("Ending output GPIO channels at {:d}".format(len(rtio_channels)))
 
         # Input GPIO/TTL Banks
         for bank, i in itertools.product(["in1", "in2", "in3"], range(8)):
-            # in1-0, in1-1, ..., in5-7
             print("{:s}-{:d} at channel {:d}".format(bank, i, len(rtio_channels)))
             phy = ttl_serdes_7series.InOut_8X(platform.request(bank, i))
             self.submodules += phy
             rtio_channels.append(rtio.Channel.from_phy(phy, ififo_depth=512))
-        print("Ending input GPIO channels at {:d}".format(len(rtio_channels)))
+            ec_phys.append(phy)  # Add phy to add edge counter later
 
-        # Tri-state buffer to disable the TTL/GPIO outputs (out1, ...)
+        # Tri-state buffer / Output enable buffer (for output GPIO/TTL banks)
+        print("OEB GPIO channel at {:d}".format(len(rtio_channels)))
         phy = ttl_simple.Output(platform.request("oeb", 0))
         self.submodules += phy
         rtio_channels.append(rtio.Channel.from_phy(phy))
-        print("OEB GPIO channels at {:d}".format(len(rtio_channels)))
 
-        # TODO: figure out usage/what this is
+        # SMA connectors JP3_{29,30,31,32,33,34,37,38,39}
         for i in range(9):
             print("{:s}-{:d} at channel {:d}".format('sma', i, len(rtio_channels)))
-            phy = ttl_serdes_7series.Output_8X(platform.request("sma", i))
+            phy = ttl_serdes_7series.InOut_8X(platform.request("sma", i))
             self.submodules += phy
-            rtio_channels.append(rtio.Channel.from_phy(phy))
-        print("Ending SMA channels at {:d}".format(len(rtio_channels)))
+            rtio_channels.append(rtio.Channel.from_phy(phy, ififo_depth=512))
+            ec_phys.append(phy)  # Add phy to add edge counter later
+
+        # Edge counters
+        for phy in ec_phys:
+            state = getattr(phy, "input_state", None)
+            if state is not None:
+                print("Edge counter channel at {:d}".format(len(rtio_channels)))
+                counter = edge_counter.SimpleEdgeCounter(state)
+                self.submodules += counter
+                rtio_channels.append(rtio.Channel.from_phy(counter))
 
         # TODO: update name for io_update everywhere
         # Update triggers for DDS. Edge will trigger output settings update
@@ -175,7 +184,6 @@ class EURIQA(_StandaloneBase):
             phy = ttl_serdes_7series.Output_8X(platform.request("io_update", i))
             self.submodules += phy
             rtio_channels.append(rtio.Channel.from_phy(phy))
-        print("Ending DDS io_update GPIO channels at {:d}".format(len(rtio_channels)))
 
         # Reset lines for the DDS boards.
         for i in range(4):
@@ -183,7 +191,6 @@ class EURIQA(_StandaloneBase):
             phy = ttl_serdes_7series.Output_8X(platform.request("reset", i))
             self.submodules += phy
             rtio_channels.append(rtio.Channel.from_phy(phy))
-        print("Ending DDS reset GPIO channels at {:d}".format(len(rtio_channels)))
 
         # SPI, CLR, RESET and LDAC interfaces to control the MEMS system
         for i in range(2):
@@ -192,7 +199,6 @@ class EURIQA(_StandaloneBase):
             phy = spi2.SPIMaster(spi_bus)
             self.submodules += phy
             rtio_channels.append(rtio.Channel.from_phy(phy, ififo_depth=128))
-        print("Ending MEMS SPI channels at {:d}".format(len(rtio_channels)))
 
         print("MEMS switch HV209 clear channel at {:d}".format(len(rtio_channels)))
         phy = ttl_simple.Output(platform.request("hv209_clr", 0))
@@ -218,7 +224,6 @@ class EURIQA(_StandaloneBase):
             rtio_channels.append(rtio.Channel.from_phy(phy, ififo_depth=128))
             odd_channel_sdio = platform.request("odd_channel_sdio", (i - 2))
             self.comb += odd_channel_sdio.eq(spi_bus.mosi)
-        print("Ending DDS SPI channels at {:d}".format(len(rtio_channels)))
 
         # SPI & Load DAC (LDAC) pins for Controlling 8x DAC (DAC 8568)
         print("DAC8568 SPI RTIO channel at {:d}".format(len(rtio_channels)))

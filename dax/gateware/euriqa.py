@@ -36,6 +36,7 @@ fmc_adapter_io = [
     ("in3", 4, Pins("HPC:HA07_P"), IOStandard("LVCMOS33")),
     ("in3", 6, Pins("HPC:HA07_N"), IOStandard("LVCMOS33")),
     ("in3", 7, Pins("HPC:HA08_P"), IOStandard("LVCMOS33")),
+
     # Output Bank 1
     ("out1", 0, Pins("HPC:LA03_N"), IOStandard("LVCMOS33")),
     ("out1", 1, Pins("HPC:LA03_P"), IOStandard("LVCMOS33")),
@@ -63,7 +64,6 @@ fmc_adapter_io = [
     ("out3", 5, Pins("HPC:LA08_N"), IOStandard("LVCMOS33")),
     ("out3", 6, Pins("HPC:LA30_P"), IOStandard("LVCMOS33")),
     ("out3", 7, Pins("HPC:LA08_P"), IOStandard("LVCMOS33")),
-
     # Output Bank 4
     ("out4", 0, Pins("HPC:LA19_P"), IOStandard("LVCMOS33")),
     ("out4", 1, Pins("HPC:LA11_N"), IOStandard("LVCMOS33")),
@@ -73,18 +73,21 @@ fmc_adapter_io = [
     ("out4", 5, Pins("HPC:LA10_N"), IOStandard("LVCMOS33")),
     ("out4", 6, Pins("HPC:LA33_P"), IOStandard("LVCMOS33")),
     ("out4", 7, Pins("HPC:LA10_P"), IOStandard("LVCMOS33")),
-    # SMA output/input??
-    ("sma", 0, Pins("HPC:HA09_P"), IOStandard("LVCMOS33")),
-    ("sma", 1, Pins("HPC:LA24_P"), IOStandard("LVCMOS33")),
-    ("sma", 2, Pins("HPC:LA24_N"), IOStandard("LVCMOS33")),
-    ("sma", 3, Pins("HPC:HA19_N"), IOStandard("LVCMOS33")),
-    ("sma", 4, Pins("HPC:HA10_N"), IOStandard("LVCMOS33")),
-    ("sma", 5, Pins("HPC:LA20_N"), IOStandard("LVCMOS33")),
-    ("sma", 6, Pins("HPC:HA11_P"), IOStandard("LVCMOS33")),
-    ("sma", 7, Pins("HPC:HA09_N"), IOStandard("LVCMOS33")),
-    ("sma", 8, Pins("HPC:LA20_P"), IOStandard("LVCMOS33")),
-    # OEB = Output enable buffer
+
+    # SMA IO
+    ("sma", 0, Pins("HPC:HA19_N"), IOStandard("LVCMOS33")),
+    ("sma", 1, Pins("HPC:HA11_P"), IOStandard("LVCMOS33")),
+    ("sma", 2, Pins("HPC:LA20_P"), IOStandard("LVCMOS33")),
+    ("sma", 3, Pins("HPC:HA10_N"), IOStandard("LVCMOS33")),
+    ("sma", 4, Pins("HPC:LA24_P"), IOStandard("LVCMOS33")),
+    ("sma", 5, Pins("HPC:HA09_N"), IOStandard("LVCMOS33")),
+    ("sma", 6, Pins("HPC:LA20_N"), IOStandard("LVCMOS33")),
+    ("sma", 7, Pins("HPC:HA09_P"), IOStandard("LVCMOS33")),
+    ("sma", 8, Pins("HPC:LA24_N"), IOStandard("LVCMOS33")),
+
+    # OEB (Output Enable Buffer)
     ("oeb", 0, Pins("HPC:HA08_N"), IOStandard("LVCMOS33")),
+
     # trigger for updating output of the DDS
     ("io_update", 0, Pins("HPC:HA00_CC_N"), IOStandard("LVCMOS33")),
     ("io_update", 1, Pins("HPC:HA18_P"), IOStandard("LVCMOS33")),
