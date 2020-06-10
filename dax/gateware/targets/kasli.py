@@ -156,7 +156,7 @@ def main():
         description="ARTIQ device binary builder for generic Kasli systems")
     builder_args(parser)
     soc_kasli_args(parser)
-    parser.set_defaults(output_dir="artiq_kasli")
+    parser.set_defaults(output_dir="kasli")
     parser.add_argument("description", metavar="DESCRIPTION",
                         help="JSON system description file")
     parser.add_argument(

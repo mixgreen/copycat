@@ -5,9 +5,8 @@ Sandia/Duke Pulser hardware: DDS's, ADC, DAC, GPIO (TTL), etc.
 
 Description of the pins & interfaces available on the FMC connector.
 """
-from migen.build.generic_platform import IOStandard
-from migen.build.generic_platform import Pins
-from migen.build.generic_platform import Subsignal
+
+from migen.build.generic_platform import IOStandard, Pins, Subsignal  # type: ignore
 
 fmc_adapter_io = [
     # Input Bank 1

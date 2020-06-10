@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 # type: ignore
 
-import logging
 import itertools
 import argparse
 
@@ -16,9 +15,6 @@ from artiq.build_soc import build_artiq_soc
 from artiq.gateware.targets.kc705 import _RTIOCRG, _StandaloneBase
 
 import dax.gateware.euriqa as euriqa
-
-# Logger
-_logger = logging.getLogger(__name__)
 
 
 # noinspection PyPep8Naming
@@ -114,10 +110,31 @@ class EURIQA(_StandaloneBase):
 
         rtio_channels = list()
 
+        # Note: prints were used instead of a logger because the logger gets disabled for unknown reasons
+
+        # USER_SMA_GPIO_P
+        print("user_sma_gpio_p_33 at channel {:d}".format(len(rtio_channels)))
+        phy = ttl_serdes_7series.InOut_8X(platform.request("user_sma_gpio_p_33"))
+        self.submodules += phy
+        rtio_channels.append(rtio.Channel.from_phy(phy, ififo_depth=512))
+
+        # USER_SMA_GPIO_N
+        print("user_sma_gpio_n_33 at channel {:d}".format(len(rtio_channels)))
+        phy = ttl_serdes_7series.InOut_8X(platform.request("user_sma_gpio_n_33"))
+        self.submodules += phy
+        rtio_channels.append(rtio.Channel.from_phy(phy, ififo_depth=512))
+
+        for i in range(2, 4):
+            # GPIO_LED_[2..3]
+            print("user_led-{:d} at channel {:d}".format(i, len(rtio_channels)))
+            phy = ttl_simple.Output(platform.request("user_led", i))
+            self.submodules += phy
+            rtio_channels.append(rtio.Channel.from_phy(phy))
+
         # Output GPIO/TTL Banks
         for bank, i in itertools.product(["out1", "out2", "out3", "out4"], range(8)):
             # out1-0, out1-1, ..., out3-7
-            _logger.info("{:s}-{:d} at channel {:d}".format(bank, i, len(rtio_channels)))
+            print("{:s}-{:d} at channel {:d}".format(bank, i, len(rtio_channels)))
             if add_sandia_dac_spi and bank == "out2" and i == 7:
                 # add unused dummy channel. to keep channel #s same.
                 # Won't output to useful digital line
@@ -126,98 +143,98 @@ class EURIQA(_StandaloneBase):
                 phy = ttl_serdes_7series.Output_8X(platform.request(bank, i))
             self.submodules += phy
             rtio_channels.append(rtio.Channel.from_phy(phy))
-        _logger.info("Ending output GPIO channels at {:d}".format(len(rtio_channels)))
+        print("Ending output GPIO channels at {:d}".format(len(rtio_channels)))
 
         # Input GPIO/TTL Banks
         for bank, i in itertools.product(["in1", "in2", "in3"], range(8)):
             # in1-0, in1-1, ..., in5-7
-            _logger.info("{:s}-{:d} at channel {:d}".format(bank, i, len(rtio_channels)))
+            print("{:s}-{:d} at channel {:d}".format(bank, i, len(rtio_channels)))
             phy = ttl_serdes_7series.InOut_8X(platform.request(bank, i))
             self.submodules += phy
             rtio_channels.append(rtio.Channel.from_phy(phy, ififo_depth=512))
-        _logger.info("Ending input GPIO channels at {:d}".format(len(rtio_channels)))
+        print("Ending input GPIO channels at {:d}".format(len(rtio_channels)))
 
         # Tri-state buffer to disable the TTL/GPIO outputs (out1, ...)
         phy = ttl_simple.Output(platform.request("oeb", 0))
         self.submodules += phy
         rtio_channels.append(rtio.Channel.from_phy(phy))
-        _logger.info("OEB GPIO channels at {:d}".format(len(rtio_channels)))
+        print("OEB GPIO channels at {:d}".format(len(rtio_channels)))
 
         # TODO: figure out usage/what this is
         for i in range(9):
-            _logger.info("{:s}-{:d} at channel {:d}".format('sma', i, len(rtio_channels)))
+            print("{:s}-{:d} at channel {:d}".format('sma', i, len(rtio_channels)))
             phy = ttl_serdes_7series.Output_8X(platform.request("sma", i))
             self.submodules += phy
             rtio_channels.append(rtio.Channel.from_phy(phy))
-        _logger.info("Ending SMA channels at {:d}".format(len(rtio_channels)))
+        print("Ending SMA channels at {:d}".format(len(rtio_channels)))
 
         # TODO: update name for io_update everywhere
         # Update triggers for DDS. Edge will trigger output settings update
         for i in range(8):
-            _logger.info("{:s}-{:d} at channel {:d}".format('dds-io_update', i, len(rtio_channels)))
+            print("{:s}-{:d} at channel {:d}".format('dds-io_update', i, len(rtio_channels)))
             phy = ttl_serdes_7series.Output_8X(platform.request("io_update", i))
             self.submodules += phy
             rtio_channels.append(rtio.Channel.from_phy(phy))
-        _logger.info("Ending DDS io_update GPIO channels at {:d}".format(len(rtio_channels)))
+        print("Ending DDS io_update GPIO channels at {:d}".format(len(rtio_channels)))
 
         # Reset lines for the DDS boards.
         for i in range(4):
-            _logger.info("{:s}-{:d} at channel {:d}".format('dds-reset', i, len(rtio_channels)))
+            print("{:s}-{:d} at channel {:d}".format('dds-reset', i, len(rtio_channels)))
             phy = ttl_serdes_7series.Output_8X(platform.request("reset", i))
             self.submodules += phy
             rtio_channels.append(rtio.Channel.from_phy(phy))
-        _logger.info("Ending DDS reset GPIO channels at {:d}".format(len(rtio_channels)))
+        print("Ending DDS reset GPIO channels at {:d}".format(len(rtio_channels)))
 
         # SPI, CLR, RESET and LDAC interfaces to control the MEMS system
         for i in range(2):
-            _logger.info("{:s}-{:d} at channel {:d}".format('MEMS-spi', i, len(rtio_channels)))
+            print("{:s}-{:d} at channel {:d}".format('MEMS-spi', i, len(rtio_channels)))
             spi_bus = self.platform.request("spi", i)
             phy = spi2.SPIMaster(spi_bus)
             self.submodules += phy
             rtio_channels.append(rtio.Channel.from_phy(phy, ififo_depth=128))
-        _logger.info("Ending MEMS SPI channels at {:d}".format(len(rtio_channels)))
+        print("Ending MEMS SPI channels at {:d}".format(len(rtio_channels)))
 
-        _logger.info("MEMS switch HV209 clear channel: %i", len(rtio_channels))
+        print("MEMS switch HV209 clear channel at {:d}".format(len(rtio_channels)))
         phy = ttl_simple.Output(platform.request("hv209_clr", 0))
         self.submodules += phy
         rtio_channels.append(rtio.Channel.from_phy(phy))
 
-        _logger.info("MEMS DAC8734 reset channel: %i", len(rtio_channels))
+        print("MEMS DAC8734 reset channel at {:d}".format(len(rtio_channels)))
         phy = ttl_simple.Output(platform.request("dac8734_reset", 0))
         self.submodules += phy
         rtio_channels.append(rtio.Channel.from_phy(phy))
 
-        _logger.info("MEMS LDAC GPIO channel: %i", len(rtio_channels))
+        print("MEMS LDAC GPIO channel at {:d}".format(len(rtio_channels)))
         phy = ttl_simple.Output(platform.request("ldac_mems", 0))
         self.submodules += phy
         rtio_channels.append(rtio.Channel.from_phy(phy))
 
         # SPI interfaces to control the DDS board outputs
         for i in range(2, 6):
-            _logger.info("{:s}-{:d} at channel {:d}".format('dds-spi', i, len(rtio_channels)))
+            print("{:s}-{:d} at channel {:d}".format('dds-spi', i, len(rtio_channels)))
             spi_bus = self.platform.request("spi", i)
             phy = spi2.SPIMaster(spi_bus)
             self.submodules += phy
             rtio_channels.append(rtio.Channel.from_phy(phy, ififo_depth=128))
             odd_channel_sdio = platform.request("odd_channel_sdio", (i - 2))
             self.comb += odd_channel_sdio.eq(spi_bus.mosi)
-        _logger.info("Ending DDS SPI channels at {:d}".format(len(rtio_channels)))
+        print("Ending DDS SPI channels at {:d}".format(len(rtio_channels)))
 
         # SPI & Load DAC (LDAC) pins for Controlling 8x DAC (DAC 8568)
-        _logger.info("DAC8568 SPI RTIO channel: %i", len(rtio_channels))
+        print("DAC8568 SPI RTIO channel at {:d}".format(len(rtio_channels)))
         spi_bus = self.platform.request("spi", 6)
         phy = spi2.SPIMaster(spi_bus)
         self.submodules += phy
         rtio_channels.append(rtio.Channel.from_phy(phy, ififo_depth=128))
 
-        _logger.info("DAC8568 LDAC GPIO channel: %i", len(rtio_channels))
+        print("DAC8568 LDAC GPIO channel at {:d}".format(len(rtio_channels)))
         phy = ttl_simple.Output(platform.request("ldac", 0))
         self.submodules += phy
         rtio_channels.append(rtio.Channel.from_phy(phy))
 
         # SPI for core device serial comm to Sandia DAC
         if add_sandia_dac_spi:
-            _logger.info("{:s} at channel {:d}".format('Sandia DAC-spi', len(rtio_channels)))
+            print("{:s} at channel {:d}".format('Sandia DAC-spi', len(rtio_channels)))
             spi_bus = self.platform.request("spi", 7)
             phy = spi2.SPIMaster(spi_bus)
             self.submodules += phy
@@ -225,10 +242,10 @@ class EURIQA(_StandaloneBase):
 
         self.config["HAS_RTIO_LOG"] = None
         self.config["RTIO_LOG_CHANNEL"] = len(rtio_channels)
-        _logger.info("RTIO log channel at {:d}".format(len(rtio_channels)))
+        print("RTIO log channel at {:d}".format(len(rtio_channels)))
         rtio_channels.append(rtio.LogChannel())
 
-        _logger.info("Euriqa KC705 RTIO channels:\n{:s}".format(
+        print("Euriqa KC705 RTIO channels:\n{:s}".format(
             '\n'.join('{{"channel": {:#x}}}, {}'.format(i, c) for i, c in enumerate(rtio_channels))))
         self.add_rtio(rtio_channels)
 
@@ -271,15 +288,11 @@ def main():
     builder_args(parser)
     soc_kc705_args(parser)
     parser.set_defaults(output_dir="kc705")
-    parser.add_argument("-V", "--variant", choices=VARIANTS)
-    parser.add_argument("-v", "--verbosity", action="count", default=0,
-                        help="Increase logging verbosity level (default=WARNING)")
+    parser.add_argument("variant", choices=VARIANTS,
+                        help="The variant to build")
     parser.add_argument("--sandia-dac-spi", action="store_true",
                         help="Add SPI for real-time Sandia 100x DAC serial communication (EURIQA only)")
     args = parser.parse_args()
-
-    # Set logger verbosity
-    _logger.setLevel(logging.WARNING - 10 * args.verbosity)
 
     # Obtain variant class
     cls = VARIANTS[args.variant.lower()]
