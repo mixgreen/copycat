@@ -455,7 +455,7 @@ class HistogramAnalyzer:
         assert isinstance(ext, str)
 
         # Get the probabilities associated with the provided key
-        probabilities = self.probabilities[key]
+        probabilities = [np.asarray(p) for p in self.probabilities[key]]
 
         if not len(probabilities):
             # No data to plot
@@ -464,6 +464,12 @@ class HistogramAnalyzer:
         if x_values is None:
             # Generate generic X values
             x_values = np.arange(len(probabilities[0]))
+        else:
+            # Sort data based on the given x values
+            x_values = np.asarray(x_values)
+            ind = x_values.argsort()
+            x_values = x_values[ind]
+            probabilities = [p[ind] for p in probabilities]
 
         # Plotting defaults
         kwargs.setdefault('marker', 'o')
