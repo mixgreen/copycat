@@ -17,8 +17,7 @@ from artiq.gateware.targets.kc705 import _RTIOCRG, _StandaloneBase
 import dax.gateware.euriqa as euriqa
 
 
-# noinspection PyPep8Naming
-class KC705_BARE(_StandaloneBase):
+class BARE(_StandaloneBase):
     """Bare KC705 board with only onboard hardware. Based on NIST_CLOCK and SMA_SPI class."""
 
     def __init__(self, sd_card_spi=False, **kwargs):
@@ -283,7 +282,7 @@ class EURIQA(_StandaloneBase):
 
 
 # Update the available variants
-VARIANTS = {cls.__name__.lower(): cls for cls in [KC705_BARE, EURIQA]}
+VARIANTS = {cls.__name__.lower(): cls for cls in [BARE, EURIQA]}
 
 
 def main():
