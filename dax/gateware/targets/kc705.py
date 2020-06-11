@@ -135,7 +135,7 @@ class EURIQA(_StandaloneBase):
             rtio_channels.append(rtio.Channel.from_phy(phy))
 
         # Output GPIO/TTL Banks
-        for bank, i in itertools.product(["out1", "out2", "out3", "out4"], range(8)):
+        for bank, i in itertools.product(["out1", "out2", "out8", "out9"], range(8)):
             print("{:s}-{:d} at channel {:d}".format(bank, i, len(rtio_channels)))
             if add_sandia_dac_spi and bank == "out2" and i == 7:
                 # add unused dummy channel. to keep channel #s same.
@@ -177,81 +177,80 @@ class EURIQA(_StandaloneBase):
                 self.submodules += counter
                 rtio_channels.append(rtio.Channel.from_phy(counter))
 
-        # TODO: update name for io_update everywhere
-        # Update triggers for DDS. Edge will trigger output settings update
-        for i in range(8):
-            print("{:s}-{:d} at channel {:d}".format('dds-io_update', i, len(rtio_channels)))
-            phy = ttl_serdes_7series.Output_8X(platform.request("io_update", i))
-            self.submodules += phy
-            rtio_channels.append(rtio.Channel.from_phy(phy))
-
-        # Reset lines for the DDS boards.
-        for i in range(4):
-            print("{:s}-{:d} at channel {:d}".format('dds-reset', i, len(rtio_channels)))
-            phy = ttl_serdes_7series.Output_8X(platform.request("reset", i))
-            self.submodules += phy
-            rtio_channels.append(rtio.Channel.from_phy(phy))
-
-        # SPI, CLR, RESET and LDAC interfaces to control the MEMS system
-        for i in range(2):
-            print("{:s}-{:d} at channel {:d}".format('MEMS-spi', i, len(rtio_channels)))
-            spi_bus = self.platform.request("spi", i)
-            phy = spi2.SPIMaster(spi_bus)
-            self.submodules += phy
-            rtio_channels.append(rtio.Channel.from_phy(phy, ififo_depth=128))
-
-        print("MEMS switch HV209 clear channel at {:d}".format(len(rtio_channels)))
-        phy = ttl_simple.Output(platform.request("hv209_clr", 0))
-        self.submodules += phy
-        rtio_channels.append(rtio.Channel.from_phy(phy))
-
-        print("MEMS DAC8734 reset channel at {:d}".format(len(rtio_channels)))
-        phy = ttl_simple.Output(platform.request("dac8734_reset", 0))
-        self.submodules += phy
-        rtio_channels.append(rtio.Channel.from_phy(phy))
-
-        print("MEMS LDAC GPIO channel at {:d}".format(len(rtio_channels)))
-        phy = ttl_simple.Output(platform.request("ldac_mems", 0))
-        self.submodules += phy
-        rtio_channels.append(rtio.Channel.from_phy(phy))
-
-        # SPI interfaces to control the DDS board outputs
-        for i in range(2, 6):
-            print("{:s}-{:d} at channel {:d}".format('dds-spi', i, len(rtio_channels)))
-            spi_bus = self.platform.request("spi", i)
-            phy = spi2.SPIMaster(spi_bus)
-            self.submodules += phy
-            rtio_channels.append(rtio.Channel.from_phy(phy, ififo_depth=128))
-            odd_channel_sdio = platform.request("odd_channel_sdio", (i - 2))
-            self.comb += odd_channel_sdio.eq(spi_bus.mosi)
-
-        # SPI & Load DAC (LDAC) pins for Controlling 8x DAC (DAC 8568)
-        print("DAC8568 SPI RTIO channel at {:d}".format(len(rtio_channels)))
-        spi_bus = self.platform.request("spi", 6)
-        phy = spi2.SPIMaster(spi_bus)
-        self.submodules += phy
-        rtio_channels.append(rtio.Channel.from_phy(phy, ififo_depth=128))
-
-        print("DAC8568 LDAC GPIO channel at {:d}".format(len(rtio_channels)))
-        phy = ttl_simple.Output(platform.request("ldac", 0))
-        self.submodules += phy
-        rtio_channels.append(rtio.Channel.from_phy(phy))
-
-        # SPI for core device serial comm to Sandia DAC
-        if add_sandia_dac_spi:
-            print("{:s} at channel {:d}".format('Sandia DAC-spi', len(rtio_channels)))
-            spi_bus = self.platform.request("spi", 7)
-            phy = spi2.SPIMaster(spi_bus)
-            self.submodules += phy
-            rtio_channels.append(rtio.Channel.from_phy(phy, ififo_depth=128))
+        # TODO: commented out code needs to be revised
+        # # Update triggers for DDS. Edge will trigger output settings update
+        # for i in range(8):
+        #     print("{:s}-{:d} at channel {:d}".format('dds-io_update', i, len(rtio_channels)))
+        #     phy = ttl_serdes_7series.Output_8X(platform.request("io_update", i))
+        #     self.submodules += phy
+        #     rtio_channels.append(rtio.Channel.from_phy(phy))
+        #
+        # # Reset lines for the DDS boards.
+        # for i in range(4):
+        #     print("{:s}-{:d} at channel {:d}".format('dds-reset', i, len(rtio_channels)))
+        #     phy = ttl_serdes_7series.Output_8X(platform.request("reset", i))
+        #     self.submodules += phy
+        #     rtio_channels.append(rtio.Channel.from_phy(phy))
+        #
+        # # SPI, CLR, RESET and LDAC interfaces to control the MEMS system
+        # for i in range(2):
+        #     print("{:s}-{:d} at channel {:d}".format('MEMS-spi', i, len(rtio_channels)))
+        #     spi_bus = self.platform.request("spi", i)
+        #     phy = spi2.SPIMaster(spi_bus)
+        #     self.submodules += phy
+        #     rtio_channels.append(rtio.Channel.from_phy(phy, ififo_depth=128))
+        #
+        # print("MEMS switch HV209 clear channel at {:d}".format(len(rtio_channels)))
+        # phy = ttl_simple.Output(platform.request("hv209_clr", 0))
+        # self.submodules += phy
+        # rtio_channels.append(rtio.Channel.from_phy(phy))
+        #
+        # print("MEMS DAC8734 reset channel at {:d}".format(len(rtio_channels)))
+        # phy = ttl_simple.Output(platform.request("dac8734_reset", 0))
+        # self.submodules += phy
+        # rtio_channels.append(rtio.Channel.from_phy(phy))
+        #
+        # print("MEMS LDAC GPIO channel at {:d}".format(len(rtio_channels)))
+        # phy = ttl_simple.Output(platform.request("ldac_mems", 0))
+        # self.submodules += phy
+        # rtio_channels.append(rtio.Channel.from_phy(phy))
+        #
+        # # SPI interfaces to control the DDS board outputs
+        # for i in range(2, 6):
+        #     print("{:s}-{:d} at channel {:d}".format('dds-spi', i, len(rtio_channels)))
+        #     spi_bus = self.platform.request("spi", i)
+        #     phy = spi2.SPIMaster(spi_bus)
+        #     self.submodules += phy
+        #     rtio_channels.append(rtio.Channel.from_phy(phy, ififo_depth=128))
+        #     odd_channel_sdio = platform.request("odd_channel_sdio", (i - 2))
+        #     self.comb += odd_channel_sdio.eq(spi_bus.mosi)
+        #
+        # # SPI & Load DAC (LDAC) pins for Controlling 8x DAC (DAC 8568)
+        # print("DAC8568 SPI RTIO channel at {:d}".format(len(rtio_channels)))
+        # spi_bus = self.platform.request("spi", 6)
+        # phy = spi2.SPIMaster(spi_bus)
+        # self.submodules += phy
+        # rtio_channels.append(rtio.Channel.from_phy(phy, ififo_depth=128))
+        #
+        # print("DAC8568 LDAC GPIO channel at {:d}".format(len(rtio_channels)))
+        # phy = ttl_simple.Output(platform.request("ldac", 0))
+        # self.submodules += phy
+        # rtio_channels.append(rtio.Channel.from_phy(phy))
+        #
+        # # SPI for core device serial comm to Sandia DAC
+        # if add_sandia_dac_spi:
+        #     print("{:s} at channel {:d}".format('Sandia DAC-spi', len(rtio_channels)))
+        #     spi_bus = self.platform.request("spi", 7)
+        #     phy = spi2.SPIMaster(spi_bus)
+        #     self.submodules += phy
+        #     rtio_channels.append(rtio.Channel.from_phy(phy, ififo_depth=128))
 
         self.config["HAS_RTIO_LOG"] = None
         self.config["RTIO_LOG_CHANNEL"] = len(rtio_channels)
         print("RTIO log channel at {:d}".format(len(rtio_channels)))
         rtio_channels.append(rtio.LogChannel())
 
-        print("Euriqa KC705 RTIO channels:\n{:s}".format(
-            '\n'.join('{{"channel": {:#x}}}, {}'.format(i, c) for i, c in enumerate(rtio_channels))))
+        print("Euriqa KC705 with {:d} RTIO channels".format(len(rtio_channels)))
         self.add_rtio(rtio_channels)
 
     def add_rtio(self, rtio_channels):
