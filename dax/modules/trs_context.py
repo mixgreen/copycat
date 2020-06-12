@@ -4,14 +4,14 @@ import numpy as np
 
 import dax.util.matplotlib_backend  # Workaround for QT error  # noqa: F401
 import matplotlib.pyplot as plt  # type: ignore
-import matplotlib.ticker  # type: ignore
 
 from dax.experiment import *
 from dax.util.ccb import get_ccb_tool
 from dax.util.output import get_file_name_generator
 from dax.util.units import UnitsFormatter
 
-__all__ = ['TimeResolvedSpectroscopyContext', 'TimeResolvedSpectroscopyContextError']
+__all__ = ['TimeResolvedSpectroscopyContext', 'TimeResolvedSpectroscopyAnalyzer',
+           'TimeResolvedSpectroscopyContextError']
 
 
 class TimeResolvedSpectroscopyContext(DaxModule):
@@ -31,8 +31,8 @@ class TimeResolvedSpectroscopyContext(DaxModule):
 
     DEFAULT_DATASET_KEY = 'trs'
     """The default name of the output dataset in archive."""
-    ARCHIVE_KEY_FORMAT = '_trs.{key:s}'
-    """Dataset key format for archiving information."""
+    META_KEY_FORMAT = '_trs.{key:s}'
+    """Dataset key format for archiving metadata."""
 
     DATASET_KEY_FORMAT = '{dataset_key:s}.{index:d}.{column:s}'
     """Format string for sub-dataset keys."""
@@ -73,7 +73,7 @@ class TimeResolvedSpectroscopyContext(DaxModule):
 
     """Helper functions"""
 
-    # TODO: add helper functions for partitioning
+    # TODO: add helper functions for partitioning based on number of bins or duration (use benchmark measurement)
 
     """Data handling functions"""
 
@@ -83,7 +83,7 @@ class TimeResolvedSpectroscopyContext(DaxModule):
         return bool(self._in_context)
 
     @rpc(flags={'async'})
-    def append_meta(self, bin_width, bin_spacing, offset):  # type: (float, float, float) -> None
+    def append_meta(self, bin_width, bin_spacing, offset=0.0):  # type: (float, float, float) -> None
         """Store metadata that matches the next call to :func:`append`.
 
         This function is intended to be fast to allow high input data throughput.
@@ -91,7 +91,7 @@ class TimeResolvedSpectroscopyContext(DaxModule):
 
         :param bin_width: The width of the bins
         :param bin_spacing: The spacing between the bins
-        :param offset: The fixed offset of this salvo, used for partitioning
+        :param offset: The known fixed offset of this trace, used for partitioning
         :raises TimeResolvedSpectroscopyContextError: Raised if called out of context
         """
         if not self._in_context:
@@ -227,7 +227,7 @@ class TimeResolvedSpectroscopyContext(DaxModule):
                                    for ((w, s, o), d), (_, o_correction) in zip(buffer[0], self._buffer)])
 
             # Format results in a dict for easier access
-            result_dict = {'result': result, 'time': time, 'width': width, }
+            result_dict = dict(result=result, time=time, width=width)
 
             # Store results in the local archive
             self._archive.setdefault(self._dataset_key, []).append(result_dict)
@@ -241,7 +241,7 @@ class TimeResolvedSpectroscopyContext(DaxModule):
 
         else:
             # Add empty element to the archive (keeps indexing consistent)
-            self._archive.setdefault(self._dataset_key, []).append(dict())
+            self._archive.setdefault(self._dataset_key, []).append({c: [] for c in self.DATASET_COLUMNS})
             # Write empty element to sub-dataset for archiving (keeps indexing consistent)
             for column in self.DATASET_COLUMNS:
                 self.set_dataset(sub_dataset_keys[column], [], archive=True)
@@ -249,7 +249,7 @@ class TimeResolvedSpectroscopyContext(DaxModule):
         # Update counter for this dataset key
         self._open_datasets[self._dataset_key] += 1
         # Archive number of sub-datasets for current key
-        self.set_dataset(self.ARCHIVE_KEY_FORMAT.format(key=self._dataset_key),
+        self.set_dataset(self.META_KEY_FORMAT.format(key=self._dataset_key),
                          self._open_datasets[self._dataset_key], archive=True)
         # Update context counter
         self._in_context -= 1
@@ -286,28 +286,119 @@ class TimeResolvedSpectroscopyContext(DaxModule):
     def get_keys(self) -> typing.List[str]:
         """Get the keys for which results were recorded.
 
-        The returned keys can be used for the :func:`get_histograms` and :func:`get_probabilities` functions.
+        The returned keys can be used for the :func:`get_traces` function.
 
         :return: A list with keys
         """
-        # TODO
         return list(self._archive)
 
     @host_only
-    def get_histograms(self, dataset_key: typing.Optional[str] = None) \
-            -> typing.List[typing.Sequence[collections.Counter]]:
-        """Obtain all histogram objects recorded by this histogram context for a specific key.
+    def get_traces(self, dataset_key: typing.Optional[str] = None) \
+            -> typing.List[typing.Dict[str, typing.Sequence[float]]]:
+        """Obtain all trace objects recorded by this time-resolved spectroscopy context for a specific key.
 
-        The data is formatted as a list of histograms per channel.
-        So to access histogram N of channel C: `get_histograms()[C][N]`.
+        The data is formatted as a list of dictionaries with the self-explaining keys
+        time, width, and results (see :attr:`DATASET_COLUMNS`).
+        Time and width are one-dimensional arrays while results is a list with one-dimensional arrays
+        where the list index corresponds to the channels.
 
         In case no dataset key is provided, the default dataset key is used.
 
-        :param dataset_key: Key of the dataset to obtain the histograms of
-        :return: All histogram data
+        :param dataset_key: Key of the dataset to obtain the trace of
+        :return: All trace data for the specified key
         """
-        # TODO
-        return list(zip(*self._archive[self._default_dataset_key if dataset_key is None else dataset_key]))
+        return self._archive[self._default_dataset_key if dataset_key is None else dataset_key]
+
+
+class TimeResolvedSpectroscopyAnalyzer:
+    """Basic automated analysis and offline plotting of data obtained by the time resolved spectroscopy context."""
+
+    PLOT_FILE_FORMAT = '{key:s}_{index:d}'
+    """File name format for plot files."""
+
+    def __init__(self, source: typing.Union[DaxSystem, TimeResolvedSpectroscopyContext, str]):
+        """Create a new time resolved spectroscopy analyzer object.
+
+        :param source: The source of the trace data
+        """
+
+        if isinstance(source, DaxSystem):
+            # Obtain time resolved spectroscopy context module
+            source = source.registry.find_module(TimeResolvedSpectroscopyContext)
+
+        if isinstance(source, TimeResolvedSpectroscopyContext):
+            # Get data from module
+            self.keys = source.get_keys()
+            self.traces = {k: source.get_traces(k) for k in self.keys}
+
+            # Obtain the file name generator
+            self._file_name_generator = get_file_name_generator(source.get_device('scheduler'))
+
+        elif isinstance(source, str):
+            # Read and convert data from HDF5 file
+            raise NotImplementedError('Analysis from HDF5 source file is not yet implemented')
+
+        else:
+            raise TypeError('Unsupported source type')
+
+    def plot_trace(self, key: str,
+                   x_label: typing.Optional[str] = 'Time', y_label: typing.Optional[str] = 'Count',
+                   legend_loc: typing.Optional[typing.Union[str, typing.Tuple[float, float]]] = None,
+                   ext: str = 'pdf',
+                   **kwargs: typing.Any) -> None:
+        """Plot the traces for a given key.
+
+        :param key: The key of the data to plot
+        :param x_label: X-axis label
+        :param y_label: Y-axis label
+        :param legend_loc: Location of the legend
+        :param ext: Output file extension
+        :param kwargs: Keyword arguments for the plot function
+        """
+        assert isinstance(key, str)
+        assert isinstance(x_label, str) or x_label is None
+        assert isinstance(y_label, str) or y_label is None
+        assert isinstance(ext, str)
+
+        # Get the traces associated with the given key
+        traces = self.traces[key]
+
+        for index, t in enumerate(traces):
+            # Obtain raw data
+            time = np.asarray(t['time'])
+            width = np.asarray(t['width'])
+            results = t['result']  # List with result arrays
+
+            # Create X values
+            x_values = time + width / 2  # Points are plotted in the middle of the bin
+
+            # Plotting defaults
+            kwargs.setdefault('marker', 'o')
+            kwargs.setdefault('linestyle', '')
+
+            # Plot
+            fig, ax = plt.subplots()
+            for i, r in enumerate(results):
+                ax.plot(x_values, r, label='Channel {:d}'.format(i), **kwargs)
+
+            # Plot formatting
+            ax.set_xlabel(x_label)
+            ax.set_ylabel(y_label)
+            ax.ticklabel_format(axis='x', scilimits=(0, 10))
+            ax.legend(loc=legend_loc)
+
+            # Save figure
+            file_name = self._file_name_generator(self.PLOT_FILE_FORMAT.format(key=key, index=index), ext)
+            fig.savefig(file_name, bbox_inches='tight')
+            plt.close(fig)
+
+    def plot_all_traces(self, **kwargs: typing.Any) -> None:
+        """Plot traces for all keys available in the data.
+
+        :param kwargs: Keyword arguments passed to :func:`plot_trace`
+        """
+        for key in self.traces:
+            self.plot_trace(key, **kwargs)
 
 
 class TimeResolvedSpectroscopyContextError(RuntimeError):
