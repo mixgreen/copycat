@@ -43,8 +43,8 @@ class HistogramContext(DaxModule):
 
     DEFAULT_DATASET_KEY = 'histogram'
     """The default name of the output dataset in archive."""
-    HISTOGRAM_ARCHIVE_KEY_FORMAT = '_histogram.{key:s}'
-    """Dataset key format for archiving histogram information."""
+    META_KEY_FORMAT = '_histogram.{key:s}'
+    """Dataset key format for archiving histogram metadata."""
 
     DATASET_KEY_FORMAT = '{dataset_key:s}.{index:d}'
     """Format string for sub-dataset keys."""
@@ -224,7 +224,7 @@ class HistogramContext(DaxModule):
         # Update counter for this dataset key
         self._open_datasets[self._dataset_key] += 1
         # Archive number of sub-datasets for current key
-        self.set_dataset(self.HISTOGRAM_ARCHIVE_KEY_FORMAT.format(key=self._dataset_key),
+        self.set_dataset(self.META_KEY_FORMAT.format(key=self._dataset_key),
                          self._open_datasets[self._dataset_key], archive=True)
         # Update context counter
         self._in_context -= 1
@@ -315,7 +315,7 @@ class HistogramContext(DaxModule):
         In case no dataset key is provided, the default dataset key is used.
 
         :param dataset_key: Key of the dataset to obtain the histograms of
-        :return: All histogram data
+        :return: All histogram data for the specified key
         """
         return list(zip(*self._histogram_archive[self._default_dataset_key if dataset_key is None else dataset_key]))
 
@@ -333,7 +333,7 @@ class HistogramContext(DaxModule):
 
         :param dataset_key: Key of the dataset to obtain the probabilities of
         :param state_detection_threshold: State detection threshold used to calculate the probabilities
-        :return: All probability data
+        :return: All probability data for the specified key
         """
         return [[self._histogram_to_probability(h, state_detection_threshold) for h in histograms]
                 for histograms in self.get_histograms(dataset_key)]
@@ -482,6 +482,7 @@ class HistogramAnalyzer:
         # Plot formatting
         ax.set_xlabel(x_label)
         ax.set_ylabel(y_label)
+        ax.ticklabel_format(axis='x', scilimits=(0, 1))
         ax.legend(loc=legend_loc)
 
         # Save and close figure
