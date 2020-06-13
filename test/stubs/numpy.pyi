@@ -97,7 +97,7 @@ class ndarray(collections.abc.Sequence, typing.Generic[__N_T]):
         ...
 
     @typing.overload
-    def __getitem__(self, s: slice) -> typing.Sequence[__N_T]:
+    def __getitem__(self, s: slice) -> ndarray:
         ...
 
     def __len__(self) -> int:

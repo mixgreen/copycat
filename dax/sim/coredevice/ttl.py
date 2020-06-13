@@ -64,7 +64,7 @@ class TTLInOut(TTLOut):
     def __init__(self, dmgr, input_freq=0.0, input_prob=0.5, seed=None, **kwargs):
         assert isinstance(input_freq, float) and input_freq >= 0.0, 'Input frequency must be a positive float'
         assert isinstance(input_prob, float), 'Input probability must be a float'
-        assert 0.0 <= input_freq <= 1.0, 'Input probability must be between 0.0 and 1.0'
+        assert 0.0 <= input_prob <= 1.0, 'Input probability must be between 0.0 and 1.0'
 
         # Call super
         super(TTLInOut, self).__init__(dmgr, **kwargs)
@@ -112,7 +112,9 @@ class TTLInOut(TTLOut):
         num_events = int(self.core.mu_to_seconds(duration) * self._input_freq * 2)
 
         # Generate relative timestamps for these events in machine units
-        timestamps = self._rng.sample(range(duration), num_events)
+        timestamps = np.asarray(self._rng.sample(range(duration), num_events), dtype=np.int64)
+        # Sort timestamps
+        timestamps.sort()
 
         # Initialize the signal to 0 at the start of the window (for graphical purposes)
         self._signal_manager.event(self._state, 0)
@@ -123,13 +125,13 @@ class TTLInOut(TTLOut):
 
         if edge_type is self._EdgeType.RISING:
             # Store odd half of the event times in the event buffer
-            self._edge_buffer.extend(timestamps[1::2])
+            self._edge_buffer.extend(timestamps[1::2] + now_mu())
         elif edge_type is self._EdgeType.FALLING:
             # Store even half of the event times in the event buffer
-            self._edge_buffer.extend(timestamps[::2])
+            self._edge_buffer.extend(timestamps[::2] + now_mu())
         elif edge_type is self._EdgeType.BOTH:
             # Store all event times in the event buffer
-            self._edge_buffer.extend(timestamps)
+            self._edge_buffer.extend(timestamps + now_mu())
 
         # Move the cursor
         delay_mu(duration)
