@@ -1,5 +1,7 @@
 import typing
 import collections
+import numbers
+import math
 import numpy as np
 
 import dax.util.matplotlib_backend  # Workaround for QT error  # noqa: F401
@@ -10,33 +12,31 @@ from dax.util.ccb import get_ccb_tool
 from dax.util.output import get_file_name_generator
 from dax.util.units import UnitsFormatter
 
-__all__ = ['TimeResolvedSpectroscopyContext', 'TimeResolvedSpectroscopyAnalyzer',
-           'TimeResolvedSpectroscopyContextError']
+__all__ = ['TimeResolvedDetectionContext', 'TimeResolvedDetectionAnalyzer', 'TimeResolvedDetectionContextError']
 
 
-class TimeResolvedSpectroscopyContext(DaxModule):
-    """Context class for managing storage of time-resolved spectroscopy output.
+class TimeResolvedDetectionContext(DaxModule):
+    """Context class for managing storage of time-resolved detection output.
 
     This module can be used as a sub-module of a service.
     """
 
-    PLOT_RESULT_KEY = 'plot.dax.trs_context.result'
+    PLOT_RESULT_KEY = 'plot.dax.trd_context.result'
     """Dataset name for plotting latest result graph (Y-axis)."""
-    PLOT_TIME_KEY = 'plot.dax.trs_context.time'
+    PLOT_TIME_KEY = 'plot.dax.trd_context.time'
     """Dataset name for plotting latest result graph (X-axis)."""
-    PLOT_NAME = 'time resolved spectroscopy'
+    PLOT_NAME = 'time resolved detection'
     """Name of the plot applet."""
-    PLOT_GROUP = 'dax.trs_context'
+    PLOT_GROUP = 'dax.trd_context'
     """Group to which the plot applets belong."""
 
-    DEFAULT_DATASET_KEY = 'trs'
-    """The default name of the output dataset in archive."""
-    META_KEY_FORMAT = '_trs.{key:s}'
-    """Dataset key format for archiving metadata."""
-
-    DATASET_KEY_FORMAT = '{dataset_key:s}.{index:d}.{column:s}'
+    DATASET_GROUP = 'trd_context'
+    """The group name for archiving data."""
+    DATASET_KEY_FORMAT = DATASET_GROUP + '/{dataset_key:s}/{index:d}/{column:s}'
     """Format string for sub-dataset keys."""
-    DATASET_COLUMNS = ['width', 'time', 'result']
+    DEFAULT_DATASET_KEY = 'trd'
+    """The default name of the output dataset in archive."""
+    DATASET_COLUMNS = ('width', 'time', 'result')
     """Column names of data within each sub-dataset."""
 
     def build(self, default_dataset_key: typing.Optional[str] = None) -> None:  # type: ignore
@@ -54,7 +54,7 @@ class TimeResolvedSpectroscopyContext(DaxModule):
         # By default we are not in context
         self._in_context = np.int32(0)
         # The count buffer (buffer appending is a bit faster than dict operations)
-        self._buffer = []  # type: typing.List[typing.Tuple[typing.Sequence[typing.Sequence[int]], float]]
+        self._buffer_data = []  # type: typing.List[typing.Tuple[typing.Sequence[typing.Sequence[int]], float]]
         self._buffer_meta = []  # type: typing.List[typing.Tuple[float, float, float]]
 
         # Archive to analyze high level data at the end of the experiment
@@ -73,7 +73,88 @@ class TimeResolvedSpectroscopyContext(DaxModule):
 
     """Helper functions"""
 
-    # TODO: add helper functions for partitioning based on number of bins or duration (use benchmark measurement)
+    @staticmethod
+    @host_only
+    def partition_bins(num_bins: int, max_partition_size: int,
+                       bin_width: float, bin_spacing: float) -> typing.List[typing.Tuple[np.int32, float]]:
+        """Partition a number of bins.
+
+        This function returns a list of tuples that can be used at runtime for partitioning in a loop.
+        The format of each element is (current_num_bins, current_offset) which can be used accordingly.
+
+        This function returns the partition table as a list. Hence, it can only be called from the host.
+
+        :param num_bins: The total number of bins desired
+        :param max_partition_size: The maximum number of bins in one partition
+        :param bin_width: The width of each bin
+        :param bin_spacing: The spacing between bins
+        :return: A list with tuples that can be used for automatic partitioning at runtime
+        """
+        assert isinstance(num_bins, numbers.Integral), 'Number of bins must be an integer'
+        assert isinstance(max_partition_size, numbers.Integral), 'Max partition size must be an integer'
+        assert isinstance(bin_width, float), 'Bin width must be of type float'
+        assert isinstance(bin_spacing, float), 'Bin spacing must be of type float'
+
+        # Check input values
+        if num_bins < 0:
+            raise ValueError('Number of bins must positive')
+        if max_partition_size <= 0:
+            raise ValueError('Maximum partition size must be greater than zero')
+        if bin_width < 0.0:
+            raise ValueError('Bin width can not be less than zero')
+        if bin_spacing < 0.0:
+            raise ValueError('Bin spacing can not be less than zero')
+
+        # Calculate the offset of a single whole partition
+        partition_offset = max_partition_size * (bin_width + bin_spacing)
+
+        # List of whole partitions (maximum number of bins)
+        partitions = [(np.int32(max_partition_size), i * partition_offset)
+                      for i in range(num_bins // max_partition_size)]
+
+        mod = num_bins % max_partition_size
+        if mod > 0:
+            # Add element with partial partition (less than the maximum number of bins)
+            partitions.append((np.int32(mod), len(partitions) * partition_offset))
+
+        # Return the partitions
+        return partitions
+
+    @staticmethod
+    @host_only
+    def partition_window(window_size: float, max_partition_size: int,
+                         bin_width: float, bin_spacing: float) -> typing.List[typing.Tuple[np.int32, float]]:
+        """Partition a time window.
+
+        This function returns a list of tuples that can be used at runtime for partitioning in a loop.
+        The format of each element is (current_num_bins, current_offset) which can be used accordingly.
+
+        This function returns the partition table as a list. Hence, it can only be called from the host.
+
+        :param window_size: The total window size
+        :param max_partition_size: The maximum number of bins in one partition
+        :param bin_width: The width of each bin
+        :param bin_spacing: The spacing between bins
+        :return: A list with tuples that can be used for automatic partitioning at runtime
+        """
+        assert isinstance(window_size, float), 'Window size must be of type float'
+        assert isinstance(bin_width, float), 'Bin width must be of type float'
+        assert isinstance(bin_spacing, float), 'Bin spacing must be of type float'
+
+        # Check input values
+        if window_size < 0.0:
+            raise ValueError('Window size must be positive')
+        if bin_width < 0.0:
+            raise ValueError('Bin width can not be less than zero')
+        if bin_spacing < 0.0:
+            raise ValueError('Bin spacing can not be less than zero')
+        if bin_width == 0.0 and bin_spacing == 0.0:
+            raise ValueError('Bin width and bin spacing can not both be zero')
+
+        # Calculate the number of bins that fit in the window, rounding the value up
+        num_bins = int(math.ceil(window_size / (bin_width + bin_spacing)))
+        # Call partition bins
+        return TimeResolvedDetectionContext.partition_bins(num_bins, max_partition_size, bin_width, bin_spacing)
 
     """Data handling functions"""
 
@@ -91,33 +172,54 @@ class TimeResolvedSpectroscopyContext(DaxModule):
 
         :param bin_width: The width of the bins
         :param bin_spacing: The spacing between the bins
-        :param offset: The known fixed offset of this trace, used for partitioning
-        :raises TimeResolvedSpectroscopyContextError: Raised if called out of context
+        :param offset: The known fixed offset of this trace in seconds, used for partitioning
+        :raises TimeResolvedDetectionContextError: Raised if called out of context
         """
         if not self._in_context:
             # Called out of context
-            raise TimeResolvedSpectroscopyContextError('The append_meta() function can only be called in-context')
+            raise TimeResolvedDetectionContextError('The append_meta() function can only be called in-context')
 
         # Append the given element to the buffer (using tuples for high performance)
         self._buffer_meta.append((bin_width, bin_spacing, offset))
 
     @rpc(flags={'async'})
-    def append(self, data, offset=0.0):  # type: (typing.Sequence[typing.Sequence[int]], float) -> None
+    def append_data(self, data, offset_mu=0):  # type: (typing.Sequence[typing.Sequence[int]], np.int64) -> None
         """Append PMT data (async RPC).
 
         This function is intended to be fast to allow high input data throughput.
         No type checking is performed on the data.
 
         :param data: A 2D list of ints representing the PMT counts of different ions
-        :param offset: An offset to correct any shifts of events (defaults to no offset)
-        :raises TimeResolvedSpectroscopyContextError: Raised if called out of context
+        :param offset_mu: An offset to correct any shifts of events in machine units (defaults to no offset)
+        :raises TimeResolvedDetectionContextError: Raised if called out of context
         """
         if not self._in_context:
             # Called out of context
-            raise TimeResolvedSpectroscopyContextError('The append() function can only be called in-context')
+            raise TimeResolvedDetectionContextError('The append() function can only be called in-context')
 
         # Append the given element to the buffer
-        self._buffer.append((data, offset))
+        self._buffer_data.append((data, self.core.mu_to_seconds(offset_mu)))  # Convert machine units to seconds
+
+    @rpc(flags={'async'})
+    def append(self, data, bin_width, bin_spacing, offset=0.0,
+               offset_mu=0):  # type: (typing.Sequence[typing.Sequence[int]], float, float, float, np.int64) -> None
+        """Append metadata and PMT data (async RPC).
+
+        This function calls :func:`append_meta` and :func:`append_data` in one call
+        and can be used in case it is not required to separate the two subroutines.
+
+        This function is intended to be fast to allow high input data throughput.
+        No type checking is performed on the data.
+
+        :param data: A 2D list of ints representing the PMT counts of different ions
+        :param bin_width: The width of the bins
+        :param bin_spacing: The spacing between the bins
+        :param offset: An offset to correct any shifts of events in seconds (defaults to no offset)
+        :param offset_mu: An offset to correct any shifts of events in machine units (defaults to no offset)
+        :raises TimeResolvedDetectionContextError: Raised if called out of context
+        """
+        self.append_meta(bin_width, bin_spacing, offset=offset)
+        self.append_data(data, offset_mu=offset_mu)
 
     @rpc(flags={'async'})
     def config_dataset(self, key=None, *args, **kwargs):  # type: (typing.Optional[str], typing.Any, typing.Any) -> None
@@ -141,13 +243,13 @@ class TimeResolvedSpectroscopyContext(DaxModule):
         :param key: Key for the result dataset using standard Python formatting notation
         :param args: Python `str.format()` positional arguments
         :param kwargs: Python `str.format()` keyword arguments
-        :raises TimeResolvedSpectroscopyContextError: Raised if called in context
+        :raises TimeResolvedDetectionContextError: Raised if called in context
         """
         assert isinstance(key, str) or key is None, 'Provided dataset key must be of type str or None'
 
         if self._in_context:
             # Called in context
-            raise TimeResolvedSpectroscopyContextError(
+            raise TimeResolvedDetectionContextError(
                 'Setting the target dataset can only be done when out of context')
 
         # Update the dataset key
@@ -176,15 +278,15 @@ class TimeResolvedSpectroscopyContext(DaxModule):
         This function can be used to manually enter the context.
         We strongly recommend to use the `with` statement instead.
 
-        :raises TimeResolvedSpectroscopyContextError: Raised if already in context (context non-reentrant)
+        :raises TimeResolvedDetectionContextError: Raised if already in context (context non-reentrant)
         """
 
         if self._in_context:
             # Prevent context reentry
-            raise TimeResolvedSpectroscopyContextError('The time resolved spectroscopy context is non-reentrant')
+            raise TimeResolvedDetectionContextError('The time resolved detection context is non-reentrant')
 
         # Create a new buffers (clearing it might result in data loss due to how the dataset manager works)
-        self._buffer = []
+        self._buffer_data = []
         self._buffer_meta = []
         # Increment in context counter
         self._in_context += 1
@@ -196,35 +298,35 @@ class TimeResolvedSpectroscopyContext(DaxModule):
         This function can be used to manually exit the context.
         We strongly recommend to use the `with` statement instead.
 
-        :raises TimeResolvedSpectroscopyContextError: Raised if called out of context
+        :raises TimeResolvedDetectionError: Raised if called out of context
         """
 
         if not self._in_context:
             # Called exit out of context
-            raise TimeResolvedSpectroscopyContextError('The exit function can only be called from inside the context')
+            raise TimeResolvedDetectionContextError('The exit function can only be called from inside the context')
 
         # Create a sub-dataset keys for this result
         sub_dataset_keys = {column: self.DATASET_KEY_FORMAT.format(column=column, dataset_key=self._dataset_key,
                                                                    index=self._open_datasets[self._dataset_key])
                             for column in self.DATASET_COLUMNS}
 
-        if len(self._buffer) or len(self._buffer_meta):
+        if len(self._buffer_data) or len(self._buffer_meta):
             # Check consistency of data in the buffers
-            if len(self._buffer) != len(self._buffer_meta):
-                self.logger.error('Data in the buffer and meta buffer are not consistent, data probably corrupt')
-            if any(len(b) != len(self._buffer[0][0]) for b, _ in self._buffer):
-                self.logger.error('Data in the buffer is not consistent, incomplete data is dropped')
-            if any(len(s) != len(b[0]) for b, _ in self._buffer for s in b):
-                self.logger.error('Data in the buffer (inner series) is not consistent, incomplete data is dropped')
+            if len(self._buffer_data) != len(self._buffer_meta):
+                raise RuntimeError('Length of the data and meta buffer are not consistent, data probably corrupt')
+            if any(len(b) != len(self._buffer_data[0][0]) for b, _ in self._buffer_data):
+                raise RuntimeError('Buffered data is not consistent, data probably corrupt')
+            if any(len(s) != len(b[0]) for b, _ in self._buffer_data for s in b):
+                raise RuntimeError('Buffered data (inner series) is not consistent, data probably corrupt')
 
             # Transform metadata and raw data
             buffer = [[(meta, d) for meta, d in zip(self._buffer_meta, data)]
-                      for data in zip(*(b for b, _ in self._buffer))]
+                      for data in zip(*(b for b, _ in self._buffer_data))]
             result = [np.concatenate([d for _, d in channel]) for channel in buffer]
             # Width and time are only calculated once since we assume all data is homogeneous
             width = np.concatenate([np.full(len(d), w, dtype=float) for (w, _, _), d in buffer[0]])
             time = np.concatenate([np.arange(len(d), dtype=float) * (w + s) + (o + o_correction)
-                                   for ((w, s, o), d), (_, o_correction) in zip(buffer[0], self._buffer)])
+                                   for ((w, s, o), d), (_, o_correction) in zip(buffer[0], self._buffer_data)])
 
             # Format results in a dict for easier access
             result_dict = dict(result=result, time=time, width=width)
@@ -248,9 +350,6 @@ class TimeResolvedSpectroscopyContext(DaxModule):
 
         # Update counter for this dataset key
         self._open_datasets[self._dataset_key] += 1
-        # Archive number of sub-datasets for current key
-        self.set_dataset(self.META_KEY_FORMAT.format(key=self._dataset_key),
-                         self._open_datasets[self._dataset_key], archive=True)
         # Update context counter
         self._in_context -= 1
 
@@ -295,7 +394,7 @@ class TimeResolvedSpectroscopyContext(DaxModule):
     @host_only
     def get_traces(self, dataset_key: typing.Optional[str] = None) \
             -> typing.List[typing.Dict[str, typing.Sequence[float]]]:
-        """Obtain all trace objects recorded by this time-resolved spectroscopy context for a specific key.
+        """Obtain all trace objects recorded by this time-resolved detection context for a specific key.
 
         The data is formatted as a list of dictionaries with the self-explaining keys
         time, width, and results (see :attr:`DATASET_COLUMNS`).
@@ -310,23 +409,23 @@ class TimeResolvedSpectroscopyContext(DaxModule):
         return self._archive[self._default_dataset_key if dataset_key is None else dataset_key]
 
 
-class TimeResolvedSpectroscopyAnalyzer:
-    """Basic automated analysis and offline plotting of data obtained by the time resolved spectroscopy context."""
+class TimeResolvedDetectionAnalyzer:
+    """Basic automated analysis and offline plotting of data obtained by the time resolved detection context."""
 
     PLOT_FILE_FORMAT = '{key:s}_{index:d}'
     """File name format for plot files."""
 
-    def __init__(self, source: typing.Union[DaxSystem, TimeResolvedSpectroscopyContext, str]):
-        """Create a new time resolved spectroscopy analyzer object.
+    def __init__(self, source: typing.Union[DaxSystem, TimeResolvedDetectionContext, str]):
+        """Create a new time resolved detection analyzer object.
 
         :param source: The source of the trace data
         """
 
         if isinstance(source, DaxSystem):
-            # Obtain time resolved spectroscopy context module
-            source = source.registry.find_module(TimeResolvedSpectroscopyContext)
+            # Obtain time resolved detection context module
+            source = source.registry.find_module(TimeResolvedDetectionContext)
 
-        if isinstance(source, TimeResolvedSpectroscopyContext):
+        if isinstance(source, TimeResolvedDetectionContext):
             # Get data from module
             self.keys = source.get_keys()
             self.traces = {k: source.get_traces(k) for k in self.keys}
@@ -401,6 +500,6 @@ class TimeResolvedSpectroscopyAnalyzer:
             self.plot_trace(key, **kwargs)
 
 
-class TimeResolvedSpectroscopyContextError(RuntimeError):
+class TimeResolvedDetectionContextError(RuntimeError):
     """Class for context errors."""
     pass
