@@ -59,7 +59,7 @@ test_conda:
 
 pages:
   extends: .nix_env
-  stage: deploy
+  stage: test
   script:
     # Generate documentation
     - nix-shell doc/shell.nix --run "cd doc; make html"
