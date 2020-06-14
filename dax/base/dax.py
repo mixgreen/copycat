@@ -834,10 +834,10 @@ class DaxSystem(DaxModuleBase):
         """
 
         # Store system information in local archive
-        self.set_dataset(self.get_system_key('dax_system_id'), self.SYS_ID, archive=True)
-        self.set_dataset(self.get_system_key('dax_system_version'), self.SYS_VER, archive=True)
-        self.set_dataset(self.get_system_key('dax_version'), _dax_version, archive=True)
-        self.set_dataset(self.get_system_key('dax_sim_enabled'), self.dax_sim_enabled, archive=True)
+        self.set_dataset('dax/system_id', self.SYS_ID, archive=True)
+        self.set_dataset('dax/system_version', self.SYS_VER, archive=True)
+        self.set_dataset('dax/version', _dax_version, archive=True)
+        self.set_dataset('dax/sim_enabled', self.dax_sim_enabled, archive=True)
 
         # Perform system initialization
         self.logger.debug('Starting DAX system initialization...')

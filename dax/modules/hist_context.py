@@ -41,13 +41,12 @@ class HistogramContext(DaxModule):
     PLOT_GROUP = 'dax.histogram_context'
     """Group to which the plot applets belong."""
 
-    DEFAULT_DATASET_KEY = 'histogram'
-    """The default name of the output dataset in archive."""
-    META_KEY_FORMAT = '_histogram.{key:s}'
-    """Dataset key format for archiving histogram metadata."""
-
-    DATASET_KEY_FORMAT = '{dataset_key:s}.{index:d}'
+    DATASET_GROUP = 'histogram_context'
+    """The group name for archiving data."""
+    DATASET_KEY_FORMAT = DATASET_GROUP + '/{dataset_key:s}/{index:d}'
     """Format string for sub-dataset keys."""
+    DEFAULT_DATASET_KEY = 'histogram'
+    """The default name of the output sub-dataset."""
 
     def build(self, default_dataset_key: typing.Optional[str] = None) -> None:  # type: ignore
         assert isinstance(default_dataset_key, str) or default_dataset_key is None, \
@@ -197,7 +196,7 @@ class HistogramContext(DaxModule):
         if len(self._buffer):
             # Check consistency of data in the buffer
             if any(len(b) != len(self._buffer[0]) for b in self._buffer):
-                self.logger.error('Data in the buffer is not consistent, incomplete data is dropped')
+                raise RuntimeError('Data in the buffer is not consistent, data probably corrupt')
 
             # Transform buffer data to pack counts per ion and convert into histograms
             histograms = [collections.Counter(c) for c in zip(*self._buffer)]
@@ -227,9 +226,6 @@ class HistogramContext(DaxModule):
 
         # Update counter for this dataset key
         self._open_datasets[self._dataset_key] += 1
-        # Archive number of sub-datasets for current key
-        self.set_dataset(self.META_KEY_FORMAT.format(key=self._dataset_key),
-                         self._open_datasets[self._dataset_key], archive=True)
         # Update context counter
         self._in_context -= 1
 
