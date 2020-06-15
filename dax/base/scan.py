@@ -159,13 +159,15 @@ class DaxScan(dax.base.dax.DaxBase, abc.ABC):
     INFINITE_SCAN_ARGUMENT = True  # type: bool
     """Flag to enable the infinite scan argument."""
     INFINITE_SCAN_DEFAULT = False  # type: bool
-    """Default setting of the infinite scan argument."""
+    """Default setting of the infinite scan."""
 
     ENABLE_INDEX = True  # type: bool
     """Flag to enable the index argument in the run_point() function."""
 
-    SCAN_ARCHIVE_KEY_FORMAT = '_scan.{key:s}'  # type: str
+    SCAN_KEY_FORMAT = 'scan/{key:s}'  # type: str
     """Dataset key format for archiving independent scans."""
+    SCAN_PRODUCT_KEY_FORMAT = 'scan/product/{key:s}'  # type: str
+    """Dataset key format for archiving scan products."""
 
     def build(self, *args: typing.Any, **kwargs: typing.Any) -> None:
         """Build the scan object using the :func:`build_scan` function.
@@ -347,12 +349,12 @@ class DaxScan(dax.base.dax.DaxBase, abc.ABC):
             self.logger.warning('No scan points found, aborting experiment')
             return
 
-        for key in self._scan_scannables:
-            # Archive cartesian product of all scan points (separate dataset for every key)
-            self.set_dataset(key, [getattr(point, key) for point, _ in self._scan_elements], archive=True)
-        # Archive values of each independent scan
         for key, scannable in self._scan_scannables.items():
-            self.set_dataset(self.SCAN_ARCHIVE_KEY_FORMAT.format(key=key), [e for e in scannable], archive=True)
+            # Archive values of independent scan
+            self.set_dataset(self.SCAN_KEY_FORMAT.format(key=key), [e for e in scannable], archive=True)
+            # Archive cartesian product of scan point (separate dataset for every key)
+            self.set_dataset(self.SCAN_PRODUCT_KEY_FORMAT.format(key=key),
+                             [getattr(point, key) for point, _ in self._scan_elements], archive=True)
 
         # Index of current scan element
         self._scan_index = np.int32(0)
