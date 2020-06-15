@@ -1,5 +1,7 @@
 import typing
 import unittest
+import collections
+import numpy as np
 
 import artiq.coredevice
 
@@ -8,6 +10,7 @@ from dax.modules.hist_context import *
 from dax.interfaces.detection import DetectionInterface
 from dax.util.artiq_helpers import get_manager_or_parent
 from dax.util.output import temp_dir
+import dax.util.matplotlib_backend  # noqa: F401
 
 
 class _MockDetectionModule(DaxModule, DetectionInterface):
@@ -178,6 +181,28 @@ class HistogramContextTestCase(unittest.TestCase):
         for h in histograms[1]:  # Channel 1
             self.assertDictEqual(h, {8: 2, 9: 4}, 'Obtained histograms did not meet expected format')
 
+    def test_ddb_histograms(self):
+        # Add data to the archive
+        num_histograms = 8
+        data = [
+            [1, 9],
+            [2, 9],
+            [2, 9],
+            [3, 9],
+            [3, 8],
+            [3, 8],
+        ]
+
+        for _ in range(num_histograms):
+            with self.h:
+                for d in data:
+                    self.h.append(d)
+
+        # Get datasets which stored flat histograms
+        dataset = self.s.get_dataset('/'.join([self.h.DATASET_GROUP, self.h.DEFAULT_DATASET_KEY, '0']))
+        flat = [[0, 1, 2, 3, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0, 2, 4]]
+        self.assertEqual(dataset, flat, 'Stored dataset does not match expected format')
+
     def test_archive_probabilities(self):
         # Add data to the archive
         num_histograms = 8
@@ -252,12 +277,17 @@ class HistogramAnalyzerTestCase(unittest.TestCase):
         with temp_dir():
             HistogramAnalyzer(self.h)
 
-    def test_histogram_analyzer_file(self):
-        # The histogram analyzer requests an output file which will trigger the creation of an experiment output dir
-        # To prevent unnecessary directories after testing, we switch to a temp dir
-        with temp_dir():
-            with self.assertRaises(NotImplementedError, msg='Did not raise expected NotImplementedError'):
-                HistogramAnalyzer('file_name.h5')
+    def test_counter_to_ndarray(self):
+        c = collections.Counter([1, 2, 3, 3, 4, 4, 4, 9])
+        a = np.asarray([0, 1, 1, 2, 3, 0, 0, 0, 0, 1])
+        n = HistogramAnalyzer.counter_to_ndarray(c)
+        self.assertListEqual(list(n), list(a), 'Counter did not convert correctly to ndarray')
+
+    def test_ndarray_to_counter(self):
+        c = collections.Counter([1, 2, 3, 3, 4, 4, 4, 9])
+        a = np.asarray([0, 1, 1, 2, 3, 0, 0, 0, 0, 1])
+        n = HistogramAnalyzer.ndarray_to_counter(a)
+        self.assertEqual(n, c, 'ndarray did not convert correctly to Counter')
 
 
 if __name__ == '__main__':

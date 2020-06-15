@@ -1,15 +1,17 @@
 import typing
 import collections
 import numpy as np
+import h5py  # type: ignore
+import natsort
+import os
 
-import dax.util.matplotlib_backend  # Workaround for QT error  # noqa: F401
 import matplotlib.pyplot as plt  # type: ignore
 import matplotlib.ticker  # type: ignore
 
 from dax.experiment import *
 from dax.interfaces.detection import DetectionInterface
 from dax.util.ccb import get_ccb_tool
-from dax.util.output import get_file_name_generator
+from dax.util.output import get_file_name_generator, dummy_file_name_generator
 from dax.util.units import UnitsFormatter
 
 __all__ = ['HistogramContext', 'HistogramAnalyzer', 'HistogramContextError']
@@ -231,11 +233,20 @@ class HistogramContext(DaxModule):
 
     def _histogram_to_probability(self, counter: collections.Counter,
                                   state_detection_threshold: typing.Optional[int] = None) -> float:
-        """Convert a histogram to a state probability."""
+        """Convert a histogram to a state probability.
+
+        Falls back on default state detection threshold if none is given.
+        """
 
         if state_detection_threshold is None:
             # Use default state_detection_threshold if not set
             state_detection_threshold = self._state_detection_threshold
+
+        return self.histogram_to_probability(counter, state_detection_threshold)
+
+    @staticmethod
+    def histogram_to_probability(counter: collections.Counter, state_detection_threshold: int) -> float:
+        """Helper function to convert a histogram to a state probability."""
 
         # One measurements (recognizes binary measurements and counts)
         one = sum(f for c, f in counter.items() if c is True or c > state_detection_threshold)
@@ -347,7 +358,7 @@ class HistogramAnalyzer:
     PROBABILITY_PLOT_FILE_FORMAT = '{key:s}_probability'
     """File name format for probability plot files."""
 
-    def __init__(self, source: typing.Union[DaxSystem, HistogramContext, str],
+    def __init__(self, source: typing.Union[DaxSystem, HistogramContext, str, h5py.File],
                  state_detection_threshold: typing.Optional[int] = None):
         """Create a new histogram analyzer object.
 
@@ -356,25 +367,76 @@ class HistogramAnalyzer:
         """
         assert isinstance(state_detection_threshold, int) or state_detection_threshold is None
 
+        # Input conversion
         if isinstance(source, DaxSystem):
             # Obtain histogram context module
             source = source.registry.find_module(HistogramContext)
+        elif isinstance(source, str):
+            # Open HDF5 file
+            source = h5py.File(os.path.expanduser(source), mode='r')
 
         if isinstance(source, HistogramContext):
             # Get data from histogram context module
             self.keys = source.get_keys()
             self.histograms = {k: source.get_histograms(k) for k in self.keys}
-            self.probabilities = {k: source.get_probabilities(k, state_detection_threshold) for k in self.keys}
+            self.probabilities = {k: np.asarray(source.get_probabilities(k, state_detection_threshold))
+                                  for k in self.keys}
 
             # Obtain the file name generator
             self._file_name_generator = get_file_name_generator(source.get_device('scheduler'))
 
-        elif isinstance(source, str):
+        elif isinstance(source, h5py.File):
+            # Verify format of HDF5 file
+            group_name = 'datasets/' + HistogramContext.DATASET_GROUP
+            if group_name not in source:
+                raise KeyError('The HDF5 file does not contain histogram data')
+
+            # Get the group which contains all data
+            group = source[group_name]
+
             # Read and convert data from HDF5 file
-            raise NotImplementedError('Analysis from HDF5 source file is not yet implemented')
+            self.keys = list(group)
+            histograms = ((k, (group[k][index] for index in natsort.natsorted(group[k]))) for k in self.keys)
+            self.histograms = {k: [[self.ndarray_to_counter(channel) for channel in dataset]
+                                   for dataset in zip(*datasets)] for k, datasets in histograms}
+            if state_detection_threshold is not None:
+                self.probabilities = {k: np.asarray(self._get_probabilities(h, state_detection_threshold))
+                                      for k, h in self.histograms.items()}
+
+            # Get a file name generator
+            self._file_name_generator = dummy_file_name_generator
 
         else:
             raise TypeError('Unsupported source type')
+
+    """Helper functions"""
+
+    @staticmethod
+    def _get_probabilities(histograms: typing.Sequence[typing.Sequence[collections.Counter]],
+                           state_detection_threshold: int) -> typing.List[typing.List[float]]:
+        """Convert a sequence of histograms to a sequence of probabilities."""
+        return [[HistogramContext.histogram_to_probability(h, state_detection_threshold) for h in channel]
+                for channel in histograms]
+
+    @staticmethod
+    def counter_to_ndarray(histogram: collections.Counter) -> np.ndarray:
+        """Convert a histogram stored as a Counter object to an ndarray.
+
+        :param histogram: The histogram in Counter format
+        :return: ndarray that represents the same histogram
+        """
+        return np.asarray([histogram[i] for i in range(max(histogram) + 1)])
+
+    @staticmethod
+    def ndarray_to_counter(histogram: typing.Sequence[int]) -> collections.Counter:
+        """Convert a histogram stored as an ndarray to a Counter object.
+
+        :param histogram: The histogram in ndarray format
+        :return: Counter object that represents the same histogram
+        """
+        return collections.Counter({i: v for i, v in enumerate(histogram) if v > 0})
+
+    """Plotting functions"""
 
     def plot_histogram(self, key: str,
                        x_label: typing.Optional[str] = 'Count', y_label: typing.Optional[str] = 'Frequency',
@@ -401,14 +463,17 @@ class HistogramAnalyzer:
         # Get the histograms associated with the given key
         histograms = self.histograms[key]
 
+        # Create figure
+        fig, ax = plt.subplots()
+
         for index, h in enumerate(zip(*histograms)):
             # Obtain X and Y values (for all channels)
             x_values = np.arange(max(max(c) for c in h) + 1)
             y_values = [[c[x] for x in x_values] for c in h]
 
             # Plot
+            ax.cla()  # Clear axes
             bar_width = width / len(h)
-            fig, ax = plt.subplots()
             for i, c_values in enumerate(y_values):
                 ax.bar(x_values + (bar_width * i) - (width / 2), c_values,
                        width=bar_width, align='edge', label='Channel {:d}'.format(i), **kwargs)
@@ -422,7 +487,9 @@ class HistogramAnalyzer:
             # Save figure
             file_name = self._file_name_generator(self.HISTOGRAM_PLOT_FILE_FORMAT.format(key=key, index=index), ext)
             fig.savefig(file_name, bbox_inches='tight')
-            plt.close(fig)
+
+        # Close the figure
+        plt.close(fig)
 
     def plot_all_histograms(self, **kwargs: typing.Any) -> None:
         """Plot histograms for all keys available in the data.
@@ -460,8 +527,7 @@ class HistogramAnalyzer:
         if not len(probabilities):
             # No data to plot
             return
-
-        if x_values is None:
+        elif x_values is None:
             # Generate generic X values
             x_values = np.arange(len(probabilities[0]))
         else:

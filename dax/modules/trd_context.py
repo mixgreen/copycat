@@ -3,8 +3,9 @@ import collections
 import numbers
 import math
 import numpy as np
+import h5py  # type: ignore
+import os
 
-import dax.util.matplotlib_backend  # Workaround for QT error  # noqa: F401
 import matplotlib.pyplot as plt  # type: ignore
 
 from dax.experiment import *
@@ -415,15 +416,19 @@ class TimeResolvedDetectionAnalyzer:
     PLOT_FILE_FORMAT = '{key:s}_{index:d}'
     """File name format for plot files."""
 
-    def __init__(self, source: typing.Union[DaxSystem, TimeResolvedDetectionContext, str]):
+    def __init__(self, source: typing.Union[DaxSystem, TimeResolvedDetectionContext, str, h5py.File]):
         """Create a new time resolved detection analyzer object.
 
         :param source: The source of the trace data
         """
 
+        # Input conversion
         if isinstance(source, DaxSystem):
             # Obtain time resolved detection context module
             source = source.registry.find_module(TimeResolvedDetectionContext)
+        elif isinstance(source, str):
+            # Open HDF5 file
+            source = h5py.File(os.path.expanduser(source), mode='r')
 
         if isinstance(source, TimeResolvedDetectionContext):
             # Get data from module
@@ -433,9 +438,9 @@ class TimeResolvedDetectionAnalyzer:
             # Obtain the file name generator
             self._file_name_generator = get_file_name_generator(source.get_device('scheduler'))
 
-        elif isinstance(source, str):
+        elif isinstance(source, h5py.File):
             # Read and convert data from HDF5 file
-            raise NotImplementedError('Analysis from HDF5 source file is not yet implemented')
+            raise NotImplementedError('Analysis from HDF5 source is not yet implemented')
 
         else:
             raise TypeError('Unsupported source type')
@@ -462,6 +467,9 @@ class TimeResolvedDetectionAnalyzer:
         # Get the traces associated with the given key
         traces = self.traces[key]
 
+        # Create figure
+        fig, ax = plt.subplots()
+
         for index, t in enumerate(traces):
             # Obtain raw data
             time = np.asarray(t['time'])
@@ -476,7 +484,7 @@ class TimeResolvedDetectionAnalyzer:
             kwargs.setdefault('linestyle', '')
 
             # Plot
-            fig, ax = plt.subplots()
+            ax.cla()  # Clear axes
             for i, r in enumerate(results):
                 ax.plot(x_values, r, label='Channel {:d}'.format(i), **kwargs)
 
@@ -489,7 +497,9 @@ class TimeResolvedDetectionAnalyzer:
             # Save figure
             file_name = self._file_name_generator(self.PLOT_FILE_FORMAT.format(key=key, index=index), ext)
             fig.savefig(file_name, bbox_inches='tight')
-            plt.close(fig)
+
+        # Close the figure
+        plt.close(fig)
 
     def plot_all_traces(self, **kwargs: typing.Any) -> None:
         """Plot traces for all keys available in the data.
