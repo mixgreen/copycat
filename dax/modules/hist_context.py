@@ -474,8 +474,8 @@ class HistogramAnalyzer:
             # Plot
             ax.cla()  # Clear axes
             bar_width = width / len(h)
-            for i, c_values in enumerate(y_values):
-                ax.bar(x_values + (bar_width * i) - (width / 2), c_values,
+            for i, y in enumerate(y_values):
+                ax.bar(x_values + (bar_width * i) - (width / 2), y,
                        width=bar_width, align='edge', label='Channel {:d}'.format(i), **kwargs)
 
             # Formatting
@@ -542,8 +542,8 @@ class HistogramAnalyzer:
 
         # Plot
         fig, ax = plt.subplots()
-        for i, p_values in enumerate(probabilities):
-            ax.plot(x_values, p_values, label='Channel {:d}'.format(i), **kwargs)
+        for i, y in enumerate(probabilities):
+            ax.plot(x_values, y, label='Channel {:d}'.format(i), **kwargs)
 
         # Plot formatting
         ax.set_xlabel(x_label)
