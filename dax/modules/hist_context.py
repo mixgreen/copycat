@@ -51,6 +51,10 @@ class HistogramContext(DaxModule):
     """The default name of the output sub-dataset."""
 
     def build(self, default_dataset_key: typing.Optional[str] = None) -> None:  # type: ignore
+        """Build the histogram context module.
+
+        :param default_dataset_key: Default dataset name used for storing histogram data
+        """
         assert isinstance(default_dataset_key, str) or default_dataset_key is None, \
             'Provided default dataset key must be None or of type str'
 
@@ -165,7 +169,7 @@ class HistogramContext(DaxModule):
         This function can be used to manually enter the histogram context.
         We strongly recommend to use the `with` statement instead.
 
-        :raises HistogramContextError: Raised if already in histogram context (context non-reentrant)
+        :raises HistogramContextError: Raised if already in histogram context (context is non-reentrant)
         """
 
         if self._in_context:

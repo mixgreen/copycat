@@ -22,6 +22,11 @@ class CpldInitModule(DaxModule):
     """Devices types that use Urukul CPLD."""
 
     def build(self, interval: float = 5 * us, check_registered_devices: bool = True) -> None:  # type: ignore
+        """Build the CPLD initialization module.
+
+        :param interval: Interval/delay between initialization of multiple CPLD devices
+        :param check_registered_devices: Enable verification if devices were already registered by an other module
+        """
         assert isinstance(interval, float), 'Interval must be a time which has type float'
         assert isinstance(check_registered_devices, bool), 'Check registered devices flag must be of type bool'
 

@@ -14,6 +14,10 @@ class RpcBenchmarkModule(DaxModule):
     LATENCY_CORE_HOST_CORE_KEY = 'latency_core_host_core'
     LATENCY_CORE_HOST_CORE_ASYNC_KEY = 'latency_core_host_core_async'
 
+    def build(self) -> None:  # type: ignore
+        """Build the RPC benchmark module."""
+        pass
+
     def init(self) -> None:
         # Load parameters
         self.setattr_dataset_sys(self.LATENCY_HOST_CORE_HOST_KEY)

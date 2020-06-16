@@ -41,6 +41,10 @@ class TimeResolvedContext(DaxModule):
     """Column names of data within each sub-dataset."""
 
     def build(self, default_dataset_key: typing.Optional[str] = None) -> None:  # type: ignore
+        """Build the time resolved context module.
+
+        :param default_dataset_key: Default dataset name used for storing trace data
+        """
         assert isinstance(default_dataset_key, str) or default_dataset_key is None, \
             'Provided default dataset key must be None or of type str'
 
@@ -278,7 +282,7 @@ class TimeResolvedContext(DaxModule):
         This function can be used to manually enter the context.
         We strongly recommend to use the `with` statement instead.
 
-        :raises TimeResolvedContextError: Raised if already in context (context non-reentrant)
+        :raises TimeResolvedContextError: Raised if already in context (context is non-reentrant)
         """
 
         if self._in_context:

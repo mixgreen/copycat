@@ -48,3 +48,11 @@ dax.modules.rtio\_benchmark module
     :members:
     :undoc-members:
     :show-inheritance:
+
+dax.modules.time\_resolved\_context module
+------------------------------------------
+
+.. automodule:: dax.modules.time_resolved_context
+    :members:
+    :undoc-members:
+    :show-inheritance:
