@@ -5,12 +5,13 @@ import math
 import numpy as np
 import h5py  # type: ignore
 import os
+import natsort
 
 import matplotlib.pyplot as plt  # type: ignore
 
 from dax.experiment import *
 from dax.util.ccb import get_ccb_tool
-from dax.util.output import get_file_name_generator
+from dax.util.output import get_file_name_generator, dummy_file_name_generator
 from dax.util.units import UnitsFormatter
 
 __all__ = ['TimeResolvedContext', 'TimeResolvedAnalyzer', 'TimeResolvedContextError']
@@ -414,7 +415,19 @@ class TimeResolvedContext(DaxModule):
 
 
 class TimeResolvedAnalyzer:
-    """Basic automated analysis and offline plotting of data obtained by the time resolved context."""
+    """Basic automated analysis and offline plotting of data obtained by the time resolved context.
+
+    Various data sources can be provided and presented data should have a uniform format.
+    Simple automated plotting functions are provided, but users can also access data directly
+    for manual processing and analysis.
+
+    :attr:`keys` is a list of keys for which data is available.
+
+    :attr:`traces` is a dict which for each key contains a list of traces.
+    Each trace is a dict with values for bin width, bin, time, and results.
+    Results are stored in a 2D array of which the first dimension is the channel
+    and the second dimension are the values.
+    """
 
     PLOT_FILE_FORMAT = '{key:s}_{index:d}'
     """File name format for plot files."""
@@ -442,11 +455,26 @@ class TimeResolvedAnalyzer:
             self._file_name_generator = get_file_name_generator(source.get_device('scheduler'))
 
         elif isinstance(source, h5py.File):
+            # Verify format of HDF5 file
+            group_name = 'datasets/' + TimeResolvedContext.DATASET_GROUP
+            if group_name not in source:
+                raise KeyError('The HDF5 file does not contain time resolved data')
+
+            # Get the group which contains all data
+            group = source[group_name]
+
             # Read and convert data from HDF5 file
-            raise NotImplementedError('Analysis from HDF5 source is not yet implemented')
+            self.keys = list(group)
+            self.traces = {k: [{column: group[k][index][column][()] for column in TimeResolvedContext.DATASET_COLUMNS}
+                               for index in natsort.natsorted(group[k])] for k in self.keys}
+
+            # Get a file name generator
+            self._file_name_generator = dummy_file_name_generator
 
         else:
             raise TypeError('Unsupported source type')
+
+    """Plotting functions"""
 
     def plot_trace(self, key: str,
                    x_label: typing.Optional[str] = 'Time', y_label: typing.Optional[str] = 'Count',

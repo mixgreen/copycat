@@ -246,18 +246,7 @@ class HistogramContext(DaxModule):
             # Use default state_detection_threshold if not set
             state_detection_threshold = self._state_detection_threshold
 
-        return self.histogram_to_probability(counter, state_detection_threshold)
-
-    @staticmethod
-    def histogram_to_probability(counter: collections.Counter, state_detection_threshold: int) -> float:
-        """Helper function to convert a histogram to a state probability."""
-
-        # One measurements (recognizes binary measurements and counts)
-        one = sum(f for c, f in counter.items() if c is True or c > state_detection_threshold)
-        # Total measurements
-        total = sum(counter.values())
-        # Return probability
-        return one / total
+        return HistogramAnalyzer.histogram_to_probability(counter, state_detection_threshold)
 
     """Applet plotting functions"""
 
@@ -355,7 +344,30 @@ class HistogramContext(DaxModule):
 
 
 class HistogramAnalyzer:
-    """Basic automated analysis and offline plotting of data obtained by the histogram context."""
+    """Basic automated analysis and offline plotting of data obtained by the histogram context.
+
+    Various data sources can be provided and presented data should have a uniform format.
+    Simple automated plotting functions are provided, but users can also access data directly
+    for manual processing and analysis.
+
+    :attr:`keys` is a list of keys for which data is available.
+
+    :attr:`histograms` is a dict which for each key contains a list of histograms per channel.
+    The first dimension is the channel and the second dimension are the histograms.
+    Note that histograms are stored as Counter objects, which behave like dicts.
+
+    :attr:`probabilities` is a dict with for each key contains a list of probabilities.
+    This attribute is only available if a state detection threshold was provided.
+    The probabilities are a mapped version of the :attr:`histograms` data.
+
+    Various helper functions for data processing are also available.
+    :func:`histogram_to_probability` converts a single histogram, formatted as a
+    Counter object, to a state probability based on a given state detection threshold.
+    :func:`histograms_to_probabilities` maps a list of histograms per channel (2D array of Counter objects)
+    to a list of probabilities per channel based on a given state detection threshold.
+    :func:`counter_to_ndarray` and :func:`ndarray_to_counter` convert a single histogram
+    stored as a Counter object to an array representation and vice versa.
+    """
 
     HISTOGRAM_PLOT_FILE_FORMAT = '{key:s}_{index:d}'
     """File name format for histogram plot files."""
@@ -404,7 +416,7 @@ class HistogramAnalyzer:
             self.histograms = {k: [[self.ndarray_to_counter(values) for values in channel]
                                    for channel in zip(*datasets)] for k, datasets in histograms}
             if state_detection_threshold is not None:
-                self.probabilities = {k: np.asarray(self._get_probabilities(h, state_detection_threshold))
+                self.probabilities = {k: self.histograms_to_probabilities(h, state_detection_threshold)
                                       for k, h in self.histograms.items()}
 
             # Get a file name generator
@@ -416,11 +428,41 @@ class HistogramAnalyzer:
     """Helper functions"""
 
     @staticmethod
-    def _get_probabilities(histograms: typing.Sequence[typing.Sequence[collections.Counter]],
-                           state_detection_threshold: int) -> typing.List[typing.List[float]]:
-        """Convert a sequence of histograms to a sequence of probabilities."""
-        return [[HistogramContext.histogram_to_probability(h, state_detection_threshold) for h in channel]
-                for channel in histograms]
+    def histogram_to_probability(counter: collections.Counter, state_detection_threshold: int) -> float:
+        """Helper function to convert a histogram to a state probability.
+
+        Counts *greater than* the state detection threshold are considered to be in state one.
+
+        :param counter: The counter object representing the histogram
+        :param state_detection_threshold: The state detection threshold to use
+        :return: The state probability as a float
+        """
+        assert isinstance(state_detection_threshold, int), 'State detection threshold must be of type int'
+
+        # One measurements (recognizes binary measurements and counts)
+        one = sum(f for c, f in counter.items() if c is True or c > state_detection_threshold)
+        # Total measurements
+        total = sum(counter.values())
+        # Return probability
+        return one / total
+
+    @staticmethod
+    def histograms_to_probabilities(histograms: typing.Sequence[typing.Sequence[collections.Counter]],
+                                    state_detection_threshold: int) -> np.ndarray:
+        """Convert histograms to probabilities based on a state detection threshold.
+
+        Histograms are provided as a 2D array of Counter objects.
+        The first dimension is the channel, the second dimension is the sequence of counters.
+
+        :param histograms: The input histograms
+        :param state_detection_threshold: The detection threshold
+        :return: Array of probabilities with the same shape as the input histograms
+        """
+        assert isinstance(state_detection_threshold, int), 'State detection threshold must be of type int'
+
+        probabilities = [[HistogramAnalyzer.histogram_to_probability(h, state_detection_threshold) for h in channel]
+                         for channel in histograms]
+        return np.asarray(probabilities)
 
     @staticmethod
     def counter_to_ndarray(histogram: collections.Counter) -> np.ndarray:

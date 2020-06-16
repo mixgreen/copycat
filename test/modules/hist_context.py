@@ -289,6 +289,31 @@ class HistogramAnalyzerTestCase(unittest.TestCase):
         n = HistogramAnalyzer.ndarray_to_counter(a)
         self.assertEqual(n, c, 'ndarray did not convert correctly to Counter')
 
+    def test_histogram_to_probability(self):
+        data = [(collections.Counter([3]), 0.0),
+                (collections.Counter([5]), 1.0),
+                (collections.Counter([1]), 0.0),
+                (collections.Counter([4]), 1.0),
+                (collections.Counter([0, 4]), 0.5), ]
+        threshold = 3
+
+        for d, r in data:
+            with self.subTest(histogram=d):
+                self.assertEqual(HistogramAnalyzer.histogram_to_probability(d, threshold), r,
+                                 'Single histogram did not converted correctly to a probability')
+
+    def test_histograms_to_probabilities(self):
+        data = [[collections.Counter([3]), collections.Counter([5]), collections.Counter([1])],
+                [collections.Counter([1]), collections.Counter([2]), collections.Counter([4])],
+                [collections.Counter([1, 4]), collections.Counter([1, 2]), collections.Counter([5, 8])], ]
+        threshold = 3
+        reference = [[0.0, 1.0, 0.0], [0.0, 0.0, 1.0], [0.5, 0.0, 1.0]]
+
+        result = HistogramAnalyzer.histograms_to_probabilities(data, threshold)
+
+        for ref, res in zip(reference, result):
+            self.assertListEqual(ref, list(res), 'Histograms did not converted correctly to probabilities')
+
 
 if __name__ == '__main__':
     unittest.main()
