@@ -13,29 +13,29 @@ from dax.util.ccb import get_ccb_tool
 from dax.util.output import get_file_name_generator
 from dax.util.units import UnitsFormatter
 
-__all__ = ['TimeResolvedDetectionContext', 'TimeResolvedDetectionAnalyzer', 'TimeResolvedDetectionContextError']
+__all__ = ['TimeResolvedContext', 'TimeResolvedAnalyzer', 'TimeResolvedContextError']
 
 
-class TimeResolvedDetectionContext(DaxModule):
+class TimeResolvedContext(DaxModule):
     """Context class for managing storage of time-resolved detection output.
 
     This module can be used as a sub-module of a service.
     """
 
-    PLOT_RESULT_KEY = 'plot.dax.trd_context.result'
+    PLOT_RESULT_KEY = 'plot.dax.time_resolved_context.result'
     """Dataset name for plotting latest result graph (Y-axis)."""
-    PLOT_TIME_KEY = 'plot.dax.trd_context.time'
+    PLOT_TIME_KEY = 'plot.dax.time_resolved_context.time'
     """Dataset name for plotting latest result graph (X-axis)."""
     PLOT_NAME = 'time resolved detection'
     """Name of the plot applet."""
-    PLOT_GROUP = 'dax.trd_context'
+    PLOT_GROUP = 'dax.time_resolved_context'
     """Group to which the plot applets belong."""
 
-    DATASET_GROUP = 'trd_context'
+    DATASET_GROUP = 'time_resolved_context'
     """The group name for archiving data."""
     DATASET_KEY_FORMAT = DATASET_GROUP + '/{dataset_key:s}/{index:d}/{column:s}'
     """Format string for sub-dataset keys."""
-    DEFAULT_DATASET_KEY = 'trd'
+    DEFAULT_DATASET_KEY = 'time_resolved'
     """The default name of the output dataset in archive."""
     DATASET_COLUMNS = ('width', 'time', 'result')
     """Column names of data within each sub-dataset."""
@@ -155,7 +155,7 @@ class TimeResolvedDetectionContext(DaxModule):
         # Calculate the number of bins that fit in the window, rounding the value up
         num_bins = int(math.ceil(window_size / (bin_width + bin_spacing)))
         # Call partition bins
-        return TimeResolvedDetectionContext.partition_bins(num_bins, max_partition_size, bin_width, bin_spacing)
+        return TimeResolvedContext.partition_bins(num_bins, max_partition_size, bin_width, bin_spacing)
 
     """Data handling functions"""
 
@@ -174,11 +174,11 @@ class TimeResolvedDetectionContext(DaxModule):
         :param bin_width: The width of the bins
         :param bin_spacing: The spacing between the bins
         :param offset: The known fixed offset of this trace in seconds, used for partitioning
-        :raises TimeResolvedDetectionContextError: Raised if called out of context
+        :raises TimeResolvedContextError: Raised if called out of context
         """
         if not self._in_context:
             # Called out of context
-            raise TimeResolvedDetectionContextError('The append_meta() function can only be called in-context')
+            raise TimeResolvedContextError('The append function can only be called in-context')
 
         # Append the given element to the buffer (using tuples for high performance)
         self._buffer_meta.append((bin_width, bin_spacing, offset))
@@ -192,11 +192,11 @@ class TimeResolvedDetectionContext(DaxModule):
 
         :param data: A 2D list of ints representing the PMT counts of different ions
         :param offset_mu: An offset to correct any shifts of events in machine units (defaults to no offset)
-        :raises TimeResolvedDetectionContextError: Raised if called out of context
+        :raises TimeResolvedContextError: Raised if called out of context
         """
         if not self._in_context:
             # Called out of context
-            raise TimeResolvedDetectionContextError('The append() function can only be called in-context')
+            raise TimeResolvedContextError('The append function can only be called in-context')
 
         # Append the given element to the buffer
         self._buffer_data.append((data, self.core.mu_to_seconds(offset_mu)))  # Convert machine units to seconds
@@ -217,7 +217,7 @@ class TimeResolvedDetectionContext(DaxModule):
         :param bin_spacing: The spacing between the bins
         :param offset: An offset to correct any shifts of events in seconds (defaults to no offset)
         :param offset_mu: An offset to correct any shifts of events in machine units (defaults to no offset)
-        :raises TimeResolvedDetectionContextError: Raised if called out of context
+        :raises TimeResolvedContextError: Raised if called out of context
         """
         self.append_meta(bin_width, bin_spacing, offset=offset)
         self.append_data(data, offset_mu=offset_mu)
@@ -244,14 +244,13 @@ class TimeResolvedDetectionContext(DaxModule):
         :param key: Key for the result dataset using standard Python formatting notation
         :param args: Python `str.format()` positional arguments
         :param kwargs: Python `str.format()` keyword arguments
-        :raises TimeResolvedDetectionContextError: Raised if called in context
+        :raises TimeResolvedContextError: Raised if called in context
         """
         assert isinstance(key, str) or key is None, 'Provided dataset key must be of type str or None'
 
         if self._in_context:
             # Called in context
-            raise TimeResolvedDetectionContextError(
-                'Setting the target dataset can only be done when out of context')
+            raise TimeResolvedContextError('Setting the target dataset can only be done when out of context')
 
         # Update the dataset key
         self._dataset_key = self._default_dataset_key if key is None else self._units_fmt.vformat(key, args, kwargs)
@@ -279,12 +278,12 @@ class TimeResolvedDetectionContext(DaxModule):
         This function can be used to manually enter the context.
         We strongly recommend to use the `with` statement instead.
 
-        :raises TimeResolvedDetectionContextError: Raised if already in context (context non-reentrant)
+        :raises TimeResolvedContextError: Raised if already in context (context non-reentrant)
         """
 
         if self._in_context:
             # Prevent context reentry
-            raise TimeResolvedDetectionContextError('The time resolved detection context is non-reentrant')
+            raise TimeResolvedContextError('The time resolved context is non-reentrant')
 
         # Create a new buffers (clearing it might result in data loss due to how the dataset manager works)
         self._buffer_data = []
@@ -299,12 +298,12 @@ class TimeResolvedDetectionContext(DaxModule):
         This function can be used to manually exit the context.
         We strongly recommend to use the `with` statement instead.
 
-        :raises TimeResolvedDetectionError: Raised if called out of context
+        :raises TimeResolvedContextError: Raised if called out of context
         """
 
         if not self._in_context:
             # Called exit out of context
-            raise TimeResolvedDetectionContextError('The exit function can only be called from inside the context')
+            raise TimeResolvedContextError('The exit function can only be called from inside the context')
 
         # Create a sub-dataset keys for this result
         sub_dataset_keys = {column: self.DATASET_KEY_FORMAT.format(column=column, dataset_key=self._dataset_key,
@@ -395,7 +394,7 @@ class TimeResolvedDetectionContext(DaxModule):
     @host_only
     def get_traces(self, dataset_key: typing.Optional[str] = None) \
             -> typing.List[typing.Dict[str, typing.Sequence[float]]]:
-        """Obtain all trace objects recorded by this time-resolved detection context for a specific key.
+        """Obtain all trace objects recorded by this time-resolved context for a specific key.
 
         The data is formatted as a list of dictionaries with the self-explaining keys
         time, width, and results (see :attr:`DATASET_COLUMNS`).
@@ -410,27 +409,27 @@ class TimeResolvedDetectionContext(DaxModule):
         return self._archive[self._default_dataset_key if dataset_key is None else dataset_key]
 
 
-class TimeResolvedDetectionAnalyzer:
-    """Basic automated analysis and offline plotting of data obtained by the time resolved detection context."""
+class TimeResolvedAnalyzer:
+    """Basic automated analysis and offline plotting of data obtained by the time resolved context."""
 
     PLOT_FILE_FORMAT = '{key:s}_{index:d}'
     """File name format for plot files."""
 
-    def __init__(self, source: typing.Union[DaxSystem, TimeResolvedDetectionContext, str, h5py.File]):
-        """Create a new time resolved detection analyzer object.
+    def __init__(self, source: typing.Union[DaxSystem, TimeResolvedContext, str, h5py.File]):
+        """Create a new time resolved analyzer object.
 
         :param source: The source of the trace data
         """
 
         # Input conversion
         if isinstance(source, DaxSystem):
-            # Obtain time resolved detection context module
-            source = source.registry.find_module(TimeResolvedDetectionContext)
+            # Obtain time resolved context module
+            source = source.registry.find_module(TimeResolvedContext)
         elif isinstance(source, str):
             # Open HDF5 file
             source = h5py.File(os.path.expanduser(source), mode='r')
 
-        if isinstance(source, TimeResolvedDetectionContext):
+        if isinstance(source, TimeResolvedContext):
             # Get data from module
             self.keys = source.get_keys()
             self.traces = {k: source.get_traces(k) for k in self.keys}
@@ -510,6 +509,6 @@ class TimeResolvedDetectionAnalyzer:
             self.plot_trace(key, **kwargs)
 
 
-class TimeResolvedDetectionContextError(RuntimeError):
-    """Class for context errors."""
+class TimeResolvedContextError(RuntimeError):
+    """Class for time resolved context errors."""
     pass

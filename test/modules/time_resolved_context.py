@@ -2,7 +2,7 @@ import unittest
 import numpy as np
 
 from dax.experiment import *
-from dax.modules.trd_context import *
+from dax.modules.time_resolved_context import *
 from dax.util.artiq_helpers import get_manager_or_parent
 from dax.util.output import temp_dir
 import dax.util.matplotlib_backend  # noqa: F401
@@ -14,15 +14,15 @@ class _TestSystem(DaxSystem):
 
     def build(self, default_dataset_key=None) -> None:  # type: ignore
         super(_TestSystem, self).build()
-        self.trd_context = TimeResolvedDetectionContext(self, 'trd_context', default_dataset_key=default_dataset_key)
+        self.time_resolved_context = TimeResolvedContext(self, 'context', default_dataset_key=default_dataset_key)
 
 
-class TrdContextTestCase(unittest.TestCase):
+class TimeResolvedContextTestCase(unittest.TestCase):
 
     def setUp(self) -> None:
         self.s = _TestSystem(get_manager_or_parent())
         self.s.dax_init()
-        self.t = self.s.trd_context
+        self.t = self.s.time_resolved_context
 
     def test_in_context(self):
         # Initially we are out of context
@@ -44,28 +44,28 @@ class TrdContextTestCase(unittest.TestCase):
 
     def test_append_out_of_context(self):
         # We can not call append out of context
-        with self.assertRaises(TimeResolvedDetectionContextError, msg='Append out of context did not raise'):
+        with self.assertRaises(TimeResolvedContextError, msg='Append out of context did not raise'):
             self.t.append([[]], 0.0, 0.0)
 
     def test_call_in_context(self):
-        # We can not call the histogram context out of context
+        # We can not call the time resolved context out of context
         with self.t:
-            with self.assertRaises(TimeResolvedDetectionContextError, msg='Config in context did not raise'):
+            with self.assertRaises(TimeResolvedContextError, msg='Config in context did not raise'):
                 self.t.config_dataset()
 
     def test_nesting_exceptions(self):
-        with self.assertRaises(TimeResolvedDetectionContextError, msg='Close out of context did not raise'):
+        with self.assertRaises(TimeResolvedContextError, msg='Close out of context did not raise'):
             self.t.close()
         # Open the context
         self.t.open()
-        with self.assertRaises(TimeResolvedDetectionContextError, msg='Open context in context did not raise'):
+        with self.assertRaises(TimeResolvedContextError, msg='Open context in context did not raise'):
             self.t.open()
         # Close the context
         self.t.close()
-        with self.assertRaises(TimeResolvedDetectionContextError, msg='Close out of context did not raise'):
+        with self.assertRaises(TimeResolvedContextError, msg='Close out of context did not raise'):
             self.t.close()
         with self.t:
-            with self.assertRaises(TimeResolvedDetectionContextError, msg='Nesting context did not raise'):
+            with self.assertRaises(TimeResolvedContextError, msg='Nesting context did not raise'):
                 with self.t:
                     pass
 
@@ -134,10 +134,10 @@ class TrdContextTestCase(unittest.TestCase):
         with self.t:
             self.t.append(data, bin_width, bin_spacing, offset, offset_mu)
 
-        # Check histograms data format
+        # Check traces data format
         trace = self.t.get_traces()
         self.assertEqual(len(trace), 1, 'Output did not match expected size')
-        self.assertSetEqual(set(TimeResolvedDetectionContext.DATASET_COLUMNS), set(trace[0].keys()),
+        self.assertSetEqual(set(TimeResolvedContext.DATASET_COLUMNS), set(trace[0].keys()),
                             'Trace keys did not match')
         self.assertTrue((np.asarray(trace[0]['result']) == np.asarray(data)).all(),
                         'Trace result did not match expected outcome')
@@ -147,7 +147,7 @@ class TrdContextTestCase(unittest.TestCase):
         self.assertTrue(np.allclose(trace[0]['time'], r),
                         'Trace time did not match expected outcome')
 
-    def test_multi_archive_histograms(self):
+    def test_multi_archive(self):
         bin_width = 1 * us
         bin_spacing = 1 * ns
         offset = 5 * ns
@@ -165,10 +165,10 @@ class TrdContextTestCase(unittest.TestCase):
         with self.t:
             self.t.append([[]], 0.0, 0.0, 0.0, 0)
 
-        # Check histograms data format for our specific key
+        # Check traces data format for our specific key
         trace = self.t.get_traces(dataset_key)
         self.assertEqual(len(trace), 1, 'Output did not match expected size')
-        self.assertSetEqual(set(TimeResolvedDetectionContext.DATASET_COLUMNS), set(trace[0].keys()),
+        self.assertSetEqual(set(TimeResolvedContext.DATASET_COLUMNS), set(trace[0].keys()),
                             'Trace keys did not match')
         self.assertTrue((np.asarray(trace[0]['result']) == np.asarray(data)).all(),
                         'Trace result did not match expected outcome')
@@ -178,7 +178,7 @@ class TrdContextTestCase(unittest.TestCase):
         self.assertTrue(np.allclose(trace[0]['time'], r),
                         'Trace time did not match expected outcome')
 
-    def test_ddb_histograms(self):
+    def test_ddb_traces(self):
         bin_width = 1 * us
         bin_spacing = 1 * ns
         offset = 5 * ns
@@ -194,7 +194,7 @@ class TrdContextTestCase(unittest.TestCase):
         width_key = self.t.DATASET_KEY_FORMAT.format(dataset_key=self.t.DEFAULT_DATASET_KEY, index=0, column='width')
         time_key = self.t.DATASET_KEY_FORMAT.format(dataset_key=self.t.DEFAULT_DATASET_KEY, index=0, column='time')
 
-        # Check histograms data format for our specific key
+        # Check traces data format for our specific key
         self.assertTrue((np.asarray(self.s.get_dataset(result_key)) == np.asarray(data)).all(),
                         'Trace result did not match expected outcome')
         self.assertTrue((self.s.get_dataset(width_key) == np.full(2, bin_width)).all(),
@@ -257,24 +257,24 @@ class TrdContextTestCase(unittest.TestCase):
                 self.assertEqual(self.t.partition_window(*i), o, 'Partitioned output did not match reference')
 
 
-class TrdAnalyzerTestCase(unittest.TestCase):
+class TimeResolvedAnalyzerTestCase(unittest.TestCase):
 
     def setUp(self) -> None:
         self.s = _TestSystem(get_manager_or_parent())
         self.s.dax_init()
-        self.t = self.s.trd_context
+        self.t = self.s.time_resolved_context
 
     def test_analyzer_system(self):
         # The analyzer requests an output file which will trigger the creation of an experiment output dir
         # To prevent unnecessary directories after testing, we switch to a temp dir
         with temp_dir():
-            TimeResolvedDetectionAnalyzer(self.s)
+            TimeResolvedAnalyzer(self.s)
 
     def test_analyzer_module(self):
         # The analyzer requests an output file which will trigger the creation of an experiment output dir
         # To prevent unnecessary directories after testing, we switch to a temp dir
         with temp_dir():
-            TimeResolvedDetectionAnalyzer(self.t)
+            TimeResolvedAnalyzer(self.t)
 
 
 if __name__ == '__main__':

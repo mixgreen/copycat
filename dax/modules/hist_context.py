@@ -397,8 +397,8 @@ class HistogramAnalyzer:
             # Read and convert data from HDF5 file
             self.keys = list(group)
             histograms = ((k, (group[k][index] for index in natsort.natsorted(group[k]))) for k in self.keys)
-            self.histograms = {k: [[self.ndarray_to_counter(channel) for channel in dataset]
-                                   for dataset in zip(*datasets)] for k, datasets in histograms}
+            self.histograms = {k: [[self.ndarray_to_counter(values) for values in channel]
+                                   for channel in zip(*datasets)] for k, datasets in histograms}
             if state_detection_threshold is not None:
                 self.probabilities = {k: np.asarray(self._get_probabilities(h, state_detection_threshold))
                                       for k, h in self.histograms.items()}
