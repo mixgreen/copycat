@@ -40,6 +40,11 @@ class HistogramContext(DaxModule):
     PROBABILITY_PLOT_NAME = 'probability'
     """Name of the probability plot applet."""
 
+    MEAN_COUNT_PLOT_KEY = 'plot.dax.histogram_context.mean_count'
+    """Dataset name for plotting latest mean count graph."""
+    MEAN_COUNT_PLOT_NAME = 'mean count'
+    """Name of the probability plot applet."""
+
     PLOT_GROUP = 'dax.histogram_context'
     """Group to which the plot applets belong."""
 
@@ -80,8 +85,9 @@ class HistogramContext(DaxModule):
         self._open_datasets = collections.Counter()  # type: typing.Dict[str, int]
 
     def init(self) -> None:
-        # Prepare the probability plot dataset by clearing it
+        # Prepare the probability and mean count plot datasets by clearing them
         self.clear_probability_plot()
+        self.clear_mean_count_plot()
 
     def post_init(self) -> None:
         # Obtain the state detection threshold
@@ -224,6 +230,11 @@ class HistogramContext(DaxModule):
             # Append result to probability plotting dataset
             self.append_to_dataset(self.PROBABILITY_PLOT_KEY, probabilities)
 
+            # Calculate average count per histogram
+            mean_counts = [sum(c * v for c, v in h.items()) / sum(h.values()) for h in histograms]
+            # Append result to mean count plotting dataset
+            self.append_to_dataset(self.MEAN_COUNT_PLOT_KEY, mean_counts)
+
         else:
             # Add empty element to the archive (keeps indexing consistent)
             self._histogram_archive.setdefault(self._dataset_key, []).append([])
@@ -235,7 +246,7 @@ class HistogramContext(DaxModule):
         # Update context counter
         self._in_context -= 1
 
-    def _histogram_to_probability(self, counter: collections.Counter,
+    def _histogram_to_probability(self, histogram: collections.Counter,
                                   state_detection_threshold: typing.Optional[int] = None) -> float:
         """Convert a histogram to a state probability.
 
@@ -246,7 +257,7 @@ class HistogramContext(DaxModule):
             # Use default state_detection_threshold if not set
             state_detection_threshold = self._state_detection_threshold
 
-        return HistogramAnalyzer.histogram_to_probability(counter, state_detection_threshold)
+        return HistogramAnalyzer.histogram_to_probability(histogram, state_detection_threshold)
 
     """Applet plotting functions"""
 
@@ -276,10 +287,28 @@ class HistogramContext(DaxModule):
         self._ccb.plot_xy_multi(self.PROBABILITY_PLOT_NAME, self.PROBABILITY_PLOT_KEY, group=self.PLOT_GROUP, **kwargs)
 
     @rpc(flags={'async'})
+    def plot_mean_count(self, **kwargs):  # type: (typing.Any) -> None
+        """Open the applet that shows a plot of average count per histogram.
+
+        :param kwargs: Extra keyword arguments for the plot
+        """
+
+        # Set default label
+        kwargs.setdefault('y_label', 'Mean count')
+        # Plot
+        self._ccb.plot_xy_multi(self.MEAN_COUNT_PLOT_NAME, self.MEAN_COUNT_PLOT_KEY, group=self.PLOT_GROUP, **kwargs)
+
+    @rpc(flags={'async'})
     def clear_probability_plot(self):  # type: () -> None
         """Clear the probability plot."""
         # Set the probability dataset to an empty list
         self.set_dataset(self.PROBABILITY_PLOT_KEY, [], broadcast=True, archive=False)
+
+    @rpc(flags={'async'})
+    def clear_mean_count_plot(self):  # type: () -> None
+        """Clear the average count plot."""
+        # Set the mean count dataset to an empty list
+        self.set_dataset(self.MEAN_COUNT_PLOT_KEY, [], broadcast=True, archive=False)
 
     @rpc(flags={'async'})
     def disable_histogram_plot(self):  # type: () -> None
@@ -290,6 +319,11 @@ class HistogramContext(DaxModule):
     def disable_probability_plot(self):  # type: () -> None
         """Close the probability plot."""
         self._ccb.disable_applet(self.PROBABILITY_PLOT_NAME, self.PLOT_GROUP)
+
+    @rpc(flags={'async'})
+    def disable_mean_count_plot(self):  # type: () -> None
+        """Close the probability plot."""
+        self._ccb.disable_applet(self.MEAN_COUNT_PLOT_NAME, self.PLOT_GROUP)
 
     @rpc(flags={'async'})
     def disable_all_plots(self):  # type: () -> None
