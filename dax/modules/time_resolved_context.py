@@ -195,6 +195,9 @@ class TimeResolvedContext(DaxModule):
         This function is intended to be fast to allow high input data throughput.
         No type checking is performed on the data.
 
+        Note that corrections for delayed events should result in **negative offset**.
+        The negative offset represents the fact that detection started before the event happened.
+
         :param data: A 2D list of ints representing the PMT counts of different ions
         :param offset_mu: An offset to correct any shifts of events in machine units (defaults to no offset)
         :raises TimeResolvedContextError: Raised if called out of context
