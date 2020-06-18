@@ -100,6 +100,13 @@ class DaxBase(artiq.experiment.HasEnvironment, abc.ABC):
 
     def __init__(self, managers_or_parent: typing.Any,
                  *args: typing.Any, **kwargs: typing.Any):
+        """Initialize DAX base.
+
+        :param managers_or_parent: ARTIQ manager or parent of this environment
+        :param args: Positional arguments forwarded to the :func:`build` function
+        :param kwargs: Keyword arguments forwarded to the :func:`build` function
+        """
+
         # Logger object
         self.__logger = logging.getLogger(self.get_identifier())
 
@@ -636,6 +643,16 @@ class DaxModuleBase(DaxHasSystem, abc.ABC):
 
     def __init__(self, managers_or_parent: typing.Any, module_name: str, module_key: str, registry: 'DaxNameRegistry',
                  *args: typing.Any, **kwargs: typing.Any):
+        """Construct the module base class.
+
+        :param managers_or_parent: Manager or parent of this module
+        :param module_name: Name of the module
+        :param module_key: Unique and complete key of this module
+        :param registry: The shared registry object
+        :param args: Positional arguments forwarded to the :func:`build` function
+        :param kwargs: Keyword arguments forwarded to the :func:`build` function
+        """
+
         # Call super
         super(DaxModuleBase, self).__init__(managers_or_parent, module_name, module_key, registry, *args, **kwargs)
 
@@ -834,10 +851,10 @@ class DaxSystem(DaxModuleBase):
         """
 
         # Store system information in local archive
-        self.set_dataset(self.get_system_key('dax_system_id'), self.SYS_ID, archive=True)
-        self.set_dataset(self.get_system_key('dax_system_version'), self.SYS_VER, archive=True)
-        self.set_dataset(self.get_system_key('dax_version'), _dax_version, archive=True)
-        self.set_dataset(self.get_system_key('dax_sim_enabled'), self.dax_sim_enabled, archive=True)
+        self.set_dataset('dax/system_id', self.SYS_ID, archive=True)
+        self.set_dataset('dax/system_version', self.SYS_VER, archive=True)
+        self.set_dataset('dax/version', _dax_version, archive=True)
+        self.set_dataset('dax/sim_enabled', self.dax_sim_enabled, archive=True)
 
         # Perform system initialization
         self.logger.debug('Starting DAX system initialization...')
@@ -917,6 +934,12 @@ class DaxClient(DaxHasSystem, abc.ABC):
 
     def __init__(self, managers_or_parent: typing.Any,
                  *args: typing.Any, **kwargs: typing.Any):
+        """Construct the DAX client object.
+
+        :param managers_or_parent: Manager or parent of this module
+        :param args: Positional arguments forwarded to the :func:`build` function
+        :param kwargs: Keyword arguments forwarded to the :func:`build` function
+        """
         # Check if the decorator was used
         if not isinstance(managers_or_parent, DaxSystem):
             raise TypeError('DAX client class {:s} must be decorated using '
@@ -1303,6 +1326,7 @@ class DaxDataStore:
     """Current working directory commit hash."""
 
     def __init__(self) -> None:  # Constructor return type required if no parameters are given
+        """Construct a new DAX data store object."""
         # Create a logger object
         self._logger = logging.getLogger('{:s}.{:s}'.format(self.__module__, self.__class__.__name__))
 

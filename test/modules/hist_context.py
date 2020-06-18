@@ -1,5 +1,7 @@
 import typing
 import unittest
+import collections
+import numpy as np
 
 import artiq.coredevice
 
@@ -8,6 +10,7 @@ from dax.modules.hist_context import *
 from dax.interfaces.detection import DetectionInterface
 from dax.util.artiq_helpers import get_manager_or_parent
 from dax.util.output import temp_dir
+import dax.util.matplotlib_backend  # noqa: F401
 
 
 class _MockDetectionModule(DaxModule, DetectionInterface):
@@ -178,6 +181,28 @@ class HistogramContextTestCase(unittest.TestCase):
         for h in histograms[1]:  # Channel 1
             self.assertDictEqual(h, {8: 2, 9: 4}, 'Obtained histograms did not meet expected format')
 
+    def test_ddb_histograms(self):
+        # Add data to the archive
+        num_histograms = 8
+        data = [
+            [1, 9],
+            [2, 9],
+            [2, 9],
+            [3, 9],
+            [3, 8],
+            [3, 8],
+        ]
+
+        for _ in range(num_histograms):
+            with self.h:
+                for d in data:
+                    self.h.append(d)
+
+        # Get datasets which stored flat histograms
+        dataset = self.s.get_dataset('/'.join([self.h.DATASET_GROUP, self.h.DEFAULT_DATASET_KEY, '0']))
+        flat = [[0, 1, 2, 3, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0, 2, 4]]
+        self.assertEqual(dataset, flat, 'Stored dataset does not match expected format')
+
     def test_archive_probabilities(self):
         # Add data to the archive
         num_histograms = 8
@@ -228,8 +253,10 @@ class HistogramContextTestCase(unittest.TestCase):
         # In simulation we can only call these functions, but nothing will happen
         self.h.plot_histogram()
         self.h.plot_probability()
+        self.h.plot_mean_count()
         self.h.disable_histogram_plot()
         self.h.disable_probability_plot()
+        self.h.disable_mean_count_plot()
         self.h.disable_all_plots()
 
 
@@ -252,12 +279,42 @@ class HistogramAnalyzerTestCase(unittest.TestCase):
         with temp_dir():
             HistogramAnalyzer(self.h)
 
-    def test_histogram_analyzer_file(self):
-        # The histogram analyzer requests an output file which will trigger the creation of an experiment output dir
-        # To prevent unnecessary directories after testing, we switch to a temp dir
-        with temp_dir():
-            with self.assertRaises(NotImplementedError, msg='Did not raise expected NotImplementedError'):
-                HistogramAnalyzer('file_name.h5')
+    def test_counter_to_ndarray(self):
+        c = collections.Counter([1, 2, 3, 3, 4, 4, 4, 9])
+        a = np.asarray([0, 1, 1, 2, 3, 0, 0, 0, 0, 1])
+        n = HistogramAnalyzer.counter_to_ndarray(c)
+        self.assertListEqual(list(n), list(a), 'Counter did not convert correctly to ndarray')
+
+    def test_ndarray_to_counter(self):
+        c = collections.Counter([1, 2, 3, 3, 4, 4, 4, 9])
+        a = np.asarray([0, 1, 1, 2, 3, 0, 0, 0, 0, 1])
+        n = HistogramAnalyzer.ndarray_to_counter(a)
+        self.assertEqual(n, c, 'ndarray did not convert correctly to Counter')
+
+    def test_histogram_to_probability(self):
+        data = [(collections.Counter([3]), 0.0),
+                (collections.Counter([5]), 1.0),
+                (collections.Counter([1]), 0.0),
+                (collections.Counter([4]), 1.0),
+                (collections.Counter([0, 4]), 0.5), ]
+        threshold = 3
+
+        for d, r in data:
+            with self.subTest(histogram=d):
+                self.assertEqual(HistogramAnalyzer.histogram_to_probability(d, threshold), r,
+                                 'Single histogram did not converted correctly to a probability')
+
+    def test_histograms_to_probabilities(self):
+        data = [[collections.Counter([3]), collections.Counter([5]), collections.Counter([1])],
+                [collections.Counter([1]), collections.Counter([2]), collections.Counter([4])],
+                [collections.Counter([1, 4]), collections.Counter([1, 2]), collections.Counter([5, 8])], ]
+        threshold = 3
+        reference = [[0.0, 1.0, 0.0], [0.0, 0.0, 1.0], [0.5, 0.0, 1.0]]
+
+        result = HistogramAnalyzer.histograms_to_probabilities(data, threshold)
+
+        for ref, res in zip(reference, result):
+            self.assertListEqual(ref, list(res), 'Histograms did not converted correctly to probabilities')
 
 
 if __name__ == '__main__':

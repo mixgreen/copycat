@@ -27,9 +27,9 @@ class MultiXYPlot(PlotWidget):
             x = x[:len(y)]
 
         # Sort based on x data
-        ind = x.argsort()
-        x = x[ind]
-        y = y[ind]
+        idx = x.argsort()
+        x = x[idx]
+        y = y[idx]
 
         # Handle sliding window
         if args.sliding_window > 0:

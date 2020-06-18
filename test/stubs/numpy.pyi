@@ -97,7 +97,7 @@ class ndarray(collections.abc.Sequence, typing.Generic[__N_T]):
         ...
 
     @typing.overload
-    def __getitem__(self, s: slice) -> typing.Sequence[__N_T]:
+    def __getitem__(self, s: slice) -> ndarray:
         ...
 
     def __len__(self) -> int:
@@ -169,4 +169,12 @@ def logspace(start, stop, num=50, endpoint=True, base=10.0, dtype=None, axis=0) 
 
 
 def asarray(a: typing.Sequence[typing.Any], dtype: type = None, order: typing.Optional[str] = None) -> ndarray:
+    ...
+
+
+def column_stack(tup: typing.Sequence[ndarray]) -> ndarray:
+    ...
+
+
+def concatenate(*arrays: typing.Sequence[typing.Any], axis: int = 0, out: typing.Optional[ndarray] = None) -> ndarray:
     ...

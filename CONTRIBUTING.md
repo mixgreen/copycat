@@ -19,7 +19,7 @@ Tests can be executed by using the following commands:
 
 ```shell
 python3 -m unittest
-mypy dax/ test/
+mypy
 flake8
 ```
 

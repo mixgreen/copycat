@@ -4,7 +4,7 @@ import pathlib
 import contextlib
 import tempfile
 
-__all__ = ['temp_dir', 'get_base_path', 'get_file_name_generator', 'get_file_name']
+__all__ = ['temp_dir', 'get_base_path', 'get_file_name_generator', 'dummy_file_name_generator', 'get_file_name']
 
 
 @contextlib.contextmanager
@@ -71,9 +71,13 @@ def get_file_name_generator(scheduler: typing.Any):  # type: ignore
         :param name: Name of the file
         :param ext: The extension of the file
         :return: A complete file name
+        :raises ValueError: Raised if the name is empty
         """
         assert isinstance(name, str), 'File name must be of type str'
         assert isinstance(ext, str) or ext is None, 'File extension must be of type str or None'
+
+        if not name:
+            raise ValueError('The given name can not be empty')
 
         if ext is not None:
             # Add file extension
@@ -87,6 +91,30 @@ def get_file_name_generator(scheduler: typing.Any):  # type: ignore
     return file_name_generator
 
 
+def dummy_file_name_generator(name: str, ext: typing.Optional[str] = None) -> str:
+    """Generate output file names, dummy replacement for :func:`get_file_name_generator`.
+
+    This function has the same interface as the generator returned by :func:`get_file_name_generator`.
+
+    :param name: Name of the file
+    :param ext: The extension of the file
+    :return: A complete file name
+    :raises ValueError: Raised if the name is empty
+    """
+    assert isinstance(name, str), 'File name must be of type str'
+    assert isinstance(ext, str) or ext is None, 'File extension must be of type str or None'
+
+    if not name:
+        raise ValueError('The given name can not be empty')
+
+    if ext is not None:
+        # Add file extension
+        name = '.'.join((name, ext))
+
+    # Return name
+    return name
+
+
 def get_file_name(scheduler: typing.Any, name: str, ext: typing.Optional[str] = None) -> str:
     """Generate a single uniformly styled output file name based on the experiment metadata.
 
@@ -94,6 +122,7 @@ def get_file_name(scheduler: typing.Any, name: str, ext: typing.Optional[str] = 
     :param name: Name of the file
     :param ext: The extension of the file
     :return: A complete file name
+    :raises ValueError: Raised if the name is empty
     """
 
     # Get a generator (extra typing annotation required to pass type checking without use of typing.Protocol)

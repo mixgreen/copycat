@@ -64,3 +64,8 @@ To run the DAX unit tests, execute the following command in the root directory o
 ```shell
 python3 -m unittest
 ```
+
+## Main contributors
+
+- Leon Riesebos (Duke University)
+- Brad Bondurant (Duke University)

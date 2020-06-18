@@ -1,3 +1,7 @@
+stages:
+  - test
+  - deploy
+
 .nix_env:
   image: nixos/nix:latest
   before_script:
@@ -27,6 +31,7 @@
 
 test_nix:
   extends: .nix_env
+  stage: test
   coverage: '/^TOTAL.+?(\d+\%)$/'
   script:
     # Run test commands in a Nix shell
@@ -38,15 +43,23 @@ test_nix:
 
 test_conda:
   extends: .conda_env
+  stage: test
   script:
     # Install packages required for testing
     - conda install pycodestyle
     # Run test commands
     - python3 --version
     - python3 -m unittest -v
+  rules:
+    # Rule to allow failure of conda test if variable is set
+    - if: '$CONDA_ALLOW_FAILURE'
+      allow_failure: true
+    # Default
+    - when: on_success
 
 pages:
   extends: .nix_env
+  stage: test
   script:
     # Generate documentation
     - nix-shell doc/shell.nix --run "cd doc; make html"

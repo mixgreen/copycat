@@ -11,6 +11,11 @@ class LedModule(DaxModule):
     """Module to control user LED's."""
 
     def build(self, *leds: str, init: bool = False) -> None:  # type: ignore
+        """Build the LED module.
+
+        :param leds: Keys of the LED devices to use in order from least to most significant
+        :param init: Enable initialization of this module
+        """
         # Check arguments
         if 1 > len(leds) > 8:
             raise TypeError("Number of LED's must be in the range [1..8]")

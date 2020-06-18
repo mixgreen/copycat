@@ -27,6 +27,19 @@ class OutputTestCase(unittest.TestCase):
             self.assertIn('bar', gen('bar'))
             self.assertIn('bar.pdf', gen('bar', 'pdf'))
 
+            with self.assertRaises(ValueError, msg='Empty name did not raise'):
+                gen('')
+
+    def test_dummy_file_name_generator(self):
+        from dax.util.output import get_file_name_generator, dummy_file_name_generator
+        with temp_dir():
+            gen = get_file_name_generator(None)
+            self.assertIn(dummy_file_name_generator('bar'), gen('bar'))
+            self.assertIn(dummy_file_name_generator('bar', 'pdf'), gen('bar', 'pdf'))
+
+            with self.assertRaises(ValueError, msg='Empty name did not raise'):
+                dummy_file_name_generator('')
+
     def test_file_name(self):
         from dax.util.output import get_file_name
         with temp_dir():

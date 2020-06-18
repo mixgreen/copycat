@@ -24,6 +24,11 @@ class RtioBenchmarkModule(DaxModule):
     DMA_BURST = 'rtio_benchmark_burst'
 
     def build(self, ttl_out: str, dma: bool = False) -> None:
+        """Build the RTIO benchmark module.
+
+        :param ttl_out: Key of the TTLInOut device to use
+        :param dma: Enable the DMA features of this module
+        """
         assert isinstance(dma, bool), 'DMA flag should be of type bool'
 
         # Store attributes
@@ -644,6 +649,12 @@ class RtioLoopBenchmarkModule(RtioBenchmarkModule):
     EDGE_DELAY = 1 * us
 
     def build(self, ttl_out: str, ttl_in: str, **kwargs: typing.Any) -> None:
+        """Build the RTIO loop benchmark module.
+
+        :param ttl_out: Key of the TTLInOut device to use as output
+        :param ttl_in: Key of the TTLInOut device to use as input
+        :param kwargs: Keyword arguments for the :class:`RtioBenchmarkModule` parent
+        """
         # Call super
         super(RtioLoopBenchmarkModule, self).build(ttl_out, **kwargs)
         # TTL input device

@@ -1,15 +1,17 @@
 import typing
 import collections
 import numpy as np
+import h5py  # type: ignore
+import natsort
+import os
 
-import dax.util.matplotlib_backend  # Workaround for QT error  # noqa: F401
 import matplotlib.pyplot as plt  # type: ignore
 import matplotlib.ticker  # type: ignore
 
 from dax.experiment import *
 from dax.interfaces.detection import DetectionInterface
 from dax.util.ccb import get_ccb_tool
-from dax.util.output import get_file_name_generator
+from dax.util.output import get_file_name_generator, dummy_file_name_generator
 from dax.util.units import UnitsFormatter
 
 __all__ = ['HistogramContext', 'HistogramAnalyzer', 'HistogramContextError']
@@ -38,18 +40,26 @@ class HistogramContext(DaxModule):
     PROBABILITY_PLOT_NAME = 'probability'
     """Name of the probability plot applet."""
 
+    MEAN_COUNT_PLOT_KEY = 'plot.dax.histogram_context.mean_count'
+    """Dataset name for plotting latest mean count graph."""
+    MEAN_COUNT_PLOT_NAME = 'mean count'
+    """Name of the probability plot applet."""
+
     PLOT_GROUP = 'dax.histogram_context'
     """Group to which the plot applets belong."""
 
-    DEFAULT_DATASET_KEY = 'histogram'
-    """The default name of the output dataset in archive."""
-    HISTOGRAM_ARCHIVE_KEY_FORMAT = '_histogram.{key:s}'
-    """Dataset key format for archiving histogram information."""
-
-    DATASET_KEY_FORMAT = '{dataset_key:s}.{index:d}'
+    DATASET_GROUP = 'histogram_context'
+    """The group name for archiving data."""
+    DATASET_KEY_FORMAT = DATASET_GROUP + '/{dataset_key:s}/{index:d}'
     """Format string for sub-dataset keys."""
+    DEFAULT_DATASET_KEY = 'histogram'
+    """The default name of the output sub-dataset."""
 
     def build(self, default_dataset_key: typing.Optional[str] = None) -> None:  # type: ignore
+        """Build the histogram context module.
+
+        :param default_dataset_key: Default dataset name used for storing histogram data
+        """
         assert isinstance(default_dataset_key, str) or default_dataset_key is None, \
             'Provided default dataset key must be None or of type str'
 
@@ -75,8 +85,9 @@ class HistogramContext(DaxModule):
         self._open_datasets = collections.Counter()  # type: typing.Dict[str, int]
 
     def init(self) -> None:
-        # Prepare the probability plot dataset by clearing it
+        # Prepare the probability and mean count plot datasets by clearing them
         self.clear_probability_plot()
+        self.clear_mean_count_plot()
 
     def post_init(self) -> None:
         # Obtain the state detection threshold
@@ -98,7 +109,7 @@ class HistogramContext(DaxModule):
         This function is intended to be fast to allow high input data throughput.
         No type checking is performed on the data.
 
-        :param data: A list of ints representing the PMT counts of different ions.
+        :param data: A list of ints representing the PMT counts of different ions
         :raises HistogramContextError: Raised if called outside the histogram context
         """
         if not self._in_context:
@@ -164,7 +175,7 @@ class HistogramContext(DaxModule):
         This function can be used to manually enter the histogram context.
         We strongly recommend to use the `with` statement instead.
 
-        :raises HistogramContextError: Raised if already in histogram context (context non-reentrant)
+        :raises HistogramContextError: Raised if already in histogram context (context is non-reentrant)
         """
 
         if self._in_context:
@@ -195,6 +206,10 @@ class HistogramContext(DaxModule):
                                                          index=self._open_datasets[self._dataset_key])
 
         if len(self._buffer):
+            # Check consistency of data in the buffer
+            if any(len(b) != len(self._buffer[0]) for b in self._buffer):
+                raise RuntimeError('Data in the buffer is not consistent, data probably corrupt')
+
             # Transform buffer data to pack counts per ion and convert into histograms
             histograms = [collections.Counter(c) for c in zip(*self._buffer)]
             # Store histograms in the archive
@@ -215,6 +230,11 @@ class HistogramContext(DaxModule):
             # Append result to probability plotting dataset
             self.append_to_dataset(self.PROBABILITY_PLOT_KEY, probabilities)
 
+            # Calculate average count per histogram
+            mean_counts = [sum(c * v for c, v in h.items()) / sum(h.values()) for h in histograms]
+            # Append result to mean count plotting dataset
+            self.append_to_dataset(self.MEAN_COUNT_PLOT_KEY, mean_counts)
+
         else:
             # Add empty element to the archive (keeps indexing consistent)
             self._histogram_archive.setdefault(self._dataset_key, []).append([])
@@ -223,26 +243,21 @@ class HistogramContext(DaxModule):
 
         # Update counter for this dataset key
         self._open_datasets[self._dataset_key] += 1
-        # Archive number of sub-datasets for current key
-        self.set_dataset(self.HISTOGRAM_ARCHIVE_KEY_FORMAT.format(key=self._dataset_key),
-                         self._open_datasets[self._dataset_key], archive=True)
         # Update context counter
         self._in_context -= 1
 
-    def _histogram_to_probability(self, counter: collections.Counter,
+    def _histogram_to_probability(self, histogram: collections.Counter,
                                   state_detection_threshold: typing.Optional[int] = None) -> float:
-        """Convert a histogram to a state probability."""
+        """Convert a histogram to a state probability.
+
+        Falls back on default state detection threshold if none is given.
+        """
 
         if state_detection_threshold is None:
             # Use default state_detection_threshold if not set
             state_detection_threshold = self._state_detection_threshold
 
-        # One measurements (recognizes binary measurements and counts)
-        one = sum(f for c, f in counter.items() if c is True or c > state_detection_threshold)
-        # Total measurements
-        total = sum(counter.values())
-        # Return probability
-        return one / total
+        return HistogramAnalyzer.histogram_to_probability(histogram, state_detection_threshold)
 
     """Applet plotting functions"""
 
@@ -272,10 +287,28 @@ class HistogramContext(DaxModule):
         self._ccb.plot_xy_multi(self.PROBABILITY_PLOT_NAME, self.PROBABILITY_PLOT_KEY, group=self.PLOT_GROUP, **kwargs)
 
     @rpc(flags={'async'})
+    def plot_mean_count(self, **kwargs):  # type: (typing.Any) -> None
+        """Open the applet that shows a plot of average count per histogram.
+
+        :param kwargs: Extra keyword arguments for the plot
+        """
+
+        # Set default label
+        kwargs.setdefault('y_label', 'Mean count')
+        # Plot
+        self._ccb.plot_xy_multi(self.MEAN_COUNT_PLOT_NAME, self.MEAN_COUNT_PLOT_KEY, group=self.PLOT_GROUP, **kwargs)
+
+    @rpc(flags={'async'})
     def clear_probability_plot(self):  # type: () -> None
         """Clear the probability plot."""
         # Set the probability dataset to an empty list
         self.set_dataset(self.PROBABILITY_PLOT_KEY, [], broadcast=True, archive=False)
+
+    @rpc(flags={'async'})
+    def clear_mean_count_plot(self):  # type: () -> None
+        """Clear the average count plot."""
+        # Set the mean count dataset to an empty list
+        self.set_dataset(self.MEAN_COUNT_PLOT_KEY, [], broadcast=True, archive=False)
 
     @rpc(flags={'async'})
     def disable_histogram_plot(self):  # type: () -> None
@@ -286,6 +319,11 @@ class HistogramContext(DaxModule):
     def disable_probability_plot(self):  # type: () -> None
         """Close the probability plot."""
         self._ccb.disable_applet(self.PROBABILITY_PLOT_NAME, self.PLOT_GROUP)
+
+    @rpc(flags={'async'})
+    def disable_mean_count_plot(self):  # type: () -> None
+        """Close the probability plot."""
+        self._ccb.disable_applet(self.MEAN_COUNT_PLOT_NAME, self.PLOT_GROUP)
 
     @rpc(flags={'async'})
     def disable_all_plots(self):  # type: () -> None
@@ -315,7 +353,7 @@ class HistogramContext(DaxModule):
         In case no dataset key is provided, the default dataset key is used.
 
         :param dataset_key: Key of the dataset to obtain the histograms of
-        :return: All histogram data
+        :return: All histogram data for the specified key
         """
         return list(zip(*self._histogram_archive[self._default_dataset_key if dataset_key is None else dataset_key]))
 
@@ -333,21 +371,44 @@ class HistogramContext(DaxModule):
 
         :param dataset_key: Key of the dataset to obtain the probabilities of
         :param state_detection_threshold: State detection threshold used to calculate the probabilities
-        :return: All probability data
+        :return: All probability data for the specified key
         """
         return [[self._histogram_to_probability(h, state_detection_threshold) for h in histograms]
                 for histograms in self.get_histograms(dataset_key)]
 
 
 class HistogramAnalyzer:
-    """Basic automated analysis and offline plotting of data obtained by the histogram context."""
+    """Basic automated analysis and offline plotting of data obtained by the histogram context.
+
+    Various data sources can be provided and presented data should have a uniform format.
+    Simple automated plotting functions are provided, but users can also access data directly
+    for manual processing and analysis.
+
+    :attr:`keys` is a list of keys for which data is available.
+
+    :attr:`histograms` is a dict which for each key contains a list of histograms per channel.
+    The first dimension is the channel and the second dimension are the histograms.
+    Note that histograms are stored as Counter objects, which behave like dicts.
+
+    :attr:`probabilities` is a dict with for each key contains a list of probabilities.
+    This attribute is only available if a state detection threshold was provided.
+    The probabilities are a mapped version of the :attr:`histograms` data.
+
+    Various helper functions for data processing are also available.
+    :func:`histogram_to_probability` converts a single histogram, formatted as a
+    Counter object, to a state probability based on a given state detection threshold.
+    :func:`histograms_to_probabilities` maps a list of histograms per channel (2D array of Counter objects)
+    to a list of probabilities per channel based on a given state detection threshold.
+    :func:`counter_to_ndarray` and :func:`ndarray_to_counter` convert a single histogram
+    stored as a Counter object to an array representation and vice versa.
+    """
 
     HISTOGRAM_PLOT_FILE_FORMAT = '{key:s}_{index:d}'
     """File name format for histogram plot files."""
     PROBABILITY_PLOT_FILE_FORMAT = '{key:s}_probability'
     """File name format for probability plot files."""
 
-    def __init__(self, source: typing.Union[DaxSystem, HistogramContext, str],
+    def __init__(self, source: typing.Union[DaxSystem, HistogramContext, str, h5py.File],
                  state_detection_threshold: typing.Optional[int] = None):
         """Create a new histogram analyzer object.
 
@@ -356,25 +417,106 @@ class HistogramAnalyzer:
         """
         assert isinstance(state_detection_threshold, int) or state_detection_threshold is None
 
+        # Input conversion
         if isinstance(source, DaxSystem):
             # Obtain histogram context module
             source = source.registry.find_module(HistogramContext)
+        elif isinstance(source, str):
+            # Open HDF5 file
+            source = h5py.File(os.path.expanduser(source), mode='r')
 
         if isinstance(source, HistogramContext):
             # Get data from histogram context module
             self.keys = source.get_keys()
             self.histograms = {k: source.get_histograms(k) for k in self.keys}
-            self.probabilities = {k: source.get_probabilities(k, state_detection_threshold) for k in self.keys}
+            self.probabilities = {k: np.asarray(source.get_probabilities(k, state_detection_threshold))
+                                  for k in self.keys}
 
             # Obtain the file name generator
             self._file_name_generator = get_file_name_generator(source.get_device('scheduler'))
 
-        elif isinstance(source, str):
+        elif isinstance(source, h5py.File):
+            # Verify format of HDF5 file
+            group_name = 'datasets/' + HistogramContext.DATASET_GROUP
+            if group_name not in source:
+                raise KeyError('The HDF5 file does not contain histogram data')
+
+            # Get the group which contains all data
+            group = source[group_name]
+
             # Read and convert data from HDF5 file
-            raise NotImplementedError('Analysis from HDF5 source file is not yet implemented')
+            self.keys = list(group)
+            histograms = ((k, (group[k][index] for index in natsort.natsorted(group[k]))) for k in self.keys)
+            self.histograms = {k: [[self.ndarray_to_counter(values) for values in channel]
+                                   for channel in zip(*datasets)] for k, datasets in histograms}
+            if state_detection_threshold is not None:
+                self.probabilities = {k: self.histograms_to_probabilities(h, state_detection_threshold)
+                                      for k, h in self.histograms.items()}
+
+            # Get a file name generator
+            self._file_name_generator = dummy_file_name_generator
 
         else:
             raise TypeError('Unsupported source type')
+
+    """Helper functions"""
+
+    @staticmethod
+    def histogram_to_probability(counter: collections.Counter, state_detection_threshold: int) -> float:
+        """Helper function to convert a histogram to a state probability.
+
+        Counts *greater than* the state detection threshold are considered to be in state one.
+
+        :param counter: The counter object representing the histogram
+        :param state_detection_threshold: The state detection threshold to use
+        :return: The state probability as a float
+        """
+        assert isinstance(state_detection_threshold, int), 'State detection threshold must be of type int'
+
+        # One measurements (recognizes binary measurements and counts)
+        one = sum(f for c, f in counter.items() if c is True or c > state_detection_threshold)
+        # Total measurements
+        total = sum(counter.values())
+        # Return probability
+        return one / total
+
+    @staticmethod
+    def histograms_to_probabilities(histograms: typing.Sequence[typing.Sequence[collections.Counter]],
+                                    state_detection_threshold: int) -> np.ndarray:
+        """Convert histograms to probabilities based on a state detection threshold.
+
+        Histograms are provided as a 2D array of Counter objects.
+        The first dimension is the channel, the second dimension is the sequence of counters.
+
+        :param histograms: The input histograms
+        :param state_detection_threshold: The detection threshold
+        :return: Array of probabilities with the same shape as the input histograms
+        """
+        assert isinstance(state_detection_threshold, int), 'State detection threshold must be of type int'
+
+        probabilities = [[HistogramAnalyzer.histogram_to_probability(h, state_detection_threshold) for h in channel]
+                         for channel in histograms]
+        return np.asarray(probabilities)
+
+    @staticmethod
+    def counter_to_ndarray(histogram: collections.Counter) -> np.ndarray:
+        """Convert a histogram stored as a Counter object to an ndarray.
+
+        :param histogram: The histogram in Counter format
+        :return: ndarray that represents the same histogram
+        """
+        return np.asarray([histogram[i] for i in range(max(histogram) + 1)])
+
+    @staticmethod
+    def ndarray_to_counter(histogram: typing.Sequence[int]) -> collections.Counter:
+        """Convert a histogram stored as an ndarray to a Counter object.
+
+        :param histogram: The histogram in ndarray format
+        :return: Counter object that represents the same histogram
+        """
+        return collections.Counter({i: v for i, v in enumerate(histogram) if v > 0})
+
+    """Plotting functions"""
 
     def plot_histogram(self, key: str,
                        x_label: typing.Optional[str] = 'Count', y_label: typing.Optional[str] = 'Frequency',
@@ -401,16 +543,19 @@ class HistogramAnalyzer:
         # Get the histograms associated with the given key
         histograms = self.histograms[key]
 
+        # Create figure
+        fig, ax = plt.subplots()
+
         for index, h in enumerate(zip(*histograms)):
             # Obtain X and Y values (for all channels)
             x_values = np.arange(max(max(c) for c in h) + 1)
             y_values = [[c[x] for x in x_values] for c in h]
 
             # Plot
+            ax.cla()  # Clear axes
             bar_width = width / len(h)
-            fig, ax = plt.subplots()
-            for i, c_values in enumerate(y_values):
-                ax.bar(x_values + (bar_width * i) - (width / 2), c_values,
+            for i, y in enumerate(y_values):
+                ax.bar(x_values + (bar_width * i) - (width / 2), y,
                        width=bar_width, align='edge', label='Channel {:d}'.format(i), **kwargs)
 
             # Formatting
@@ -422,7 +567,9 @@ class HistogramAnalyzer:
             # Save figure
             file_name = self._file_name_generator(self.HISTOGRAM_PLOT_FILE_FORMAT.format(key=key, index=index), ext)
             fig.savefig(file_name, bbox_inches='tight')
-            plt.close(fig)
+
+        # Close the figure
+        plt.close(fig)
 
     def plot_all_histograms(self, **kwargs: typing.Any) -> None:
         """Plot histograms for all keys available in the data.
@@ -455,27 +602,33 @@ class HistogramAnalyzer:
         assert isinstance(ext, str)
 
         # Get the probabilities associated with the provided key
-        probabilities = self.probabilities[key]
+        probabilities = [np.asarray(p) for p in self.probabilities[key]]
 
         if not len(probabilities):
             # No data to plot
             return
-
-        if x_values is None:
+        elif x_values is None:
             # Generate generic X values
             x_values = np.arange(len(probabilities[0]))
+        else:
+            # Sort data based on the given x values
+            x_values = np.asarray(x_values)
+            ind = x_values.argsort()
+            x_values = x_values[ind]
+            probabilities = [p[ind] for p in probabilities]
 
         # Plotting defaults
         kwargs.setdefault('marker', 'o')
 
         # Plot
         fig, ax = plt.subplots()
-        for i, p_values in enumerate(probabilities):
-            ax.plot(x_values, p_values, label='Channel {:d}'.format(i), **kwargs)
+        for i, y in enumerate(probabilities):
+            ax.plot(x_values, y, label='Channel {:d}'.format(i), **kwargs)
 
         # Plot formatting
         ax.set_xlabel(x_label)
         ax.set_ylabel(y_label)
+        ax.ticklabel_format(axis='x', scilimits=(0, 1))
         ax.legend(loc=legend_loc)
 
         # Save and close figure
