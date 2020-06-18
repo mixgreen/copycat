@@ -179,6 +179,10 @@ class DaxScan(dax.base.dax.DaxBase, abc.ABC):
         :param kwargs: Keyword arguments forwarded to the superclass
         """
 
+        # Check if host_*() functions are all non-kernel functions
+        if any(_is_kernel(f) for f in [self.host_setup, self.host_cleanup, self.host_exit]):
+            raise TypeError('host_*() functions can not be kernels')
+
         # Call super and forward arguments, for compatibility with other libraries
         # noinspection PyArgumentList
         super(DaxScan, self).build(*args, **kwargs)
