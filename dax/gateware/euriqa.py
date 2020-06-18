@@ -9,6 +9,7 @@ Description of the pins & interfaces available on the FMC connector.
 from migen.build.generic_platform import IOStandard, Pins, Subsignal  # type: ignore
 
 fmc_adapter_io = [
+    # Input banks
     # IN1_[0..7]
     ("in1", 0, Pins("HPC:LA17_CC_P"), IOStandard("LVCMOS33")),  # JP2-20
     ("in1", 1, Pins("HPC:LA14_P"), IOStandard("LVCMOS33")),  # JP2-19
@@ -37,6 +38,7 @@ fmc_adapter_io = [
     ("in3", 6, Pins("HPC:LA30_P"), IOStandard("LVCMOS33")),  # JP2-44
     ("in3", 7, Pins("HPC:LA28_P"), IOStandard("LVCMOS33")),  # JP2-42
 
+    # Output banks
     # OUT1_[0..7]
     ("out1", 0, Pins("HPC:LA27_N"), IOStandard("LVCMOS33")),  # JP3-65
     ("out1", 1, Pins("LPC:LA21_N"), IOStandard("LVCMOS33")),  # JP3-67 # EXT4
@@ -89,98 +91,94 @@ fmc_adapter_io = [
     # OEB (Output Enable Buffer)
     ("oeb", 0, Pins("HPC:LA32_P"), IOStandard("LVCMOS33")),  # JP2-40
 
-    # trigger for updating output of the DDS
-    ("io_update", 0, Pins("HPC:LA25_P"), IOStandard("LVCMOS33")),  # JP3-43
-    ("io_update", 1, Pins("HPC:HA09_P"), IOStandard("LVCMOS33")),  # JP3-38
-    ("io_update", 2, Pins("HPC:LA24_P"), IOStandard("LVCMOS33")),  # JP3-33
-    ("io_update", 3, Pins("HPC:HA11_N"), IOStandard("LVCMOS33")),  # JP3-28
-    ("io_update", 4, Pins("HPC:HA04_P"), IOStandard("LVCMOS33")),  # JP3-25
-    ("io_update", 5, Pins("HPC:HA13_N"), IOStandard("LVCMOS33")),  # JP3-20
-    ("io_update", 6, Pins("HPC:HA02_P"), IOStandard("LVCMOS33")),  # JP3-17
-    ("io_update", 7, Pins("HPC:LA04_N"), IOStandard("LVCMOS33")),  # JP2_61
-    ("io_update", 8, Pins("HPC:LA06_N"), IOStandard("LVCMOS33")),  # JP2_51
-    ("io_update", 9, Pins("HPC:LA09_P"), IOStandard("LVCMOS33")),  # JP2_41
-    # Resets for the DDS control boards
-    ("reset", 0, Pins("HPC:LA21_P"), IOStandard("LVCMOS33")),  # JP3-41
-    ("reset", 1, Pins("HPC:LA20_P"), IOStandard("LVCMOS33")),  # JP3-31
-    ("reset", 2, Pins("HPC:HA03_N"), IOStandard("LVCMOS33")),  # JP3-23
-    ("reset", 3, Pins("HPC:HA01_CC_N"), IOStandard("LVCMOS33")),  # JP3-15
-    ("reset", 4, Pins("HPC:LA07_N"), IOStandard("LVCMOS33")),  # JP2_47
+    # Triggers for DDS SPI outputs
     # data channel for odd DDS channels on the DDS board,
     # Because the data channels are separated
     # the even channels are in the mosi Subsignal of the SPI busses
+    # OUT3
+    ("io_update", 0, Pins("HPC:LA25_P"), IOStandard("LVCMOS33")),  # JP3-43
+    ("io_update", 1, Pins("HPC:HA09_P"), IOStandard("LVCMOS33")),  # JP3-38
+    ("reset", 0, Pins("HPC:LA21_P"), IOStandard("LVCMOS33")),  # JP3-41
     ("odd_channel_sdio", 0, Pins("HPC:LA24_N"), IOStandard("LVCMOS33")),  # JP3-39
+    # OUT4
+    ("io_update", 2, Pins("HPC:LA24_P"), IOStandard("LVCMOS33")),  # JP3-33
+    ("io_update", 3, Pins("HPC:HA11_N"), IOStandard("LVCMOS33")),  # JP3-28
+    ("reset", 1, Pins("HPC:LA20_P"), IOStandard("LVCMOS33")),  # JP3-31
     ("odd_channel_sdio", 1, Pins("HPC:HA19_N"), IOStandard("LVCMOS33")),  # JP3-29
+    # OUT5
+    ("io_update", 4, Pins("HPC:HA04_P"), IOStandard("LVCMOS33")),  # JP3-25
+    ("io_update", 5, Pins("HPC:HA13_N"), IOStandard("LVCMOS33")),  # JP3-20
+    ("reset", 2, Pins("HPC:HA03_N"), IOStandard("LVCMOS33")),  # JP3-23
     ("odd_channel_sdio", 2, Pins("HPC:HA03_P"), IOStandard("LVCMOS33")),  # JP3-21
+    # OUT6
+    ("io_update", 6, Pins("HPC:HA02_P"), IOStandard("LVCMOS33")),  # JP3-17
+    ("io_update", 7, Pins("HPC:LA04_N"), IOStandard("LVCMOS33")),  # JP2_61
+    ("reset", 3, Pins("HPC:HA01_CC_N"), IOStandard("LVCMOS33")),  # JP3-15
     ("odd_channel_sdio", 3, Pins("HPC:LA04_P"), IOStandard("LVCMOS33")),  # JP2_63
-    ("odd_channel_sdio", 4, Pins("HPC:LA08_N"), IOStandard("LVCMOS33")),  # JP2_43
-    # SPI outputs
-    (
-        "spi",
-        0,
-        Subsignal("clk", Pins("HPC:HA08_P")),  # JP3-42
-        Subsignal("cs_n", Pins("HPC:LA21_N HPC:HA08_N")),  # JP3-45, JP3-40
-        Subsignal("mosi", Pins("HPC:HA07_N")),  # JP3-44
-        IOStandard("LVCMOS33"),
-    ),
-    # SPI channels for communicating to DDS boards
-    (
-        "spi",
-        1,
-        Subsignal("clk", Pins("HPC:HA10_N")),  # JP3-32
-        Subsignal("cs_n", Pins("HPC:LA20_N HPC:HA11_P")),  # JP3-37, JP3-30
-        Subsignal("mosi", Pins("HPC:HA09_N")),  # JP3-34
-        IOStandard("LVCMOS33"),
-    ),
-    (
-        "spi",
-        2,
-        Subsignal("clk", Pins("HPC:HA12_N")),  # JP3-24
-        Subsignal("cs_n", Pins("HPC:HA19_P HPC:HA13_P")),  # JP3-27, JP3-22
-        Subsignal("mosi", Pins("HPC:HA12_P")),  # JP3-26
-        IOStandard("LVCMOS33"),
-    ),
-    (
-        "spi",
-        3,
-        Subsignal("clk", Pins("HPC:HA14_N")),  # JP3-16
-        Subsignal("cs_n", Pins("HPC:HA02_N HPC:LA03_N")),  # JP3-19, JP2_65
-        Subsignal("mosi", Pins("HPC:HA14_P")),  # JP3-18
-        IOStandard("LVCMOS33"),
-    ),
-    (
-        "spi",
-        4,
-        Subsignal("clk", Pins("HPC:LA07_P")),  # JP2_49
-        Subsignal("cs_n", Pins("HPC:LA05_N HPC:LA08_P")),  # JP2_57, JP2_45
-        Subsignal("mosi", Pins("HPC:LA06_P")),  # JP2_53
-        IOStandard("LVCMOS33"),
-    ),
+    # # OUT7, repurposed for MEMS
+    # ("io_update", 8, Pins("HPC:LA06_N"), IOStandard("LVCMOS33")),  # JP2_51
+    # ("io_update", 9, Pins("HPC:LA09_P"), IOStandard("LVCMOS33")),  # JP2_41
+    # ("reset", 4, Pins("HPC:LA07_N"), IOStandard("LVCMOS33")),  # JP2_47
+    # ("odd_channel_sdio", 4, Pins("HPC:LA08_N"), IOStandard("LVCMOS33")),  # JP2_43
+
+    # SPI outputs for DDS
+    # OUT3
+    ("spi", 0,
+     Subsignal("clk", Pins("HPC:HA08_P")),  # JP3-42
+     Subsignal("cs_n", Pins("HPC:LA21_N HPC:HA08_N")),  # JP3-45, JP3-40
+     Subsignal("mosi", Pins("HPC:HA07_N")),  # JP3-44
+     IOStandard("LVCMOS33"),),
+    # OUT4
+    ("spi", 1,
+     Subsignal("clk", Pins("HPC:HA10_N")),  # JP3-32
+     Subsignal("cs_n", Pins("HPC:LA20_N HPC:HA11_P")),  # JP3-37, JP3-30
+     Subsignal("mosi", Pins("HPC:HA09_N")),  # JP3-34
+     IOStandard("LVCMOS33"),),
+    # OUT5
+    ("spi", 2,
+     Subsignal("clk", Pins("HPC:HA12_N")),  # JP3-24
+     Subsignal("cs_n", Pins("HPC:HA19_P HPC:HA13_P")),  # JP3-27, JP3-22
+     Subsignal("mosi", Pins("HPC:HA12_P")),  # JP3-26
+     IOStandard("LVCMOS33"),),
+    # OUT6
+    ("spi", 3,
+     Subsignal("clk", Pins("HPC:HA14_N")),  # JP3-16
+     Subsignal("cs_n", Pins("HPC:HA02_N HPC:LA03_N")),  # JP3-19, JP2_65
+     Subsignal("mosi", Pins("HPC:HA14_P")),  # JP3-18
+     IOStandard("LVCMOS33"),),
+
+    # MEMS SPI and triggers
+    # OUT7
+    ("spi", 4,
+     Subsignal("clk", Pins("HPC:LA07_P")),  # JP2_49
+     Subsignal("cs_n", Pins("HPC:LA05_N HPC:LA08_P")),  # JP2_57, JP2_45
+     Subsignal("mosi", Pins("HPC:LA06_P")),  # JP2_53
+     IOStandard("LVCMOS33"),),
+    ("mems_ldac", 0, Pins("HPC:LA06_N"), IOStandard("LVCMOS33")),  # JP2_51
+    # ("mems_unused", 0, Pins("HPC:LA09_P"), IOStandard("LVCMOS33")),  # JP2_41
+    ("mems_dac8734_reset", 0, Pins("HPC:LA07_N"), IOStandard("LVCMOS33")),  # JP2_47
+    ("mems_hv209_clr", 0, Pins("HPC:LA08_N"), IOStandard("LVCMOS33")),  # JP2_43
+
     # DAC8568 Control pins: SPI & Load DAC TTL/GPIO trigger (LDAC)
-    (
-        "spi",
-        5,
-        Subsignal("clk", Pins("HPC:HA00_CC_P")),  # JP2-76
-        Subsignal("cs_n", Pins("LPC:LA20_P")),  # JP2-70 (EXT-1, LPC board J20)
-        Subsignal("mosi", Pins("HPC:HA00_CC_N")),  # JP2-74
-        IOStandard("LVCMOS33"),
-    ),
-    ("ldac", 0, Pins("LPC:LA21_P"), IOStandard("LVCMOS33")),  # JP2-68 (EXT-3, LPC J20)
+    ("spi", 5,
+     Subsignal("clk", Pins("HPC:HA00_CC_P")),  # JP2-76
+     Subsignal("cs_n", Pins("LPC:LA20_P")),  # JP2-70 (EXT-1, LPC board J20)
+     Subsignal("mosi", Pins("HPC:HA00_CC_N")),  # JP2-74
+     IOStandard("LVCMOS33"),),
+    ("dac8568_ldac", 0, Pins("LPC:LA21_P"), IOStandard("LVCMOS33")),  # JP2-68 (EXT-3, LPC J20)
 ]
 
 x100_dac_spi = [
-    # SPI to hack UART-like communication to Sandia DAC. Takes over out2-7.
-    # SHOULD NOT ALWAYS BE USED. Only if using real-time comm to 100x DAC.
-    # Only relevant pin is "miso", overwrites the SD card pins.
-    # COULD SCREW UP YOUR SD CARD. CAREFUL
-    (
-        "spi",
-        6,
-        Subsignal("clk", Pins("AB22")),  # Unassigned # AB22 = SD Card MOSI
-        Subsignal("mosi", Pins("HPC:LA23_N")),  # JP3-63
-        Subsignal("cs_n", Pins("AC21")),  # AC21 = SD Card CS_n
-        IOStandard("LVCMOS33"),
-    ),
+    # SPI to hack UART-like communication to Sandia DAC.
+    # Output on pin OUT2_7 if enabled.
+    # Should only be used if using real-time comm to 100x DAC.
+    # Only relevant pin is "MISO", uses the KC705 SD card pins to assign other signals somewhere.
+    # DO NOT USE SD CARD SLOT WHEN THIS DEVICE IS INSTANTIATED!
+    ("spi", 6,
+     Subsignal("clk", Pins("AB22")),  # Unassigned # AB22 = SD Card MOSI
+     Subsignal("mosi", Pins("HPC:LA23_N")),  # JP3-63
+     Subsignal("cs_n", Pins("AC21")),  # AC21 = SD Card CS_n
+     IOStandard("LVCMOS33"),),
     # unused acts as dummy pin, not routed to relevant location.
-    ("unused", 0, Pins("AC20"), IOStandard("LVCMOS33")),  # AC20 = SD Card MISO
+    ("sandia_dac_dummy", 0, Pins("AC20"), IOStandard("LVCMOS33")),  # AC20 = SD Card MISO
 ]
