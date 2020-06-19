@@ -6,11 +6,11 @@ import numpy as np
 import artiq.coredevice
 
 from dax.experiment import *
+import dax.util.matplotlib_backend  # noqa: F401
 from dax.modules.hist_context import *
 from dax.interfaces.detection import DetectionInterface
 from dax.util.artiq_helpers import get_manager_or_parent
 from dax.util.output import temp_dir
-import dax.util.matplotlib_backend  # noqa: F401
 
 
 class _MockDetectionModule(DaxModule, DetectionInterface):

@@ -26,8 +26,10 @@ stages:
     - conda init
     - source ~/.bashrc
     - conda activate artiq
+    # Reinstall ARTIQ library from a specific channel (fix for llvmlite_artiq import error)
+    - conda install -y -c m-labs llvmlite-artiq
     # Install DAX dependencies
-    - conda install numpy scipy "pyvcd<0.2" natsort pygit2 "pyqt>=5" pyqtgraph matplotlib python-graphviz
+    - conda install -y numpy scipy "pyvcd<0.2" natsort pygit2 "pyqt>=5" pyqtgraph matplotlib python-graphviz h5py
 
 test_nix:
   extends: .nix_env
@@ -46,7 +48,7 @@ test_conda:
   stage: test
   script:
     # Install packages required for testing
-    - conda install pycodestyle
+    - conda install -y pycodestyle
     # Run test commands
     - python3 --version
     - python3 -m unittest -v
