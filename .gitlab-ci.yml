@@ -29,7 +29,7 @@ stages:
     # Reinstall ARTIQ library from a specific channel (fix for llvmlite_artiq import error)
     - conda install -y -c m-labs llvmlite-artiq
     # Install DAX dependencies
-    - conda install -y numpy scipy "pyvcd<0.2" natsort pygit2 "pyqt>=5" pyqtgraph matplotlib python-graphviz h5py
+    - conda install -y numpy scipy "pyvcd<0.2" natsort pygit2 "pyqt>=5.5" "pyqtgraph=0.10.0" matplotlib python-graphviz h5py
 
 test_nix:
   extends: .nix_env
