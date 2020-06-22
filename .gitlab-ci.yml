@@ -19,15 +19,10 @@ stages:
   image: continuumio/miniconda3:latest
   before_script:
     # Install ARTIQ and activate environment
-    - wget https://raw.githubusercontent.com/m-labs/artiq/release-5/install-with-conda.py
-    - sed -i "/artiq-board/d" install-with-conda.py  # Remove ARTIQ board packages
-    - python3 install-with-conda.py
-    - rm install-with-conda.py
-    - conda init
-    - source ~/.bashrc
+    - conda config --prepend channels https://conda.m-labs.hk/artiq
+    - conda config --append channels conda-forge
+    - conda create -y -n artiq artiq
     - conda activate artiq
-    # Reinstall ARTIQ library from a specific channel (fix for llvmlite_artiq import error)
-    - conda install -y -c m-labs llvmlite-artiq
     # Install DAX dependencies
     - conda install -y numpy scipy "pyvcd<0.2" natsort pygit2 "pyqt>=5.5" "pyqtgraph=0.10.0" matplotlib python-graphviz h5py
 
@@ -48,10 +43,12 @@ test_conda:
   stage: test
   script:
     # Install packages required for testing
-    - conda install -y pycodestyle
+    - conda install -y pycodestyle mypy flake8
     # Run test commands
     - python3 --version
     - python3 -m unittest -v
+    - mypy --version; mypy
+    - flake8 --version; flake8
   rules:
     # Rule to allow failure of conda test if variable is set
     - if: '$CONDA_ALLOW_FAILURE'
