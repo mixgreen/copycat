@@ -16,14 +16,22 @@ stages:
     - echo "trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= nixbld.m-labs.hk-1:5aSRVA5b320xbNvu30tqxVPXpld73bhtOeH6uAjRyHc=" >> ~/.config/nix/nix.conf
 
 .conda_env:
-  image: continuumio/miniconda3:latest
+  image: ubuntu
+  variables:
+    CONDA_SCRIPT: "~/miniconda.sh"
+    CONDA_DIR: "~/miniconda"
   before_script:
+    # Setup conda
+    - apt update; apt -y install wget
+    - wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O $CONDA_SCRIPT
+    - bash $CONDA_SCRIPT -b -p $CONDA_DIR
+    - source $CONDA_DIR/bin/activate
+    - conda init
+    - source ~/.bashrc
     # Install ARTIQ and activate environment
     - conda config --prepend channels https://conda.m-labs.hk/artiq
     - conda config --append channels conda-forge
     - conda create -y -n artiq artiq
-    - conda init
-    - source ~/.bashrc
     - conda activate artiq
     # Install DAX dependencies
     - conda install -y numpy scipy "pyvcd<=0.2.0" natsort pygit2 pyqt pyqtgraph matplotlib python-graphviz h5py
