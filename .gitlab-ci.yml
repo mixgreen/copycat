@@ -18,11 +18,11 @@ stages:
 .conda_env:
   image: ubuntu
   variables:
-    CONDA_SCRIPT: "~/miniconda.sh"
-    CONDA_DIR: "~/miniconda"
+    CONDA_SCRIPT: "$TEMP/miniconda.sh"
+    CONDA_DIR: "$HOME/miniconda"
   before_script:
     # Setup conda
-    - apt update; apt -y install wget
+    - apt-get update; apt-get -y install wget
     - wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O $CONDA_SCRIPT
     - bash $CONDA_SCRIPT -b -p $CONDA_DIR
     - source $CONDA_DIR/bin/activate
