@@ -5,8 +5,8 @@ import sys
 
 import versioneer
 
-if sys.version_info[:3] < (3, 5, 3):
-    raise Exception("This software requires Python 3.5.3+")
+if sys.version_info[:2] < (3, 7):
+    raise Exception("This software requires Python 3.7+")
 
 setup(
     version=versioneer.get_version(),

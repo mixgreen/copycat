@@ -135,7 +135,7 @@ class VcdSignalManager(DaxSignalManager[_VS_T]):
         assert isinstance(size, int) or size is None, 'The size must be an int or None'
 
         if type_ not in self._CONVERT_TYPE:
-            raise TypeError('VCD signal manager does not support signal type {}'.format(type_))
+            raise TypeError(f'VCD signal manager does not support signal type {type_}')
 
         # Get the var type
         var_type = self._CONVERT_TYPE[type_]
@@ -145,8 +145,9 @@ class VcdSignalManager(DaxSignalManager[_VS_T]):
             init = ''  # Shows up as `Z` instead of string value 'x'
 
         # Register the signal with the VCD writer
+        # Note: The "ident" keyword argument is removed in pyvcd>=0.2.1
         return self._vcd.register_var(scope.key, name, var_type=var_type, size=size, init=init,
-                                      ident='{:s}.{:s}'.format(scope.key, name))
+                                      ident=f'{scope.key:s}.{name:s}')
 
     def event(self, signal: _VS_T, value: _VV_T,
               time: typing.Optional[np.int64] = None, offset: typing.Optional[np.int64] = None) -> None:
@@ -292,14 +293,14 @@ class PeekSignalManager(DaxSignalManager[_PS_T]):
 
         # Check if type is supported and convert type if it is
         if type_ not in self._CONVERT_TYPE:
-            raise ValueError('Peek signal manager does not support signal type {}'.format(type_))
+            raise ValueError(f'Peek signal manager does not support signal type {type_}')
         type_ = self._CONVERT_TYPE[type_]
 
         # Get signals of the given device
         signals = self._event_buffer.setdefault(scope, dict())
         # Check if signal was already registered
         if name in signals:
-            raise LookupError('Signal "{:s}.{:s}" was already registered'.format(scope.key, name))
+            raise LookupError(f'Signal "{scope.key:s}.{name:s}" was already registered')
 
         # Check size
         if type_ is bool:
@@ -307,7 +308,7 @@ class PeekSignalManager(DaxSignalManager[_PS_T]):
                 raise TypeError('Provide a legal size for signal type bool')
         else:
             if size is not None:
-                raise TypeError('Size not supported for signal type "{}"'.format(type_))
+                raise TypeError(f'Size not supported for signal type "{type_}"')
 
         if init is not None:
             # Check init value
@@ -374,7 +375,7 @@ class PeekSignalManager(DaxSignalManager[_PS_T]):
             return  # Value is legal (expected type)
 
         # Value did not pass check
-        raise ValueError('Invalid value {} for signal type {}'.format(value, type_))
+        raise ValueError(f'Invalid value {value} for signal type {type_}')
 
     """Peek functions"""
 
@@ -398,7 +399,7 @@ class PeekSignalManager(DaxSignalManager[_PS_T]):
             # Get the signal
             type_, _, events = device[signal]
         except KeyError:
-            raise KeyError('Signal "{:s}.{:s}" could not be found'.format(scope.key, signal)) from None
+            raise KeyError(f'Signal "{scope.key:s}.{signal:s}" could not be found') from None
 
         if time is None:
             # Use the default time if none was provided

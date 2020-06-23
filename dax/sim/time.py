@@ -49,7 +49,10 @@ class _ParallelTimeContext(_TimeContext):
 
 
 class _Watchdog:
-    """DAX.sim watchdog implementation."""
+    """DAX.sim watchdog implementation.
+
+    Note that the watchdog feature is planned to be removed in ARTIQ 6.
+    """
 
     def __init__(self, watchdogs: typing.Set['_Watchdog'], timeout_mu: _MU_T):
         # Store the watchdogs container
@@ -67,7 +70,7 @@ class _Watchdog:
         """
         if now_mu_ > self._timeout_mu:
             # Raise exception if watchdog timed out
-            raise WatchdogExpired('Watchdog expired at time {}'.format(self._timeout_mu))
+            raise WatchdogExpired(f'Watchdog expired at time {self._timeout_mu}')
 
     def __enter__(self) -> None:
         if self._used:

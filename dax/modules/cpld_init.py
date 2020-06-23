@@ -31,9 +31,8 @@ class CpldInitModule(DaxModule):
         assert isinstance(check_registered_devices, bool), 'Check registered devices flag must be of type bool'
 
         # Store interval
-        # TODO: default interval time is not optimized
         self._interval = interval
-        self.logger.debug('Interval set to {:s}'.format(dax.util.units.time_to_str(self._interval)))
+        self.logger.debug(f'Interval set to {dax.util.units.time_to_str(self._interval):s}')
 
         if check_registered_devices:
             # Check if no devices have been requested yet
@@ -41,8 +40,8 @@ class CpldInitModule(DaxModule):
             devices = self.registry.search_devices(self.DEVICE_TYPES)
             if devices:
                 # Warn the user that devices using CPLD already have been registered
-                self.logger.warning('The following devices that use CPLD have already been registered '
-                                    'before this module was created: {:s}'.format(', '.join(devices)))
+                self.logger.warning(f'The following devices that use CPLD have already been registered '
+                                    f'before this module was created: {", ".join(devices):s}')
 
         # List of CPLD device keys
         cpld_device_keys = [k for k, v in self.get_device_db().items()
@@ -50,7 +49,7 @@ class CpldInitModule(DaxModule):
 
         # CPLD array
         self._cpld = [self.get_device(key, artiq.coredevice.urukul.CPLD) for key in cpld_device_keys]
-        self.logger.debug('Number of CPLD devices: {:d}'.format(len(self._cpld)))
+        self.logger.debug(f'Number of CPLD devices: {len(self._cpld):d}')
 
         # Store kernel invariants
         self.update_kernel_invariants('_interval', '_cpld')

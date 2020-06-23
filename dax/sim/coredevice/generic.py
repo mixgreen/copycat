@@ -26,13 +26,13 @@ class _GenericBase:
 
     def __call__(self, *args: typing.Tuple[typing.Any, ...], **kwargs: typing.Dict[str, typing.Any]) -> None:
         # Make a string for the parameters
-        parameters = '{:s}{:s}{:s}'.format(','.join(str(a) for a in args),
-                                           ',' if args and kwargs else '',
-                                           ','.join('{:s}={}'.format(k, v) for k, v in kwargs.items()))
+        parameters = f'{",".join(str(a) for a in args):s}' \
+                     f'{"," if args and kwargs else "":s}' \
+                     f'{",".join(f"{k:s}={v}" for k, v in kwargs.items()):s}'
 
         # Register the event
         self._signal_manager.event(self._signal_call, True)  # Register the timestamp of the call
-        self._signal_manager.event(self._signal_function, '{:s}({})'.format(self._attr_name, parameters))
+        self._signal_manager.event(self._signal_function, f'{self._attr_name:s}({parameters})')
 
 
 class Generic(_GenericBase, DaxSimDevice):
@@ -51,4 +51,4 @@ class Generic(_GenericBase, DaxSimDevice):
 
     def __call__(self, *args: typing.Tuple[typing.Any, ...], **kwargs: typing.Dict[str, typing.Any]) -> None:
         # The device can not be directly called, only its attributes
-        raise TypeError('Generic device {:s} is not callable, only its attributes are'.format(self.key))
+        raise TypeError(f'Generic device {self.key:s} is not callable, only its attributes are')

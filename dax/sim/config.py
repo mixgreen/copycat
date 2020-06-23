@@ -23,7 +23,7 @@ class DaxSimConfig:
 
         # Set the dax.sim logging level and report that simulation is enabled
         _logger.setLevel(logging_level)
-        _logger.info('DAX.sim enabled ({:s})'.format(_dax_version))
+        _logger.info(f'DAX.sim enabled ({_dax_version:s})')
 
         if output is None:
             # Disable output
@@ -53,7 +53,7 @@ class DaxSimConfig:
 
         else:
             # Output type was not supported
-            raise ValueError('Unsupported output type "{:s}"'.format(output))
+            raise ValueError(f'Unsupported output type "{output:s}"')
 
     @property
     def output_enabled(self) -> bool:

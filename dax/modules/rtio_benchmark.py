@@ -47,7 +47,7 @@ class RtioBenchmarkModule(DaxModule):
 
         # Update DMA enabled flag
         self._dma_enabled = self._dma_enabled and self.hasattr(self.EVENT_PERIOD_KEY, self.EVENT_BURST_KEY)
-        self.logger.debug('DMA enabled: {}'.format(self._dma_enabled))
+        self.logger.debug(f'DMA enabled: {self._dma_enabled}')
 
         # Update kernel invariants
         self.update_kernel_invariants('_dma_enabled', 'DMA_BURST')
@@ -55,7 +55,7 @@ class RtioBenchmarkModule(DaxModule):
         if self._dma_enabled:
             # Cap event burst size
             burst_size = np.int32(min(self.event_burst, 10000))
-            self.logger.debug('Event burst size set to: {:d}'.format(burst_size))
+            self.logger.debug(f'Event burst size set to: {burst_size:d}')
             # Initialize and record the DMA burst
             self._record_dma_burst(burst_size)
         else:
@@ -309,7 +309,7 @@ class RtioBenchmarkModule(DaxModule):
     @rpc(flags={"async"})
     def _message_current_period(self, current_period):  # type: (float) -> None
         # Message current period
-        self.logger.info('Using period {:s}'.format(dax.util.units.time_to_str(current_period)))
+        self.logger.info(f'Using period {dax.util.units.time_to_str(current_period):s}')
 
     @kernel
     def _benchmark_event_burst(self, num_events_min: TInt32, num_events_max: TInt32, num_events_step: TInt32,
@@ -668,7 +668,7 @@ class RtioLoopBenchmarkModule(RtioBenchmarkModule):
         super(RtioLoopBenchmarkModule, self).init()
 
         # Log edge delay setting
-        self.logger.debug('Edge delay set to: {:s}'.format(dax.util.units.time_to_str(self.EDGE_DELAY)))
+        self.logger.debug(f'Edge delay set to: {dax.util.units.time_to_str(self.EDGE_DELAY):s}')
 
         # Load parameters
         self.setattr_dataset_sys(self.INPUT_BUFFER_SIZE_KEY)

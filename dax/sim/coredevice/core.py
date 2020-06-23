@@ -45,7 +45,7 @@ class Core(DaxSimDevice):
         self._comm = CommKernelDummy()
 
         # Set the time manager in ARTIQ
-        _logger.debug('Initializing time manager with reference period {:s}'.format(time_to_str(self.ref_period)))
+        _logger.debug(f'Initializing time manager with reference period {time_to_str(self.ref_period):s}')
         set_time_manager(DaxTimeManager(self.ref_period))
 
         # Get the signal manager and register signals

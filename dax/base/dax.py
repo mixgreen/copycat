@@ -77,7 +77,7 @@ def _resolve_unique_device_key(d: typing.Dict[str, typing.Any], key: str, trace:
     # Check if we are not stuck in a loop
     if key in trace:
         # We are in an alias loop
-        raise LookupError('Key "{:s}" caused an alias loop'.format(key))
+        raise LookupError(f'Key "{key:s}" caused an alias loop')
     # Add key to the trace
     trace.add(key)
 
@@ -92,7 +92,7 @@ def _resolve_unique_device_key(d: typing.Dict[str, typing.Any], key: str, trace:
         return key
     else:
         # We ended up with an unexpected type
-        raise TypeError('Key "{:s}" returned an unexpected type'.format(key))
+        raise TypeError(f'Key "{key:s}" returned an unexpected type')
 
 
 class DaxBase(artiq.experiment.HasEnvironment, abc.ABC):
@@ -190,9 +190,9 @@ class DaxHasSystem(DaxBase, abc.ABC):
 
         # Check name and system key
         if not _is_valid_name(name):
-            raise ValueError('Invalid name "{:s}" for class "{:s}"'.format(name, self.__class__.__name__))
+            raise ValueError(f'Invalid name "{name:s}" for class "{self.__class__.__name__:s}"')
         if not _is_valid_key(system_key) or not system_key.endswith(name):
-            raise ValueError('Invalid system key "{:s}" for class "{:s}"'.format(system_key, self.__class__.__name__))
+            raise ValueError(f'Invalid system key "{system_key:s}" for class "{self.__class__.__name__:s}"')
 
         # Store constructor arguments as attributes
         self.__name = name
@@ -288,7 +288,7 @@ class DaxHasSystem(DaxBase, abc.ABC):
         # Check if the given keys are valid
         for k in keys:
             if not _is_valid_key(k):
-                raise ValueError('Invalid key "{:s}"'.format(k))
+                raise ValueError(f'Invalid key "{k:s}"')
 
         # Return the assigned key
         return _KEY_SEPARATOR.join([self.__system_key, *keys])
@@ -387,14 +387,14 @@ class DaxHasSystem(DaxBase, abc.ABC):
         assert isinstance(key, str) and key, 'Key must be of type str and not empty'
 
         # Debug message
-        self.logger.debug('Requesting device "{:s}"'.format(key))
+        self.logger.debug(f'Requesting device "{key:s}"')
 
         try:
             # Get the unique key, which will also check the keys and aliases
             unique = _get_unique_device_key(self.get_device_db(), key)
         except (LookupError, TypeError) as e:
             # Device was not found in the device DB
-            raise KeyError('Device "{:s}" could not be found in the device DB'.format(key)) from e
+            raise KeyError(f'Device "{key:s}" could not be found in the device DB') from e
 
         # Get the device using the initial key (let ARTIQ resolve the aliases)
         device = super(DaxHasSystem, self).get_device(key)
@@ -402,7 +402,7 @@ class DaxHasSystem(DaxBase, abc.ABC):
         if type_ is not None and not isinstance(device, (type_, artiq.master.worker_db.DummyDevice,
                                                          dax.sim.device.DaxSimDevice)):
             # Device has an unexpected type
-            raise TypeError('Device "{:s}" does not match the expected type'.format(key))
+            raise TypeError(f'Device "{key:s}" does not match the expected type')
 
         # Register the requested device with the unique key
         self.registry.add_device(unique, device, self)
@@ -442,9 +442,9 @@ class DaxHasSystem(DaxBase, abc.ABC):
 
         # Set the device as attribute
         if not _is_valid_name(attr_name):
-            raise ValueError('Attribute name "{:s}" not valid'.format(attr_name))
+            raise ValueError(f'Attribute name "{attr_name:s}" not valid')
         if hasattr(self, attr_name):
-            raise AttributeError('Attribute name "{:s}" was already assigned'.format(attr_name))
+            raise AttributeError(f'Attribute name "{attr_name:s}" was already assigned')
         setattr(self, attr_name, device)
 
         # Add attribute to kernel invariants
@@ -467,7 +467,7 @@ class DaxHasSystem(DaxBase, abc.ABC):
         artiq.master.worker_db.logger.setLevel(logging.WARNING + 1)
 
         # Set value in system dataset with extra flags
-        self.logger.debug('System dataset key "{:s}" set to value "{}"'.format(key, value))
+        self.logger.debug(f'System dataset key "{key:s}" set to value "{value}"')
         self.set_dataset(system_key, value, broadcast=True, persist=True, archive=True)
 
         # Restore original logging level of worker_db logger
@@ -494,7 +494,7 @@ class DaxHasSystem(DaxBase, abc.ABC):
         system_key = self.get_system_key(key)
 
         # Mutate system dataset
-        self.logger.debug('System dataset key "{:s}"[{}] mutate to value "{}"'.format(key, index, value))
+        self.logger.debug(f'System dataset key "{key:s}"[{index}] mutate to value "{value}"')
         self.mutate_dataset(system_key, index, value)
 
         if data_store:
@@ -516,7 +516,7 @@ class DaxHasSystem(DaxBase, abc.ABC):
         system_key = self.get_system_key(key)
 
         # Append value to system dataset
-        self.logger.debug('System dataset key "{:s}" append value "{}"'.format(key, value))
+        self.logger.debug(f'System dataset key "{key:s}" append value "{value}"')
         self.append_to_dataset(system_key, value)
 
         if data_store:
@@ -554,17 +554,17 @@ class DaxHasSystem(DaxBase, abc.ABC):
         except KeyError:
             if default is artiq.experiment.NoDefault:
                 # The value was not available in the system dataset and no default was provided
-                raise KeyError('System dataset key "{:s}" not found'.format(system_key)) from None
+                raise KeyError(f'System dataset key "{system_key:s}" not found') from None
             else:
                 # If the value does not exist, write the default value to the system dataset, but do not archive yet
-                self.logger.debug('System dataset key "{:s}" set to default value "{}"'.format(key, default))
+                self.logger.debug(f'System dataset key "{key:s}" set to default value "{default}"')
                 self.set_dataset(system_key, default, broadcast=True, persist=True, archive=False)
                 # Get the value again and make sure it is archived
                 value = self.get_dataset(system_key, archive=True)  # Should never raise a KeyError
                 # Archive value using the data store
                 self.data_store.set(system_key, value)
         else:
-            self.logger.debug('System dataset key "{:s}" returned value "{}"'.format(key, value))
+            self.logger.debug(f'System dataset key "{key:s}" returned value "{value}"')
 
         # Return value
         return value
@@ -607,7 +607,7 @@ class DaxHasSystem(DaxBase, abc.ABC):
             value = self.get_dataset_sys(key, default)
         except KeyError:
             # The value was not available in the system dataset and no default was provided, attribute will not be set
-            self.logger.debug('System attribute "{:s}" not set'.format(key))
+            self.logger.debug(f'System attribute "{key:s}" not set')
         else:
             # Set the value as attribute (reassigning is possible, required for re-loading attributes)
             setattr(self, key, value)
@@ -618,7 +618,7 @@ class DaxHasSystem(DaxBase, abc.ABC):
 
             # Debug message
             msg_postfix = ' (kernel invariant)' if kernel_invariant else ''
-            self.logger.debug('System attribute "{:s}" set to value "{}"{:s}'.format(key, value, msg_postfix))
+            self.logger.debug(f'System attribute "{key:s}" set to value "{value}"{msg_postfix:s}')
 
     @artiq.experiment.host_only
     def hasattr(self, *keys: str) -> bool:
@@ -635,7 +635,7 @@ class DaxHasSystem(DaxBase, abc.ABC):
     @artiq.experiment.host_only
     def get_identifier(self) -> str:
         """Return the system key with the class name."""
-        return '[{:s}]({:s})'.format(self.get_system_key(), self.__class__.__name__)
+        return f'[{self.get_system_key():s}]({self.__class__.__name__:s})'
 
 
 class DaxModuleBase(DaxHasSystem, abc.ABC):
@@ -675,10 +675,10 @@ class DaxModule(DaxModuleBase, abc.ABC):
 
         # Check module name
         if not _is_valid_name(module_name):
-            raise ValueError('Invalid module name "{:s}"'.format(module_name))
+            raise ValueError(f'Invalid module name "{module_name:s}"')
         # Check parent type
         if not isinstance(managers_or_parent, DaxHasSystem):
-            raise TypeError('Parent of module "{:s}" is not of type DaxHasSystem'.format(module_name))
+            raise TypeError(f'Parent of module "{module_name:s}" is not of type DaxHasSystem')
 
         # Take core attributes from parent
         self._take_parent_core_attributes(managers_or_parent)
@@ -727,7 +727,7 @@ class DaxSystem(DaxModuleBase):
         # Check if system ID was overridden
         assert isinstance(self.SYS_ID, str), 'System ID must be of type str'
         assert DaxSystem.SYS_ID != self.SYS_ID, 'Every DAX system class must override the SYS_ID class attribute'
-        assert _is_valid_name(self.SYS_ID), 'Invalid system ID "{:s}"'.format(self.SYS_ID)
+        assert _is_valid_name(self.SYS_ID), f'Invalid system ID "{self.SYS_ID:s}"'
 
         # Check if system version was overridden
         assert isinstance(self.SYS_VER, int), 'System version must be of type int'
@@ -782,7 +782,7 @@ class DaxSystem(DaxModuleBase):
         """Override this method to build your DAX system. (Do not forget to call `super.build()` first!)"""
 
         # Log DAX version
-        self.logger.debug('DAX version {:s}'.format(_dax_version))
+        self.logger.debug(f'DAX version {_dax_version:s}')
 
         # Call super and forward arguments, for compatibility with other libraries
         # noinspection PyArgumentList
@@ -818,10 +818,10 @@ class DaxSystem(DaxModuleBase):
             # Core log controller was not found in the device DB
             if not self.dax_sim_enabled:
                 # Log a warning (if we are not in simulation)
-                self.logger.warning('Core log controller "{:s}" not found in device DB'.format(self.CORE_LOG_KEY))
+                self.logger.warning(f'Core log controller "{self.CORE_LOG_KEY:s}" not found in device DB')
         except artiq.master.worker_db.DeviceError:
             # Failed to create core log driver
-            self.logger.warning('Failed to create core log driver "{:s}"'.format(self.CORE_LOG_KEY), exc_info=True)
+            self.logger.warning(f'Failed to create core log driver "{self.CORE_LOG_KEY:s}"', exc_info=True)
 
         # Instantiate the data store (needs to be done in build() since it requests a controller)
         try:
@@ -831,15 +831,14 @@ class DaxSystem(DaxModuleBase):
             # Influx DB controller was not found in the device DB, fall back on base data store
             if not self.dax_sim_enabled:
                 # Log a warning (if we are not in simulation)
-                self.logger.warning('Influx DB controller "{:s}" not found in device DB'.format(self.DAX_INFLUX_DB_KEY))
+                self.logger.warning(f'Influx DB controller "{self.DAX_INFLUX_DB_KEY:s}" not found in device DB')
             # Log a debug message
             self.logger.debug('Fall back on base data store')
             self.__data_store = DaxDataStore()
         except artiq.master.worker_db.DeviceError:
             # Failed to create Influx DB driver, fall back on base data store
             self.__data_store = DaxDataStore()
-            self.logger.warning('Failed to create DAX Influx DB driver "{:s}"'.format(self.DAX_INFLUX_DB_KEY),
-                                exc_info=True)
+            self.logger.warning(f'Failed to create DAX Influx DB driver "{self.DAX_INFLUX_DB_KEY:s}"', exc_info=True)
 
     @artiq.experiment.host_only
     def dax_init(self) -> None:
@@ -891,7 +890,7 @@ class DaxService(DaxHasSystem, abc.ABC):
 
         # Check parent type
         if not isinstance(managers_or_parent, (DaxSystem, DaxService)):
-            raise TypeError('Parent of service "{:s}" is not a DAX system or service'.format(self.SERVICE_NAME))
+            raise TypeError(f'Parent of service "{self.SERVICE_NAME:s}" is not a DAX system or service')
 
         # Take core attributes from parent
         self._take_parent_core_attributes(managers_or_parent)
@@ -942,8 +941,7 @@ class DaxClient(DaxHasSystem, abc.ABC):
         """
         # Check if the decorator was used
         if not isinstance(managers_or_parent, DaxSystem):
-            raise TypeError('DAX client class {:s} must be decorated using '
-                            '@dax_client_factory'.format(self.__class__.__name__))
+            raise TypeError(f'DAX client class {self.__class__.__name__:s} must be decorated with @dax_client_factory')
 
         # Take attributes from the parent system
         self._take_parent_core_attributes(managers_or_parent)
@@ -980,7 +978,7 @@ class DaxNameRegistry:
 
         # Check system services key
         if not _is_valid_key(system.SYS_SERVICES):
-            raise ValueError('Invalid system services key "{:s}"'.format(system.SYS_SERVICES))
+            raise ValueError(f'Invalid system services key "{system.SYS_SERVICES:s}"')
 
         # Store system services key
         self._sys_services_key = system.SYS_SERVICES  # Access attribute directly
@@ -1009,7 +1007,7 @@ class DaxNameRegistry:
 
         if reg_module is not None:
             # Key already in use by another module
-            msg = 'Module key "{:s}" was already registered by module {:s}'.format(key, reg_module.get_identifier())
+            msg = f'Module key "{key:s}" was already registered by module {reg_module.get_identifier():s}'
             raise dax.base.exceptions.NonUniqueRegistrationError(msg)
 
         # Add module key to the dict of registered modules
@@ -1039,11 +1037,11 @@ class DaxNameRegistry:
             module = self._modules[key]
         except KeyError:
             # Module was not found
-            raise KeyError('Module "{:s}" could not be found'.format(key)) from None
+            raise KeyError(f'Module "{key:s}" could not be found') from None
 
         if not isinstance(module, type_):
             # Module does not have the correct type
-            raise TypeError('Module "{:s}" does not match the expected type'.format(key))
+            raise TypeError(f'Module "{key:s}" does not match the expected type')
 
         # Return the module
         return module
@@ -1062,10 +1060,10 @@ class DaxNameRegistry:
 
         if not results:
             # No modules were found
-            raise KeyError('Could not find modules with type "{:s}"'.format(type_.__name__))
+            raise KeyError(f'Could not find modules with type "{type_.__name__:s}"')
         elif len(results) > 1:
             # More than one module was found
-            raise LookupError('Could not find a unique module with type "{:s}"'.format(type_.__name__))
+            raise LookupError(f'Could not find a unique module with type "{type_.__name__:s}"')
 
         # Return the only result
         _, module = results.popitem()
@@ -1126,7 +1124,7 @@ class DaxNameRegistry:
         if device_value is not None:
             # Device was already registered
             _, reg_parent = device_value  # Unpack tuple
-            msg = 'Device "{:s}" was already registered by parent "{:s}"'.format(key, reg_parent.get_system_key())
+            msg = f'Device "{key:s}" was already registered by parent "{reg_parent.get_system_key():s}"'
             raise dax.base.exceptions.NonUniqueRegistrationError(msg)
 
         # Add unique device key to the dict of registered devices
@@ -1167,7 +1165,7 @@ class DaxNameRegistry:
         assert isinstance(service_name, str), 'Service name must be a string'
         if not _is_valid_name(service_name):
             # Service name not valid
-            raise ValueError('Invalid service name "{:s}"'.format(service_name))
+            raise ValueError(f'Invalid service name "{service_name:s}"')
 
         # Return assigned key
         return _KEY_SEPARATOR.join([self._sys_services_key, service_name])
@@ -1192,8 +1190,7 @@ class DaxNameRegistry:
 
         if reg_service is not None:
             # Service name was already registered
-            raise dax.base.exceptions.NonUniqueRegistrationError(
-                'Service with name "{:s}" was already registered'.format(key))
+            raise dax.base.exceptions.NonUniqueRegistrationError(f'Service with name "{key:s}" was already registered')
 
         # Add service to the registry
         self._services[key] = service
@@ -1241,7 +1238,7 @@ class DaxNameRegistry:
             return self._services[service_key]
         except KeyError:
             # Service was not found
-            raise KeyError('Service "{:s}" is not available'.format(service_key)) from None
+            raise KeyError(f'Service "{service_key:s}" is not available') from None
 
     def get_service_key_list(self) -> typing.List[str]:
         """Return a sorted list of registered service keys.
@@ -1276,10 +1273,10 @@ class DaxNameRegistry:
 
         if not results:
             # No interfaces were found
-            raise KeyError('Could not find interfaces with type "{:s}"'.format(type_.__name__))
+            raise KeyError(f'Could not find interfaces with type "{type_.__name__:s}"')
         elif len(results) > 1:
             # More than one interface was found
-            raise LookupError('Could not find a unique interface with type "{:s}"'.format(type_.__name__))
+            raise LookupError(f'Could not find a unique interface with type "{type_.__name__:s}"')
 
         # Return the only result
         _, interface = results.popitem()
@@ -1328,7 +1325,7 @@ class DaxDataStore:
     def __init__(self) -> None:  # Constructor return type required if no parameters are given
         """Construct a new DAX data store object."""
         # Create a logger object
-        self._logger = logging.getLogger('{:s}.{:s}'.format(self.__module__, self.__class__.__name__))
+        self._logger = logging.getLogger(f'{self.__module__:s}.{self.__class__.__name__:s}')
 
     def set(self, key: str, value: typing.Any) -> None:
         """Write a key-value into the data store.
@@ -1336,7 +1333,7 @@ class DaxDataStore:
         :param key: The key of the value
         :param value: The value to store
         """
-        self._logger.debug('Set key "{:s}" to value: "{}"'.format(key, value))
+        self._logger.debug(f'Set key "{key:s}" to value: "{value}"')
 
     def mutate(self, key: str, index: typing.Any, value: typing.Any) -> None:
         """Mutate a specific index of a key-value in the data store.
@@ -1345,7 +1342,7 @@ class DaxDataStore:
         :param index: The index to mutate
         :param value: The value to store
         """
-        self._logger.debug('Mutate key "{:s}"[{}] to value "{}"'.format(key, index, value))
+        self._logger.debug(f'Mutate key "{key:s}"[{index}] to value "{value}"')
 
     def append(self, key: str, value: typing.Any) -> None:
         """Append a value to a key-value in the data store.
@@ -1353,7 +1350,7 @@ class DaxDataStore:
         :param key: The key of the value
         :param value: The value to append
         """
-        self._logger.debug('Append key "{:s}" with value "{}"'.format(key, value))
+        self._logger.debug(f'Append key "{key:s}" with value "{value}"')
 
 
 def __load_commit_hashes() -> None:
@@ -1442,7 +1439,7 @@ class DaxDataStoreInfluxDb(DaxDataStore):
             self._base_fields['cwd_commit'] = self._CWD_COMMIT
 
         # Debug message
-        self._logger.debug('Initialized base fields: {}'.format(self._base_fields))
+        self._logger.debug(f'Initialized base fields: {self._base_fields}')
 
     def set(self, key: str, value: typing.Any) -> None:
         """Write a key-value into the Influx DB data store.
@@ -1465,8 +1462,7 @@ class DaxDataStoreInfluxDb(DaxDataStore):
             self._index_table[key] = len(value)
         else:
             # Unsupported type, do not raise but warn user instead
-            self._logger.warning('Could not store value for key "{:s}", unsupported value type '
-                                 'for value "{}"'.format(key, value))
+            self._logger.warning(f'Could not store value for key "{key:s}", unsupported value type for value "{value}"')
 
     def mutate(self, key: str, index: typing.Any, value: typing.Any) -> None:
         """Mutate a specified index of a key-value in the Influx DB data store.
@@ -1487,12 +1483,11 @@ class DaxDataStoreInfluxDb(DaxDataStore):
                 self._write_points([self._make_point(key, value, index)])
             else:
                 # Non-integer index is not supported, do not raise but warn user instead
-                self._logger.warning('Could not mutate value for key "{:s}", index "{}" '
-                                     'not supported'.format(key, index))
+                self._logger.warning(f'Could not mutate value for key "{key:s}", index "{index}" not supported')
         else:
             # Unsupported type, do not raise but warn user instead
-            self._logger.warning('Could not mutate value for key "{:s}", unsupported value type '
-                                 'for value "{}"'.format(key, value))
+            self._logger.warning(f'Could not mutate value for key "{key:s}", '
+                                 f'unsupported value type for value "{value}"')
 
     def append(self, key: str, value: typing.Any) -> None:
         """Append a value to a key-value in the Influx DB data store.
@@ -1515,12 +1510,12 @@ class DaxDataStoreInfluxDb(DaxDataStore):
                 self._index_table[key] += 1
             else:
                 # Index unknown, can not emulate append operation
-                self._logger.warning('Could not append value for key "{:s}", no index was cached '
-                                     'and the append operation could not be emulated'.format(key))
+                self._logger.warning(f'Could not append value for key "{key:s}", no index was cached '
+                                     f'and the append operation could not be emulated')
         else:
             # Unsupported type, do not raise but warn user instead
-            self._logger.warning('Could not append value for key "{:s}", unsupported value type '
-                                 'for value "{}"'.format(key, value))
+            self._logger.warning(f'Could not append value for key "{key:s}", '
+                                 f'unsupported value type for value "{value}"')
 
     def _make_point(self, key: str, value: __F_T, index: typing.Union[None, int, numbers.Integral] = None) -> __P_T:
         """Make a point object from a key-value pair, optionally with an index.
@@ -1533,7 +1528,7 @@ class DaxDataStoreInfluxDb(DaxDataStore):
 
         if not _is_valid_key(key):
             # Invalid key
-            raise ValueError('Influx DB data store received an invalid key "{:s}"'.format(key))
+            raise ValueError(f'Influx DB data store received an invalid key "{key:s}"')
 
         if isinstance(value, np.integer):
             # Convert Numpy int to Python int

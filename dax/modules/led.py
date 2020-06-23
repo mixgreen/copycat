@@ -24,11 +24,11 @@ class LedModule(DaxModule):
 
         # Store attributes
         self._init_flag = init
-        self.logger.debug('Init flag: {}'.format(self._init_flag))
+        self.logger.debug(f'Init flag: {self._init_flag}')
 
         # LED array
         self.led = [self.get_device(led, artiq.coredevice.ttl.TTLOut) for led in leds]
-        self.logger.debug("Number of LED's: {:d}".format(len(self.led)))
+        self.logger.debug(f"Number of LED's: {len(self.led):d}")
 
         # Store kernel invariants
         self.update_kernel_invariants('_init_flag', 'led')

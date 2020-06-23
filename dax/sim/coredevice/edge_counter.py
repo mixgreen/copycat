@@ -112,13 +112,13 @@ class EdgeCounter(DaxSimDevice):
 
             if count >= self.counter_max:
                 # Count overflow
-                raise CounterOverflow('Input edge counter overflow for device {:s}'.format(self.key))
+                raise CounterOverflow(f'Input edge counter overflow for device {self.key:s}')
 
             # Return the result
             return count
         else:
             # No count available to return
-            raise IndexError('Device "{:s}" has no count to return'.format(self.key))
+            raise IndexError(f'Device "{self.key:s}" has no count to return')
 
     # noinspection PyUnusedLocal
     @kernel
@@ -129,7 +129,7 @@ class EdgeCounter(DaxSimDevice):
 
             if count >= self.counter_max:
                 # Count overflow
-                raise CounterOverflow('Input edge counter overflow for device {:s}'.format(self.key))
+                raise CounterOverflow(f'Input edge counter overflow for device {self.key:s}')
 
             # Return the result
             return timestamp, count

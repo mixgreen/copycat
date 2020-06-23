@@ -48,7 +48,7 @@ class MultiXYPlot(PlotWidget):
         self.clear()
         for i, y_values in enumerate(zip(*y)):
             # Name of the plot
-            name = '{:s} {:d}'.format(args.plot_names, i)
+            name = f'{args.plot_names:s} {i:d}'
             # Transform to a list of Y-values and plot
             color = pyqtgraph.intColor(i)
             self.plot(x, y_values, pen=color, symbol='o', symbolBrush=color, name=name)

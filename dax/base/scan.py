@@ -40,17 +40,17 @@ class ScanProductGenerator:
     # Iterator type
     __I_T = typing.Iterator[typing.Tuple['ScanProductGenerator.ScanPoint', 'ScanProductGenerator.ScanIndex']]
 
-    class ScanItem:
+    class _ScanItem:
         def __init__(self, **kwargs: typing.Any):
             # Mark all attributes as kernel invariant
             self.kernel_invariants = set(kwargs)
 
         def __repr__(self) -> str:
             """Return a string representation of this object."""
-            attributes = ', '.join('{:s}={}'.format(k, getattr(self, k)) for k in self.kernel_invariants)
-            return self.__class__.__name__.format(attributes)
+            attributes = ', '.join(f'{k:s}={getattr(self, k)}' for k in self.kernel_invariants)
+            return f'{self.__class__.__name__}: {attributes}'
 
-    class ScanPoint(ScanItem):
+    class ScanPoint(_ScanItem):
         def __init__(self, **kwargs: typing.Any):
             # Call super
             super(ScanProductGenerator.ScanPoint, self).__init__(**kwargs)
@@ -58,7 +58,7 @@ class ScanProductGenerator:
             for k, v in kwargs.items():
                 setattr(self, k, v)
 
-    class ScanIndex(ScanItem):
+    class ScanIndex(_ScanItem):
         def __init__(self, **kwargs: int):
             # Call super
             super(ScanProductGenerator.ScanIndex, self).__init__(**kwargs)
@@ -264,9 +264,9 @@ class DaxScan(dax.base.dax.DaxBase, abc.ABC):
 
         # Verify the key is valid and not in use
         if not _is_valid_key(key):
-            raise ValueError('Provided key "{:s}" is not valid'.format(key))
+            raise ValueError(f'Provided key "{key:s}" is not valid')
         if key in self._scan_scannables:
-            raise LookupError('Provided key "{:s}" was already in use'.format(key))
+            raise LookupError(f'Provided key "{key:s}" was already in use')
 
         # Add argument to the list of scannables
         self._scan_scannables[key] = self.get_argument(name, scannable, group=group, tooltip=tooltip)

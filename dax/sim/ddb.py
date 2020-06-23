@@ -42,8 +42,7 @@ def enable_dax_sim(enable: bool,
                    output: typing.Optional[str] = 'vcd',
                    sim_config_module: str = 'dax.sim.config',
                    sim_config_class: str = 'DaxSimConfig',
-                   **signal_mgr_kwargs: typing.Any  # No trailing comma, causes syntax error on Python 3.5
-                   ) -> typing.Dict[str, typing.Any]:
+                   **signal_mgr_kwargs: typing.Any) -> typing.Dict[str, typing.Any]:
     """Enable the DAX simulation package by applying this function on your device DB.
 
     This function will modify your device DB in-place to configure it for simulation.
@@ -128,7 +127,7 @@ def _mutate_ddb_entry(key: str, value: typing.Any) -> typing.Any:
         # Get the type entry of this value
         type_ = value.get('type')
         if not isinstance(type_, str):
-            raise TypeError('The type key of local device "{:s}" must be of type str'.format(key))
+            raise TypeError(f'The type key of local device "{key:s}" must be of type str')
 
         # Mutate entry
         if type_ == 'local':
@@ -136,7 +135,7 @@ def _mutate_ddb_entry(key: str, value: typing.Any) -> typing.Any:
         elif type_ == 'controller':
             _mutate_controller(key, value)
         else:
-            _logger.debug('Skipped entry "{:s}"'.format(key))
+            _logger.debug(f'Skipped entry "{key:s}"')
     else:
         # Value is not a dict, it can be ignored
         pass
@@ -151,7 +150,7 @@ def _mutate_local(key: str, value: typing.Any) -> None:
     # Get the module of the device
     module = value.get('module')
     if not isinstance(module, str):
-        raise TypeError('The module key of local device "{:s}" must be of type str'.format(key))
+        raise TypeError(f'The module key of local device "{key:s}" must be of type str')
 
     # Convert module name to a dax.sim module
     module = '.'.join([_DAX_DEVICE_MODULE, module.rsplit('.', maxsplit=1)[-1]])
@@ -168,7 +167,7 @@ def _mutate_local(key: str, value: typing.Any) -> None:
         # Get the class of the device
         class_ = value.get('class')
         if not isinstance(class_, str):
-            raise TypeError('The class key of local device "{:s}" must be of type str'.format(key))
+            raise TypeError(f'The class key of local device "{key:s}" must be of type str')
 
         if not hasattr(m, class_):
             # Class was not found in module, fall back on generic device
@@ -180,17 +179,17 @@ def _mutate_local(key: str, value: typing.Any) -> None:
     # Add key of the device to the device arguments
     arguments = value.setdefault('arguments', dict())
     if not isinstance(arguments, dict):
-        raise TypeError('The arguments key of local device "{:s}" must be of type dict'.format(key))
+        raise TypeError(f'The arguments key of local device "{key:s}" must be of type dict')
     arguments.update(_key=key)
 
     # Add simulation arguments to normal arguments
     sim_args = value.setdefault('sim_args', dict())
     if not isinstance(sim_args, dict):
-        raise TypeError('The sim_args key of local device "{:s}" must be of type dict'.format(key))
+        raise TypeError(f'The sim_args key of local device "{key:s}" must be of type dict')
     arguments.update(sim_args)
 
     # Debug message
-    _logger.debug('Converted local device "{:s}" to class "{module:s}.{class:s}"'.format(key, **value))
+    _logger.debug(f'Converted local device "{key:s}" to class "{value["module"]:s}.{value["class"]:s}"')
 
 
 def _mutate_controller(key: str, value: typing.Any) -> None:
@@ -201,16 +200,16 @@ def _mutate_controller(key: str, value: typing.Any) -> None:
 
     if command is None:
         # No command was set
-        _logger.debug('No command found for controller "{:s}"'.format(key))
+        _logger.debug(f'No command found for controller "{key:s}"')
     elif isinstance(command, str):
         # Check if the controller was already set to simulation mode
         if _SIMULATION_ARG not in command:
             # Simulation argument not found, append it
-            _logger.debug('Added simulation argument to command for controller "{:s}"'.format(key))
+            _logger.debug(f'Added simulation argument to command for controller "{key:s}"')
             value['command'] = ' '.join([command, _SIMULATION_ARG])
         else:
             # Debug message
-            _logger.debug('Controller "{:s}" was not modified'.format(key))
+            _logger.debug(f'Controller "{key:s}" was not modified')
     else:
         # Command was not of type str
-        raise TypeError('The command key of controller "{:s}" must be of type str'.format(key))
+        raise TypeError(f'The command key of controller "{key:s}" must be of type str')

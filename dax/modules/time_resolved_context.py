@@ -520,7 +520,7 @@ class TimeResolvedAnalyzer:
             # Plot
             ax.cla()  # Clear axes
             for i, r in enumerate(results):
-                ax.plot(x_values, r, label='Channel {:d}'.format(i), **kwargs)
+                ax.plot(x_values, r, label=f'Channel {i:d}', **kwargs)
 
             # Plot formatting
             ax.set_xlabel(x_label)
