@@ -344,7 +344,10 @@ class DaxDataStoreInfluxDbTestCase(unittest.TestCase):
     def test_dax_commit_hash(self):
         self.assertIsInstance(self.ds._DAX_COMMIT, (str, type(None)), 'Unexpected type for DAX commit hash')
 
-        if pygit2.discover_repository(os.path.dirname(__file__)) is None:
+        # Get a directory path of the currently active DAX library
+        dax_dir = os.path.dirname(os.path.realpath(dax.base.dax.__file__))
+
+        if pygit2.discover_repository(dax_dir) is None:
             # DAX is not in a git repository at this moment, skipping test
             self.skipTest('DAX currently not in a git repo')
 
