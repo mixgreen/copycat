@@ -25,7 +25,7 @@ class EdgeCounter(DaxSimDevice):
         FALLING = 2
         BOTH = 3
 
-    def __init__(self, dmgr, input_freq=0.0, gateware_width=31, **kwargs):
+    def __init__(self, dmgr: typing.Any, input_freq: float = 0.0, gateware_width: int = 31, **kwargs: typing.Any):
         assert isinstance(input_freq, float) and input_freq >= 0.0, 'Input frequency must be a positive float'
         assert isinstance(gateware_width, int), 'Gateware width must be of type int'
 
@@ -33,13 +33,13 @@ class EdgeCounter(DaxSimDevice):
         super(EdgeCounter, self).__init__(dmgr, **kwargs)
 
         # From ARTIQ code
-        self.counter_max = (1 << (gateware_width - 1)) - 1
+        self.counter_max: int = (1 << (gateware_width - 1)) - 1
 
         # Store simulation settings
-        self._input_freq = input_freq
+        self._input_freq: float = input_freq
 
         # Buffers to store counts
-        self._count_buffer = collections.deque()  # type: typing.Deque[typing.Tuple[np.int64, int]]
+        self._count_buffer: typing.Deque[typing.Tuple[np.int64, int]] = collections.deque()
 
         # Register signals
         self._signal_manager = get_signal_manager()

@@ -97,7 +97,7 @@ class HasEnvironment:
     __DDV_T = typing.Union[__DV_T, typing.Type[NoDefault]]
 
     def __init__(self, managers_or_parent: typing.Any, *args: typing.Any, **kwargs: typing.Any):
-        self.children = ...  # type: typing.List['HasEnvironment']
+        self.children: typing.List['HasEnvironment'] = ...
 
     def register_child(self, child: HasEnvironment) -> None:
         ...

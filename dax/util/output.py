@@ -126,6 +126,6 @@ def get_file_name(scheduler: typing.Any, name: str, ext: typing.Optional[str] = 
     """
 
     # Get a generator (extra typing annotation required to pass type checking without use of typing.Protocol)
-    gen = get_file_name_generator(scheduler)  # type: typing.Callable[[str, typing.Optional[str]], str]
+    gen: typing.Callable[[str, typing.Optional[str]], str] = get_file_name_generator(scheduler)
     # Return full file name
     return gen(name, ext)

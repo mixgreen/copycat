@@ -14,7 +14,7 @@ class SystemBenchmarkDaxInit(DaxClient, EnvExperiment):
     """DAX system initialization benchmark."""
 
     # DAX init does not have to run at client startup
-    DAX_INIT = False
+    DAX_INIT: bool = False
 
     def build(self) -> None:  # type: ignore
         # Arguments

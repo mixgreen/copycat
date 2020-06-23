@@ -32,9 +32,9 @@ class PlotWidget(pyqtgraph.PlotWidget):
         # Call super
         pyqtgraph.PlotWidget.__init__(self)
         # Store args
-        self.__args = args
+        self.__args: typing.Any = args
         # Dict with data, acts as a buffer
-        self.__data_buffer = {}  # type: typing.Dict[str, typing.Any]
+        self.__data_buffer: typing.Dict[str, typing.Any] = {}
 
     def update_applet(self, args):
         """This function replaces the :func:`data_changed` function and will be called whenever data changes.

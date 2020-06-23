@@ -4,35 +4,35 @@ import typing
 
 __all__ = ['DAX_SIM_CONFIG_KEY', 'enable_dax_sim']
 
-_logger = logging.getLogger(__name__)
+_logger: logging.Logger = logging.getLogger(__name__)
 """The logger for this file."""
 
-_DAX_DEVICE_MODULE = 'dax.sim.coredevice'
+_DAX_DEVICE_MODULE: str = 'dax.sim.coredevice'
 """The dax.sim device module."""
 
-_GENERIC_DEVICE = {
+_GENERIC_DEVICE: typing.Dict[str, str] = {
     'type': 'local',
     'module': '.'.join([_DAX_DEVICE_MODULE, 'generic']),
     'class': 'Generic',
 }
 """The properties of a generic device."""
 
-_DUMMY_DEVICE = {
+_DUMMY_DEVICE: typing.Dict[str, str] = {
     'type': 'local',
     'module': '.'.join([_DAX_DEVICE_MODULE, 'dummy']),
     'class': 'Dummy',
 }
 """The properties of a dummy device."""
 
-_SPECIAL_KEYS = {
+_SPECIAL_KEYS: typing.Dict[str, typing.Any] = {
     'core_log': _DUMMY_DEVICE,  # Core log controller should not start in simulation, replace with dummy device
 }
 """Special keys/entries in the device DB that will be replaced."""
 
-_SIMULATION_ARG = '--simulation'
+_SIMULATION_ARG: str = '--simulation'
 """The simulation argument/option for controllers as proposed by the ARTIQ manual."""
 
-DAX_SIM_CONFIG_KEY = '_dax_sim_config'
+DAX_SIM_CONFIG_KEY: str = '_dax_sim_config'
 """The key of the virtual simulation configuration device."""
 
 
@@ -177,13 +177,13 @@ def _mutate_local(key: str, value: typing.Any) -> None:
             value['module'] = module
 
     # Add key of the device to the device arguments
-    arguments = value.setdefault('arguments', dict())
+    arguments = value.setdefault('arguments', {})
     if not isinstance(arguments, dict):
         raise TypeError(f'The arguments key of local device "{key:s}" must be of type dict')
     arguments.update(_key=key)
 
     # Add simulation arguments to normal arguments
-    sim_args = value.setdefault('sim_args', dict())
+    sim_args = value.setdefault('sim_args', {})
     if not isinstance(sim_args, dict):
         raise TypeError(f'The sim_args key of local device "{key:s}" must be of type dict')
     arguments.update(sim_args)

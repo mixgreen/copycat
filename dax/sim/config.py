@@ -7,7 +7,7 @@ from dax.util.output import get_file_name
 
 __all__ = ['DaxSimConfig']
 
-_logger = logging.getLogger(__package__)
+_logger: logging.Logger = logging.getLogger(__package__)
 """The logger for this file and the root logger for dax.sim."""
 
 

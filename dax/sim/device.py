@@ -24,12 +24,12 @@ class DaxSimDevice(abc.ABC):
         assert isinstance(core_device, str), 'Core device argument must be of type str'
 
         # Store device key
-        self.__key = _key
+        self.__key: str = _key
         # Store core device
-        self.__core = dmgr.get(core_device) if _core is None else _core
+        self.__core: typing.Any = dmgr.get(core_device) if _core is None else _core
 
         # Store leftover kwargs, potentially useful for debugging
-        self.__kwargs = kwargs
+        self.__kwargs: typing.Dict[str, typing.Any] = kwargs
 
     @property
     def core(self) -> artiq.coredevice.core.Core:

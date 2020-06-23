@@ -6,7 +6,7 @@ from dax.util.introspect import ComponentGraphviz, RelationGraphviz
 class Introspect(DaxClient, EnvExperiment):
     """System introspection tool."""
 
-    DAX_INIT = False
+    DAX_INIT: bool = False
     """DAX init should not run for introspect."""
 
     GRAPHS = {

@@ -31,7 +31,7 @@ class CpldInitModule(DaxModule):
         assert isinstance(check_registered_devices, bool), 'Check registered devices flag must be of type bool'
 
         # Store interval
-        self._interval = interval
+        self._interval: float = interval
         self.logger.debug(f'Interval set to {dax.util.units.time_to_str(self._interval):s}')
 
         if check_registered_devices:

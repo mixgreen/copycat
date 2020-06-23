@@ -68,7 +68,7 @@ class GetBeam2TestCase(unittest.TestCase):
     def test_free_beam(self):
         for _ in range(self.N * 2):
             # Keep track of returned indices
-            beam_dict = dict()
+            beam_dict = {}
 
             # Allocate all beams
             for t in range(self.N):
@@ -97,7 +97,7 @@ class GetBeam2TestCase(unittest.TestCase):
         for i in range(self.N):
             with self.subTest(i=i):
                 # Keep track of returned indices
-                beam_dict = dict()
+                beam_dict = {}
 
                 # Allocate all beams
                 for t in range(self.N):

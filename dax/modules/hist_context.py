@@ -30,29 +30,29 @@ class HistogramContext(DaxModule):
     "input parameters".
     """
 
-    HISTOGRAM_PLOT_KEY = 'plot.dax.histogram_context.histogram'
+    HISTOGRAM_PLOT_KEY: str = 'plot.dax.histogram_context.histogram'
     """Dataset name for plotting latest histogram."""
-    HISTOGRAM_PLOT_NAME = 'histogram'
+    HISTOGRAM_PLOT_NAME: str = 'histogram'
     """Name of the histogram plot applet."""
 
-    PROBABILITY_PLOT_KEY = 'plot.dax.histogram_context.probability'
+    PROBABILITY_PLOT_KEY: str = 'plot.dax.histogram_context.probability'
     """Dataset name for plotting latest probability graph."""
-    PROBABILITY_PLOT_NAME = 'probability'
+    PROBABILITY_PLOT_NAME: str = 'probability'
     """Name of the probability plot applet."""
 
-    MEAN_COUNT_PLOT_KEY = 'plot.dax.histogram_context.mean_count'
+    MEAN_COUNT_PLOT_KEY: str = 'plot.dax.histogram_context.mean_count'
     """Dataset name for plotting latest mean count graph."""
-    MEAN_COUNT_PLOT_NAME = 'mean count'
+    MEAN_COUNT_PLOT_NAME: str = 'mean count'
     """Name of the probability plot applet."""
 
-    PLOT_GROUP = 'dax.histogram_context'
+    PLOT_GROUP: str = 'dax.histogram_context'
     """Group to which the plot applets belong."""
 
-    DATASET_GROUP = 'histogram_context'
+    DATASET_GROUP: str = 'histogram_context'
     """The group name for archiving data."""
-    DATASET_KEY_FORMAT = DATASET_GROUP + '/{dataset_key:s}/{index:d}'
+    DATASET_KEY_FORMAT: str = DATASET_GROUP + '/{dataset_key:s}/{index:d}'
     """Format string for sub-dataset keys."""
-    DEFAULT_DATASET_KEY = 'histogram'
+    DEFAULT_DATASET_KEY: str = 'histogram'
     """The default name of the output sub-dataset."""
 
     def build(self, default_dataset_key: typing.Optional[str] = None) -> None:  # type: ignore
@@ -64,25 +64,28 @@ class HistogramContext(DaxModule):
             'Provided default dataset key must be None or of type str'
 
         # Store default dataset key
-        self._default_dataset_key = self.DEFAULT_DATASET_KEY if default_dataset_key is None else default_dataset_key
+        if default_dataset_key is None:
+            self._default_dataset_key: str = self.DEFAULT_DATASET_KEY
+        else:
+            self._default_dataset_key = default_dataset_key
 
         # Get CCB tool
         self._ccb = get_ccb_tool(self)
         # Units formatter
-        self._units_fmt = UnitsFormatter()
+        self._units_fmt: UnitsFormatter = UnitsFormatter()
 
         # By default we are not in context
-        self._in_context = np.int32(0)
+        self._in_context: np.int32 = np.int32(0)
         # The count buffer (buffer appending is a bit faster than dict operations)
-        self._buffer = []  # type: typing.List[typing.Sequence[int]]
+        self._buffer: typing.List[typing.Sequence[int]] = []
 
         # Archive to analyze high level data at the end of the experiment
-        self._histogram_archive = {}  # type: typing.Dict[str, typing.List[typing.Sequence[collections.Counter]]]
+        self._histogram_archive: typing.Dict[str, typing.List[typing.Sequence[collections.Counter]]] = {}
 
         # Target dataset key
-        self._dataset_key = self._default_dataset_key
+        self._dataset_key: str = self._default_dataset_key
         # Datasets that are initialized with a counter, which represents the length of the data
-        self._open_datasets = collections.Counter()  # type: typing.Dict[str, int]
+        self._open_datasets: typing.Counter[str] = collections.Counter()
 
     def init(self) -> None:
         # Prepare the probability and mean count plot datasets by clearing them
@@ -202,8 +205,8 @@ class HistogramContext(DaxModule):
             raise HistogramContextError('The exit function can only be called from inside the histogram context')
 
         # Create a sub-dataset key for this result (HDF5 only supports fixed size elements in a list)
-        sub_dataset_key = self.DATASET_KEY_FORMAT.format(dataset_key=self._dataset_key,
-                                                         index=self._open_datasets[self._dataset_key])
+        sub_dataset_key: str = self.DATASET_KEY_FORMAT.format(dataset_key=self._dataset_key,
+                                                              index=self._open_datasets[self._dataset_key])
 
         if len(self._buffer):
             # Check consistency of data in the buffer
@@ -211,14 +214,14 @@ class HistogramContext(DaxModule):
                 raise RuntimeError('Data in the buffer is not consistent, data probably corrupt')
 
             # Transform buffer data to pack counts per ion and convert into histograms
-            histograms = [collections.Counter(c) for c in zip(*self._buffer)]
+            histograms: typing.List[typing.Counter[int]] = [collections.Counter(c) for c in zip(*self._buffer)]
             # Store histograms in the archive
             self._histogram_archive.setdefault(self._dataset_key, []).append(histograms)
 
             # Obtain maximum count over all histograms (HDF5 only supports fixed size arrays)
-            max_count = max(max(h) for h in histograms)
+            max_count: int = max(max(h) for h in histograms)
             # Flatten dict-like histograms to same-size list-style histograms (HDF5 does not support mapping types)
-            flat_histograms = [[h[i] for i in range(max_count + 1)] for h in histograms]
+            flat_histograms: typing.List[typing.List[int]] = [[h[i] for i in range(max_count + 1)] for h in histograms]
 
             # Write result to sub-dataset for archiving
             self.set_dataset(sub_dataset_key, flat_histograms, archive=True)
@@ -226,12 +229,12 @@ class HistogramContext(DaxModule):
             self.set_dataset(self.HISTOGRAM_PLOT_KEY, flat_histograms, broadcast=True, archive=False)
 
             # Calculate state probabilities
-            probabilities = [self._histogram_to_probability(h) for h in histograms]
+            probabilities: typing.List[float] = [self._histogram_to_probability(h) for h in histograms]
             # Append result to probability plotting dataset
             self.append_to_dataset(self.PROBABILITY_PLOT_KEY, probabilities)
 
             # Calculate average count per histogram
-            mean_counts = [sum(c * v for c, v in h.items()) / sum(h.values()) for h in histograms]
+            mean_counts: typing.List[float] = [sum(c * v for c, v in h.items()) / sum(h.values()) for h in histograms]
             # Append result to mean count plotting dataset
             self.append_to_dataset(self.MEAN_COUNT_PLOT_KEY, mean_counts)
 
@@ -403,9 +406,9 @@ class HistogramAnalyzer:
     stored as a Counter object to an array representation and vice versa.
     """
 
-    HISTOGRAM_PLOT_FILE_FORMAT = '{key:s}_{index:d}'
+    HISTOGRAM_PLOT_FILE_FORMAT: str = '{key:s}_{index:d}'
     """File name format for histogram plot files."""
-    PROBABILITY_PLOT_FILE_FORMAT = '{key:s}_probability'
+    PROBABILITY_PLOT_FILE_FORMAT: str = '{key:s}_probability'
     """File name format for probability plot files."""
 
     def __init__(self, source: typing.Union[DaxSystem, HistogramContext, str, h5py.File],
@@ -427,10 +430,11 @@ class HistogramAnalyzer:
 
         if isinstance(source, HistogramContext):
             # Get data from histogram context module
-            self.keys = source.get_keys()
-            self.histograms = {k: source.get_histograms(k) for k in self.keys}
-            self.probabilities = {k: np.asarray(source.get_probabilities(k, state_detection_threshold))
-                                  for k in self.keys}
+            self.keys: typing.List[str] = source.get_keys()
+            self.histograms: typing.Dict[str, typing.List[typing.Sequence[typing.Counter[int]]]] = \
+                {k: source.get_histograms(k) for k in self.keys}
+            self.probabilities: typing.Dict[str, np.ndarray] = \
+                {k: np.asarray(source.get_probabilities(k, state_detection_threshold)) for k in self.keys}
 
             # Obtain the file name generator
             self._file_name_generator = get_file_name_generator(source.get_device('scheduler'))

@@ -21,7 +21,7 @@ class _MockScan1(DaxScan, _MockSystem):
 
     def build_scan(self) -> None:
         # Counter
-        self.counter = collections.Counter()  # type: typing.Dict[str, int]
+        self.counter: typing.Counter[str] = collections.Counter()
 
         # Scan
         self.add_scan('foo', 'foo', Scannable(RangeScan(1, self.FOO, self.FOO, randomize=False)))

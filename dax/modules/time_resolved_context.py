@@ -23,22 +23,22 @@ class TimeResolvedContext(DaxModule):
     This module can be used as a sub-module of a service.
     """
 
-    PLOT_RESULT_KEY = 'plot.dax.time_resolved_context.result'
+    PLOT_RESULT_KEY: str = 'plot.dax.time_resolved_context.result'
     """Dataset name for plotting latest result graph (Y-axis)."""
-    PLOT_TIME_KEY = 'plot.dax.time_resolved_context.time'
+    PLOT_TIME_KEY: str = 'plot.dax.time_resolved_context.time'
     """Dataset name for plotting latest result graph (X-axis)."""
-    PLOT_NAME = 'time resolved detection'
+    PLOT_NAME: str = 'time resolved detection'
     """Name of the plot applet."""
-    PLOT_GROUP = 'dax.time_resolved_context'
+    PLOT_GROUP: str = 'dax.time_resolved_context'
     """Group to which the plot applets belong."""
 
-    DATASET_GROUP = 'time_resolved_context'
+    DATASET_GROUP: str = 'time_resolved_context'
     """The group name for archiving data."""
-    DATASET_KEY_FORMAT = DATASET_GROUP + '/{dataset_key:s}/{index:d}/{column:s}'
+    DATASET_KEY_FORMAT: str = DATASET_GROUP + '/{dataset_key:s}/{index:d}/{column:s}'
     """Format string for sub-dataset keys."""
-    DEFAULT_DATASET_KEY = 'time_resolved'
+    DEFAULT_DATASET_KEY: str = 'time_resolved'
     """The default name of the output dataset in archive."""
-    DATASET_COLUMNS = ('width', 'time', 'result')
+    DATASET_COLUMNS: typing.Tuple[str, ...] = ('width', 'time', 'result')
     """Column names of data within each sub-dataset."""
 
     def build(self, default_dataset_key: typing.Optional[str] = None) -> None:  # type: ignore
@@ -50,26 +50,29 @@ class TimeResolvedContext(DaxModule):
             'Provided default dataset key must be None or of type str'
 
         # Store default dataset key
-        self._default_dataset_key = self.DEFAULT_DATASET_KEY if default_dataset_key is None else default_dataset_key
+        if default_dataset_key is None:
+            self._default_dataset_key: str = self.DEFAULT_DATASET_KEY
+        else:
+            self._default_dataset_key = default_dataset_key
 
         # Get CCB tool
         self._ccb = get_ccb_tool(self)
         # Units formatter
-        self._units_fmt = UnitsFormatter()
+        self._units_fmt: UnitsFormatter = UnitsFormatter()
 
         # By default we are not in context
-        self._in_context = np.int32(0)
+        self._in_context: np.int32 = np.int32(0)
         # The count buffer (buffer appending is a bit faster than dict operations)
-        self._buffer_data = []  # type: typing.List[typing.Tuple[typing.Sequence[typing.Sequence[int]], float]]
-        self._buffer_meta = []  # type: typing.List[typing.Tuple[float, float, float]]
+        self._buffer_data: typing.List[typing.Tuple[typing.Sequence[typing.Sequence[int]], float]] = []
+        self._buffer_meta: typing.List[typing.Tuple[float, float, float]] = []
 
         # Archive to analyze high level data at the end of the experiment
-        self._archive = {}  # type: typing.Dict[str, typing.List[typing.Dict[str, typing.Sequence[float]]]]
+        self._archive: typing.Dict[str, typing.List[typing.Dict[str, typing.Sequence[float]]]] = {}
 
         # Target dataset key
-        self._dataset_key = self._default_dataset_key
+        self._dataset_key: str = self._default_dataset_key
         # Datasets that are initialized with a counter, which represents the length of the data
-        self._open_datasets = collections.Counter()  # type: typing.Dict[str, int]
+        self._open_datasets: typing.Counter[str] = collections.Counter()
 
     def init(self) -> None:
         pass
@@ -112,7 +115,7 @@ class TimeResolvedContext(DaxModule):
             raise ValueError('Bin spacing can not be less than zero')
 
         # Calculate the offset of a single whole partition
-        partition_offset = max_partition_size * (bin_width + bin_spacing)
+        partition_offset: float = max_partition_size * (bin_width + bin_spacing)
 
         # List of whole partitions (maximum number of bins)
         partitions = [(np.int32(max_partition_size), i * partition_offset)
@@ -158,7 +161,7 @@ class TimeResolvedContext(DaxModule):
             raise ValueError('Bin width and bin spacing can not both be zero')
 
         # Calculate the number of bins that fit in the window, rounding the value up
-        num_bins = int(math.ceil(window_size / (bin_width + bin_spacing)))
+        num_bins: int = int(math.ceil(window_size / (bin_width + bin_spacing)))
         # Call partition bins
         return TimeResolvedContext.partition_bins(num_bins, max_partition_size, bin_width, bin_spacing)
 
@@ -337,7 +340,7 @@ class TimeResolvedContext(DaxModule):
                                    for ((w, s, o), d), (_, o_correction) in zip(buffer[0], self._buffer_data)])
 
             # Format results in a dict for easier access
-            result_dict = dict(result=result, time=time, width=width)
+            result_dict = {'result': result, 'time': time, 'width': width}
 
             # Store results in the local archive
             self._archive.setdefault(self._dataset_key, []).append(result_dict)
@@ -432,7 +435,7 @@ class TimeResolvedAnalyzer:
     and the second dimension are the values.
     """
 
-    PLOT_FILE_FORMAT = '{key:s}_{index:d}'
+    PLOT_FILE_FORMAT: str = '{key:s}_{index:d}'
     """File name format for plot files."""
 
     def __init__(self, source: typing.Union[DaxSystem, TimeResolvedContext, str, h5py.File]):
@@ -451,8 +454,9 @@ class TimeResolvedAnalyzer:
 
         if isinstance(source, TimeResolvedContext):
             # Get data from module
-            self.keys = source.get_keys()
-            self.traces = {k: source.get_traces(k) for k in self.keys}
+            self.keys: typing.List[str] = source.get_keys()
+            self.traces: typing.Dict[str, typing.List[typing.Dict[str, typing.Sequence[float]]]] = \
+                {k: source.get_traces(k) for k in self.keys}
 
             # Obtain the file name generator
             self._file_name_generator = get_file_name_generator(source.get_device('scheduler'))

@@ -11,15 +11,16 @@ from dax.sim.signal import get_signal_manager
 from dax.sim.ddb import DAX_SIM_CONFIG_KEY
 from dax.sim.time import DaxTimeManager
 from dax.sim.coredevice.comm_kernel import CommKernelDummy
+from dax.sim.config import DaxSimConfig
 from dax.util.units import time_to_str
 from dax.util.output import get_file_name
 
-_logger = logging.getLogger(__name__)
+_logger: logging.Logger = logging.getLogger(__name__)
 """The logger for this file."""
 
 
 class Core(DaxSimDevice):
-    RESET_TIME_MU = 125000
+    RESET_TIME_MU: int = 125000
     """The reset time in machine units."""
 
     def __init__(self, dmgr: typing.Any,
@@ -30,16 +31,16 @@ class Core(DaxSimDevice):
 
         # Get the virtual simulation configuration device, which will configure the simulation
         # DAX system already initializes the virtual sim config device, this is a fallback
-        self._sim_config = dmgr.get(DAX_SIM_CONFIG_KEY)
+        self._sim_config: DaxSimConfig = dmgr.get(DAX_SIM_CONFIG_KEY)
 
         # Call super
         super(Core, self).__init__(dmgr, _core=self, **kwargs)  # type: ignore[arg-type]
 
         # Store arguments
         self._device_manager = dmgr
-        self._ref_period = ref_period
-        self._ref_multiplier = ref_multiplier
-        self._coarse_ref_period = self._ref_period * self._ref_multiplier
+        self._ref_period: float = ref_period
+        self._ref_multiplier: int = ref_multiplier
+        self._coarse_ref_period: float = self._ref_period * self._ref_multiplier
 
         # Setup dummy comm object
         self._comm = CommKernelDummy()
@@ -50,16 +51,16 @@ class Core(DaxSimDevice):
 
         # Get the signal manager and register signals
         self._signal_manager = get_signal_manager()
-        self._reset_signal = self._signal_manager.register(self, 'reset', bool, size=1)  # type: typing.Any
+        self._reset_signal: typing.Any = self._signal_manager.register(self, 'reset', bool, size=1)
 
         # Set initial call nesting level to zero
-        self._level = 0
+        self._level: int = 0
 
         # Counter for context switches
-        self._context_switch_counter = 0
+        self._context_switch_counter: int = 0
         # Counting dicts for function call profiling
-        self._func_counter = collections.Counter()  # type: typing.Counter[typing.Any]
-        self._func_time = collections.Counter()  # type: typing.Counter[typing.Any]
+        self._func_counter: typing.Counter[typing.Any] = collections.Counter()
+        self._func_time: typing.Counter[typing.Any] = collections.Counter()
 
     @property
     def ref_period(self) -> float:
@@ -85,7 +86,7 @@ class Core(DaxSimDevice):
         # Register the function call
         self._func_counter[kernel_func] += 1
         # Track current time
-        t_start = now_mu()  # type: np.int64
+        t_start: np.int64 = now_mu()
 
         # Call the kernel function while increasing the level
         self._level += 1
@@ -110,7 +111,7 @@ class Core(DaxSimDevice):
         if self._sim_config.output_enabled:
             # Create an output file name
             scheduler = self._device_manager.get('scheduler')
-            output_file_name = get_file_name(scheduler, 'profile', 'csv')
+            output_file_name: str = get_file_name(scheduler, 'profile', 'csv')
 
             # Create a profiling report
             _logger.debug('Writing profiling report')

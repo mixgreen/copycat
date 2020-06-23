@@ -23,7 +23,7 @@ class LedModule(DaxModule):
         assert isinstance(init, bool), 'Initialization flag must be of type bool'
 
         # Store attributes
-        self._init_flag = init
+        self._init_flag: bool = init
         self.logger.debug(f'Init flag: {self._init_flag}')
 
         # LED array

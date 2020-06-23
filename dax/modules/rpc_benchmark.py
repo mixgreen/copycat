@@ -10,9 +10,9 @@ class RpcBenchmarkModule(DaxModule):
     """Module to benchmark RPC performance."""
 
     # System keys
-    LATENCY_HOST_CORE_HOST_KEY = 'latency_host_core_host'
-    LATENCY_CORE_HOST_CORE_KEY = 'latency_core_host_core'
-    LATENCY_CORE_HOST_CORE_ASYNC_KEY = 'latency_core_host_core_async'
+    LATENCY_HOST_CORE_HOST_KEY: str = 'latency_host_core_host'
+    LATENCY_CORE_HOST_CORE_KEY: str = 'latency_core_host_core'
+    LATENCY_CORE_HOST_CORE_ASYNC_KEY: str = 'latency_core_host_core_async'
 
     def build(self) -> None:  # type: ignore
         """Build the RPC benchmark module."""

@@ -14,21 +14,27 @@ def _get_attributes(o: typing.Any) -> typing.Iterator[typing.Any]:
     return (getattr(o, attr) for attr in dir(o) if attr[0:2] != '__')
 
 
-_logger = logging.getLogger(__name__)
+_logger: logging.Logger = logging.getLogger(__name__)
 """Module logger object"""
-
-__A_T = typing.Dict[str, str]  # Type of attribute dicts
 
 
 class GraphvizBase(graphviz.Digraph):
-    MODULE_NODE_ATTR = {'color': 'blue'}  # type:  __A_T
-    MODULE_EDGE_ATTR = {'K': '0.8'}  # type:  __A_T
-    SYSTEM_EDGE_ATTR = {'len': '1.5'}  # type:  __A_T
+    __A_T = typing.Dict[str, str]  # Type of attribute dicts
 
-    SERVICE_NODE_ATTR = {'color': 'red'}  # type:  __A_T
-    SERVICE_EDGE_ATTR = {}  # type:  __A_T
+    MODULE_NODE_ATTR: __A_T = {'color': 'blue'}
+    """Node attributes for modules."""
+    MODULE_EDGE_ATTR: __A_T = {'K': '0.8'}
+    """Edge attributes for modules."""
+    SYSTEM_EDGE_ATTR: __A_T = {'len': '1.5'}
+    """Edge attributes for the system."""
 
-    INTER_CLUSTER_EDGE_ATTR = {'len': '2.5'}  # type:  __A_T
+    SERVICE_NODE_ATTR: __A_T = {'color': 'red'}
+    """Node attributes for services."""
+    SERVICE_EDGE_ATTR: __A_T = {}
+    """Edge attributes for services."""
+
+    INTER_CLUSTER_EDGE_ATTR: __A_T = {'len': '2.5'}
+    """Edge attributes for inter-cluster edges."""
 
     def _add_modules(self, graph: graphviz.Digraph,
                      module: dax.base.dax.DaxModuleBase,

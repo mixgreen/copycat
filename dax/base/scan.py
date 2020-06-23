@@ -11,7 +11,7 @@ import dax.base.dax
 
 __all__ = ['DaxScan']
 
-_KEY_RE = re.compile(r'[a-zA-Z_]\w*')
+_KEY_RE: typing.Pattern[str] = re.compile(r'[a-zA-Z_]\w*')
 """Regex for matching valid keys."""
 
 
@@ -37,17 +37,14 @@ class ScanProductGenerator:
     This class is inspired by the ARTIQ MultiScanManager class.
     """
 
-    # Iterator type
-    __I_T = typing.Iterator[typing.Tuple['ScanProductGenerator.ScanPoint', 'ScanProductGenerator.ScanIndex']]
-
     class _ScanItem:
         def __init__(self, **kwargs: typing.Any):
             # Mark all attributes as kernel invariant
-            self.kernel_invariants = set(kwargs)
+            self.kernel_invariants: typing.Set[str] = set(kwargs)
 
         def __repr__(self) -> str:
             """Return a string representation of this object."""
-            attributes = ', '.join(f'{k:s}={getattr(self, k)}' for k in self.kernel_invariants)
+            attributes: str = ', '.join(f'{k:s}={getattr(self, k)}' for k in self.kernel_invariants)
             return f'{self.__class__.__name__}: {attributes}'
 
     class ScanPoint(_ScanItem):
@@ -82,14 +79,14 @@ class ScanProductGenerator:
         self._keys, self._scans = tuple(zip(*scans))
 
         # Store enable index flag
-        self._enable_index = enable_index
+        self._enable_index: bool = enable_index
 
-    def _point_generator(self) -> typing.Iterator['ScanProductGenerator.ScanPoint']:
+    def _point_generator(self) -> typing.Iterator[ScanPoint]:
         """Returns a generator for scan points."""
         for values in itertools.product(*self._scans):
             yield self.ScanPoint(**{k: v for k, v in zip(self._keys, values)})
 
-    def _index_generator(self) -> typing.Iterator['ScanProductGenerator.ScanIndex']:
+    def _index_generator(self) -> typing.Iterator[ScanIndex]:
         """Returns a generator for scan indices."""
         if self._enable_index:
             for indices in itertools.product(*(range(len(s)) for s in self._scans)):
@@ -102,7 +99,7 @@ class ScanProductGenerator:
                 # Yield the empty scan index object for all
                 yield si
 
-    def __iter__(self) -> __I_T:
+    def __iter__(self) -> typing.Iterator[typing.Tuple[ScanPoint, ScanIndex]]:
         """Returns a generator that returns tuples of a scan point and a scan index."""
         # Storing a list of tuples instead of two list hopefully results in better data locality
         return zip(self._point_generator(), self._index_generator())
@@ -156,17 +153,17 @@ class DaxScan(dax.base.dax.DaxBase, abc.ABC):
     up the right devices to actually run a kernel.
     """
 
-    INFINITE_SCAN_ARGUMENT = True  # type: bool
+    INFINITE_SCAN_ARGUMENT: bool = True
     """Flag to enable the infinite scan argument."""
-    INFINITE_SCAN_DEFAULT = False  # type: bool
+    INFINITE_SCAN_DEFAULT: bool = False
     """Default setting of the infinite scan."""
 
-    ENABLE_INDEX = True  # type: bool
+    ENABLE_INDEX: bool = True
     """Flag to enable the index argument in the run_point() function."""
 
-    SCAN_KEY_FORMAT = 'scan/{key:s}'  # type: str
+    SCAN_KEY_FORMAT: str = 'scan/{key:s}'
     """Dataset key format for archiving independent scans."""
-    SCAN_PRODUCT_KEY_FORMAT = 'scan/product/{key:s}'  # type: str
+    SCAN_PRODUCT_KEY_FORMAT: str = 'scan/product/{key:s}'
     """Dataset key format for archiving scan products."""
 
     def build(self, *args: typing.Any, **kwargs: typing.Any) -> None:
@@ -188,22 +185,22 @@ class DaxScan(dax.base.dax.DaxBase, abc.ABC):
         super(DaxScan, self).build(*args, **kwargs)
 
         # Collection of scannables
-        self._scan_scannables = OrderedDict()  # type: OrderedDict[str, typing.Iterable[typing.Any]]
+        self._scan_scannables: OrderedDict[str, typing.Iterable[typing.Any]] = OrderedDict()
 
         # The scheduler object
-        self._scan_scheduler = self.get_device('scheduler')
+        self._scan_scheduler: typing.Any = self.get_device('scheduler')
 
         # Build this scan (no args or kwargs available)
         self.logger.debug('Building scan')
-        self.__in_build = True
+        self.__in_build: bool = True
         self.build_scan()
         self.__in_build = False
 
         if self.INFINITE_SCAN_ARGUMENT:
             # Add an argument for infinite scan
-            self._scan_infinite = self.get_argument('Infinite scan', BooleanValue(self.INFINITE_SCAN_DEFAULT),
-                                                    group='DAX.scan',
-                                                    tooltip='Loop infinitely over the scan points')  # type: bool
+            self._scan_infinite: bool = self.get_argument('Infinite scan', BooleanValue(self.INFINITE_SCAN_DEFAULT),
+                                                          group='DAX.scan',
+                                                          tooltip='Loop infinitely over the scan points')
         else:
             # If infinite scan argument is disabled, the value is always the default one
             self._scan_infinite = self.INFINITE_SCAN_DEFAULT
@@ -340,8 +337,9 @@ class DaxScan(dax.base.dax.DaxBase, abc.ABC):
 
         # Make the scan elements
         if self._scan_scannables:
-            self._scan_elements = list(ScanProductGenerator(*self._scan_scannables.items(),  # type: ignore[arg-type]
-                                                            enable_index=self.ENABLE_INDEX))
+            self._scan_elements: typing.List[typing.Any] = list(
+                ScanProductGenerator(*self._scan_scannables.items(),  # type: ignore[arg-type]
+                                     enable_index=self.ENABLE_INDEX))
         else:
             self._scan_elements = []
         self.update_kernel_invariants('_scan_elements')
@@ -361,7 +359,7 @@ class DaxScan(dax.base.dax.DaxBase, abc.ABC):
                              [getattr(point, key) for point, _ in self._scan_elements], archive=True)
 
         # Index of current scan element
-        self._scan_index = np.int32(0)
+        self._scan_index: np.int32 = np.int32(0)
 
         try:
             while self._scan_index < len(self._scan_elements):

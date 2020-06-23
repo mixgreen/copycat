@@ -29,7 +29,7 @@ def get_manager_or_parent(device_db: typing.Union[typing.Dict[str, typing.Any], 
     # Scheduler
     scheduler = artiq.frontend.artiq_run.DummyScheduler()
     # Construct expid of scheduler and add default values
-    scheduler.expid = dict() if expid is None else expid
+    scheduler.expid = {} if expid is None else expid
     for k, v in _EXPID_DEFAULTS.items():
         scheduler.expid.setdefault(k, v)
     # Set arguments (overwrites any arguments in the expid)
@@ -65,14 +65,14 @@ def get_manager_or_parent(device_db: typing.Union[typing.Dict[str, typing.Any], 
 
     # Return a tuple that is accepted as manager_or_parent
     # DeviceManager, DatasetManager, ProcessArgumentManager, dict
-    return device_mgr, dataset_mgr, argument_mgr, dict()
+    return device_mgr, dataset_mgr, argument_mgr, {}
 
 
 # Disable ARTIQ logging by setting logging level to critical
 logging.basicConfig(level=logging.CRITICAL)
 
 # Default device DB
-_DEVICE_DB = {
+_DEVICE_DB: typing.Dict[str, typing.Any] = {
     'core': {
         'type': 'local',
         'module': 'artiq.coredevice.core',
@@ -89,10 +89,10 @@ _DEVICE_DB = {
         'module': 'artiq.coredevice.dma',
         'class': 'CoreDMA'
     },
-}  # type: typing.Dict[str, typing.Any]
+}
 
 # Default expid values
-_EXPID_DEFAULTS = {'log_level': logging.CRITICAL,
-                   'file': 'dax_artiq_helper_file.py',
-                   'class_name': 'DaxArtiqHelperExperiment',
-                   'repo_rev': 'N/A'}  # type: typing.Dict[str, typing.Any]
+_EXPID_DEFAULTS: typing.Dict[str, typing.Any] = {'log_level': logging.CRITICAL,
+                                                 'file': 'dax_artiq_helper_file.py',
+                                                 'class_name': 'DaxArtiqHelperExperiment',
+                                                 'repo_rev': 'N/A'}

@@ -15,13 +15,13 @@ class RtioBenchmarkModule(DaxModule):
     """Module to benchmark the RTIO output system."""
 
     # System keys
-    EVENT_PERIOD_KEY = 'event_period'
-    EVENT_BURST_KEY = 'event_burst'
-    DMA_EVENT_PERIOD_KEY = 'dma_event_period'
-    LATENCY_CORE_RTIO_KEY = 'latency_core_rtio'
+    EVENT_PERIOD_KEY: str = 'event_period'
+    EVENT_BURST_KEY: str = 'event_burst'
+    DMA_EVENT_PERIOD_KEY: str = 'dma_event_period'
+    LATENCY_CORE_RTIO_KEY: str = 'latency_core_rtio'
 
     # Unique DMA tags
-    DMA_BURST = 'rtio_benchmark_burst'
+    DMA_BURST: str = 'rtio_benchmark_burst'
 
     def build(self, ttl_out: str, dma: bool = False) -> None:
         """Build the RTIO benchmark module.
@@ -32,7 +32,7 @@ class RtioBenchmarkModule(DaxModule):
         assert isinstance(dma, bool), 'DMA flag should be of type bool'
 
         # Store attributes
-        self._dma_enabled = dma
+        self._dma_enabled: bool = dma
 
         # TTL output device
         self.ttl_out = self.get_device(ttl_out, artiq.coredevice.ttl.TTLInOut)
@@ -640,13 +640,13 @@ class RtioLoopBenchmarkModule(RtioBenchmarkModule):
     """Module to benchmark the RTIO system with a looped connection."""
 
     # System keys
-    INPUT_BUFFER_SIZE_KEY = 'input_buffer_size'
-    LATENCY_RTIO_RTIO_KEY = 'latency_rtio_rtio'
-    LATENCY_RTIO_CORE_KEY = 'latency_rtio_core'
-    LATENCY_RTT_KEY = 'latency_rtt'  # Round-trip-time from RTIO input to RTIO output
+    INPUT_BUFFER_SIZE_KEY: str = 'input_buffer_size'
+    LATENCY_RTIO_RTIO_KEY: str = 'latency_rtio_rtio'
+    LATENCY_RTIO_CORE_KEY: str = 'latency_rtio_core'
+    LATENCY_RTT_KEY: str = 'latency_rtt'  # Round-trip-time from RTIO input to RTIO output
 
     # Fixed edge delay time
-    EDGE_DELAY = 1 * us
+    EDGE_DELAY: float = 1 * us
 
     def build(self, ttl_out: str, ttl_in: str, **kwargs: typing.Any) -> None:
         """Build the RTIO loop benchmark module.

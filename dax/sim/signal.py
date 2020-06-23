@@ -99,7 +99,7 @@ class VcdSignalManager(DaxSignalManager[_VS_T]):
         assert timescale > 0.0, 'Timescale must be > 0.0'
 
         # Store timescale
-        self._timescale = timescale
+        self._timescale: float = timescale
 
         # Open file
         self._output_file = open(output_file, mode='w')
@@ -108,7 +108,7 @@ class VcdSignalManager(DaxSignalManager[_VS_T]):
         timescale_str = dax.util.units.time_to_str(timescale, precision=0)
         self._vcd = vcd.writer.VCDWriter(self._output_file, timescale=timescale_str, comment=output_file)
         # Create event buffer to support reverting time
-        self._event_buffer = []  # type: typing.List[typing.Tuple[int, _VS_T, _VV_T]]
+        self._event_buffer: typing.List[typing.Tuple[int, _VS_T, _VV_T]] = []
 
     def register(self, scope: DaxSimDevice, name: str, type_: _VT_T,
                  size: typing.Optional[int] = None, init: _VV_T = None) -> _VS_T:
@@ -230,7 +230,7 @@ class SignalNotSet(metaclass=_Meta):
 class PeekSignalManager(DaxSignalManager[_PS_T]):
     """Peek signal manager."""
 
-    _CONVERT_TYPE = {
+    _CONVERT_TYPE: typing.Dict[type, _PT_T] = {
         bool: bool,
         int: int,
         np.int32: int,
@@ -238,33 +238,33 @@ class PeekSignalManager(DaxSignalManager[_PS_T]):
         float: float,
         str: str,
         object: object,
-    }  # type: typing.Dict[type, _PT_T]
+    }
     """Dict to convert Python types to peek signal manager internal types."""
 
-    _CHECK_TYPE = {
+    _CHECK_TYPE: typing.Dict[_PT_T, type] = {
         bool: bool,
         int: numbers.Integral,
         float: float,
         str: str,
         object: bool,
-    }  # type: typing.Dict[_PT_T, type]
+    }
     """Dict to convert internal types to peek signal manager type-checking types."""
 
-    _SPECIAL_BOOL_VALUES = {'x', 'X', 'z', 'Z'}  # type: typing.Set[str]
+    _SPECIAL_BOOL_VALUES: typing.Set[str] = {'x', 'X', 'z', 'Z'}
     """Special values for a bool or int type signal."""
 
-    _SPECIAL_VALUES = {
+    _SPECIAL_VALUES: typing.Dict[_PT_T, typing.Set[typing.Any]] = {
         bool: _SPECIAL_BOOL_VALUES,
         int: _SPECIAL_BOOL_VALUES,
         float: set(),
         str: {None},
         object: set(),
-    }  # type: typing.Dict[_PT_T, typing.Set[typing.Any]]
+    }
     """Dict with special allowed values for internal types."""
 
     def __init__(self) -> None:
         # Registered devices and buffer for signals/events
-        self._event_buffer = {}  # type: _PD_T
+        self._event_buffer: _PD_T = {}
 
     def register(self, scope: DaxSimDevice, name: str, type_: _PT_T,
                  size: typing.Optional[int] = None, init: _PV_T = None) -> _PS_T:
@@ -427,7 +427,7 @@ class PeekSignalManager(DaxSignalManager[_PS_T]):
         return value
 
 
-_signal_manager = NullSignalManager()  # type: DaxSignalManager[typing.Any]
+_signal_manager: DaxSignalManager[typing.Any] = NullSignalManager()
 """Singleton instance of the signal manager."""
 
 

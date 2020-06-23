@@ -11,12 +11,12 @@ __all__ = ['PmtMonitor']
 class PmtMonitor(DaxClient, EnvExperiment):
     """PMT monitor utility to monitor a single PMT channel."""
 
-    APPLET_NAME = 'pmt_monitor'
+    APPLET_NAME: str = 'pmt_monitor'
     """Name of the applet in the dashboard."""
-    APPLET_GROUP = 'dax'
+    APPLET_GROUP: str = 'dax'
     """Group of the applet."""
 
-    DEFAULT_DATASET = 'plot.dax.pmt_monitor_count'
+    DEFAULT_DATASET: str = 'plot.dax.pmt_monitor_count'
     """Default dataset for output."""
 
     COUNT_SCALES = collections.OrderedDict(GHz=GHz, MHz=MHz, kHz=kHz, Hz=Hz, mHz=mHz)

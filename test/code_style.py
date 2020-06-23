@@ -1,5 +1,4 @@
 import unittest
-import os
 import io
 import contextlib
 
@@ -14,9 +13,8 @@ class TestCodeStyle(unittest.TestCase):
         except ImportError:
             self.skipTest('pycodestyle library not available')
         else:
-            # Get path to the root of DAX
-            import dax
-            dax_path = os.path.dirname(os.path.realpath(dax.__file__))
+            # Get DAX directory
+            from dax import __dax_dir__ as dax_dir
 
             # Create a style object
             style = pycodestyle.StyleGuide(max_line_length=120)  # Increase line length
@@ -26,7 +24,7 @@ class TestCodeStyle(unittest.TestCase):
 
             with contextlib.redirect_stdout(buf):
                 # Check all files
-                result = style.check_files([dax_path])
+                result = style.check_files([dax_dir])
 
             # Format message and assert
             msg = '\n\nCode style report:\n{:s}'.format(buf.getvalue())

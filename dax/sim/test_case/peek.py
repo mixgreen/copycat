@@ -13,7 +13,7 @@ from dax.sim.device import DaxSimDevice
 
 __all__ = ['PeekTestCase']
 
-_logger = logging.getLogger(__name__)
+_logger: logging.Logger = logging.getLogger(__name__)
 """The module logger object."""
 
 
@@ -27,7 +27,7 @@ class PeekTestCase(unittest.TestCase):
     Users are allowed to combine regular unittest constructs with peek-testing features.
     """
 
-    DEFAULT_DEVICE_DB = 'device_db.py'  # type: str
+    DEFAULT_DEVICE_DB: str = 'device_db.py'
     """The path of the default device DB used to construct environments."""
 
     __E_T = typing.TypeVar('__E_T', bound=HasEnvironment)  # Type variable for environment
@@ -53,9 +53,9 @@ class PeekTestCase(unittest.TestCase):
 
         # Set default values
         if build_args is None:
-            build_args = tuple()
+            build_args = ()
         if build_kwargs is None:
-            build_kwargs = dict()
+            build_kwargs = {}
 
         assert issubclass(env_class, HasEnvironment), 'The environment class must be a subclass of HasEnvironment'
         assert isinstance(device_db, (str, dict)) or device_db is None, 'Device DB must be of type str, dict, or None'
@@ -67,9 +67,9 @@ class PeekTestCase(unittest.TestCase):
         _logger.setLevel(logging_level)
 
         # Construct an expid object
-        expid = {'log_level': logging_level,
-                 'class_name': env_class.__name__,
-                 'repo_rev': 'N/A'}  # type: typing.Dict[str, typing.Any]
+        expid: typing.Dict[str, typing.Any] = {'log_level': logging_level,
+                                               'class_name': env_class.__name__,
+                                               'repo_rev': 'N/A'}
 
         if not isinstance(device_db, dict):
             # Obtain device DB from file

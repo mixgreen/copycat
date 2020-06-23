@@ -43,8 +43,8 @@ class Generic(_GenericBase, DaxSimDevice):
 
         # Register signal
         signal_manager = get_signal_manager()
-        signal_call = signal_manager.register(self, 'call', object)  # type: typing.Any
-        signal_function = signal_manager.register(self, 'function', str)  # type: typing.Any
+        signal_call: typing.Any = signal_manager.register(self, 'call', object)
+        signal_function: typing.Any = signal_manager.register(self, 'function', str)
 
         # Call super for _GenericBase
         _GenericBase.__init__(self, None, signal_manager, signal_call, signal_function)

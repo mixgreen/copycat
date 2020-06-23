@@ -1,3 +1,5 @@
+from __future__ import annotations  # Postponed evaluation of annotations
+
 import abc
 import typing
 import numpy as np
@@ -16,8 +18,8 @@ class _TimeContext(abc.ABC):
     """Abstract time context class."""
 
     def __init__(self, current_time: _MU_T):
-        self._current_time = current_time
-        self._block_duration = _MU_T(0)
+        self._current_time: _MU_T = current_time
+        self._block_duration: _MU_T = _MU_T(0)
 
     @property
     def current_time(self) -> _MU_T:
@@ -54,13 +56,13 @@ class _Watchdog:
     Note that the watchdog feature is planned to be removed in ARTIQ 6.
     """
 
-    def __init__(self, watchdogs: typing.Set['_Watchdog'], timeout_mu: _MU_T):
+    def __init__(self, watchdogs: typing.Set[_Watchdog], timeout_mu: _MU_T):
         # Store the watchdogs container
-        self._watchdogs = watchdogs
+        self._watchdogs: typing.Set[_Watchdog] = watchdogs
         # Store the given timeout (relative time)
-        self._timeout_mu = timeout_mu
+        self._timeout_mu: _MU_T = timeout_mu
         # Flag to check that a watchdog is only used once
-        self._used = False
+        self._used: bool = False
 
     def check_timeout(self, now_mu_: _MU_T) -> None:
         """Let the watchdog check if it has timed out.
@@ -100,13 +102,13 @@ class DaxTimeManager:
             raise ValueError('The reference period must be larger than zero')
 
         # Store reference period
-        self._ref_period = ref_period
+        self._ref_period: float = ref_period
 
         # Initialize time context stack
-        self._stack = [_SequentialTimeContext(_MU_T(0))]  # type: typing.List[_TimeContext]
+        self._stack: typing.List[_TimeContext] = [_SequentialTimeContext(_MU_T(0))]
 
         # Set of active watchdogs
-        self._watchdogs = set()  # type: typing.Set[_Watchdog]
+        self._watchdogs: typing.Set[_Watchdog] = set()
 
         # Set the watchdog factory
         set_watchdog_factory(self._watchdog_factory)
