@@ -174,7 +174,7 @@ class TimeResolvedContext(DaxModule):
 
     @rpc(flags={'async'})
     def append_meta(self, bin_width, bin_spacing, offset=0.0):  # type: (float, float, float) -> None
-        """Store metadata that matches the next call to :func:`append`.
+        """Store metadata that matches the next call to :func:`append_data`.
 
         This function is intended to be fast to allow high input data throughput.
         No type checking is performed on the data.
@@ -190,6 +190,28 @@ class TimeResolvedContext(DaxModule):
 
         # Append the given element to the buffer (using tuples for high performance)
         self._buffer_meta.append((bin_width, bin_spacing, offset))
+
+    @rpc(flags={'async'})
+    def remove_meta(self):  # type: () -> None
+        """Remove metadata that was appended with the last call to :func:`append_meta`.
+
+        This function is intended to remove or cancel the last call to :func:`append_meta`.
+        It can be used when no useful data can be provided to the :func:`append_data`
+        call that should have matched the last :func:`append_meta` call.
+
+        It is up to the user to manage the stream of data. Hence, the user can choose if
+        the data point is dropped, or if a retry will be performed.
+        In any way, the buffers of the time resolved context can remain consistent.
+
+        :raises TimeResolvedContextError: Raised if called out of context
+        :raises IndexError: Raised if there was no metadata to remove
+        """
+        if not self._in_context:
+            # Called out of context
+            raise TimeResolvedContextError('The remove function can only be called in-context')
+
+        # Append the given element to the buffer (using tuples for high performance)
+        self._buffer_meta.pop()
 
     @rpc(flags={'async'})
     def append_data(self, data, offset_mu=0):  # type: (typing.Sequence[typing.Sequence[int]], np.int64) -> None

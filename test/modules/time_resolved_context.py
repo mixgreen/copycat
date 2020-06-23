@@ -122,13 +122,30 @@ class TimeResolvedContextTestCase(unittest.TestCase):
             # Check buffer
             self.assertListEqual(data, self.t._buffer_meta, 'Buffer did not contain expected data')
 
-            # Add meta to prevent consistency errors
+            # Add data to prevent consistency errors
             for _ in range(len(data)):
                 self.t.append_data([[]])
 
         with self.t:
             # Check buffer
             self.assertListEqual([], self.t._buffer_meta, 'Buffer was not cleared when entering new context')
+
+    def test_remove_meta(self):
+        num_points = 5
+
+        with self.t:
+            # Check buffer
+            self.assertListEqual([], self.t._buffer_meta, 'Buffer was not cleared when entering new context')
+
+            # Append meta
+            for _ in range(num_points):
+                self.t.append_meta(2 * us, 0 * us, 0 * us)
+            # Remove meta
+            for _ in range(num_points):
+                self.t.remove_meta()
+
+            # Check buffer
+            self.assertListEqual([], self.t._buffer_meta, 'Buffer was not empty after removing all metadata')
 
     def test_archive(self):
         bin_width = 1 * us
