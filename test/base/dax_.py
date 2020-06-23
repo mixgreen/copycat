@@ -993,6 +993,12 @@ class DaxModuleBaseTestCase(unittest.TestCase):
         s = _TestSystem(get_manager_or_parent(_device_db))
         self.assertTrue(isinstance(s.get_identifier(), str), 'get_identifier() did not returned a string')
 
+    def test_repr(self):
+        s = _TestSystem(get_manager_or_parent(_device_db))
+        r = repr(s)
+        self.assertTrue(isinstance(r, str), 'repr() did not returned a string')
+        self.assertIn(s.get_system_key(), r)
+
 
 class DaxSystemTestCase(unittest.TestCase):
     class InitTestSystem(DaxSystem):

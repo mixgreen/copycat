@@ -66,6 +66,15 @@ class _MockScanCallback(_MockScan1):
         raise NotImplementedError
 
 
+class _MockScanEmpty(_MockScan1):
+
+    def build_scan(self) -> None:
+        pass
+
+    def run_point(self, point, index):  # type: (typing.Any, typing.Any) -> None
+        raise NotImplementedError('The run_point() function should not have been reached')
+
+
 class _MockScan2(_MockScan1):
     BAR = 30
 
@@ -94,6 +103,18 @@ class _MockScanStop(_MockScan1):
 
 class _MockScanInfinite(_MockScan1):
     INFINITE_SCAN_ARGUMENT = True
+    INFINITE_SCAN_DEFAULT = True
+
+    STOP = 100
+
+    def run_point(self, point, index):  # type: (typing.Any, typing.Any) -> None
+        if self.counter['run_point'] == self.STOP:
+            self.stop_scan()
+        self.counter['run_point'] += 1
+
+
+class _MockScanInfiniteNoArgument(_MockScan1):
+    INFINITE_SCAN_ARGUMENT = False
     INFINITE_SCAN_DEFAULT = True
 
     STOP = 100
@@ -199,6 +220,9 @@ class Scan1TestCase(unittest.TestCase):
         self.assertFalse(is_kernel(self.scan.portable_func), 'Portable function wrongly marked as a kernel function')
         self.assertTrue(is_kernel(self.scan.kernel_func), 'Kernel function not correctly recognized as such')
 
+    def test_is_infinite(self):
+        self.assertFalse(self.scan.is_infinite_scan, 'Scan reported incorrectly it was infinite')
+
     def test_call_counters(self):
         # Run the scan
         self.scan.run()
@@ -241,6 +265,19 @@ class BuildScanTestCase(unittest.TestCase):
 
         MockScan(get_manager_or_parent())
 
+    def test_raise_bad_scan_type(self):
+        class MockScan(_MockScanCallback):
+            # noinspection PyMethodParameters
+            def callback(self_scan):
+                with self.assertRaises(TypeError, msg='Bad scan type did not raise'):
+                    # noinspection PyTypeChecker
+                    self_scan.add_scan('foo', 'foo', NoScan(1))
+                with self.assertRaises(TypeError, msg='Bad scan type did not raise'):
+                    # noinspection PyTypeChecker
+                    self_scan.add_scan('foo', 'foo', EnumerationValue('abc'))
+
+        MockScan(get_manager_or_parent())
+
     def test_raise_bad_scan_key(self):
         class MockScan(_MockScanCallback):
             # noinspection PyMethodParameters
@@ -252,6 +289,16 @@ class BuildScanTestCase(unittest.TestCase):
                             self_scan.add_scan(k, 'some name', Scannable(NoScan(1)))
 
         MockScan(get_manager_or_parent())
+
+
+class EmptyScanTestCase(unittest.TestCase):
+
+    def setUp(self) -> None:
+        self.scan = _MockScanEmpty(get_manager_or_parent())
+
+    def test_run_point_not_called(self):
+        # The run function should exit early and run_point() is not called (which will raise if it does)
+        self.scan.run()
 
 
 class Scan2TestCase(unittest.TestCase):
@@ -274,6 +321,9 @@ class Scan2TestCase(unittest.TestCase):
         }
         self.assertDictEqual(self.scan.counter, counter_ref, 'Function counters did not match expected values')
 
+    def test_is_infinite(self):
+        self.assertFalse(self.scan.is_infinite_scan, 'Scan reported incorrectly it was infinite')
+
     def test_get_scan_points(self):
         self.scan.run()
         points = self.scan.get_scan_points()
@@ -281,6 +331,12 @@ class Scan2TestCase(unittest.TestCase):
         self.assertIn('bar', points)
         self.assertEqual(len(points['foo']), self.scan.FOO * self.scan.BAR)
         self.assertEqual(len(points['bar']), self.scan.FOO * self.scan.BAR)
+
+    def test_get_scan_points_too_early(self):
+        with self.assertRaises(AttributeError, msg='Scan point request before run did not raise'):
+            self.scan.get_scan_points()
+        self.scan.run()
+        self.scan.get_scan_points()
 
     def test_get_scannables(self):
         scannables = self.scan.get_scannables()
@@ -335,7 +391,10 @@ class ScanStopTestCase(unittest.TestCase):
 class InfiniteScanTestCase(unittest.TestCase):
 
     def setUp(self) -> None:
-        self.scan = _MockScanInfinite(get_manager_or_parent())
+        self.scan: _MockScan1 = _MockScanInfinite(get_manager_or_parent())
+
+    def test_is_infinite(self):
+        self.assertTrue(self.scan.is_infinite_scan, 'Scan reported incorrectly it was not infinite')
 
     def test_call_counters(self):
         # Run the scan
@@ -351,6 +410,12 @@ class InfiniteScanTestCase(unittest.TestCase):
             'host_exit': 1,  # host_exit() is called when using stop_scan()
         }
         self.assertDictEqual(self.scan.counter, counter_ref, 'Function counters did not match expected values')
+
+
+class InfiniteScanNoArgumentTestCase(InfiniteScanTestCase):
+
+    def setUp(self) -> None:
+        self.scan = _MockScanInfiniteNoArgument(get_manager_or_parent())
 
 
 class DisableIndexScanTestCase(unittest.TestCase):
