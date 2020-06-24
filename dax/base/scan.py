@@ -130,8 +130,8 @@ class DaxScan(dax.base.dax.DaxBase, abc.ABC):
     4. :func:`device_cleanup`
     5. :func:`host_cleanup`
 
-    Finally, the :func:`host_exit` function can be overridden to implement any functionality
-    executed just before leaving the :func:`run` function.
+    Finally, the :func:`host_enter` and :func:`host_exit` functions can be overridden to implement any
+    functionality executed once at the start of or just before leaving the :func:`run` function.
 
     To exit a scan early, call the :func:`stop_scan` function.
 
@@ -185,10 +185,10 @@ class DaxScan(dax.base.dax.DaxBase, abc.ABC):
         super(DaxScan, self).build(*args, **kwargs)
 
         # Collection of scannables
-        self._scan_scannables: OrderedDict[str, typing.Iterable[typing.Any]] = OrderedDict()
+        self._dax_scan_scannables: OrderedDict[str, typing.Iterable[typing.Any]] = OrderedDict()
 
         # The scheduler object
-        self._scan_scheduler: typing.Any = self.get_device('scheduler')
+        self._dax_scan_scheduler: typing.Any = self.get_device('scheduler')
 
         # Build this scan (no args or kwargs available)
         self.logger.debug('Building scan')
@@ -198,15 +198,15 @@ class DaxScan(dax.base.dax.DaxBase, abc.ABC):
 
         if self.INFINITE_SCAN_ARGUMENT:
             # Add an argument for infinite scan
-            self._scan_infinite: bool = self.get_argument('Infinite scan', BooleanValue(self.INFINITE_SCAN_DEFAULT),
-                                                          group='DAX.scan',
-                                                          tooltip='Loop infinitely over the scan points')
+            self._dax_scan_infinite: bool = self.get_argument('Infinite scan', BooleanValue(self.INFINITE_SCAN_DEFAULT),
+                                                              group='DAX.scan',
+                                                              tooltip='Loop infinitely over the scan points')
         else:
             # If infinite scan argument is disabled, the value is always the default one
-            self._scan_infinite = self.INFINITE_SCAN_DEFAULT
+            self._dax_scan_infinite = self.INFINITE_SCAN_DEFAULT
 
         # Update kernel invariants
-        self.update_kernel_invariants('_scan_scheduler', '_scan_infinite')
+        self.update_kernel_invariants('_dax_scan_scheduler', '_dax_scan_infinite')
 
     @abc.abstractmethod
     def build_scan(self) -> None:
@@ -220,8 +220,8 @@ class DaxScan(dax.base.dax.DaxBase, abc.ABC):
     @property
     def is_infinite_scan(self) -> bool:
         """True if the scan was set to be an infinite scan."""
-        if hasattr(self, '_scan_infinite'):
-            return self._scan_infinite
+        if hasattr(self, '_dax_scan_infinite'):
+            return self._dax_scan_infinite
         else:
             raise AttributeError('is_scan_infinite can only be obtained after build() was called')
 
@@ -262,11 +262,11 @@ class DaxScan(dax.base.dax.DaxBase, abc.ABC):
         # Verify the key is valid and not in use
         if not _is_valid_key(key):
             raise ValueError(f'Provided key "{key:s}" is not valid')
-        if key in self._scan_scannables:
+        if key in self._dax_scan_scannables:
             raise LookupError(f'Provided key "{key:s}" was already in use')
 
         # Add argument to the list of scannables
-        self._scan_scannables[key] = self.get_argument(name, scannable, group=group, tooltip=tooltip)
+        self._dax_scan_scannables[key] = self.get_argument(name, scannable, group=group, tooltip=tooltip)
 
     @host_only
     def set_scan_order(self, *keys: str) -> None:
@@ -288,7 +288,7 @@ class DaxScan(dax.base.dax.DaxBase, abc.ABC):
 
         for k in keys:
             # Move key to the end of the list
-            self._scan_scannables.move_to_end(k)
+            self._dax_scan_scannables.move_to_end(k)
 
     @host_only
     def get_scan_points(self) -> typing.Dict[str, typing.List[typing.Any]]:
@@ -304,8 +304,9 @@ class DaxScan(dax.base.dax.DaxBase, abc.ABC):
 
         :return: A dict containing all the scan points on a per-key basis
         """
-        if hasattr(self, '_scan_elements'):
-            return {key: [getattr(point, key) for point, _ in self._scan_elements] for key in self._scan_scannables}
+        if hasattr(self, '_dax_scan_elements'):
+            return {key: [getattr(point, key) for point, _ in self._dax_scan_elements]
+                    for key in self._dax_scan_scannables}
         else:
             raise AttributeError('Scan points can only be obtained after run() was called')
 
@@ -320,7 +321,7 @@ class DaxScan(dax.base.dax.DaxBase, abc.ABC):
 
         :return: A dict containing the individual scan values on a per-key basis
         """
-        return {key: list(scannable) for key, scannable in self._scan_scannables.items()}
+        return {key: list(scannable) for key, scannable in self._dax_scan_scannables.items()}
 
     """Run functions"""
 
@@ -329,44 +330,48 @@ class DaxScan(dax.base.dax.DaxBase, abc.ABC):
         """Entry point of the experiment implemented by the scan class.
 
         Normally users do not have to override this method.
-        Users implement the :func:`run_point` function instead.
+        Once-executed entry code can use the :func:`host_enter` function instead.
         """
 
         # Check if build() was called
-        assert hasattr(self, '_scan_scannables'), 'DaxScan.build() was not called'
+        assert hasattr(self, '_dax_scan_scannables'), 'DaxScan.build() was not called'
 
         # Make the scan elements
-        if self._scan_scannables:
-            self._scan_elements: typing.List[typing.Any] = list(
-                ScanProductGenerator(*self._scan_scannables.items(),  # type: ignore[arg-type]
+        if self._dax_scan_scannables:
+            self._dax_scan_elements: typing.List[typing.Any] = list(
+                ScanProductGenerator(*self._dax_scan_scannables.items(),  # type: ignore[arg-type]
                                      enable_index=self.ENABLE_INDEX))
         else:
-            self._scan_elements = []
-        self.update_kernel_invariants('_scan_elements')
+            self._dax_scan_elements = []
+        self.update_kernel_invariants('_dax_scan_elements')
         self.logger.debug('Prepared {:d} scan point(s) with {:d} scan parameter(s)'.
-                          format(len(self._scan_elements), len(self._scan_scannables)))
+                          format(len(self._dax_scan_elements), len(self._dax_scan_scannables)))
 
-        if not self._scan_elements:
+        if not self._dax_scan_elements:
             # There are no scan points
             self.logger.warning('No scan points found, aborting experiment')
             return
 
-        for key, scannable in self._scan_scannables.items():
+        for key, scannable in self._dax_scan_scannables.items():
             # Archive values of independent scan
             self.set_dataset(self.SCAN_KEY_FORMAT.format(key=key), [e for e in scannable], archive=True)
             # Archive cartesian product of scan point (separate dataset for every key)
             self.set_dataset(self.SCAN_PRODUCT_KEY_FORMAT.format(key=key),
-                             [getattr(point, key) for point, _ in self._scan_elements], archive=True)
+                             [getattr(point, key) for point, _ in self._dax_scan_elements], archive=True)
 
         # Index of current scan element
-        self._scan_index: np.int32 = np.int32(0)
+        self._dax_scan_index: np.int32 = np.int32(0)
 
         try:
-            while self._scan_index < len(self._scan_elements):
-                while self._scan_scheduler.check_pause():
+            # Call the host enter code
+            self.logger.debug('Performing host enter procedure')
+            self.host_enter()
+
+            while self._dax_scan_index < len(self._dax_scan_elements):
+                while self._dax_scan_scheduler.check_pause():
                     # Pause the scan
                     self.logger.debug('Pausing scan')
-                    self._scan_scheduler.pause()
+                    self._dax_scan_scheduler.pause()
                     self.logger.debug('Resuming scan')
 
                 try:
@@ -377,10 +382,10 @@ class DaxScan(dax.base.dax.DaxBase, abc.ABC):
                     # Run the scan
                     if _is_kernel(self.run_point):
                         self.logger.debug('Running scan on core device')
-                        self._run_scan_in_kernel()
+                        self._run_dax_scan_in_kernel()
                     else:
                         self.logger.debug('Running scan on host')
-                        self._run_scan()
+                        self._run_dax_scan()
 
                 finally:
                     # One time host cleanup
@@ -397,32 +402,32 @@ class DaxScan(dax.base.dax.DaxBase, abc.ABC):
             self.host_exit()
 
     @kernel
-    def _run_scan_in_kernel(self):  # type: () -> None
+    def _run_dax_scan_in_kernel(self):  # type: () -> None
         """Run scan on the core device."""
-        self._run_scan()
+        self._run_dax_scan()
 
     @portable
-    def _run_scan(self):  # type: () -> None
+    def _run_dax_scan(self):  # type: () -> None
         """Portable run scan function."""
         try:
             # Perform device setup
             self.device_setup()
 
-            while self._scan_index < len(self._scan_elements):
+            while self._dax_scan_index < len(self._dax_scan_elements):
                 # Check for pause condition
-                if self._scan_scheduler.check_pause():
+                if self._dax_scan_scheduler.check_pause():
                     break  # Break to exit the run scan function
 
                 # Run for one point
-                point, index = self._scan_elements[self._scan_index]
+                point, index = self._dax_scan_elements[self._dax_scan_index]
                 self.run_point(point, index)
 
                 # Increment index
-                self._scan_index += np.int32(1)
+                self._dax_scan_index += np.int32(1)
 
                 # Handle infinite scan
-                if self._scan_infinite and self._scan_index == len(self._scan_elements):
-                    self._scan_index = np.int32(0)
+                if self._dax_scan_infinite and self._dax_scan_index == len(self._dax_scan_elements):
+                    self._dax_scan_index = np.int32(0)
 
         finally:
             # Perform device cleanup
@@ -436,9 +441,13 @@ class DaxScan(dax.base.dax.DaxBase, abc.ABC):
         """
 
         # Stop the scan by moving the index to the end (+1 to differentiate with infinite scan)
-        self._scan_index = len(self._scan_elements) + np.int32(1)
+        self._dax_scan_index = np.int32(len(self._dax_scan_elements) + 1)
 
     """Functions to be implemented by the user"""
+
+    def host_enter(self) -> None:
+        """0. Entry code on the host, called once."""
+        pass
 
     def host_setup(self) -> None:
         """1. Preparation on the host, called once at entry and after a pause."""
@@ -476,5 +485,5 @@ class DaxScan(dax.base.dax.DaxBase, abc.ABC):
         pass
 
     def host_exit(self) -> None:
-        """6. Exit code on the host if the scan finished successfully."""
+        """6. Exit code on the host, called if the scan finished without exceptions."""
         pass

@@ -26,6 +26,9 @@ class _MockScan1(DaxScan, _MockSystem):
         # Scan
         self.add_scan('foo', 'foo', Scannable(RangeScan(1, self.FOO, self.FOO, randomize=False)))
 
+    def host_enter(self) -> None:
+        self.counter['host_enter'] += 1
+
     def host_setup(self) -> None:
         self.counter['host_setup'] += 1
 
@@ -69,7 +72,8 @@ class _MockScanCallback(_MockScan1):
 class _MockScanEmpty(_MockScan1):
 
     def build_scan(self) -> None:
-        pass
+        # Counter
+        self.counter: typing.Counter[str] = collections.Counter()
 
     def run_point(self, point, index):  # type: (typing.Any, typing.Any) -> None
         raise NotImplementedError('The run_point() function should not have been reached')
@@ -229,6 +233,7 @@ class Scan1TestCase(unittest.TestCase):
 
         # Verify counters
         counter_ref = {
+            'host_enter': 1,
             'host_setup': 1,
             'device_setup': 1,
             'run_point': self.scan.FOO,
@@ -296,6 +301,9 @@ class EmptyScanTestCase(unittest.TestCase):
     def setUp(self) -> None:
         self.scan = _MockScanEmpty(get_manager_or_parent())
 
+        # Verify counters (object is an empty dict)
+        self.assertDictEqual(self.scan.counter, {}, 'Function counters did not match expected values')
+
     def test_run_point_not_called(self):
         # The run function should exit early and run_point() is not called (which will raise if it does)
         self.scan.run()
@@ -312,6 +320,7 @@ class Scan2TestCase(unittest.TestCase):
 
         # Verify counters
         counter_ref = {
+            'host_enter': 1,
             'host_setup': 1,
             'device_setup': 1,
             'run_point': self.scan.FOO * self.scan.BAR,
@@ -357,6 +366,7 @@ class ScanTerminateTestCase(unittest.TestCase):
 
         # Verify counters
         counter_ref = {
+            'host_enter': 1,
             'host_setup': 1,
             'device_setup': 1,
             'run_point': self.scan.TERMINATE,
@@ -378,6 +388,7 @@ class ScanStopTestCase(unittest.TestCase):
 
         # Verify counters
         counter_ref = {
+            'host_enter': 1,
             'host_setup': 1,
             'device_setup': 1,
             'run_point': self.scan.STOP + 1,  # The last point is finished, so plus 1
@@ -402,6 +413,7 @@ class InfiniteScanTestCase(unittest.TestCase):
 
         # Verify counters
         counter_ref = {
+            'host_enter': 1,
             'host_setup': 1,
             'device_setup': 1,
             'run_point': self.scan.STOP + 1,  # The last point is finished, so plus 1
@@ -435,6 +447,7 @@ class DisableIndexScanTestCase(unittest.TestCase):
 
         # Verify counters
         counter_ref = {
+            'host_enter': 1,
             'host_setup': 1,
             'device_setup': 1,
             'run_point': scan_w_index.FOO,
