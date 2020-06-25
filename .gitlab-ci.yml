@@ -40,13 +40,15 @@ test_nix:
   extends: .nix_env
   stage: test
   coverage: '/^TOTAL.+?(\d+\%)$/'
+  variables:
+    NIX_CMD: "nix-shell test/shell.nix --run"
   script:
-    # Run test commands in a Nix shell
-    - nix-shell test/shell.nix --run "python3 --version"
-    - nix-shell test/shell.nix --run "coverage --version; coverage run -m unittest -v"
-    - nix-shell test/shell.nix --run "coverage report"
-    - nix-shell test/shell.nix --run "mypy --version; mypy"
-    - nix-shell test/shell.nix --run "flake8 --version; flake8"
+    # Run test commands
+    - $NIX_CMD "python3 --version"
+    - $NIX_CMD "coverage --version; coverage run -m unittest -v"
+    - $NIX_CMD "coverage report"
+    - $NIX_CMD "mypy --version; mypy"
+    - $NIX_CMD "flake8 --version; flake8"
 
 test_conda:
   extends: .conda_env
@@ -69,9 +71,11 @@ test_conda:
 pages:
   extends: .nix_env
   stage: test
+  variables:
+    NIX_CMD: "nix-shell doc/shell.nix --run"
   script:
     # Generate documentation
-    - nix-shell doc/shell.nix --run "cd doc; make html"
+    - $NIX_CMD "cd doc; make html"
     - mv doc/build/html/ public/
   artifacts:
     paths:
