@@ -7,19 +7,19 @@ __all__ = ['DAX_SIM_CONFIG_KEY', 'enable_dax_sim']
 _logger: logging.Logger = logging.getLogger(__name__)
 """The logger for this file."""
 
-_DAX_DEVICE_MODULE: str = 'dax.sim.coredevice'
-"""The dax.sim device module."""
+_DAX_COREDEVICE_PACKAGE: str = 'dax.sim.coredevice'
+"""The path to the dax.sim coredevice package."""
 
 _GENERIC_DEVICE: typing.Dict[str, str] = {
     'type': 'local',
-    'module': '.'.join([_DAX_DEVICE_MODULE, 'generic']),
+    'module': '.'.join([_DAX_COREDEVICE_PACKAGE, 'generic']),
     'class': 'Generic',
 }
 """The properties of a generic device."""
 
 _DUMMY_DEVICE: typing.Dict[str, str] = {
     'type': 'local',
-    'module': '.'.join([_DAX_DEVICE_MODULE, 'dummy']),
+    'module': '.'.join([_DAX_COREDEVICE_PACKAGE, 'dummy']),
     'class': 'Dummy',
 }
 """The properties of a dummy device."""
@@ -42,6 +42,7 @@ def enable_dax_sim(enable: bool,
                    output: typing.Optional[str] = 'vcd',
                    sim_config_module: str = 'dax.sim.config',
                    sim_config_class: str = 'DaxSimConfig',
+                   coredevice_packages: typing.Union[str, typing.List[str]] = None,
                    **signal_mgr_kwargs: typing.Any) -> typing.Dict[str, typing.Any]:
     """Enable the DAX simulation package by applying this function on your device DB.
 
@@ -53,12 +54,20 @@ def enable_dax_sim(enable: bool,
     can be added by adding a `sim_args` dict to the device entry in the device DB.
     The `arguments` dict of the device will be updated with the content of the `sim_args` dict.
 
+    The DAX.sim package provides a limited list of simulated coredevice drivers.
+    It is possible to add additional packages to the coredevice path which will
+    be searched for simulated coredevice drivers in given order.
+    If no coredevice driver was found, the device will be assigned a generic driver.
+    Note that custom simulated coredevice drivers need to be a subclass of
+    :class:`dax.sim.device.DaxSimDevice` to be compatible with other DAX software.
+
     :param enable: Flag to enable DAX simulation
     :param ddb: The device DB (will be updated if simulation is enabled)
     :param logging_level: The logging level
     :param output: Simulation output type (`None`, `'vcd'`, or `'peek'`)
     :param sim_config_module: The module name of the simulation configuration class
     :param sim_config_class: The class name of the simulation configuration class
+    :param coredevice_packages: Additional packages to search for simulated coredevice drivers
     :param signal_mgr_kwargs: Arguments for the signal manager if output is enabled
     :return: The updated device DB
     """
@@ -69,6 +78,21 @@ def enable_dax_sim(enable: bool,
     assert isinstance(output, str) or output is None, 'Invalid type for output parameter'
     assert isinstance(sim_config_module, str), 'Simulation configuration module name must be of type str'
     assert isinstance(sim_config_class, str), 'Simulation configuration class name must be of type str'
+
+    # Handle the coredevice packages
+    if coredevice_packages is None:
+        # Default is just the DAX coredevice package
+        coredevice_packages = [_DAX_COREDEVICE_PACKAGE]
+    elif isinstance(coredevice_packages, str):
+        # Make a list of the given package and the DAX coredevice package
+        coredevice_packages = [coredevice_packages, _DAX_COREDEVICE_PACKAGE]
+    elif isinstance(coredevice_packages, list):
+        # Already a list, just append the DAX coredevice package
+        coredevice_packages.append(_DAX_COREDEVICE_PACKAGE)
+    else:
+        raise TypeError('The coredevice path argument has an invalid type')
+
+    assert isinstance(coredevice_packages, list) and all(isinstance(p, str) for p in coredevice_packages)
 
     # Set the logging level to the given value
     _logger.setLevel(logging_level)
@@ -83,7 +107,7 @@ def enable_dax_sim(enable: bool,
             try:
                 for k, v in ddb.items():
                     # Mutate every entry in-place
-                    _mutate_ddb_entry(k, v)
+                    _mutate_ddb_entry(k, v, coredevice_packages)
             except Exception as e:
                 # Log exception to provide more context
                 _logger.exception(e)
@@ -114,7 +138,7 @@ def enable_dax_sim(enable: bool,
         return ddb
 
 
-def _mutate_ddb_entry(key: str, value: typing.Any) -> typing.Any:
+def _mutate_ddb_entry(key: str, value: typing.Any, coredevice_packages: typing.List[str]) -> typing.Any:
     """Mutate a device DB entry to use it for simulation."""
 
     assert isinstance(key, str), 'The key must be of type str'
@@ -131,7 +155,7 @@ def _mutate_ddb_entry(key: str, value: typing.Any) -> typing.Any:
 
         # Mutate entry
         if type_ == 'local':
-            _mutate_local(key, value)
+            _mutate_local(key, value, coredevice_packages)
         elif type_ == 'controller':
             _mutate_controller(key, value)
         else:
@@ -144,37 +168,11 @@ def _mutate_ddb_entry(key: str, value: typing.Any) -> typing.Any:
     return value
 
 
-def _mutate_local(key: str, value: typing.Any) -> None:
+def _mutate_local(key: str, value: typing.Dict[str, typing.Any], coredevice_packages: typing.List[str]) -> None:
     """Mutate a device DB local entry to use it for simulation."""
 
-    # Get the module of the device
-    module = value.get('module')
-    if not isinstance(module, str):
-        raise TypeError(f'The module key of local device "{key:s}" must be of type str')
-
-    # Convert module name to a dax.sim module
-    module = '.'.join([_DAX_DEVICE_MODULE, module.rsplit('.', maxsplit=1)[-1]])
-
-    try:
-        # Check if the module exists by importing it
-        m = importlib.import_module(module)
-
-    except ImportError:
-        # Module was not found, fall back on generic device
-        value.update(_GENERIC_DEVICE)
-
-    else:
-        # Get the class of the device
-        class_ = value.get('class')
-        if not isinstance(class_, str):
-            raise TypeError(f'The class key of local device "{key:s}" must be of type str')
-
-        if not hasattr(m, class_):
-            # Class was not found in module, fall back on generic device
-            value.update(_GENERIC_DEVICE)
-        else:
-            # Both module and class were found, update module
-            value['module'] = module
+    # Update the module of the current device to a simulation-capable coredevice driver
+    _update_module(key, value, coredevice_packages)
 
     # Add key of the device to the device arguments
     arguments = value.setdefault('arguments', {})
@@ -192,7 +190,48 @@ def _mutate_local(key: str, value: typing.Any) -> None:
     _logger.debug(f'Converted local device "{key:s}" to class "{value["module"]:s}.{value["class"]:s}"')
 
 
-def _mutate_controller(key: str, value: typing.Any) -> None:
+def _update_module(key: str, value: typing.Dict[str, typing.Any], coredevice_packages: typing.List[str]) -> None:
+    """Update the module of a local device to a simulation-capable coredevice driver."""
+
+    # Get the module of the device
+    module = value.get('module')
+    if not isinstance(module, str):
+        raise TypeError(f'The module key of local device "{key:s}" must be of type str')
+
+    # Keep the tail of the module
+    tail = module.rsplit('.', maxsplit=1)[-1]
+
+    for package in coredevice_packages:
+        # Convert module name based on the current package
+        module = '.'.join([package, tail])
+
+        try:
+            # Check if the module exists by importing it
+            m = importlib.import_module(module)
+
+        except ImportError:
+            # Module was not found, continue to next package
+            continue
+
+        else:
+            # Get the class of the device
+            class_ = value.get('class')
+            if not isinstance(class_, str):
+                raise TypeError(f'The class key of local device "{key:s}" must be of type str')
+
+            if hasattr(m, class_):
+                # Both module and class were found, update module and return
+                value['module'] = module
+                return
+            else:
+                # Class was not found in module, continue to next package
+                continue
+
+    # Module was not found in any package, fall back on generic device
+    value.update(_GENERIC_DEVICE)
+
+
+def _mutate_controller(key: str, value: typing.Dict[str, typing.Any]) -> None:
     """Mutate a device DB controller entry to use it for simulation."""
 
     # Get the command of this controller

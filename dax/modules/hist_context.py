@@ -560,7 +560,7 @@ class HistogramAnalyzer:
             bar_width = width / len(h)
             for i, y in enumerate(y_values):
                 ax.bar(x_values + (bar_width * i) - (width / 2), y,
-                       width=bar_width, align='edge', label=f'Channel {i:d}', **kwargs)
+                       width=bar_width, align='edge', label=f'Plot {i:d}', **kwargs)
 
             # Formatting
             ax.set_xlabel(x_label)
@@ -627,7 +627,7 @@ class HistogramAnalyzer:
         # Plot
         fig, ax = plt.subplots()
         for i, y in enumerate(probabilities):
-            ax.plot(x_values, y, label=f'Channel {i:d}', **kwargs)
+            ax.plot(x_values, y, label=f'Plot {i:d}', **kwargs)
 
         # Plot formatting
         ax.set_xlabel(x_label)
