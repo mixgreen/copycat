@@ -24,7 +24,7 @@ class _GenericBase:
         setattr(self, item, obj)
         return obj
 
-    def __call__(self, *args: typing.Tuple[typing.Any, ...], **kwargs: typing.Dict[str, typing.Any]) -> None:
+    def __call__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
         # Make a string for the parameters
         parameters = f'{",".join(str(a) for a in args):s}' \
                      f'{"," if args and kwargs else "":s}' \
@@ -49,6 +49,6 @@ class Generic(_GenericBase, DaxSimDevice):
         # Call super for _GenericBase
         _GenericBase.__init__(self, None, signal_manager, signal_call, signal_function)
 
-    def __call__(self, *args: typing.Tuple[typing.Any, ...], **kwargs: typing.Dict[str, typing.Any]) -> None:
+    def __call__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
         # The device can not be directly called, only its attributes
         raise TypeError(f'Generic device {self.key:s} is not callable, only its attributes are')

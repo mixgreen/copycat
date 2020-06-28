@@ -11,7 +11,7 @@ class DaxSimDevice(abc.ABC):
 
     def __init__(self, dmgr: typing.Any, _key: str,
                  _core: typing.Any = None, core_device: str = 'core',
-                 **kwargs: typing.Dict[str, typing.Any]):
+                 **kwargs: typing.Any):
         """Initialize a DAX simulation device.
 
         :param dmgr: The device manager, always first positional argument when ARTIQ constructs a device object

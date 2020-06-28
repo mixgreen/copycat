@@ -18,6 +18,9 @@ def get_manager_or_parent(device_db: typing.Union[typing.Dict[str, typing.Any], 
 
     This function is primarily used for testing purposes.
 
+    If a full ARTIQ environment is not required but only a core device driver is sufficient,
+    please take a look at the `dax.sim.coredevice.core.BaseCore` class.
+
     :param device_db: A device DB as dict or a file name (optional)
     :param expid: Dict for the scheduler expid attribute (optional)
     :param arguments: Arguments for the ProcessArgumentManager object
