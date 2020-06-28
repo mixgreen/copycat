@@ -28,8 +28,18 @@ dax.util.introspect module
 dax.util.matplotlib\_backend module
 -----------------------------------
 
-Importing this module activates a workaround for the matplotlib backend.
-This workaround is required to prevent QT related errors.
+.. automodule:: dax.util.matplotlib_backend
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+dax.util.moninj module
+----------------------
+
+.. automodule:: dax.util.moninj
+    :members:
+    :undoc-members:
+    :show-inheritance:
 
 dax.util.output module
 ----------------------

@@ -2,6 +2,7 @@ import unittest
 import logging
 import typing
 import collections
+import warnings
 
 from artiq.experiment import HasEnvironment, now_mu
 from artiq.master.databases import device_db_from_file
@@ -74,7 +75,11 @@ class PeekTestCase(unittest.TestCase):
         if not isinstance(device_db, dict):
             # Obtain device DB from file
             _logger.debug('Obtaining device DB from file')
-            device_db = device_db_from_file(self.DEFAULT_DEVICE_DB if device_db is None else device_db)
+            with warnings.catch_warnings():
+                # Ignore resource warnings that could be raised from evaluating the device DB
+                # These warnings appear when starting the MonInjDummyService
+                warnings.simplefilter('ignore', category=ResourceWarning)
+                device_db = device_db_from_file(self.DEFAULT_DEVICE_DB if device_db is None else device_db)
 
         # Convert and configure device DB
         _logger.debug('Converting device DB')

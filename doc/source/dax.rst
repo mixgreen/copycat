@@ -4,10 +4,6 @@ dax package
 dax.experiment
 --------------
 
-This module is intended to be imported by users.
-It will import the ARTIQ library (``from artiq.experiment import *``)
-and the base components of DAX.
-
 .. automodule:: dax.experiment
     :members:
     :undoc-members:
@@ -15,9 +11,6 @@ and the base components of DAX.
 
 dax.scan
 --------
-
-This module is intended to be imported by users.
-It will import the components required to use the DAX scan infrastructure.
 
 .. automodule:: dax.scan
     :members:
