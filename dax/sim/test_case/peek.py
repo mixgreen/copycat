@@ -78,7 +78,7 @@ class PeekTestCase(unittest.TestCase):
 
         # Convert and configure device DB
         _logger.debug('Converting device DB')
-        enable_dax_sim(enable=True, ddb=device_db, logging_level=logging_level, output='peek')
+        enable_dax_sim(enable=True, ddb=device_db, logging_level=logging_level, output='peek', moninj_service=False)
 
         # Construct environment, which will also construct a new signal manager
         _logger.debug('Constructing environment')

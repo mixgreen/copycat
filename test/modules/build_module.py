@@ -39,7 +39,8 @@ class BuildModuleTestCase(unittest.TestCase):
                             self.module = module_type(self, module_type.__name__, *args, **module_kwargs)
 
                     # Create system
-                    manager = get_manager_or_parent(enable_dax_sim(enable=True, ddb=_device_db, logging_level=30))
+                    manager = get_manager_or_parent(
+                        enable_dax_sim(enable=True, ddb=_device_db, logging_level=30, moninj_service=False))
                     system = _WrappedTestSystem(manager, **module_kwargs)
                     self.assertIsInstance(system, DaxSystem)
                     # Initialize system

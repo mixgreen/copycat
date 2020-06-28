@@ -24,8 +24,11 @@ _DUMMY_DEVICE: typing.Dict[str, str] = {
 }
 """The properties of a dummy device."""
 
-_SPECIAL_KEYS: typing.Dict[str, typing.Any] = {
-    'core_log': _DUMMY_DEVICE,  # Core log controller should not start in simulation, replace with dummy device
+_SPECIAL_ENTRIES: typing.Dict[str, typing.Callable[[typing.Dict[str, typing.Any]], typing.Any]] = {
+    # Host address of core set to localhost to prevent any undesired connections
+    'core': lambda d: d.get('arguments', {}).update({'host': 'localhost'}),
+    # Core log controller should not start in simulation, replace with dummy device
+    'core_log': lambda d: d.update(_DUMMY_DEVICE),
 }
 """Special keys/entries in the device DB that will be replaced."""
 
@@ -43,6 +46,7 @@ def enable_dax_sim(enable: bool,
                    sim_config_module: str = 'dax.sim.config',
                    sim_config_class: str = 'DaxSimConfig',
                    coredevice_packages: typing.Union[str, typing.List[str]] = None,
+                   moninj_service: bool = True,
                    **signal_mgr_kwargs: typing.Any) -> typing.Dict[str, typing.Any]:
     """Enable the DAX simulation package by applying this function on your device DB.
 
@@ -68,6 +72,7 @@ def enable_dax_sim(enable: bool,
     :param sim_config_module: The module name of the simulation configuration class
     :param sim_config_class: The class name of the simulation configuration class
     :param coredevice_packages: Additional packages to search for simulated coredevice drivers
+    :param moninj_service: Start the dummy MonInj service for the dashboard to connect to
     :param signal_mgr_kwargs: Arguments for the signal manager if output is enabled
     :return: The updated device DB
     """
@@ -78,6 +83,7 @@ def enable_dax_sim(enable: bool,
     assert isinstance(output, str) or output is None, 'Invalid type for output parameter'
     assert isinstance(sim_config_module, str), 'Simulation configuration module name must be of type str'
     assert isinstance(sim_config_class, str), 'Simulation configuration class name must be of type str'
+    assert isinstance(moninj_service, bool), 'MonInj service flag must be of type bool'
 
     # Handle the coredevice packages
     if coredevice_packages is None:
@@ -129,6 +135,11 @@ def enable_dax_sim(enable: bool,
         _logger.debug('Updating simulation configuration in device DB')
         ddb.update(sim_config)
 
+        if moninj_service:
+            # Start MonInj dummy service
+            _logger.debug('Starting MonInj dummy service')
+            _start_moninj_service()
+
         # Return the device DB
         return ddb
 
@@ -143,9 +154,9 @@ def _mutate_ddb_entry(key: str, value: typing.Any, coredevice_packages: typing.L
 
     assert isinstance(key, str), 'The key must be of type str'
 
-    if key in _SPECIAL_KEYS and isinstance(value, dict):
-        # Special keys receive pre-processing
-        value.update(_SPECIAL_KEYS[key])  # Update dict of special key
+    if key in _SPECIAL_ENTRIES:
+        # Special entries receive pre-processing
+        _SPECIAL_ENTRIES[key](value)
 
     if isinstance(value, dict):  # If value is a dict, further processing is needed
         # Get the type entry of this value
@@ -252,3 +263,14 @@ def _mutate_controller(key: str, value: typing.Dict[str, typing.Any]) -> None:
     else:
         # Command was not of type str
         raise TypeError(f'The command key of controller "{key:s}" must be of type str')
+
+
+def _start_moninj_service() -> None:
+    """Start the MonInj dummy service as an external process.
+
+    If the MonInj dummy service was already started, it will exit silently.
+    The current Python interpreter is used for the subprocess.
+    """
+    import subprocess
+    import sys
+    subprocess.Popen([sys.executable, '-m', 'dax.util.moninj'])

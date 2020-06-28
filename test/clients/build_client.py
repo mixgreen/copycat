@@ -75,7 +75,8 @@ class BuildClientTestCase(unittest.TestCase):
                         pass
 
                     # Create client
-                    manager = get_manager_or_parent(enable_dax_sim(enable=True, ddb=_device_db, logging_level=30))
+                    manager = get_manager_or_parent(
+                        enable_dax_sim(enable=True, ddb=_device_db, logging_level=30, moninj_service=False))
                     client = _InstantiatedClient(manager)
                     self.assertIsInstance(client, _InstantiatedClient)
                     # Get system
