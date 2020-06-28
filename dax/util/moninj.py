@@ -65,7 +65,7 @@ class MonInjDummyService:
         :raises MonInjBindError: Raised if the server could not bind
         """
 
-        _logger.info(f'Binding to "{self._host:s}:{self._port:d}"')
+        _logger.info(f'Binding to ({self._host!r}, {self._port:d})')
         try:
             # Start server
             server = await asyncio.start_server(self._handler, self._host, self._port)
@@ -76,8 +76,7 @@ class MonInjDummyService:
         if server.sockets:
             # Report socket information
             for socket in server.sockets:
-                host, port = socket.getsockname()
-                _logger.debug(f'Serving on "{host:s}:{port:d}"')
+                _logger.debug(f'Serving on {socket.getsockname()}')
         else:
             # No socket available for unknown reason
             raise RuntimeError('Unable to open socket for unknown reason')
@@ -92,11 +91,11 @@ class MonInjDummyService:
         hello = await reader.readuntil()
 
         # Retrieve peer information and report
-        host, port = writer.get_extra_info('peername')
+        peer = writer.get_extra_info("peername")
         if hello == self.ARTIQ_HELLO:
-            _logger.info(f'Established connection with "{host:s}:{port:d}"')
+            _logger.info(f'Established connection with {peer}')
         else:
-            _logger.warning(f'Received unexpected message {hello.decode()!r} from "{host:s}:{port:d}", '
+            _logger.warning(f'Received unexpected message {hello.decode()!r} from {peer}, '
                             f'maintaining connection anyway')
 
         # Dashboard is waiting for a byte of data
@@ -104,7 +103,7 @@ class MonInjDummyService:
         await reader.read()
 
         # The connection was closed from the dashboard side, close it from this side too
-        _logger.info(f'Closing connection with "{host:s}:{port:d}"')
+        _logger.info(f'Closing connection with {peer}')
         writer.close()
 
 
@@ -113,7 +112,7 @@ if __name__ == '__main__':
 
     # Parse arguments
     parser = argparse.ArgumentParser(description='Start MonInj dummy service')
-    parser.add_argument('--host', default='localhost', type=str, help='The host to bind to')
+    parser.add_argument('--host', default='::1', type=str, help='The host to bind to')
     parser.add_argument('--port', default=1383, type=int, help='The port to bind to')
     parser.add_argument('-q', '--quiet', default=0, action='count', help='Decrease verbosity')
     parser.add_argument('-v', '--verbose', default=0, action='count', help='Increase verbosity')

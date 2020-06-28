@@ -25,8 +25,8 @@ _DUMMY_DEVICE: typing.Dict[str, str] = {
 """The properties of a dummy device."""
 
 _SPECIAL_ENTRIES: typing.Dict[str, typing.Callable[[typing.Dict[str, typing.Any]], typing.Any]] = {
-    # Host address of core set to localhost to prevent any undesired connections
-    'core': lambda d: d.get('arguments', {}).update({'host': 'localhost'}),
+    # Set core host address to ::1 to prevent any undesired connections
+    'core': lambda d: d.get('arguments', {}).update({'host': '::1'}),
     # Core log controller should not start in simulation, replace with dummy device
     'core_log': lambda d: d.update(_DUMMY_DEVICE),
 }

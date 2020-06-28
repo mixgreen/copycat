@@ -99,8 +99,8 @@ class DdbTestCase(unittest.TestCase):
 
     def test_core_address(self):
         ddb = enable_dax_sim(True, self.DEVICE_DB.copy(), logging_level=logging.WARNING, moninj_service=False)
-        # Core host address should be mutated to localhost
-        self.assertEqual(ddb['core']['arguments']['host'], 'localhost')
+        # Core host address should be mutated to ::1
+        self.assertEqual(ddb['core']['arguments']['host'], '::1')
 
     def test_generic(self):
         for ddb in [self.DEVICE_DB_GENERIC_0.copy(), self.DEVICE_DB_GENERIC_1.copy()]:
