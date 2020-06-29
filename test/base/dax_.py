@@ -181,6 +181,22 @@ class DaxHelpersTestCase(unittest.TestCase):
         for k in virtual_devices:
             self.assertEqual(dax.base.dax._get_unique_device_key(d, k), k, 'Virtual device key not returned correctly')
 
+    def test_cwd_commit_hash(self):
+        self.assertIsInstance(dax.base.dax._CWD_COMMIT, (str, type(None)), 'Unexpected type for CWD commit hash')
+
+        # Discover repo path
+        path = pygit2.discover_repository(os.getcwd())
+
+        if path is None:
+            # CWD is not in a git repository at this moment, skipping test
+            self.skipTest('CWD currently not in a git repo')
+
+        # Test if CWD commit hash was loaded
+        self.assertIsNotNone(dax.base.dax._CWD_COMMIT, 'CWD commit hash was not loaded')
+        self.assertIsInstance(dax.base.dax._CWD_COMMIT, str, 'Unexpected type for CWD commit hash')
+        self.assertEqual(dax.base.dax._CWD_COMMIT, str(pygit2.Repository(path).head.target.hex),
+                         'CWD commit hash did not match reference')
+
 
 class DaxNameRegistryTestCase(unittest.TestCase):
 
@@ -340,31 +356,6 @@ class DaxDataStoreInfluxDbTestCase(unittest.TestCase):
         self.s = _TestSystem(get_manager_or_parent(_device_db))
         # Special data store that skips actual writing
         self.ds = self.MockDataStore(callback, self.s, 'dax_influx_db')
-
-    def test_dax_commit_hash(self):
-        self.assertIsInstance(self.ds._DAX_COMMIT, (str, type(None)), 'Unexpected type for DAX commit hash')
-
-        # Get a directory path of the currently active DAX library
-        import dax
-
-        if pygit2.discover_repository(dax.__dax_dir__) is None:
-            # DAX is not in a git repository at this moment, skipping test
-            self.skipTest('DAX currently not in a git repo')
-
-        # Test if DAX commit hash was loaded
-        self.assertIsNotNone(self.ds._DAX_COMMIT, 'DAX commit hash was not loaded')
-        self.assertIsInstance(self.ds._DAX_COMMIT, str, 'Unexpected type for DAX commit hash')
-
-    def test_cwd_commit_hash(self):
-        self.assertIsInstance(self.ds._CWD_COMMIT, (str, type(None)), 'Unexpected type for CWD commit hash')
-
-        if pygit2.discover_repository(os.getcwd()) is None:
-            # DAX is not in a git repository at this moment, skipping test
-            self.skipTest('CWD currently not in a git repo')
-
-        # Test if CWD commit hash was loaded
-        self.assertIsNotNone(self.ds._CWD_COMMIT, 'CWD commit hash was not loaded')
-        self.assertIsInstance(self.ds._CWD_COMMIT, str, 'Unexpected type for CWD commit hash')
 
     def test_make_point(self):
         # Data to test against

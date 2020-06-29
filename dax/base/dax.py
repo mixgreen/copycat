@@ -21,7 +21,7 @@ import artiq.coredevice.core  # type: ignore
 import artiq.coredevice.dma  # type: ignore
 import artiq.coredevice.cache  # type: ignore
 
-from dax import __version__ as _dax_version, __dax_dir__ as _dax_dir
+from dax import __version__ as _dax_version
 import dax.base.exceptions
 import dax.base.interface
 import dax.sim.ddb
@@ -51,6 +51,21 @@ def _is_valid_key(key: str) -> bool:
     assert isinstance(key, str), 'The given key should be a string'
     return all(_NAME_RE.fullmatch(n) for n in key.split(_KEY_SEPARATOR))
 
+
+def _get_cwd_commit() -> typing.Optional[str]:
+    """Return the commit hash of the current working directory if available.
+
+    :return: Commit hash as a string or None if no repository could be found
+    """
+    # Discover repository path of current working directory, also looks in parent directories
+    path = pygit2.discover_repository(os.getcwd())
+    return None if path is None else str(pygit2.Repository(path).head.target.hex)
+
+
+_CWD_COMMIT: typing.Optional[str] = _get_cwd_commit()
+"""Commit hash of the current working directory if available."""
+
+del _get_cwd_commit  # Remove one-time function
 
 _ARTIQ_VIRTUAL_DEVICES: typing.Set[str] = {'scheduler', 'ccb'}
 """ARTIQ virtual devices."""
@@ -855,8 +870,10 @@ class DaxSystem(DaxModuleBase):
         # Store system information in local archive
         self.set_dataset('dax/system_id', self.SYS_ID, archive=True)
         self.set_dataset('dax/system_version', self.SYS_VER, archive=True)
-        self.set_dataset('dax/version', _dax_version, archive=True)
-        self.set_dataset('dax/sim_enabled', self.dax_sim_enabled, archive=True)
+        self.set_dataset('dax/dax_version', _dax_version, archive=True)
+        self.set_dataset('dax/dax_sim_enabled', self.dax_sim_enabled, archive=True)
+        if _CWD_COMMIT is not None:
+            self.set_dataset('dax/cwd_commit', _CWD_COMMIT, archive=True)
 
         # Perform system initialization
         self.logger.debug('Starting DAX system initialization...')
@@ -1319,11 +1336,6 @@ class DaxDataStore:
     override the :func:`set`, :func:`mutate`, and :func:`append` methods.
     """
 
-    _DAX_COMMIT: typing.Optional[str] = None
-    """DAX commit hash."""
-    _CWD_COMMIT: typing.Optional[str] = None
-    """Current working directory commit hash."""
-
     def __init__(self) -> None:  # Constructor return type required if no parameters are given
         """Construct a new DAX data store object."""
         # Create a logger object
@@ -1353,26 +1365,6 @@ class DaxDataStore:
         :param value: The value to append
         """
         self._logger.debug(f'Append key "{key:s}" with value "{value}"')
-
-
-def __load_commit_hashes() -> None:
-    """Load commit hash class attributes, only needs to be done once."""
-
-    # Discover repository path of DAX
-    path = pygit2.discover_repository(_dax_dir)
-    if path is not None:
-        # Store commit hash
-        DaxDataStore._DAX_COMMIT = pygit2.Repository(path).head.target.hex
-
-    # Discover repository path of current working directory
-    path = pygit2.discover_repository(os.getcwd())
-    if path is not None:
-        # Store commit hash
-        DaxDataStore._CWD_COMMIT = pygit2.Repository(path).head.target.hex
-
-
-__load_commit_hashes()  # Load commit hashes into class attributes
-del __load_commit_hashes  # Remove one-time function
 
 
 class DaxDataStoreInfluxDb(DaxDataStore):
@@ -1435,10 +1427,8 @@ class DaxDataStoreInfluxDb(DaxDataStore):
                                  if k not in self._base_fields and isinstance(v, self._FIELD_TYPES))
 
         # Add commit hashes to fields
-        if self._DAX_COMMIT is not None:
-            self._base_fields['dax_commit'] = self._DAX_COMMIT
-        if self._CWD_COMMIT is not None:
-            self._base_fields['cwd_commit'] = self._CWD_COMMIT
+        if _CWD_COMMIT is not None:
+            self._base_fields['cwd_commit'] = _CWD_COMMIT
 
         # Debug message
         self._logger.debug(f'Initialized base fields: {self._base_fields}')
