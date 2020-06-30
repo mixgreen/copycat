@@ -49,6 +49,14 @@ dax.modules.rtio\_benchmark module
     :undoc-members:
     :show-inheritance:
 
+dax.modules.safety\_context module
+----------------------------------
+
+.. automodule:: dax.modules.safety_context
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 dax.modules.time\_resolved\_context module
 ------------------------------------------
 

@@ -281,6 +281,9 @@ class HistogramContext(DaxModule):
     def plot_probability(self, **kwargs):  # type: (typing.Any) -> None
         """Open the applet that shows a plot of state probabilities over multiple histograms.
 
+        Note that if the data points are randomized the user should provide X values
+        to sort the points and plot the graph correctly (`x` kwarg).
+
         :param kwargs: Extra keyword arguments for the plot
         """
 
@@ -601,6 +604,9 @@ class HistogramAnalyzer:
                          **kwargs: typing.Any) -> None:
         """Plot the probability graph for a given key.
 
+        Note that if the data points are randomized the user should provide X values
+        to sort the points and plot the graph correctly.
+
         :param key: The key of the data to plot
         :param x_values: The sequence with X values for the graph
         :param x_label: X-axis label
@@ -661,6 +667,9 @@ class HistogramAnalyzer:
 
     def plot_all_probabilities(self, **kwargs: typing.Any) -> None:
         """Plot probability graphs for all keys available in the data.
+
+        Note that if the data points are randomized the user should provide X values
+        to sort the points and plot the graph correctly (`x_values` kwarg).
 
         :param kwargs: Keyword arguments passed to :func:`plot_probability`
         """

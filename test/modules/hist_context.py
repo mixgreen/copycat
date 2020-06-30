@@ -51,7 +51,7 @@ class HistogramContextTestCase(unittest.TestCase):
     def test_in_context(self):
         # Initially we are out of context
         self.assertFalse(self.h.in_context(), 'in_context() reported wrong value')
-        with self.h:  # Without call we use the default values
+        with self.h:
             # In context
             self.assertTrue(self.h.in_context(), 'in_context() reported wrong value')
 
