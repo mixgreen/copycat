@@ -507,6 +507,7 @@ class TimeResolvedAnalyzer:
 
     def plot_trace(self, key: str,
                    x_label: typing.Optional[str] = 'Time', y_label: typing.Optional[str] = 'Count',
+                   labels: typing.Optional[typing.Sequence[str]] = None,
                    legend_loc: typing.Optional[typing.Union[str, typing.Tuple[float, float]]] = None,
                    ext: str = 'pdf',
                    **kwargs: typing.Any) -> None:
@@ -515,6 +516,7 @@ class TimeResolvedAnalyzer:
         :param key: The key of the data to plot
         :param x_label: X-axis label
         :param y_label: Y-axis label
+        :param labels: List of plot labels
         :param legend_loc: Location of the legend
         :param ext: Output file extension
         :param kwargs: Keyword arguments for the plot function
@@ -522,6 +524,7 @@ class TimeResolvedAnalyzer:
         assert isinstance(key, str)
         assert isinstance(x_label, str) or x_label is None
         assert isinstance(y_label, str) or y_label is None
+        assert isinstance(labels, collections.abc.Sequence) or labels is None
         assert isinstance(ext, str)
 
         # Get the traces associated with the given key
@@ -539,14 +542,20 @@ class TimeResolvedAnalyzer:
             # Create X values
             x_values = time + width / 2  # Points are plotted in the middle of the bin
 
+            # Current labels
+            current_labels = [f'Plot {i:d}' for i in range(len(results))] if labels is None else labels
+            if len(current_labels) < len(results):
+                # Not enough labels
+                raise IndexError('Number of labels is less than the number of plots')
+
             # Plotting defaults
             kwargs.setdefault('marker', 'o')
             kwargs.setdefault('linestyle', '')
 
             # Plot
             ax.cla()  # Clear axes
-            for i, r in enumerate(results):
-                ax.plot(x_values, r, label=f'Plot {i:d}', **kwargs)
+            for y, label in zip(results, current_labels):
+                ax.plot(x_values, y, label=label, **kwargs)
 
             # Plot formatting
             ax.set_xlabel(x_label)

@@ -524,6 +524,7 @@ class HistogramAnalyzer:
 
     def plot_histogram(self, key: str,
                        x_label: typing.Optional[str] = 'Count', y_label: typing.Optional[str] = 'Frequency',
+                       labels: typing.Optional[typing.Sequence[str]] = None,
                        width: float = 0.8,
                        legend_loc: typing.Optional[typing.Union[str, typing.Tuple[float, float]]] = None,
                        ext: str = 'pdf',
@@ -533,6 +534,7 @@ class HistogramAnalyzer:
         :param key: The key of the data to plot
         :param x_label: X-axis label
         :param y_label: Y-axis label
+        :param labels: List of plot labels
         :param width: Total width of a bar
         :param legend_loc: Location of the legend
         :param ext: Output file extension
@@ -541,6 +543,7 @@ class HistogramAnalyzer:
         assert isinstance(key, str)
         assert isinstance(x_label, str) or x_label is None
         assert isinstance(y_label, str) or y_label is None
+        assert isinstance(labels, collections.abc.Sequence) or labels is None
         assert isinstance(width, float)
         assert isinstance(ext, str)
 
@@ -555,12 +558,18 @@ class HistogramAnalyzer:
             x_values = np.arange(max(max(c) for c in h) + 1)
             y_values = [[c[x] for x in x_values] for c in h]
 
+            # Current labels
+            current_labels = [f'Plot {i:d}' for i in range(len(y_values))] if labels is None else labels
+            if len(current_labels) < len(y_values):
+                # Not enough labels
+                raise IndexError('Number of labels is less than the number of plots')
+
             # Plot
             ax.cla()  # Clear axes
             bar_width = width / len(h)
-            for i, y in enumerate(y_values):
+            for i, (y, label) in enumerate(zip(y_values, current_labels)):
                 ax.bar(x_values + (bar_width * i) - (width / 2), y,
-                       width=bar_width, align='edge', label=f'Plot {i:d}', **kwargs)
+                       width=bar_width, align='edge', label=label, **kwargs)
 
             # Formatting
             ax.set_xlabel(x_label)
@@ -586,6 +595,7 @@ class HistogramAnalyzer:
     def plot_probability(self, key: str,
                          x_values: typing.Optional[typing.Sequence[typing.Union[float, int]]] = None,
                          x_label: typing.Optional[str] = None, y_label: typing.Optional[str] = 'State probability',
+                         labels: typing.Optional[typing.Sequence[str]] = None,
                          legend_loc: typing.Optional[typing.Union[str, typing.Tuple[float, float]]] = None,
                          ext: str = 'pdf',
                          **kwargs: typing.Any) -> None:
@@ -595,6 +605,7 @@ class HistogramAnalyzer:
         :param x_values: The sequence with X values for the graph
         :param x_label: X-axis label
         :param y_label: Y-axis label
+        :param labels: List of plot labels
         :param legend_loc: Location of the legend
         :param ext: Output file extension
         :param kwargs: Keyword arguments for the plot function
@@ -603,6 +614,7 @@ class HistogramAnalyzer:
         assert isinstance(x_values, collections.abc.Sequence) or x_values is None
         assert isinstance(x_label, str) or x_label is None
         assert isinstance(y_label, str) or y_label is None
+        assert isinstance(labels, collections.abc.Sequence) or labels is None
         assert isinstance(ext, str)
 
         # Get the probabilities associated with the provided key
@@ -611,7 +623,8 @@ class HistogramAnalyzer:
         if not len(probabilities):
             # No data to plot
             return
-        elif x_values is None:
+
+        if x_values is None:
             # Generate generic X values
             x_values = np.arange(len(probabilities[0]))
         else:
@@ -621,13 +634,19 @@ class HistogramAnalyzer:
             x_values = x_values[ind]
             probabilities = [p[ind] for p in probabilities]
 
+        # Current labels
+        current_labels = [f'Plot {i:d}' for i in range(len(probabilities))] if labels is None else labels
+        if len(current_labels) < len(probabilities):
+            # Not enough labels
+            raise IndexError('Number of labels is less than the number of plots')
+
         # Plotting defaults
         kwargs.setdefault('marker', 'o')
 
         # Plot
         fig, ax = plt.subplots()
-        for i, y in enumerate(probabilities):
-            ax.plot(x_values, y, label=f'Plot {i:d}', **kwargs)
+        for y, label in zip(probabilities, current_labels):
+            ax.plot(x_values, y, label=label, **kwargs)
 
         # Plot formatting
         ax.set_xlabel(x_label)
