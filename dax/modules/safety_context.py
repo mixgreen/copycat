@@ -3,7 +3,7 @@ import numpy as np
 
 from dax.experiment import *
 
-__all__ = ['SafetyContext', 'SafetyContextError']
+__all__ = ['ReentrantSafetyContext', 'SafetyContext', 'SafetyContextError']
 
 
 class SafetyContextError(RuntimeError):
@@ -15,13 +15,15 @@ class SafetyContextError(RuntimeError):
     pass
 
 
-class SafetyContext(DaxModule):
+class ReentrantSafetyContext(DaxModule):
     """Context class for safety controls when entering and exiting a context.
 
     Callback functions for enter and exit should be provided by the
     `enter_cb` and `exit_cb` kwargs respectively.
 
-    This context is not reentrant and has all portable functions.
+    **This context is reentrant** and has all portable functions.
+    The callback functions will only be called in the outermost context
+    and not when entering or exiting a nested context.
     Other objects can check if the context is entered by using
     the :func:`in_context` function.
 
@@ -44,7 +46,7 @@ class SafetyContext(DaxModule):
         # Add class constants as kernel invariants
         assert issubclass(self.EXCEPTION_TYPE, SafetyContextError), \
             'The provided exception type is not a subclass of SafetyContextError'
-        self.update_kernel_invariants('EXCEPTION_TYPE', 'ENTER_ERR_MSG', 'EXIT_ERR_MSG')
+        self.update_kernel_invariants('EXCEPTION_TYPE')
 
         # Store references to the callback functions
         self._enter_cb: typing.Callable[[], None] = enter_cb
@@ -52,9 +54,8 @@ class SafetyContext(DaxModule):
         self.update_kernel_invariants('_enter_cb', '_exit_cb')
 
         # Store custom error messages
-        self._enter_err_msg: str = f'Safety context "{self.get_name()}" is non-reentrant'
         self._exit_err_msg: str = f'Safety context "{self.get_name()}" has been exited more times than entered'
-        self.update_kernel_invariants('_enter_err_msg', '_exit_err_msg')
+        self.update_kernel_invariants('_exit_err_msg')
 
         # By default we are not in context
         self._in_context: np.int32 = np.int32(0)  # This variable is NOT kernel invariant
@@ -76,13 +77,11 @@ class SafetyContext(DaxModule):
 
         Normally this function should not be called directly but by the `with` statement instead.
         """
-        if self._in_context != 0:
-            # Prevent nested context
-            raise self.EXCEPTION_TYPE(self._enter_err_msg)
+        if self._in_context == 0:
+            # Call enter callback function
+            self._enter_cb()
 
-        # Call enter callback function
-        self._enter_cb()
-        # Increment in context counter after successful enter callback
+        # Increment in context counter
         self._in_context += 1
 
     @portable
@@ -98,7 +97,53 @@ class SafetyContext(DaxModule):
             # Enter and exit calls were out of sync
             raise self.EXCEPTION_TYPE(self._exit_err_msg)
 
-        # Call exit callback function
-        self._exit_cb()
-        # Decrement context counter after successful exit callback
+        if self._in_context == 1:
+            # Call exit callback function
+            self._exit_cb()
+
+        # Decrement context counter
         self._in_context -= 1
+
+
+class SafetyContext(ReentrantSafetyContext):
+    """Context class for safety controls when entering and exiting a context.
+
+    Callback functions for enter and exit should be provided by the
+    `enter_cb` and `exit_cb` kwargs respectively.
+
+    **This context is not reentrant** and has all portable functions.
+    Other objects can check if the context is entered by using
+    the :func:`in_context` function.
+
+    This class can optionally be subclassed and the class attribute
+    :attr:`EXCEPTION_TYPE` can be overridden if desired.
+    """
+
+    def build(self, enter_cb, exit_cb) -> None:  # type: ignore
+        """Build the safety context module."""
+
+        # Call super
+        super(SafetyContext, self).build(enter_cb, exit_cb)
+
+        # Store custom error message
+        self._enter_err_msg: str = f'Safety context "{self.get_name()}" is non-reentrant'
+        self.update_kernel_invariants('_enter_err_msg')
+
+    @portable
+    def __enter__(self):  # type: () -> None
+        """Enter the safety context.
+
+        Normally this function should not be called directly but by the `with` statement instead.
+        """
+        if self._in_context != 0:
+            # Prevent nested context
+            raise self.EXCEPTION_TYPE(self._enter_err_msg)
+
+        # Note: not using super() because the ARTIQ compiler does not support it
+        # Note: not using ReentrantSafetyContext.__enter__() because the ARTIQ compiler can not unify it
+        if self._in_context == 0:
+            # Call enter callback function
+            self._enter_cb()
+
+        # Increment in context counter
+        self._in_context += 1

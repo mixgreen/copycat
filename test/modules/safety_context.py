@@ -6,13 +6,14 @@ from dax.modules.safety_context import *
 from dax.util.artiq_helpers import get_manager_or_parent
 
 
-class _TestSystem(DaxSystem):
+class _ReentrantTestSystem(DaxSystem):
     SYS_ID = 'unittest_system'
     SYS_VER = 0
+    SAFETY_CONTEXT_TYPE = ReentrantSafetyContext
 
     def build(self) -> None:  # type: ignore
-        super(_TestSystem, self).build()
-        self.context = SafetyContext(self, 'context', enter_cb=self.enter, exit_cb=self.exit)
+        super(_ReentrantTestSystem, self).build()
+        self.context = self.SAFETY_CONTEXT_TYPE(self, 'context', enter_cb=self.enter, exit_cb=self.exit)
         self.counter = collections.Counter({'enter': 0, 'exit': 0})
 
     def enter(self):
@@ -22,33 +23,18 @@ class _TestSystem(DaxSystem):
         self.counter['exit'] += 1
 
 
-class SafetyContextTestCase(unittest.TestCase):
+class _NonReentrantTestSystem(_ReentrantTestSystem):
+    SAFETY_CONTEXT_TYPE = SafetyContext
+
+
+class _GenericSafetyContextTestCase(unittest.TestCase):
+    SYSTEM_TYPE = _ReentrantTestSystem
 
     def setUp(self) -> None:
-        self.s = _TestSystem(get_manager_or_parent())
+        self.s = self.SYSTEM_TYPE(get_manager_or_parent())
         self.s.dax_init()
         self.counter = self.s.counter
         self.context = self.s.context
-
-    def test_nested_context(self):
-        self.assertDictEqual(self.counter, {'enter': 0, 'exit': 0}, 'Counters did not match expected values')
-
-        with self.context:
-            self.assertDictEqual(self.counter, {'enter': 1, 'exit': 0}, 'Counters did not match expected values')
-            with self.assertRaises(SafetyContextError, msg='Reentering context did not raise'):
-                with self.context:
-                    self.fail()
-
-        self.assertDictEqual(self.counter, {'enter': 1, 'exit': 1}, 'Counters did not match expected values')
-
-    def test_nested_context_with(self):
-        self.assertDictEqual(self.counter, {'enter': 0, 'exit': 0}, 'Counters did not match expected values')
-
-        with self.assertRaises(SafetyContextError, msg='Reentering context did not raise'):
-            with self.context, self.context:
-                self.fail()
-
-        self.assertDictEqual(self.counter, {'enter': 1, 'exit': 1}, 'Counters did not match expected values')
 
     def test_exit_mismatch(self):
         with self.assertRaises(SafetyContextError, msg='Out of sync exit did not raise'):
@@ -127,6 +113,82 @@ class SafetyContextTestCase(unittest.TestCase):
         # Expect 0 as enter failed and exit was never called
         self.assertEqual(self.context._in_context, 0, 'In context did not match expected value')
         self.assertDictEqual(self.counter, {'enter': 0, 'exit': 0}, 'Counters did not match expected values')
+
+    def test_multiple_context_objects(self):
+        counter_b = collections.Counter()
+
+        def enter():
+            counter_b['enter'] += 1
+
+        def exit_():
+            counter_b['exit'] += 1
+
+        context_b = SafetyContext(self.s, 'context_b', enter, exit_)
+        # noinspection PyUnusedLocal
+        enter_flag = False
+
+        with self.context, context_b:
+            enter_flag = True
+
+        self.assertTrue(enter_flag, 'Context was never entered')
+        self.assertDictEqual(self.counter, {'enter': 1, 'exit': 1}, 'Counters did not match expected values')
+        self.assertDictEqual(counter_b, {'enter': 1, 'exit': 1}, 'Counters (b) did not match expected values')
+
+
+class ReentrantSafetyContextTestCase(_GenericSafetyContextTestCase):
+    SYSTEM_TYPE = _ReentrantTestSystem
+
+    def test_nested_context(self):
+        self.assertDictEqual(self.counter, {'enter': 0, 'exit': 0}, 'Counters did not match expected values')
+
+        # noinspection PyUnusedLocal
+        enter_flag = False
+
+        with self.context:
+            self.assertDictEqual(self.counter, {'enter': 1, 'exit': 0}, 'Counters did not match expected values')
+            with self.context:
+                enter_flag = True
+            self.assertDictEqual(self.counter, {'enter': 1, 'exit': 0}, 'Counters did not match expected values')
+
+        self.assertTrue(enter_flag, 'Context was never entered')
+        self.assertDictEqual(self.counter, {'enter': 1, 'exit': 1}, 'Counters did not match expected values')
+
+    def test_nested_context_single_with(self):
+        self.assertDictEqual(self.counter, {'enter': 0, 'exit': 0}, 'Counters did not match expected values')
+
+        # noinspection PyUnusedLocal
+        enter_flag = False
+
+        with self.context, self.context:
+            enter_flag = True
+            self.assertDictEqual(self.counter, {'enter': 1, 'exit': 0}, 'Counters did not match expected values')
+
+        self.assertTrue(enter_flag, 'Context was never entered')
+        self.assertDictEqual(self.counter, {'enter': 1, 'exit': 1}, 'Counters did not match expected values')
+
+
+class SafetyContextTestCase(_GenericSafetyContextTestCase):
+    SYSTEM_TYPE = _NonReentrantTestSystem
+
+    def test_nested_context(self):
+        self.assertDictEqual(self.counter, {'enter': 0, 'exit': 0}, 'Counters did not match expected values')
+
+        with self.context:
+            self.assertDictEqual(self.counter, {'enter': 1, 'exit': 0}, 'Counters did not match expected values')
+            with self.assertRaises(SafetyContextError, msg='Reentering context did not raise'):
+                with self.context:
+                    self.fail()
+
+        self.assertDictEqual(self.counter, {'enter': 1, 'exit': 1}, 'Counters did not match expected values')
+
+    def test_nested_context_single_with(self):
+        self.assertDictEqual(self.counter, {'enter': 0, 'exit': 0}, 'Counters did not match expected values')
+
+        with self.assertRaises(SafetyContextError, msg='Reentering context did not raise'):
+            with self.context, self.context:
+                self.fail()
+
+        self.assertDictEqual(self.counter, {'enter': 1, 'exit': 1}, 'Counters did not match expected values')
 
 
 if __name__ == '__main__':
