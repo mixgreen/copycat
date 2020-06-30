@@ -273,4 +273,4 @@ def _start_moninj_service() -> None:
     """
     import subprocess
     import sys
-    subprocess.Popen([sys.executable, '-m', 'dax.util.moninj'])
+    subprocess.Popen([sys.executable, '-m', 'dax.util.moninj', '--auto-close', '1'])

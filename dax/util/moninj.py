@@ -3,6 +3,9 @@ This module can be run directly to start the MonInj dummy service.
 
 The MonInj dummy service can be used during simulation to reduce the number of error messages observed
 in the ARTIQ dashboard. When using DAX.sim, the MonInj dummy service is started automatically.
+
+Note that the MonInj dummy service does not implement the SiPyCo interface and is therefore
+not implemented as an ARTIQ controller.
 """
 
 import logging
@@ -33,18 +36,27 @@ class MonInjDummyService:
     ARTIQ_HELLO: bytes = b"ARTIQ moninj\n"
     """Hello message from ARTIQ dashboard."""
 
-    def __init__(self, host: str, port: int):
+    def __init__(self, host: str, port: int, auto_close: int = 0):
         """Instantiate a new MonInj dummy service.
+
+        Set `auto_close` to `0` to not serve connections forever.
 
         :param host: The host to bind to
         :param port: The port to bind to
+        :param auto_close: Automatically close server after a number of connections
         """
         assert isinstance(host, str), 'Host most be of type str'
         assert isinstance(port, int), 'Port must be of type int'
+        assert isinstance(auto_close, int), 'Auto close must be of type int'
+        assert auto_close >= 0, 'Auto close must be greater or equal to 0'
 
         # Store attributes
         self._host: str = host
         self._port: int = port
+        self._auto_close: int = auto_close
+
+        if self._auto_close:
+            _logger.debug(f'Server is configured to automatically close after {self._auto_close:d} connection(s)')
 
     def run(self) -> None:
         """Regular method to run the server in an infinite loop.
@@ -68,22 +80,23 @@ class MonInjDummyService:
         _logger.info(f'Binding to ({self._host!r}, {self._port:d})')
         try:
             # Start server
-            server = await asyncio.start_server(self._handler, self._host, self._port)
+            self._server = await asyncio.start_server(self._handler, self._host, self._port)
         except OSError as e:
-            # Binding error, server is probably already running
+            # Binding error, server might already be running
             raise MonInjBindError from e
 
-        if server.sockets:
+        if self._server.sockets:
             # Report socket information
-            for socket in server.sockets:
+            for socket in self._server.sockets:
                 _logger.debug(f'Serving on {socket.getsockname()}')
         else:
             # No socket available for unknown reason
             raise RuntimeError('Unable to open socket for unknown reason')
 
-        async with server:
+        async with self._server:
             # Run server forever
-            await server.serve_forever()
+            asyncio.create_task(self._server.serve_forever())
+            await self._server.wait_closed()
 
     async def _handler(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         # Wait for hello message
@@ -106,6 +119,15 @@ class MonInjDummyService:
         _logger.info(f'Closing connection with {peer}')
         writer.close()
 
+        if self._auto_close == 1:
+            # Close the server
+            _logger.info('Automatically closing server as maximum number of connections was reached')
+            self._server.close()
+        elif self._auto_close > 1:
+            # Decrement counter
+            self._auto_close -= 1
+            _logger.debug(f'Serving {self._auto_close:d} more connection(s) before automatically closing')
+
 
 if __name__ == '__main__':
     import argparse
@@ -116,6 +138,8 @@ if __name__ == '__main__':
     parser.add_argument('--port', default=1383, type=int, help='The port to bind to')
     parser.add_argument('-q', '--quiet', default=0, action='count', help='Decrease verbosity')
     parser.add_argument('-v', '--verbose', default=0, action='count', help='Increase verbosity')
+    parser.add_argument('--auto-close', default=0, type=int,
+                        help='Automatically close server after a number of connections')
     args = parser.parse_args()
 
     # Configure logger
@@ -124,7 +148,7 @@ if __name__ == '__main__':
 
     try:
         # Create and run service
-        MonInjDummyService(args.host, args.port).run()
+        MonInjDummyService(host=args.host, port=args.port, auto_close=args.auto_close).run()
     except MonInjBindError:
         # Could not bind, exit silently
-        _logger.info('Could not bind to address, service might already be running')
+        _logger.info('Could not bind to address (service might already be running)')
