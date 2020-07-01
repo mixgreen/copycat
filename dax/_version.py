@@ -1,3 +1,5 @@
+# mypy: ignore-errors
+
 # This file helps to compute a version number in source trees obtained from
 # git-archive tarball (such as those provided by githubs download-from-tag
 # feature). Distribution tarballs (built by setup.py sdist) and build
@@ -51,8 +53,8 @@ class NotThisMethod(Exception):
     """Exception raised if a method is not valid for the current scenario."""
 
 
-LONG_VERSION_PY = {}  # type: ignore
-HANDLERS = {}  # type: ignore
+LONG_VERSION_PY = {}
+HANDLERS = {}
 
 
 def register_vcs_handler(vcs, method):  # decorator
