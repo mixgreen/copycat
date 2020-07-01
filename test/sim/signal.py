@@ -19,7 +19,7 @@ class PeekSignalManagerTestCase(unittest.TestCase):
 
     def setUp(self) -> None:
         # Create the system
-        ddb = enable_dax_sim(True, _DEVICE_DB, output='peek', moninj_service=False)
+        ddb = enable_dax_sim(_DEVICE_DB, enable=True, output='peek', moninj_service=False)
         self.sys = _TestSystem(get_manager_or_parent(ddb))
 
         # Get the peek signal manager

@@ -1,6 +1,7 @@
 import logging
 import importlib
 import typing
+import configparser
 
 __all__ = ['DAX_SIM_CONFIG_KEY', 'enable_dax_sim']
 
@@ -35,12 +36,15 @@ _SPECIAL_ENTRIES: typing.Dict[str, typing.Callable[[typing.Dict[str, typing.Any]
 _SIMULATION_ARG: str = '--simulation'
 """The simulation argument/option for controllers as proposed by the ARTIQ manual."""
 
+_CONFIG_FILES: typing.List[str] = ['.dax', 'setup.cfg']
+"""Configuration file locations."""
+
 DAX_SIM_CONFIG_KEY: str = '_dax_sim_config'
 """The key of the virtual simulation configuration device."""
 
 
-def enable_dax_sim(enable: bool,
-                   ddb: typing.Dict[str, typing.Any],
+def enable_dax_sim(ddb: typing.Dict[str, typing.Any], *,
+                   enable: typing.Optional[bool] = None,
                    logging_level: typing.Union[int, str] = logging.NOTSET,
                    output: typing.Optional[str] = 'vcd',
                    sim_config_module: str = 'dax.sim.config',
@@ -53,6 +57,8 @@ def enable_dax_sim(enable: bool,
     This function will modify your device DB in-place to configure it for simulation.
 
     The simulation can be configured through the function parameters.
+    If the `enable` argument is not set the value will be looked up in configuration
+    files (section `[dax.sim]` option `enable`).
 
     If supported by a specific simulated device, extra simulation-specific arguments
     can be added by adding a `sim_args` dict to the device entry in the device DB.
@@ -65,8 +71,8 @@ def enable_dax_sim(enable: bool,
     Note that custom simulated coredevice drivers need to be a subclass of
     :class:`dax.sim.device.DaxSimDevice` to be compatible with other DAX software.
 
-    :param enable: Flag to enable DAX simulation
     :param ddb: The device DB (will be updated if simulation is enabled)
+    :param enable: Flag to enable DAX simulation
     :param logging_level: The logging level
     :param output: Simulation output type (`None`, `'vcd'`, or `'peek'`)
     :param sim_config_module: The module name of the simulation configuration class
@@ -75,10 +81,11 @@ def enable_dax_sim(enable: bool,
     :param moninj_service: Start the dummy MonInj service for the dashboard to connect to
     :param signal_mgr_kwargs: Arguments for the signal manager if output is enabled
     :return: The updated device DB
+    :raises FileNotFoundError: Raised if configuration files are used but none are found
     """
 
-    assert isinstance(enable, bool), 'The enable flag must be of type bool'
     assert isinstance(ddb, dict), 'The device DB argument must be a dict'
+    assert isinstance(enable, bool) or enable is None, 'The enable flag must be None or of type bool'
     assert isinstance(logging_level, (int, str)), 'Logging level must be of type int or str'
     assert isinstance(output, str) or output is None, 'Invalid type for output parameter'
     assert isinstance(sim_config_module, str), 'Simulation configuration module name must be of type str'
@@ -102,6 +109,19 @@ def enable_dax_sim(enable: bool,
 
     # Set the logging level to the given value
     _logger.setLevel(logging_level)
+
+    if enable is None:
+        # Read configuration file
+        _logger.debug('Reading configuration file')
+        config = configparser.ConfigParser()
+        if not config.read(_CONFIG_FILES):
+            # No files were successfully read
+            _logger.error(f'Could not find a configuration file at any of the following '
+                          f'locations: {", ".join(_CONFIG_FILES)}')
+            raise FileNotFoundError('Configuration file not found')
+
+        # Get the boolean value (can raise various exceptions)
+        enable = config.getboolean('dax.sim', 'enable')
 
     if enable:
         # Log that dax.sim was enabled
