@@ -36,8 +36,8 @@ _SPECIAL_ENTRIES: typing.Dict[str, typing.Callable[[typing.Dict[str, typing.Any]
 _SIMULATION_ARG: str = '--simulation'
 """The simulation argument/option for controllers as proposed by the ARTIQ manual."""
 
-_CONFIG_FILES: typing.List[str] = ['.dax', 'setup.cfg']
-"""Configuration file locations."""
+_CONFIG_FILES: typing.List[str] = ['setup.cfg', '.dax']
+"""Configuration file locations in reverse order of priority."""
 
 DAX_SIM_CONFIG_KEY: str = '_dax_sim_config'
 """The key of the virtual simulation configuration device."""
@@ -58,7 +58,8 @@ def enable_dax_sim(ddb: typing.Dict[str, typing.Any], *,
 
     The simulation can be configured through the function parameters.
     If the `enable` argument is not set the value will be looked up in configuration
-    files (section `[dax.sim]` option `enable`).
+    files (section `[dax.sim]` option `enable`). The possible configuration files
+    in order of priority currently are `'.dax'` and `'setup.cfg'`.
 
     If supported by a specific simulated device, extra simulation-specific arguments
     can be added by adding a `sim_args` dict to the device entry in the device DB.
