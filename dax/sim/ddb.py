@@ -49,7 +49,7 @@ def enable_dax_sim(ddb: typing.Dict[str, typing.Any], *,
                    output: typing.Optional[str] = 'vcd',
                    sim_config_module: str = 'dax.sim.config',
                    sim_config_class: str = 'DaxSimConfig',
-                   coredevice_packages: typing.Union[str, typing.List[str]] = None,
+                   coredevice_packages: typing.Union[None, str, typing.List[str]] = None,
                    moninj_service: bool = True,
                    **signal_mgr_kwargs: typing.Any) -> typing.Dict[str, typing.Any]:
     """Enable the DAX simulation package by applying this function on your device DB.

@@ -3,7 +3,7 @@
 import numpy as np
 import pyqtgraph  # type: ignore
 
-import artiq.applets.simple  # type: ignore
+import artiq.applets.simple
 
 from dax.applets.widget import PlotWidget
 

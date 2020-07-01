@@ -16,7 +16,7 @@ class NoDefault:
 
 class _SimpleArgProcessor:
 
-    def __init__(self, default: typing.Any = NoDefault):
+    def __init__(self, default: typing.Any = ...):
         ...
 
     def default(self) -> typing.Any:
@@ -42,7 +42,7 @@ class BooleanValue(_SimpleArgProcessor):
 class EnumerationValue(_SimpleArgProcessor):
 
     # noinspection PyMissingConstructor
-    def __init__(self, choices: typing.Sequence[str], default: typing.Union[str, typing.Type[NoDefault]] = NoDefault):
+    def __init__(self, choices: typing.Sequence[str], default: typing.Union[str, typing.Type[NoDefault]] = ...):
         ...
 
 
@@ -51,10 +51,10 @@ class NumberValue(_SimpleArgProcessor):
     __N_T = typing.Union[int, float]
 
     # noinspection PyShadowingBuiltins,PyMissingConstructor
-    def __init__(self, default: typing.Union[__N_T, typing.Type[NoDefault]] = NoDefault, unit: str = "",
-                 scale: typing.Optional[__N_T] = None,
-                 step: typing.Optional[__N_T] = None, min: typing.Optional[__N_T] = None,
-                 max: typing.Optional[__N_T] = None, ndecimals: int = 2):
+    def __init__(self, default: typing.Union[__N_T, typing.Type[NoDefault]] = ..., unit: str = ...,
+                 scale: typing.Optional[__N_T] = ...,
+                 step: typing.Optional[__N_T] = ..., min: typing.Optional[__N_T] = ...,
+                 max: typing.Optional[__N_T] = ..., ndecimals: int = ...):
         ...
 
     def _is_int(self) -> bool:
@@ -109,11 +109,11 @@ class HasEnvironment:
         ...
 
     def get_argument(self, key: str, processor: typing.Union[_SimpleArgProcessor, Scannable],
-                     group: typing.Optional[str] = None, tooltip: typing.Optional[str] = None) -> typing.Any:
+                     group: typing.Optional[str] = ..., tooltip: typing.Optional[str] = ...) -> typing.Any:
         ...
 
     def setattr_argument(self, key: str, processor: typing.Union[_SimpleArgProcessor, Scannable],
-                         group: typing.Optional[str] = None, tooltip: typing.Optional[str] = None) -> None:
+                         group: typing.Optional[str] = ..., tooltip: typing.Optional[str] = ...) -> None:
         ...
 
     def get_device_db(self) -> typing.Dict[str, typing.Any]:
@@ -126,7 +126,7 @@ class HasEnvironment:
         ...
 
     def set_dataset(self, key: str, value: __DV_T,
-                    broadcast: bool = False, persist: bool = False, archive: bool = True) -> None:
+                    broadcast: bool = ..., persist: bool = ..., archive: bool = ...) -> None:
         ...
 
     def mutate_dataset(self, key: str, index: typing.Any, value: __DV_T) -> None:
@@ -135,14 +135,14 @@ class HasEnvironment:
     def append_to_dataset(self, key: str, value: __DV_T) -> None:
         ...
 
-    def get_dataset(self, key: str, default: __DDV_T = NoDefault, archive: bool = True) -> __DV_T:
+    def get_dataset(self, key: str, default: __DDV_T = ..., archive: bool = ...) -> __DV_T:
         ...
 
-    def setattr_dataset(self, key: str, default: __DDV_T = NoDefault, archive: bool = True) -> None:
+    def setattr_dataset(self, key: str, default: __DDV_T = ..., archive: bool = ...) -> None:
         ...
 
-    def set_default_scheduling(self, priority: typing.Optional[int] = None, pipeline_name: typing.Optional[str] = None,
-                               flush: typing.Optional[bool] = None) -> None:
+    def set_default_scheduling(self, priority: typing.Optional[int] = ..., pipeline_name: typing.Optional[str] = ...,
+                               flush: typing.Optional[bool] = ...) -> None:
         ...
 
 

@@ -22,7 +22,8 @@ import dax.clients.system_benchmark
 class _TestDetectionModule(DaxModule, dax.interfaces.detection.DetectionInterface):
 
     def build(self):
-        self.pmt_array = [self.get_device('ec0', artiq.coredevice.edge_counter.EdgeCounter)]
+        self.pmt_array: typing.List[artiq.coredevice.edge_counter.EdgeCounter] = \
+            [self.get_device('ec0', artiq.coredevice.edge_counter.EdgeCounter)]
 
     def init(self) -> None:
         pass

@@ -15,7 +15,7 @@ from dax.util.output import temp_dir
 
 class _MockDetectionModule(DaxModule, DetectionInterface):
 
-    def build(self, state_detection_threshold):
+    def build(self, state_detection_threshold: int):  # type: ignore
         self.state_detection_threshold = state_detection_threshold
 
     def init(self) -> None:

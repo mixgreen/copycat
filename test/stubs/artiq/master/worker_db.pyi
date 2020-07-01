@@ -16,7 +16,7 @@ class DeviceError(Exception):
 
 class DeviceManager:
     # noinspection PyDefaultArgument
-    def __init__(self, ddb: typing.Any, virtual_devices: typing.Dict[str, typing.Any] = dict()):
+    def __init__(self, ddb: typing.Any, virtual_devices: typing.Dict[str, typing.Any] = ...):
         ...
 
     def get_device_db(self):

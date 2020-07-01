@@ -16,7 +16,7 @@ __V_T = typing.TypeVar('__V_T')
 
 
 class NoScan(ScanObject, typing.Generic[__V_T]):
-    def __init__(self, value: __V_T, repetitions: int = 1):
+    def __init__(self, value: __V_T, repetitions: int = ...):
         ...
 
     def __iter__(self) -> typing.Iterator[__V_T]:
@@ -31,7 +31,7 @@ class NoScan(ScanObject, typing.Generic[__V_T]):
 
 class RangeScan(ScanObject):
     def __init__(self, start: float, stop: float, npoints: int,
-                 randomize: bool = False, seed: typing.Any = None):
+                 randomize: bool = ..., seed: typing.Any = ...):
         ...
 
     def __iter__(self) -> typing.Iterator[float]:
@@ -46,7 +46,7 @@ class RangeScan(ScanObject):
 
 class CenterScan(ScanObject):
     def __init__(self, center: float, span: float, step: float,
-                 randomize: bool = False, seed: typing.Any = None):
+                 randomize: bool = ..., seed: typing.Any = ...):
         ...
 
     def __iter__(self) -> typing.Iterator[float]:

@@ -4,7 +4,7 @@ import inspect
 import artiq.coredevice.core  # type: ignore
 import artiq.coredevice.dma  # type: ignore
 import artiq.coredevice.ttl  # type: ignore
-import artiq.coredevice.edge_counter  # type: ignore
+import artiq.coredevice.edge_counter
 import artiq.coredevice.ad9910  # type: ignore
 import artiq.coredevice.ad9912  # type: ignore
 import artiq.coredevice.urukul  # type: ignore

@@ -5,7 +5,7 @@ import os
 import pygit2  # type: ignore
 
 from artiq.experiment import HasEnvironment
-import artiq.coredevice.edge_counter  # type: ignore
+import artiq.coredevice.edge_counter
 import artiq.coredevice.ttl  # type: ignore
 import artiq.coredevice.core  # type: ignore
 

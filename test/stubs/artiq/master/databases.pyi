@@ -17,12 +17,12 @@ class DeviceDB:
     def get_device_db(self) -> typing.Dict[str, typing.Any]:
         ...
 
-    def get(self, key: str, resolve_alias: bool = False) -> typing.Any:
+    def get(self, key: str, resolve_alias: bool = ...) -> typing.Any:
         ...
 
 
 class DatasetDB:
-    def __init__(self, persist_file: str, autosave_period: int = 30):
+    def __init__(self, persist_file: str, autosave_period: int = ...):
         ...
 
     def save(self) -> None:
@@ -34,7 +34,7 @@ class DatasetDB:
     def update(self, mod: typing.Any) -> None:
         ...
 
-    def set(self, key: str, value: typing.Any, persist: typing.Optional[bool] = None) -> None:
+    def set(self, key: str, value: typing.Any, persist: typing.Optional[bool] = ...) -> None:
         ...
 
     def delete(self, key: str) -> None:

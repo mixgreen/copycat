@@ -11,7 +11,7 @@ from PyQt5.QtGui import QFont, QPalette  # type: ignore
 import pyqtgraph  # type: ignore
 import itertools
 from artiq.applets.simple import TitleApplet
-from pyqtgraph import InfiniteLine  # type: ignore
+from pyqtgraph import InfiniteLine
 
 
 class MainWidget(QWidget):
