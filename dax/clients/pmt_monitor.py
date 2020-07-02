@@ -33,6 +33,7 @@ class PmtMonitor(DaxClient, EnvExperiment):
         # Get the scheduler and CCB tool
         self.scheduler = self.get_device('scheduler')
         self.ccb = get_ccb_tool(self)
+        self.update_kernel_invariants('scheduler')
 
         # Get max for PMT channel argument
         pmt_channel_max = len(self.pmt_array) - 1

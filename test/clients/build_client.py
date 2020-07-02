@@ -65,6 +65,8 @@ class BuildClientTestCase(unittest.TestCase):
         dax.clients.rtio_benchmark.RtioBenchmarkInputBufferSize,
         dax.clients.rtio_benchmark.RtioBenchmarkLatencyRtioCore,
         dax.clients.rtio_benchmark.RtioBenchmarkLatencyRtt,
+        dax.clients.system_benchmark.SystemBenchmarkDaxInit,
+        dax.clients.system_benchmark.SystemBenchmarkDaxInitProfile,
     ]
     """List of client types."""
 
