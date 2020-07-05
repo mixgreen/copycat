@@ -1419,7 +1419,7 @@ class DaxDataStoreInfluxDb(DaxDataStore):
             'priority': int(scheduler.priority),
             'artiq_version': str(_artiq_version),
             'dax_version': str(_dax_version),
-            'dax_sim_enabled': str(system.dax_sim_enabled)
+            'dax_sim_enabled': bool(system.dax_sim_enabled)
         }
 
         # Add expid items to fields if keys do not exist yet and the types are appropriate

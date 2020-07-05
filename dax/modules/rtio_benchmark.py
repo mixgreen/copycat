@@ -23,16 +23,20 @@ class RtioBenchmarkModule(DaxModule):
     # Unique DMA tags
     DMA_BURST: str = 'rtio_benchmark_burst'
 
-    def build(self, ttl_out: str, dma: bool = False) -> None:
+    def build(self, ttl_out: str, dma: bool = False, max_burst: int = 10000) -> None:
         """Build the RTIO benchmark module.
 
         :param ttl_out: Key of the TTLInOut device to use
         :param dma: Enable the DMA features of this module
+        :param max_burst: The maximum burst size
         """
         assert isinstance(dma, bool), 'DMA flag should be of type bool'
+        assert isinstance(max_burst, int), 'Max burst should be of type int'
 
         # Store attributes
         self._dma_enabled: bool = dma
+        self._max_burst: int = max(max_burst, 0)
+        self.update_kernel_invariants('_dma_enabled', 'DMA_BURST', '_max_burst')
 
         # TTL output device
         self.ttl_out = self.get_device(ttl_out, artiq.coredevice.ttl.TTLInOut)
@@ -49,27 +53,27 @@ class RtioBenchmarkModule(DaxModule):
         self._dma_enabled = self._dma_enabled and self.hasattr(self.EVENT_PERIOD_KEY, self.EVENT_BURST_KEY)
         self.logger.debug(f'DMA enabled: {self._dma_enabled}')
 
-        # Update kernel invariants
-        self.update_kernel_invariants('_dma_enabled', 'DMA_BURST')
+        if self.hasattr(self.EVENT_BURST_KEY):
+            # Limit event burst size
+            self.event_burst_size = np.int32(min(self.event_burst, self._max_burst))
+            self.update_kernel_invariants('event_burst_size')
+            self.logger.debug(f'Event burst size set to: {self.event_burst_size:d}')
 
         if self._dma_enabled:
-            # Cap event burst size
-            burst_size = np.int32(min(self.event_burst, 10000))
-            self.logger.debug(f'Event burst size set to: {burst_size:d}')
             # Initialize and record the DMA burst
-            self._record_dma_burst(burst_size)
+            self._record_dma_burst()
         else:
             # Only basic initialization
             self._init()
 
     @kernel
-    def _record_dma_burst(self, burst_size: TInt32):
+    def _record_dma_burst(self):
         # Initialize
         self._init()
 
         with self.core_dma.record(self.DMA_BURST):
             # Record the DMA burst trace
-            for _ in range(burst_size):
+            for _ in range(self.event_burst_size):
                 delay(self.event_period / 2)
                 self.ttl_out.on()
                 delay(self.event_period / 2)
@@ -105,7 +109,7 @@ class RtioBenchmarkModule(DaxModule):
     @kernel
     def burst_slow(self):  # type: () -> None
         """Burst by spawning events one by one."""
-        for _ in range(self.event_burst_cap):
+        for _ in range(self.event_burst_size):
             delay(self.event_period * 2)
             self.ttl_out.on()
             delay(self.event_period * 2)
