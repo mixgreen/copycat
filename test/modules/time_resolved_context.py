@@ -4,8 +4,11 @@ import numpy as np
 from dax.experiment import *
 import dax.util.matplotlib_backend  # noqa: F401
 from dax.modules.time_resolved_context import *
-from dax.util.artiq_helpers import get_manager_or_parent
+from dax.util.artiq import get_manager_or_parent, disable_logging
 from dax.util.output import temp_dir
+
+# Disable logging
+disable_logging()
 
 
 class _TestSystem(DaxSystem):

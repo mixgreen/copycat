@@ -6,7 +6,7 @@ import artiq.coredevice.edge_counter
 from dax.experiment import *
 from dax.sim import enable_dax_sim
 from dax.util.output import temp_dir
-from dax.util.artiq_helpers import get_manager_or_parent
+from dax.util.artiq import get_manager_or_parent, disable_logging
 
 import dax.modules.rtio_benchmark
 import dax.modules.rpc_benchmark
@@ -17,6 +17,9 @@ import dax.clients.pmt_monitor
 import dax.clients.rpc_benchmark
 import dax.clients.rtio_benchmark
 import dax.clients.system_benchmark
+
+# Disable logging
+disable_logging()
 
 
 class _TestDetectionModule(DaxModule, dax.interfaces.detection.DetectionInterface):

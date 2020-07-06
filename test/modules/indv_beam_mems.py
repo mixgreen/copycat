@@ -3,7 +3,10 @@ import numpy as np
 
 from dax.experiment import *
 from dax.modules.indv_beam_mems import IndvBeamMemsModule
-from dax.util.artiq_helpers import get_manager_or_parent
+from dax.util.artiq import get_manager_or_parent, disable_logging
+
+# Disable logging
+disable_logging()
 
 
 class _ModuleWrapper(IndvBeamMemsModule):

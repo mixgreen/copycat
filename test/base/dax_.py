@@ -13,7 +13,10 @@ from dax.base.dax import *
 import dax.base.dax
 import dax.base.exceptions
 import dax.base.interface
-from dax.util.artiq_helpers import get_manager_or_parent
+from dax.util.artiq import get_manager_or_parent, disable_logging
+
+# Disable logging
+disable_logging()
 
 """Device DB for testing"""
 

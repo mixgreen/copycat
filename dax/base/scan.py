@@ -8,6 +8,7 @@ from collections import OrderedDict
 from artiq.experiment import *
 
 import dax.base.dax
+import dax.util.artiq
 
 __all__ = ['DaxScan']
 
@@ -19,16 +20,6 @@ def _is_valid_key(key: str) -> bool:
     """Return true if the given key is valid."""
     assert isinstance(key, str), 'The given key should be a string'
     return bool(_KEY_RE.fullmatch(key))
-
-
-def _is_kernel(func: typing.Any) -> bool:
-    """Helper function to detect if a function is a kernel or not.
-
-    :param func: The function of interest
-    :return: True if the given function is a kernel
-    """
-    meta = getattr(func, 'artiq_embedded', None)
-    return False if meta is None else (meta.core_name is not None and not meta.portable)
 
 
 class ScanProductGenerator:
@@ -177,7 +168,8 @@ class DaxScan(dax.base.dax.DaxBase, abc.ABC):
         """
 
         # Check if host_*() functions are all non-kernel functions
-        if any(_is_kernel(f) for f in [self.host_setup, self.host_cleanup, self.host_exit]):
+        if any(dax.util.artiq.is_kernel(f) for f in [self.host_enter, self.host_setup,
+                                                     self.host_cleanup, self.host_exit]):
             raise TypeError('host_*() functions can not be kernels')
 
         # Call super and forward arguments, for compatibility with other libraries
@@ -380,7 +372,7 @@ class DaxScan(dax.base.dax.DaxBase, abc.ABC):
                     self.host_setup()
 
                     # Run the scan
-                    if _is_kernel(self.run_point):
+                    if dax.util.artiq.is_kernel(self.run_point):
                         self.logger.debug('Running scan on core device')
                         self._run_dax_scan_in_kernel()
                     else:

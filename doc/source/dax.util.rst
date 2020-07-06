@@ -1,10 +1,10 @@
 dax.util package
 ================
 
-dax.util.artiq\_helpers module
-------------------------------
+dax.util.artiq module
+---------------------
 
-.. automodule:: dax.util.artiq_helpers
+.. automodule:: dax.util.artiq
     :members:
     :undoc-members:
     :show-inheritance:

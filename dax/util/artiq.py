@@ -8,7 +8,46 @@ import artiq.master.worker_db
 import artiq.master.databases
 import artiq.frontend.artiq_run  # type: ignore
 
-__all__ = ['get_manager_or_parent']
+__all__ = ['is_kernel', 'is_portable', 'is_host_only',
+           'disable_logging', 'get_manager_or_parent']
+
+
+def is_kernel(func: typing.Any) -> bool:
+    """Helper function to detect if a function is an ARTIQ kernel (`@kernel`) or not.
+
+    :param func: The function of interest
+    :return: True if the given function is a kernel
+    """
+    meta = getattr(func, 'artiq_embedded', None)
+    return False if meta is None else (meta.core_name is not None and not meta.portable)
+
+
+def is_portable(func: typing.Any) -> bool:
+    """Helper function to detect if a function is an ARTIQ portable function (`@portable`) or not.
+
+    :param func: The function of interest
+    :return: True if the given function is a portable function
+    """
+    meta = getattr(func, 'artiq_embedded', None)
+    return False if meta is None else bool(meta.portable)
+
+
+def is_host_only(func: typing.Any) -> bool:
+    """Helper function to detect if a function is marked as host only (`@host_only`) or not.
+
+    :param func: The function of interest
+    :return: True if the given function is host only
+    """
+    meta = getattr(func, 'artiq_embedded', None)
+    return False if meta is None else bool(meta.forbidden)
+
+
+def disable_logging() -> None:
+    """Disable ARTIQ logging by setting logging level high.
+
+    This function is primarily used for testing purposes.
+    """
+    logging.basicConfig(level=logging.CRITICAL)
 
 
 def get_manager_or_parent(device_db: typing.Union[typing.Dict[str, typing.Any], str, None] = None,
@@ -56,7 +95,9 @@ def get_manager_or_parent(device_db: typing.Union[typing.Dict[str, typing.Any], 
         artiq.master.databases.DeviceDB(device_db_file_name),
         virtual_devices={
             "scheduler": scheduler,
-            "ccb": artiq.frontend.artiq_run.DummyCCB()})
+            "ccb": artiq.frontend.artiq_run.DummyCCB()
+        }
+    )
 
     # Dataset DB and manager for testing in tmp directory
     dataset_db_file_name = os.path.join(tempfile.gettempdir(), 'dax_artiq_helper_dataset_db.pyon')
@@ -70,9 +111,6 @@ def get_manager_or_parent(device_db: typing.Union[typing.Dict[str, typing.Any], 
     # DeviceManager, DatasetManager, ProcessArgumentManager, dict
     return device_mgr, dataset_mgr, argument_mgr, {}
 
-
-# Disable ARTIQ logging by setting logging level to critical
-logging.basicConfig(level=logging.CRITICAL)
 
 # Default device DB
 _DEVICE_DB: typing.Dict[str, typing.Any] = {
@@ -95,7 +133,6 @@ _DEVICE_DB: typing.Dict[str, typing.Any] = {
 }
 
 # Default expid values
-_EXPID_DEFAULTS: typing.Dict[str, typing.Any] = {'log_level': logging.CRITICAL,
-                                                 'file': 'dax_artiq_helper_file.py',
+_EXPID_DEFAULTS: typing.Dict[str, typing.Any] = {'file': 'dax_artiq_helper_file.py',
                                                  'class_name': 'DaxArtiqHelperExperiment',
                                                  'repo_rev': 'N/A'}

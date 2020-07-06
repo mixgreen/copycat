@@ -7,7 +7,7 @@ import warnings
 from artiq.experiment import HasEnvironment, now_mu
 from artiq.master.databases import device_db_from_file
 
-from dax.util.artiq_helpers import get_manager_or_parent
+from dax.util.artiq import get_manager_or_parent
 from dax.sim import enable_dax_sim
 from dax.sim.signal import get_signal_manager, PeekSignalManager, SignalNotSet
 from dax.sim.device import DaxSimDevice

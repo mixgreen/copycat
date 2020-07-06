@@ -5,10 +5,12 @@ import itertools
 
 from artiq.experiment import *
 
-import dax.base.scan
 from dax.base.scan import *
 from dax.base.dax import DaxSystem
-from dax.util.artiq_helpers import get_manager_or_parent
+from dax.util.artiq import get_manager_or_parent, disable_logging
+
+# Disable logging
+disable_logging()
 
 
 class _MockSystem(DaxSystem):
@@ -46,18 +48,6 @@ class _MockScan1(DaxScan, _MockSystem):
 
     def host_exit(self) -> None:
         self.counter['host_exit'] += 1
-
-    @rpc
-    def rpc_func(self):
-        pass
-
-    @portable
-    def portable_func(self):
-        pass
-
-    @kernel
-    def kernel_func(self):
-        pass
 
 
 class _MockScanCallback(_MockScan1):
@@ -215,14 +205,6 @@ class Scan1TestCase(unittest.TestCase):
 
     def setUp(self) -> None:
         self.scan = _MockScan1(get_manager_or_parent())
-
-    def test_is_kernel(self):
-        is_kernel = dax.base.scan._is_kernel
-
-        self.assertFalse(is_kernel(self.scan.run_point), 'Undecorated function wrongly marked as a kernel function')
-        self.assertFalse(is_kernel(self.scan.rpc_func), 'RPC function wrongly marked as a kernel function')
-        self.assertFalse(is_kernel(self.scan.portable_func), 'Portable function wrongly marked as a kernel function')
-        self.assertTrue(is_kernel(self.scan.kernel_func), 'Kernel function not correctly recognized as such')
 
     def test_is_infinite(self):
         self.assertFalse(self.scan.is_infinite_scan, 'Scan reported incorrectly it was infinite')
