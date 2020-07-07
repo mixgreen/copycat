@@ -846,17 +846,20 @@ class DaxSystem(DaxModuleBase):
             # Create an Influx DB data store
             self.__data_store: DaxDataStore = DaxDataStoreInfluxDb(self, self.DAX_INFLUX_DB_KEY)
         except KeyError:
-            # Influx DB controller was not found in the device DB, fall back on base data store
+            # Influx DB controller was not found in the device DB
             if not self.dax_sim_enabled:
                 # Log a warning (if we are not in simulation)
                 self.logger.warning(f'Influx DB controller "{self.DAX_INFLUX_DB_KEY:s}" not found in device DB')
-            # Log a debug message
-            self.logger.debug('Fall back on base data store')
+            # Fall back on base data store
+            self.logger.debug('Fall back on base data store (Influx DB controller not found in device DB)')
             self.__data_store = DaxDataStore()
         except artiq.master.worker_db.DeviceError:
-            # Failed to create Influx DB driver, fall back on base data store
+            # Failed to create Influx DB driver
+            if not self.dax_sim_enabled:
+                self.logger.warning(f'Failed to create Influx DB driver "{self.DAX_INFLUX_DB_KEY:s}"', exc_info=True)
+            # Fall back on base data store
+            self.logger.debug('Fall back on base data store (Failed to create Influx DB driver)')
             self.__data_store = DaxDataStore()
-            self.logger.warning(f'Failed to create DAX Influx DB driver "{self.DAX_INFLUX_DB_KEY:s}"', exc_info=True)
 
     @artiq.experiment.host_only
     def dax_init(self) -> None:
