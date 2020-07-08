@@ -462,7 +462,7 @@ class DaxDataStoreInfluxDbTestCase(unittest.TestCase):
             ('k', [str(i + 66) for i in range(5)]),
             ('k', [7.65 * i for i in range(4)]),
             ('k.a', np.arange(5)),
-            ('k.a', np.empty(5)),
+            ('k.a', np.full(6, 99.99)),  # Do not use np.empty() as it can result in unpredictable values
             ('k', [1, '2', True, 5.5]),
             ('k.a', range(7)),  # Ranges also work, though this is not specifically intended behavior
         ]
