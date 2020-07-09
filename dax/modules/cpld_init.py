@@ -37,8 +37,8 @@ class CpldInitModule(DaxModule):
         self._interval: float = interval
         self.update_kernel_invariants('_interval')
         self.logger.debug(f'Interval set to {dax.util.units.time_to_str(self._interval):s}')
-        self._init_flag: bool = init
-        self.logger.debug(f'Init flag: {self._init_flag}')
+        self._init: bool = init
+        self.logger.debug(f'Init flag: {self._init}')
 
         if check_registered_devices:
             # Check if no devices have been requested yet
@@ -54,17 +54,22 @@ class CpldInitModule(DaxModule):
                             if isinstance(v, dict) and v.get('class') == 'CPLD']
 
         # CPLD array
-        self._cpld = [self.get_device(key, artiq.coredevice.urukul.CPLD) for key in cpld_device_keys]
-        self.update_kernel_invariants('_cpld')
-        self.logger.debug(f'Number of CPLD devices: {len(self._cpld):d}')
+        self.cpld = [self.get_device(key, artiq.coredevice.urukul.CPLD) for key in cpld_device_keys]
+        self.update_kernel_invariants('cpld')
+        self.logger.debug(f'Number of CPLD devices: {len(self.cpld):d}')
 
-        if not self._cpld:
+        if not self.cpld:
             # Disable CPLD initialization kernel if there are no devices
             self.init_kernel = self._nop  # type: ignore[assignment]
 
-    def init(self) -> None:
-        if self._init_flag and self._cpld:
+    def init(self, *, force: bool = False) -> None:
+        """Initialize this module.
+
+        :param force: Force full initialization
+        """
+        if (self._init or force) and self.cpld:
             # Initialize CPLD devices
+            self.logger.debug('Running initialization kernel')
             self.init_kernel()
 
     @kernel
@@ -72,7 +77,7 @@ class CpldInitModule(DaxModule):
         # Reset the core
         self.core.reset()
 
-        for c in self._cpld:
+        for c in self.cpld:
             # Load attenuation values to device driver
             c.get_att_mu()
             delay(self._interval)

@@ -37,15 +37,19 @@ class RtioBenchmarkModule(DaxModule):
         # Store attributes
         self._dma_enabled: bool = dma
         self._max_burst: int = max(max_burst, 0)
-        self._init_flag: bool = init
-        self.logger.debug(f'Init flag: {self._init_flag}')
-        self.update_kernel_invariants('_dma_enabled', 'DMA_BURST', '_max_burst')
+        self._init: bool = init
+        self.logger.debug(f'Init flag: {self._init}')
+        self.update_kernel_invariants('_dma_enabled', '_max_burst', 'DMA_BURST')
 
         # TTL output device
         self.ttl_out = self.get_device(ttl_out, artiq.coredevice.ttl.TTLInOut)
         self.update_kernel_invariants('ttl_out')
 
-    def init(self) -> None:
+    def init(self, *, force: bool = False) -> None:
+        """Initialize this module.
+
+        :param force: Force full initialization
+        """
         # Load parameters
         self.setattr_dataset_sys(self.EVENT_PERIOD_KEY)
         self.setattr_dataset_sys(self.EVENT_BURST_KEY)
@@ -71,8 +75,9 @@ class RtioBenchmarkModule(DaxModule):
             # Disable DMA recording during initialization
             self._record_dma_burst = self._nop  # type: ignore[assignment]
 
-        if self._init_flag:
+        if self._init or force:
             # Call the init kernel function
+            self.logger.debug('Running initialization kernel')
             self.init_kernel()
 
     @kernel
@@ -683,7 +688,7 @@ class RtioLoopBenchmarkModule(RtioBenchmarkModule):
         # Add edge delay to kernel invariants
         self.update_kernel_invariants('EDGE_DELAY', 'ttl_in')
 
-    def init(self) -> None:
+    def init(self, **kwargs) -> None:
         # Log edge delay setting
         self.logger.debug(f'Edge delay set to: {dax.util.units.time_to_str(self.EDGE_DELAY):s}')
 
@@ -694,7 +699,7 @@ class RtioLoopBenchmarkModule(RtioBenchmarkModule):
         self.setattr_dataset_sys(self.LATENCY_RTT_KEY)
 
         # Call super
-        super(RtioLoopBenchmarkModule, self).init()
+        super(RtioLoopBenchmarkModule, self).init(**kwargs)
 
     @kernel
     def init_kernel(self):  # type: () -> None

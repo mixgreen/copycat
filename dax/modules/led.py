@@ -23,19 +23,22 @@ class LedModule(DaxModule):
         assert isinstance(init, bool), 'Initialization flag must be of type bool'
 
         # Store attributes
-        self._init_flag: bool = init
-        self.logger.debug(f'Init flag: {self._init_flag}')
+        self._init: bool = init
+        self.logger.debug(f'Init flag: {self._init}')
 
         # LED array
         self.led = [self.get_device(led, artiq.coredevice.ttl.TTLOut) for led in leds]
+        self.update_kernel_invariants('led')
         self.logger.debug(f"Number of LED's: {len(self.led):d}")
 
-        # Store kernel invariants
-        self.update_kernel_invariants('_init_flag', 'led')
+    def init(self, *, force: bool = False) -> None:
+        """Initialize this module.
 
-    def init(self) -> None:
-        if self._init_flag:
+        :param force: Force full initialization
+        """
+        if self._init or force:
             # Initialize the LED's if the init flag is set
+            self.logger.debug('Running initialization kernel')
             self.init_kernel()
 
     @kernel

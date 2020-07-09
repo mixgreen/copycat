@@ -7,10 +7,10 @@ import artiq.coredevice.ad9912  # type: ignore
 
 from dax.experiment import *
 from dax.sim.signal import SignalNotSet
-from dax.sim.test_case import PeekTestCase
+import dax.sim.test_case
 
 
-class PeekTestCaseTestCase(PeekTestCase):
+class PeekTestCaseTestCase(dax.sim.test_case.PeekTestCase):
 
     def setUp(self) -> None:
         # Construct environment

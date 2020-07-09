@@ -5,7 +5,6 @@ import artiq.coredevice.edge_counter
 
 from dax.experiment import *
 from dax.sim import enable_dax_sim
-from dax.util.output import temp_dir
 from dax.util.artiq import get_manager_or_parent, disable_logging
 
 import dax.modules.rtio_benchmark
@@ -74,21 +73,20 @@ class BuildClientTestCase(unittest.TestCase):
     """List of client types."""
 
     def test_build_client(self):
-        with temp_dir():
-            for client_type in self._CLIENTS:
-                with self.subTest(client_type=client_type.__name__):
-                    class _InstantiatedClient(client_type(_TestSystem)):
-                        pass
+        for client_type in self._CLIENTS:
+            with self.subTest(client_type=client_type.__name__):
+                class _InstantiatedClient(client_type(_TestSystem)):
+                    pass
 
-                    # Create client
-                    manager = get_manager_or_parent(
-                        enable_dax_sim(ddb=_device_db, enable=True, logging_level=30, moninj_service=False))
-                    client = _InstantiatedClient(manager)
-                    self.assertIsInstance(client, _InstantiatedClient)
-                    # Get system
-                    system = client.registry.find_module(DaxSystem)
-                    self.assertIsInstance(system, _TestSystem)
-                    self.assertIsNone(system.dax_init())
+                # Create client
+                manager = get_manager_or_parent(
+                    enable_dax_sim(ddb=_device_db, enable=True, logging_level=30, output=None, moninj_service=False))
+                client = _InstantiatedClient(manager)
+                self.assertIsInstance(client, _InstantiatedClient)
+                # Get system
+                system = client.registry.find_module(DaxSystem)
+                self.assertIsInstance(system, _TestSystem)
+                self.assertIsNone(system.dax_init())
 
 
 _device_db = {

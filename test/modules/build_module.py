@@ -3,7 +3,6 @@ import unittest
 
 from dax.experiment import *
 from dax.sim import enable_dax_sim
-from dax.util.output import temp_dir
 from dax.util.artiq import get_manager_or_parent, disable_logging
 
 import dax.modules.cpld_init
@@ -33,21 +32,20 @@ class BuildModuleTestCase(unittest.TestCase):
     """List of module types and kwargs."""
 
     def test_build_module(self):
-        with temp_dir():
-            for module_type, module_kwargs in self._MODULES.items():
-                with self.subTest(module_type=module_type.__name__):
-                    class _WrappedTestSystem(_TestSystem):
-                        def build(self, *args: typing.Any, **kwargs: typing.Any) -> None:
-                            super(_WrappedTestSystem, self).build()
-                            self.module = module_type(self, module_type.__name__, *args, **module_kwargs)
+        for module_type, module_kwargs in self._MODULES.items():
+            with self.subTest(module_type=module_type.__name__):
+                class _WrappedTestSystem(_TestSystem):
+                    def build(self, *args: typing.Any, **kwargs: typing.Any) -> None:
+                        super(_WrappedTestSystem, self).build()
+                        self.module = module_type(self, module_type.__name__, *args, **module_kwargs)
 
-                    # Create system
-                    manager = get_manager_or_parent(
-                        enable_dax_sim(ddb=_device_db, enable=True, logging_level=30, moninj_service=False))
-                    system = _WrappedTestSystem(manager, **module_kwargs)
-                    self.assertIsInstance(system, DaxSystem)
-                    # Initialize system
-                    self.assertIsNone(system.dax_init())
+                # Create system
+                manager = get_manager_or_parent(
+                    enable_dax_sim(ddb=_device_db, enable=True, logging_level=30, output=None, moninj_service=False))
+                system = _WrappedTestSystem(manager, **module_kwargs)
+                self.assertIsInstance(system, DaxSystem)
+                # Initialize system
+                self.assertIsNone(system.dax_init())
 
 
 _device_db = {
