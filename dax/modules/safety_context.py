@@ -31,14 +31,16 @@ class ReentrantSafetyContext(DaxModule):
     :attr:`EXCEPTION_TYPE` can be overridden if desired.
     """
 
+    __CB_T = typing.Callable[[], None]  # Callback function type
+
     EXCEPTION_TYPE: type = SafetyContextError
     """The exception type raised (must be a subclass of :class:`SafetyContextError`)."""
 
-    def build(self, enter_cb, exit_cb) -> None:  # type: ignore
+    def build(self, *, enter_cb: __CB_T, exit_cb: __CB_T) -> None:  # type: ignore
         """Build the safety context module.
 
-        :param enter_cb: The callback function for entering the context.
-        :param exit_cb: The callback function for exiting the context.
+        :param enter_cb: The callback function for entering the context
+        :param exit_cb: The callback function for exiting the context
         """
         assert callable(enter_cb), 'Provided enter callback is not a callable'
         assert callable(exit_cb), 'Provided exit callback is not callable'
@@ -49,8 +51,8 @@ class ReentrantSafetyContext(DaxModule):
         self.update_kernel_invariants('EXCEPTION_TYPE')
 
         # Store references to the callback functions
-        self._enter_cb: typing.Callable[[], None] = enter_cb
-        self._exit_cb: typing.Callable[[], None] = exit_cb
+        self._enter_cb: ReentrantSafetyContext.__CB_T = enter_cb
+        self._exit_cb: ReentrantSafetyContext.__CB_T = exit_cb
         self.update_kernel_invariants('_enter_cb', '_exit_cb')
 
         # Store custom error messages
@@ -119,11 +121,11 @@ class SafetyContext(ReentrantSafetyContext):
     :attr:`EXCEPTION_TYPE` can be overridden if desired.
     """
 
-    def build(self, enter_cb, exit_cb) -> None:  # type: ignore
+    def build(self, **kwargs: typing.Any) -> None:  # type: ignore
         """Build the safety context module."""
 
         # Call super
-        super(SafetyContext, self).build(enter_cb, exit_cb)
+        super(SafetyContext, self).build(**kwargs)
 
         # Store custom error message
         self._enter_err_msg: str = f'Safety context "{self.get_name()}" is non-reentrant'

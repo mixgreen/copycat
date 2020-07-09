@@ -1,5 +1,3 @@
-# mypy: ignore-errors
-
 import typing
 import numpy as np
 
@@ -23,19 +21,24 @@ class RtioBenchmarkModule(DaxModule):
     # Unique DMA tags
     DMA_BURST: str = 'rtio_benchmark_burst'
 
-    def build(self, ttl_out: str, dma: bool = False, max_burst: int = 10000) -> None:
+    def build(self, *,  # type: ignore
+              ttl_out: str, dma: bool = False, max_burst: int = 10000, init: bool = True) -> None:
         """Build the RTIO benchmark module.
 
         :param ttl_out: Key of the TTLInOut device to use
         :param dma: Enable the DMA features of this module
         :param max_burst: The maximum burst size
+        :param init: Enable initialization of this module
         """
         assert isinstance(dma, bool), 'DMA flag should be of type bool'
         assert isinstance(max_burst, int), 'Max burst should be of type int'
+        assert isinstance(init, bool), 'Initialization flag must be of type bool'
 
         # Store attributes
         self._dma_enabled: bool = dma
         self._max_burst: int = max(max_burst, 0)
+        self._init_flag: bool = init
+        self.logger.debug(f'Init flag: {self._init_flag}')
         self.update_kernel_invariants('_dma_enabled', 'DMA_BURST', '_max_burst')
 
         # TTL output device
@@ -55,32 +58,30 @@ class RtioBenchmarkModule(DaxModule):
 
         if self.hasattr(self.EVENT_BURST_KEY):
             # Limit event burst size
-            self.event_burst_size = np.int32(min(self.event_burst, self._max_burst))
+            self.event_burst_size = np.int32(min(self.event_burst, self._max_burst))  # type: ignore[attr-defined]
             self.update_kernel_invariants('event_burst_size')
             self.logger.debug(f'Event burst size set to: {self.event_burst_size:d}')
 
         if self._dma_enabled:
-            # Initialize and record the DMA burst
-            self._record_dma_burst()
+            # Assign DMA burst as default burst
+            self.burst = self.burst_dma  # type: ignore[assignment]
         else:
-            # Only basic initialization
-            self._init()
+            # Assign slow burst as default burst
+            self.burst = self.burst_slow  # type: ignore[assignment]
+            # Disable DMA recording during initialization
+            self._record_dma_burst = self._nop  # type: ignore[assignment]
+
+        if self._init_flag:
+            # Call the init kernel function
+            self.init_kernel()
 
     @kernel
-    def _record_dma_burst(self):
-        # Initialize
-        self._init()
+    def init_kernel(self):  # type: () -> None
+        """Kernel function to initialize this module.
 
-        with self.core_dma.record(self.DMA_BURST):
-            # Record the DMA burst trace
-            for _ in range(self.event_burst_size):
-                delay(self.event_period / 2)
-                self.ttl_out.on()
-                delay(self.event_period / 2)
-                self.ttl_out.off()
-
-    @kernel
-    def _init(self):  # type: () -> None
+        This function is called automatically during initialization unless the user configured otherwise.
+        In that case, this function has to be called manually.
+        """
         # Reset the core
         self.core.reset()
 
@@ -89,6 +90,24 @@ class RtioBenchmarkModule(DaxModule):
 
         # Wait until event is submitted
         self.core.wait_until_mu(now_mu())
+
+        # Record DMA burst
+        self._record_dma_burst()
+
+    @kernel
+    def _record_dma_burst(self):  # type: () -> None
+        # Record the DMA burst trace
+        with self.core_dma.record(self.DMA_BURST):
+            for _ in range(self.event_burst_size):
+                delay(self.event_period / 2)  # type: ignore[attr-defined]
+                self.ttl_out.on()
+                delay(self.event_period / 2)  # type: ignore[attr-defined]
+                self.ttl_out.off()
+
+    @kernel
+    def _nop(self):  # type: () -> None
+        """Empty function."""
+        pass
 
     def post_init(self) -> None:
         if self._dma_enabled:
@@ -101,18 +120,16 @@ class RtioBenchmarkModule(DaxModule):
     @kernel
     def burst(self):  # type: () -> None
         """Burst using DMA if enabled, otherwise fallback on slow burst."""
-        if self._dma_enabled:
-            self.burst_dma()
-        else:
-            self.burst_slow()
+        # This function is a placeholder that will be assigned during initialization
+        raise RuntimeError('Module was not initialized')
 
     @kernel
     def burst_slow(self):  # type: () -> None
         """Burst by spawning events one by one."""
         for _ in range(self.event_burst_size):
-            delay(self.event_period * 2)
+            delay(self.event_period * 2)  # type: ignore[attr-defined]
             self.ttl_out.on()
-            delay(self.event_period * 2)
+            delay(self.event_period * 2)  # type: ignore[attr-defined]
             self.ttl_out.off()
 
     @kernel
@@ -326,7 +343,7 @@ class RtioBenchmarkModule(DaxModule):
         # A flag to mark if at least one underflow happened
         underflow_flag = False
         # Current period
-        current_period = self.event_period
+        current_period = self.event_period  # type: ignore[attr-defined]
 
         while num_step_cutoff > 0:
             # Reset variables
@@ -652,15 +669,14 @@ class RtioLoopBenchmarkModule(RtioBenchmarkModule):
     # Fixed edge delay time
     EDGE_DELAY: float = 1 * us
 
-    def build(self, ttl_out: str, ttl_in: str, **kwargs: typing.Any) -> None:
+    def build(self, *, ttl_in: str, **kwargs: typing.Any) -> None:  # type: ignore
         """Build the RTIO loop benchmark module.
 
-        :param ttl_out: Key of the TTLInOut device to use as output
         :param ttl_in: Key of the TTLInOut device to use as input
         :param kwargs: Keyword arguments for the :class:`RtioBenchmarkModule` parent
         """
         # Call super
-        super(RtioLoopBenchmarkModule, self).build(ttl_out, **kwargs)
+        super(RtioLoopBenchmarkModule, self).build(**kwargs)
         # TTL input device
         self.ttl_in = self.get_device(ttl_in, artiq.coredevice.ttl.TTLInOut)
 
@@ -668,9 +684,6 @@ class RtioLoopBenchmarkModule(RtioBenchmarkModule):
         self.update_kernel_invariants('EDGE_DELAY', 'ttl_in')
 
     def init(self) -> None:
-        # Call super
-        super(RtioLoopBenchmarkModule, self).init()
-
         # Log edge delay setting
         self.logger.debug(f'Edge delay set to: {dax.util.units.time_to_str(self.EDGE_DELAY):s}')
 
@@ -680,19 +693,28 @@ class RtioLoopBenchmarkModule(RtioBenchmarkModule):
         self.setattr_dataset_sys(self.LATENCY_RTIO_CORE_KEY)
         self.setattr_dataset_sys(self.LATENCY_RTT_KEY)
 
-    @kernel
-    def _init(self):  # type: () -> None
-        # Initialize super
-        RtioBenchmarkModule._init(self)
+        # Call super
+        super(RtioLoopBenchmarkModule, self).init()
 
+    @kernel
+    def init_kernel(self):  # type: () -> None
+        """Kernel function to initialize this module.
+
+        This function is called automatically during initialization unless the user configured otherwise.
+        In that case, this function has to be called manually.
+        """
         # Reset the core
         self.core.reset()
 
-        # Set direction of input pin
+        # Set direction of pins
+        self.ttl_out.output()
         self.ttl_in.input()
 
         # Wait until event is submitted
         self.core.wait_until_mu(now_mu())
+
+        # Record DMA burst
+        self._record_dma_burst()
 
     @kernel
     def test_loop_connection(self, retry: TInt32 = np.int32(1)):
@@ -838,16 +860,16 @@ class RtioLoopBenchmarkModule(RtioBenchmarkModule):
         t_rtio = self.get_dataset('t_rtio')
         t_return = self.get_dataset('t_return')
 
-        if any(t == -1 for t in t_rtio):
+        if any(t == -1 for t in t_rtio):  # type: ignore[union-attr]
             # One or more tests did not return a timestamp, test failed
             msg = 'Could not determine RTIO-core latency: One or more tests did not return a valid timestamp'
             self.logger.warning(msg)
             raise RuntimeWarning(msg)
         else:
             # Convert values to times
-            t_zero = np.array([self.core.mu_to_seconds(t) for t in t_zero])
-            t_rtio = np.array([self.core.mu_to_seconds(t) for t in t_rtio])
-            t_return = np.array([self.core.mu_to_seconds(t) for t in t_return])
+            t_zero = np.array([self.core.mu_to_seconds(t) for t in t_zero])  # type: ignore[union-attr]
+            t_rtio = np.array([self.core.mu_to_seconds(t) for t in t_rtio])  # type: ignore[union-attr]
+            t_return = np.array([self.core.mu_to_seconds(t) for t in t_return])  # type: ignore[union-attr]
 
             # Process results directly (next experiment might need these values)
             rtio_rtio = (t_rtio - t_zero).mean()

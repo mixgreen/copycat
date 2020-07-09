@@ -31,13 +31,13 @@ def _value_to_str(value: float, threshold: float, precision: int, scales: typing
 
 
 @host_only
-def time_to_str(time: float, threshold: float = 1.0, precision: int = 2) -> str:
+def time_to_str(time: float, *, threshold: float = 1.0, precision: int = 2) -> str:
     """Convert a time to a string for pretty printing."""
     return _value_to_str(time, threshold, precision, ['s', 'ms', 'us', 'ns', 'ps'])
 
 
 @host_only
-def freq_to_str(frequency: float, threshold: float = 1.0, precision: int = 2) -> str:
+def freq_to_str(frequency: float, *, threshold: float = 1.0, precision: int = 2) -> str:
     """Convert a frequency to a string for pretty printing."""
     return _value_to_str(frequency, threshold, precision, ['GHz', 'MHz', 'kHz', 'Hz', 'mHz'])
 

@@ -9,9 +9,8 @@ __all__ = ['DaxSimDevice']
 class DaxSimDevice(abc.ABC):
     """Abstract base class for simulated device drivers."""
 
-    def __init__(self, dmgr: typing.Any, _key: str,
-                 _core: typing.Any = None, core_device: str = 'core',
-                 **kwargs: typing.Any):
+    def __init__(self, dmgr: typing.Any, *,
+                 _key: str, _core: typing.Any = None, core_device: str = 'core', **kwargs: typing.Any):
         """Initialize a DAX simulation device.
 
         :param dmgr: The device manager, always first positional argument when ARTIQ constructs a device object

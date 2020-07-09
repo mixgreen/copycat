@@ -21,18 +21,24 @@ class CpldInitModule(DaxModule):
                     artiq.coredevice.suservo.SUServo,)
     """Devices types that use Urukul CPLD."""
 
-    def build(self, interval: float = 5 * us, check_registered_devices: bool = True) -> None:  # type: ignore
+    def build(self, *,  # type: ignore
+              interval: float = 5 * us, check_registered_devices: bool = True, init: bool = True) -> None:
         """Build the CPLD initialization module.
 
         :param interval: Interval/delay between initialization of multiple CPLD devices
         :param check_registered_devices: Enable verification if devices were already registered by an other module
+        :param init: Enable initialization of this module
         """
         assert isinstance(interval, float), 'Interval must be a time which has type float'
         assert isinstance(check_registered_devices, bool), 'Check registered devices flag must be of type bool'
+        assert isinstance(init, bool), 'Initialization flag must be of type bool'
 
-        # Store interval
+        # Store attributes
         self._interval: float = interval
+        self.update_kernel_invariants('_interval')
         self.logger.debug(f'Interval set to {dax.util.units.time_to_str(self._interval):s}')
+        self._init_flag: bool = init
+        self.logger.debug(f'Init flag: {self._init_flag}')
 
         if check_registered_devices:
             # Check if no devices have been requested yet
@@ -49,18 +55,20 @@ class CpldInitModule(DaxModule):
 
         # CPLD array
         self._cpld = [self.get_device(key, artiq.coredevice.urukul.CPLD) for key in cpld_device_keys]
+        self.update_kernel_invariants('_cpld')
         self.logger.debug(f'Number of CPLD devices: {len(self._cpld):d}')
 
-        # Store kernel invariants
-        self.update_kernel_invariants('_interval', '_cpld')
+        if not self._cpld:
+            # Disable CPLD initialization kernel if there are no devices
+            self.init_kernel = self._nop  # type: ignore[assignment]
 
     def init(self) -> None:
-        if self._cpld:
+        if self._init_flag and self._cpld:
             # Initialize CPLD devices
-            self._init()
+            self.init_kernel()
 
     @kernel
-    def _init(self):  # type: () -> None
+    def init_kernel(self):  # type: () -> None
         # Reset the core
         self.core.reset()
 
@@ -71,6 +79,11 @@ class CpldInitModule(DaxModule):
 
         # Wait until event is submitted
         self.core.wait_until_mu(now_mu())
+
+    @kernel
+    def _nop(self):  # type: () -> None
+        """Empty function."""
+        pass
 
     def post_init(self) -> None:
         pass

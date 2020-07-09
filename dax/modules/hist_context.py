@@ -55,7 +55,7 @@ class HistogramContext(DaxModule):
     DEFAULT_DATASET_KEY: str = 'histogram'
     """The default name of the output sub-dataset."""
 
-    def build(self, default_dataset_key: typing.Optional[str] = None) -> None:  # type: ignore
+    def build(self, *, default_dataset_key: typing.Optional[str] = None) -> None:  # type: ignore
         """Build the histogram context module.
 
         :param default_dataset_key: Default dataset name used for storing histogram data

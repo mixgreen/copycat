@@ -36,10 +36,15 @@ class LedModule(DaxModule):
     def init(self) -> None:
         if self._init_flag:
             # Initialize the LED's if the init flag is set
-            self._init()
+            self.init_kernel()
 
     @kernel
-    def _init(self):  # type: () -> None
+    def init_kernel(self):  # type: () -> None
+        """Kernel function to initialize this module.
+
+        This function is called automatically during initialization unless the user configured otherwise.
+        In that case, this function has to be called manually.
+        """
         # Reset the core
         self.core.reset()
 

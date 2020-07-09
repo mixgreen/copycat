@@ -1,3 +1,6 @@
+__all__ = ['BuildError', 'NonUniqueRegistrationError']
+
+
 class BuildError(RuntimeError):
     """Raised when the original build error has already been logged.
 

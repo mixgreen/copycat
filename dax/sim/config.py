@@ -14,7 +14,7 @@ _logger: logging.Logger = logging.getLogger(__package__)
 class DaxSimConfig:
     """Virtual device class that configures the simulation through the device DB."""
 
-    def __init__(self, dmgr: typing.Any,
+    def __init__(self, dmgr: typing.Any, *,
                  logging_level: typing.Union[int, str], output: typing.Optional[str],
                  signal_mgr_kwargs: typing.Dict[str, typing.Any]):
         assert isinstance(logging_level, (int, str)), 'Logging level must be of type int or str'

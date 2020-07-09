@@ -189,8 +189,8 @@ class DaxHasSystem(DaxBase, abc.ABC):
     __CORE_ATTRIBUTES: typing.Tuple[str, ...] = __CORE_DEVICES + ('data_store',)
     """Attribute names of core objects created in build() or inherited from parents."""
 
-    def __init__(self, managers_or_parent: typing.Any, name: str, system_key: str, registry: DaxNameRegistry,
-                 *args: typing.Any, **kwargs: typing.Any):
+    def __init__(self, managers_or_parent: typing.Any, *args: typing.Any,
+                 name: str, system_key: str, registry: DaxNameRegistry, **kwargs: typing.Any):
         """Constructor of a DAX base class.
 
         :param managers_or_parent: The manager or parent object
@@ -671,7 +671,8 @@ class DaxModuleBase(DaxHasSystem, abc.ABC):
         """
 
         # Call super
-        super(DaxModuleBase, self).__init__(managers_or_parent, module_name, module_key, registry, *args, **kwargs)
+        super(DaxModuleBase, self).__init__(managers_or_parent, *args,
+                                            name=module_name, system_key=module_key, registry=registry, **kwargs)
 
         # Register this module
         self.registry.add_module(self)
@@ -922,7 +923,8 @@ class DaxService(DaxHasSystem, abc.ABC):
         system_key: str = registry.make_service_key(self.SERVICE_NAME)
 
         # Call super
-        super(DaxService, self).__init__(managers_or_parent, self.SERVICE_NAME, system_key, registry, *args, **kwargs)
+        super(DaxService, self).__init__(managers_or_parent, *args,
+                                         name=self.SERVICE_NAME, system_key=system_key, registry=registry, **kwargs)
 
         # Register this service
         self.registry.add_service(self)
@@ -969,8 +971,9 @@ class DaxClient(DaxHasSystem, abc.ABC):
         self._take_parent_core_attributes(managers_or_parent)
 
         # Call super and identify with system name and system key
-        super(DaxClient, self).__init__(managers_or_parent, managers_or_parent.SYS_NAME, managers_or_parent.SYS_NAME,
-                                        managers_or_parent.registry, *args, **kwargs)
+        super(DaxClient, self).__init__(managers_or_parent, *args,
+                                        name=managers_or_parent.SYS_NAME, system_key=managers_or_parent.SYS_NAME,
+                                        registry=managers_or_parent.registry, **kwargs)
 
     def init(self) -> None:
         pass

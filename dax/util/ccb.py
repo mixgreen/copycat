@@ -88,7 +88,8 @@ class CcbTool:
 
     """Functions that directly create ARTIQ applets"""
 
-    def big_number(self, name: str, dataset: str, digit_count: typing.Optional[int] = None,
+    def big_number(self, name: str, dataset: str, *,
+                   digit_count: typing.Optional[int] = None,
                    update_delay: typing.Optional[float] = None, group: typing.Optional[_G_T] = None,
                    **kwargs: typing.Any) -> None:
         """Create a big number applet.
@@ -106,7 +107,7 @@ class CcbTool:
         # Create applet
         self.create_applet(name, command, group=group)
 
-    def image(self, name: str, img: str,
+    def image(self, name: str, img: str, *,
               update_delay: typing.Optional[float] = None, group: typing.Optional[_G_T] = None,
               **kwargs: typing.Any) -> None:
         """Create an image applet.
@@ -123,7 +124,8 @@ class CcbTool:
         # Create applet
         self.create_applet(name, command, group=group)
 
-    def plot_xy(self, name: str, y: str, x: typing.Optional[str] = None,
+    def plot_xy(self, name: str, y: str, *,
+                x: typing.Optional[str] = None,
                 error: typing.Optional[str] = None, fit: typing.Optional[str] = None,
                 v_lines: typing.Optional[str] = None, h_lines: typing.Optional[str] = None,
                 sliding_window: typing.Optional[int] = None,
@@ -157,7 +159,8 @@ class CcbTool:
         # Create applet
         self.create_applet(name, command, group=group)
 
-    def plot_xy_multi(self, name: str, y: str, x: typing.Optional[str] = None,
+    def plot_xy_multi(self, name: str, y: str, *,
+                      x: typing.Optional[str] = None,
                       v_lines: typing.Optional[str] = None, h_lines: typing.Optional[str] = None,
                       sliding_window: typing.Optional[int] = None,
                       plot_names: typing.Optional[str] = None,
@@ -189,7 +192,8 @@ class CcbTool:
         # Create applet
         self.create_applet(name, command, group=group)
 
-    def plot_hist(self, name: str, y: str, index: typing.Optional[int] = None,
+    def plot_hist(self, name: str, y: str, *,
+                  index: typing.Optional[int] = None,
                   plot_names: typing.Optional[str] = None,
                   title: typing.Optional[str] = None,
                   x_label: typing.Optional[str] = None, y_label: typing.Optional[str] = None,
@@ -216,7 +220,8 @@ class CcbTool:
         # Create applet
         self.create_applet(name, command, group=group)
 
-    def plot_hist_artiq(self, name: str, y: str, x: typing.Optional[str] = None,
+    def plot_hist_artiq(self, name: str, y: str, *,
+                        x: typing.Optional[str] = None,
                         title: typing.Optional[str] = None,
                         update_delay: typing.Optional[float] = None, group: typing.Optional[_G_T] = None,
                         **kwargs: typing.Any) -> None:
@@ -236,7 +241,7 @@ class CcbTool:
         # Create applet
         self.create_applet(name, command, group=group)
 
-    def plot_xy_hist(self, name: str, xs: str, histogram_bins: str, histogram_counts: str,
+    def plot_xy_hist(self, name: str, xs: str, histogram_bins: str, histogram_counts: str, *,
                      update_delay: typing.Optional[float] = None, group: typing.Optional[_G_T] = None,
                      **kwargs: typing.Any) -> None:
         """Create a 2D histogram applet.

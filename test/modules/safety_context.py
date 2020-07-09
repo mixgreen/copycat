@@ -126,7 +126,7 @@ class _GenericSafetyContextTestCase(unittest.TestCase):
         def exit_():
             counter_b['exit'] += 1
 
-        context_b = SafetyContext(self.s, 'context_b', enter, exit_)
+        context_b = SafetyContext(self.s, 'context_b', enter_cb=enter, exit_cb=exit_)
         # noinspection PyUnusedLocal
         enter_flag = False
 

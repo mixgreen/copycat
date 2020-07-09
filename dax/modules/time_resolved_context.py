@@ -41,7 +41,7 @@ class TimeResolvedContext(DaxModule):
     DATASET_COLUMNS: typing.Tuple[str, ...] = ('width', 'time', 'result')
     """Column names of data within each sub-dataset."""
 
-    def build(self, default_dataset_key: typing.Optional[str] = None) -> None:  # type: ignore
+    def build(self, *, default_dataset_key: typing.Optional[str] = None) -> None:  # type: ignore
         """Build the time resolved context module.
 
         :param default_dataset_key: Default dataset name used for storing trace data
@@ -399,8 +399,8 @@ class TimeResolvedContext(DaxModule):
         kwargs.setdefault('x_label', 'Time')
         kwargs.setdefault('y_label', 'Number of counts')
         # Plot
-        self._ccb.plot_xy_multi(self.PLOT_NAME, self.PLOT_RESULT_KEY, self.PLOT_TIME_KEY,
-                                group=self.PLOT_GROUP, **kwargs)
+        self._ccb.plot_xy_multi(self.PLOT_NAME, self.PLOT_RESULT_KEY,
+                                x=self.PLOT_TIME_KEY, group=self.PLOT_GROUP, **kwargs)
 
     @rpc(flags={'async'})
     def disable_plot(self):  # type: () -> None

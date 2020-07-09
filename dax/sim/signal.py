@@ -21,13 +21,13 @@ class DaxSignalManager(abc.ABC, typing.Generic[_S_T]):
     """Abstract class for classes that manage simulated signals."""
 
     @abc.abstractmethod
-    def register(self, scope: DaxSimDevice, name: str, type_: type,
+    def register(self, scope: DaxSimDevice, name: str, type_: type, *,
                  size: typing.Optional[int] = None, init: typing.Any = None) -> _S_T:
         """Method used by devices to register a signal."""
         pass
 
     @abc.abstractmethod
-    def event(self, signal: _S_T, value: typing.Any,
+    def event(self, signal: _S_T, value: typing.Any, *,
               time: typing.Optional[np.int64] = None, offset: typing.Optional[np.int64] = None) -> None:
         """Method used by devices to register events."""
         pass
@@ -56,11 +56,11 @@ class DaxSignalManager(abc.ABC, typing.Generic[_S_T]):
 class NullSignalManager(DaxSignalManager[typing.Any]):
     """A signal manager that does nothing."""
 
-    def register(self, scope: DaxSimDevice, name: str, type_: type,
+    def register(self, scope: DaxSimDevice, name: str, type_: type, *,
                  size: typing.Optional[int] = None, init: typing.Any = None) -> typing.Any:
         pass
 
-    def event(self, signal: typing.Any, value: typing.Any,
+    def event(self, signal: typing.Any, value: typing.Any, *,
               time: typing.Optional[np.int64] = None, offset: typing.Optional[np.int64] = None) -> None:
         pass
 
@@ -110,7 +110,7 @@ class VcdSignalManager(DaxSignalManager[_VS_T]):
         # Create event buffer to support reverting time
         self._event_buffer: typing.List[typing.Tuple[int, _VS_T, _VV_T]] = []
 
-    def register(self, scope: DaxSimDevice, name: str, type_: _VT_T,
+    def register(self, scope: DaxSimDevice, name: str, type_: _VT_T, *,
                  size: typing.Optional[int] = None, init: _VV_T = None) -> _VS_T:
         """ Register a signal.
 
@@ -149,7 +149,7 @@ class VcdSignalManager(DaxSignalManager[_VS_T]):
         return self._vcd.register_var(scope.key, name, var_type=var_type, size=size, init=init,
                                       ident=f'{scope.key:s}.{name:s}')
 
-    def event(self, signal: _VS_T, value: _VV_T,
+    def event(self, signal: _VS_T, value: _VV_T, *,
               time: typing.Optional[np.int64] = None, offset: typing.Optional[np.int64] = None) -> None:
         """Commit an event.
 
@@ -266,7 +266,7 @@ class PeekSignalManager(DaxSignalManager[_PS_T]):
         # Registered devices and buffer for signals/events
         self._event_buffer: _PD_T = {}
 
-    def register(self, scope: DaxSimDevice, name: str, type_: _PT_T,
+    def register(self, scope: DaxSimDevice, name: str, type_: _PT_T, *,
                  size: typing.Optional[int] = None, init: _PV_T = None) -> _PS_T:
         """ Register a signal.
 
@@ -320,7 +320,7 @@ class PeekSignalManager(DaxSignalManager[_PS_T]):
         # Return the signal object
         return scope, name
 
-    def event(self, signal: _PS_T, value: _PV_T,
+    def event(self, signal: _PS_T, value: _PV_T, *,
               time: typing.Optional[np.int64] = None, offset: typing.Optional[np.int64] = None) -> None:
         """Commit an event.
 

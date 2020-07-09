@@ -33,7 +33,7 @@ class PeekTestCase(unittest.TestCase):
 
     __E_T = typing.TypeVar('__E_T', bound=HasEnvironment)  # Type variable for environment
 
-    def construct_env(self, env_class: typing.Type[__E_T],
+    def construct_env(self, env_class: typing.Type[__E_T], *,
                       device_db: typing.Union[str, typing.Dict[str, typing.Any], None] = None,
                       logging_level: typing.Union[int, str] = logging.NOTSET,
                       build_args: typing.Optional[typing.Sequence[typing.Any]] = None,

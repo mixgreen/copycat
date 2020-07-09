@@ -217,7 +217,7 @@ class DaxScan(dax.base.dax.DaxBase, abc.ABC):
         else:
             raise AttributeError('is_scan_infinite can only be obtained after build() was called')
 
-    def add_scan(self, key: str, name: str, scannable: Scannable,
+    def add_scan(self, key: str, name: str, scannable: Scannable, *,
                  group: typing.Optional[str] = None, tooltip: typing.Optional[str] = None) -> None:
         """Register a scannable.
 
