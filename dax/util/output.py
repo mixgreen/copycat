@@ -9,20 +9,23 @@ __all__ = ['temp_dir', 'get_base_path', 'get_file_name_generator', 'dummy_file_n
 
 @contextlib.contextmanager
 def temp_dir() -> typing.Generator[None, None, None]:
-    """Context manager to temporally go into the temp directory.
+    """Context manager to temporally change current working directory to a unique temp directory.
 
     Mainly used for testing.
+    The temp directory is removed when the context is exited.
     """
 
     # Remember the original directory
     orig_dir = os.getcwd()
-    # Change the directory
-    os.chdir(tempfile.gettempdir())
-    try:
-        yield
-    finally:
-        # Return to the original directory
-        os.chdir(orig_dir)
+
+    with tempfile.TemporaryDirectory(suffix='dax_util_output_') as tmp_dir:
+        # Change the directory
+        os.chdir(tmp_dir)
+        try:
+            yield
+        finally:
+            # Return to the original directory
+            os.chdir(orig_dir)
 
 
 def get_base_path(scheduler: typing.Any) -> pathlib.Path:

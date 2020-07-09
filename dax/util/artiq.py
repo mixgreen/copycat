@@ -1,3 +1,5 @@
+from __future__ import annotations  # Postponed evaluation of annotations
+
 import os
 import tempfile
 import typing
@@ -77,9 +79,12 @@ def get_manager_or_parent(device_db: typing.Union[typing.Dict[str, typing.Any], 
     # Set arguments (overwrites any arguments in the expid)
     scheduler.expid['arguments'] = arguments
 
+    # Create a unique temp dir
+    tempdir = _TemporaryDirectory(prefix='dax_util_artiq_')
+
     if isinstance(device_db, dict) or device_db is None:
         # Create a temporally device DB file
-        device_db_file_name = os.path.join(tempfile.gettempdir(), 'dax_artiq_helper_device_db.py')
+        device_db_file_name = os.path.join(tempdir.name, 'device_db.py')
         with open(device_db_file_name, 'w') as device_db_file:
             device_db_file.write('device_db=')
             device_db_file.write(str(_DEVICE_DB if device_db is None else device_db))
@@ -100,7 +105,7 @@ def get_manager_or_parent(device_db: typing.Union[typing.Dict[str, typing.Any], 
     )
 
     # Dataset DB and manager for testing in tmp directory
-    dataset_db_file_name = os.path.join(tempfile.gettempdir(), 'dax_artiq_helper_dataset_db.pyon')
+    dataset_db_file_name = os.path.join(tempdir.name, 'dataset_db.pyon')
     dataset_db = artiq.master.databases.DatasetDB(dataset_db_file_name)
     dataset_mgr = artiq.master.worker_db.DatasetManager(dataset_db)
 
@@ -110,6 +115,24 @@ def get_manager_or_parent(device_db: typing.Union[typing.Dict[str, typing.Any], 
     # Return a tuple that is accepted as manager_or_parent
     # DeviceManager, DatasetManager, ProcessArgumentManager, dict
     return device_mgr, dataset_mgr, argument_mgr, {}
+
+
+class _TemporaryDirectory(tempfile.TemporaryDirectory):  # type: ignore[type-arg]
+    """Custom `tempfile.TemporaryDirectory` class."""
+
+    _refs: typing.List[_TemporaryDirectory] = []
+    """List of references to instances of this class."""
+
+    def __init__(self, *args: typing.Any, **kwargs: typing.Any):
+        # Call super
+        super(_TemporaryDirectory, self).__init__(*args, **kwargs)
+
+        # Add self to list of references to make sure the object is not destructed
+        _TemporaryDirectory._refs.append(self)
+
+    def __del__(self) -> None:
+        """Cleanup temp dir explicitly at destruction, prevents resource warning."""
+        self.cleanup()
 
 
 # Default device DB
