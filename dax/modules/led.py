@@ -10,21 +10,21 @@ __all__ = ['LedModule']
 class LedModule(DaxModule):
     """Module to control user LED's."""
 
-    def build(self, *leds: str, init: bool = False) -> None:  # type: ignore
+    def build(self, *leds: str, init_kernel: bool = False) -> None:  # type: ignore
         """Build the LED module.
 
         :param leds: Keys of the LED devices to use in order from least to most significant
-        :param init: Call initialization kernel during module initialization
+        :param init_kernel: Run initialization kernel during default module initialization
         """
         # Check arguments
         if 1 > len(leds) > 8:
             raise TypeError("Number of LED's must be in the range [1..8]")
         assert all(isinstance(led, str) for led in leds), 'Provided LED keys must be of type str'
-        assert isinstance(init, bool), 'Init flag must be of type bool'
+        assert isinstance(init_kernel, bool), 'Init kernel flag must be of type bool'
 
         # Store attributes
-        self._init: bool = init
-        self.logger.debug(f'Init flag: {self._init}')
+        self._init_kernel: bool = init_kernel
+        self.logger.debug(f'Init kernel: {self._init_kernel}')
 
         # LED array
         self.led = [self.get_device(led, artiq.coredevice.ttl.TTLOut) for led in leds]
@@ -36,7 +36,7 @@ class LedModule(DaxModule):
 
         :param force: Force full initialization
         """
-        if self._init or force:
+        if self._init_kernel or force:
             # Initialize the LED's if the init flag is set
             self.logger.debug('Running initialization kernel')
             self.init_kernel()

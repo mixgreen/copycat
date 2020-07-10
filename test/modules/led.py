@@ -44,13 +44,13 @@ class LedModuleTestCase(dax.sim.test_case.PeekTestCase):
         return self.construct_env(_TestSystem, device_db=self._DEVICE_DB, build_kwargs=kwargs)
 
     def test_dax_init(self):
-        s = self._construct_env(init=True)
+        s = self._construct_env(init_kernel=True)
         self.expect(s.led.led[0], 'state', 'x')
         s.dax_init()
         self.expect(s.led.led[0], 'state', 0)
 
     def test_dax_init_disabled(self):
-        s = self._construct_env(init=False)
+        s = self._construct_env(init_kernel=False)
         self.expect(s.led.led[0], 'state', 'x')
         s.dax_init()
         self.expect(s.led.led[0], 'state', 'x')
@@ -58,7 +58,7 @@ class LedModuleTestCase(dax.sim.test_case.PeekTestCase):
         self.expect(s.led.led[0], 'state', 0)
 
     def test_manual_init(self):
-        s = self._construct_env(init=False)
+        s = self._construct_env(init_kernel=False)
         self.expect(s.led.led[0], 'state', 'x')
         s.led.init()
         self.expect(s.led.led[0], 'state', 'x')
@@ -66,13 +66,13 @@ class LedModuleTestCase(dax.sim.test_case.PeekTestCase):
         self.expect(s.led.led[0], 'state', 0)
 
     def test_manual_init_2(self):
-        s = self._construct_env(init=True)
+        s = self._construct_env(init_kernel=True)
         self.expect(s.led.led[0], 'state', 'x')
         s.led.init(force=True)
         self.expect(s.led.led[0], 'state', 0)
 
     def test_manual_init_force(self):
-        s = self._construct_env(init=False)
+        s = self._construct_env(init_kernel=False)
         self.expect(s.led.led[0], 'state', 'x')
         s.led.init(force=True)
         self.expect(s.led.led[0], 'state', 0)

@@ -22,23 +22,23 @@ class RtioBenchmarkModule(DaxModule):
     DMA_BURST: str = 'rtio_benchmark_burst'
 
     def build(self, *,  # type: ignore
-              ttl_out: str, dma: bool = False, max_burst: int = 10000, init: bool = True) -> None:
+              ttl_out: str, dma: bool = False, max_burst: int = 10000, init_kernel: bool = True) -> None:
         """Build the RTIO benchmark module.
 
         :param ttl_out: Key of the TTLInOut device to use
         :param dma: Enable the DMA features of this module
         :param max_burst: The maximum burst size
-        :param init: Call initialization kernel during module initialization
+        :param init_kernel: Run initialization kernel during default module initialization
         """
         assert isinstance(dma, bool), 'DMA flag should be of type bool'
         assert isinstance(max_burst, int), 'Max burst should be of type int'
-        assert isinstance(init, bool), 'Init flag must be of type bool'
+        assert isinstance(init_kernel, bool), 'Init kernel flag must be of type bool'
 
         # Store attributes
         self._dma_enabled: bool = dma
         self._max_burst: int = max(max_burst, 0)
-        self._init: bool = init
-        self.logger.debug(f'Init flag: {self._init}')
+        self._init_kernel: bool = init_kernel
+        self.logger.debug(f'Init kernel: {self._init_kernel}')
         self.update_kernel_invariants('_dma_enabled', '_max_burst', 'DMA_BURST')
 
         # TTL output device
@@ -75,7 +75,7 @@ class RtioBenchmarkModule(DaxModule):
             self.update_kernel_invariants('event_burst_size')
             self.logger.debug(f'Event burst size set to: {self.event_burst_size:d}')
 
-        if self._init or force:
+        if self._init_kernel or force:
             # Call the init kernel function
             self.logger.debug('Running initialization kernel')
             self.init_kernel()
@@ -147,6 +147,7 @@ class RtioBenchmarkModule(DaxModule):
     def benchmark_event_throughput(self, period_scan: typing.Union[typing.List[float], np.ndarray],
                                    num_samples: int, num_events: int, no_underflow_cutoff: int) -> None:
         # Convert types of arguments
+        period_scan = np.asarray(period_scan, dtype=float)
         num_samples = np.int32(num_samples)
         num_events = np.int32(num_events)
         no_underflow_cutoff = np.int32(no_underflow_cutoff)
@@ -408,6 +409,7 @@ class RtioBenchmarkModule(DaxModule):
     def benchmark_dma_throughput(self, period_scan: typing.Union[typing.List[float], np.ndarray],
                                  num_samples: int, num_events: int, no_underflow_cutoff: int) -> None:
         # Convert types of arguments
+        period_scan = np.asarray(period_scan, dtype=float)
         num_samples = np.int32(num_samples)
         num_events = np.int32(num_events)
         no_underflow_cutoff = np.int32(no_underflow_cutoff)

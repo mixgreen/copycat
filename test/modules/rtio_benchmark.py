@@ -60,7 +60,7 @@ class RtioBenchmarkModuleTestCase(dax.sim.test_case.PeekTestCase):
         return self.construct_env(self._SYS_TYPE, device_db=self._DEVICE_DB, build_kwargs=kwargs)
 
     def test_dax_init(self):
-        s = self._construct_env(init=True)
+        s = self._construct_env(init_kernel=True)
         self.expect(s.rtio.ttl_out, 'state', 'x')
         self.expect(s.rtio.ttl_out, 'direction', 'x')
         s.dax_init()
@@ -68,7 +68,7 @@ class RtioBenchmarkModuleTestCase(dax.sim.test_case.PeekTestCase):
         self.expect(s.rtio.ttl_out, 'direction', 1)
 
     def test_dax_init_disabled(self):
-        s = self._construct_env(init=False)
+        s = self._construct_env(init_kernel=False)
         self.expect(s.rtio.ttl_out, 'state', 'x')
         self.expect(s.rtio.ttl_out, 'direction', 'x')
         s.dax_init()
@@ -79,7 +79,7 @@ class RtioBenchmarkModuleTestCase(dax.sim.test_case.PeekTestCase):
         self.expect(s.rtio.ttl_out, 'direction', 1)
 
     def test_manual_init(self):
-        s = self._construct_env(init=False)
+        s = self._construct_env(init_kernel=False)
         self.expect(s.rtio.ttl_out, 'state', 'x')
         self.expect(s.rtio.ttl_out, 'direction', 'x')
         s.rtio.init()
@@ -90,7 +90,7 @@ class RtioBenchmarkModuleTestCase(dax.sim.test_case.PeekTestCase):
         self.expect(s.rtio.ttl_out, 'direction', 1)
 
     def test_manual_init_2(self):
-        s = self._construct_env(init=True)
+        s = self._construct_env(init_kernel=True)
         self.expect(s.rtio.ttl_out, 'state', 'x')
         self.expect(s.rtio.ttl_out, 'direction', 'x')
         s.rtio.init(force=True)
@@ -98,7 +98,7 @@ class RtioBenchmarkModuleTestCase(dax.sim.test_case.PeekTestCase):
         self.expect(s.rtio.ttl_out, 'direction', 1)
 
     def test_manual_init_force(self):
-        s = self._construct_env(init=False)
+        s = self._construct_env(init_kernel=False)
         self.expect(s.rtio.ttl_out, 'state', 'x')
         self.expect(s.rtio.ttl_out, 'direction', 'x')
         s.rtio.init(force=True)
@@ -110,7 +110,7 @@ class RtioLoopBenchmarkModuleTestCase(RtioBenchmarkModuleTestCase):
     _SYS_TYPE = _LoopTestSystem
 
     def test_dax_init(self):
-        s = self._construct_env(init=True)
+        s = self._construct_env(init_kernel=True)
         self.expect(s.rtio.ttl_out, 'state', 'x')
         self.expect(s.rtio.ttl_out, 'direction', 'x')
         self.expect(s.rtio.ttl_in, 'state', 'x')
@@ -124,7 +124,7 @@ class RtioLoopBenchmarkModuleTestCase(RtioBenchmarkModuleTestCase):
         self.expect(s.rtio.ttl_in, 'direction', 0)
 
     def test_dax_init_disabled(self):
-        s = self._construct_env(init=False)
+        s = self._construct_env(init_kernel=False)
         self.expect(s.rtio.ttl_out, 'state', 'x')
         self.expect(s.rtio.ttl_out, 'direction', 'x')
         self.expect(s.rtio.ttl_in, 'state', 'x')
@@ -144,7 +144,7 @@ class RtioLoopBenchmarkModuleTestCase(RtioBenchmarkModuleTestCase):
         self.expect(s.rtio.ttl_in, 'direction', 0)
 
     def test_manual_init(self):
-        s = self._construct_env(init=False)
+        s = self._construct_env(init_kernel=False)
         self.expect(s.rtio.ttl_out, 'state', 'x')
         self.expect(s.rtio.ttl_out, 'direction', 'x')
         self.expect(s.rtio.ttl_in, 'state', 'x')
@@ -164,7 +164,7 @@ class RtioLoopBenchmarkModuleTestCase(RtioBenchmarkModuleTestCase):
         self.expect(s.rtio.ttl_in, 'direction', 0)
 
     def test_manual_init_2(self):
-        s = self._construct_env(init=True)
+        s = self._construct_env(init_kernel=True)
         self.expect(s.rtio.ttl_out, 'state', 'x')
         self.expect(s.rtio.ttl_out, 'direction', 'x')
         self.expect(s.rtio.ttl_in, 'state', 'x')
@@ -178,7 +178,7 @@ class RtioLoopBenchmarkModuleTestCase(RtioBenchmarkModuleTestCase):
         self.expect(s.rtio.ttl_in, 'direction', 0)
 
     def test_manual_init_force(self):
-        s = self._construct_env(init=False)
+        s = self._construct_env(init_kernel=False)
         self.expect(s.rtio.ttl_out, 'state', 'x')
         self.expect(s.rtio.ttl_out, 'direction', 'x')
         self.expect(s.rtio.ttl_in, 'state', 'x')

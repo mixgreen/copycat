@@ -22,23 +22,23 @@ class CpldInitModule(DaxModule):
     """Devices types that use Urukul CPLD."""
 
     def build(self, *,  # type: ignore
-              interval: float = 5 * us, check_registered_devices: bool = True, init: bool = True) -> None:
+              interval: float = 5 * us, check_registered_devices: bool = True, init_kernel: bool = True) -> None:
         """Build the CPLD initialization module.
 
         :param interval: Interval/delay between initialization of multiple CPLD devices
         :param check_registered_devices: Enable verification if devices were already registered by an other module
-        :param init: Call initialization kernel during module initialization
+        :param init_kernel: Run initialization kernel during default module initialization
         """
         assert isinstance(interval, float), 'Interval must be a time which has type float'
         assert isinstance(check_registered_devices, bool), 'Check registered devices flag must be of type bool'
-        assert isinstance(init, bool), 'Init flag must be of type bool'
+        assert isinstance(init_kernel, bool), 'Init kernel flag must be of type bool'
 
         # Store attributes
         self._interval: float = interval
         self.update_kernel_invariants('_interval')
         self.logger.debug(f'Interval set to {dax.util.units.time_to_str(self._interval):s}')
-        self._init: bool = init
-        self.logger.debug(f'Init flag: {self._init}')
+        self._init_kernel: bool = init_kernel
+        self.logger.debug(f'Init kernel: {self._init_kernel}')
 
         if check_registered_devices:
             # Check if no devices have been requested yet
@@ -68,7 +68,7 @@ class CpldInitModule(DaxModule):
 
         :param force: Force full initialization
         """
-        if (self._init or force) and self.cpld:
+        if (self._init_kernel or force) and self.cpld:
             # Initialize CPLD devices
             self.logger.debug('Running initialization kernel')
             self.init_kernel()
