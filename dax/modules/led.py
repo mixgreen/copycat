@@ -14,13 +14,13 @@ class LedModule(DaxModule):
         """Build the LED module.
 
         :param leds: Keys of the LED devices to use in order from least to most significant
-        :param init: Enable initialization of this module
+        :param init: Call initialization kernel during module initialization
         """
         # Check arguments
         if 1 > len(leds) > 8:
             raise TypeError("Number of LED's must be in the range [1..8]")
         assert all(isinstance(led, str) for led in leds), 'Provided LED keys must be of type str'
-        assert isinstance(init, bool), 'Initialization flag must be of type bool'
+        assert isinstance(init, bool), 'Init flag must be of type bool'
 
         # Store attributes
         self._init: bool = init

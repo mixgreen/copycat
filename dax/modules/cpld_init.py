@@ -27,11 +27,11 @@ class CpldInitModule(DaxModule):
 
         :param interval: Interval/delay between initialization of multiple CPLD devices
         :param check_registered_devices: Enable verification if devices were already registered by an other module
-        :param init: Enable initialization of this module
+        :param init: Call initialization kernel during module initialization
         """
         assert isinstance(interval, float), 'Interval must be a time which has type float'
         assert isinstance(check_registered_devices, bool), 'Check registered devices flag must be of type bool'
-        assert isinstance(init, bool), 'Initialization flag must be of type bool'
+        assert isinstance(init, bool), 'Init flag must be of type bool'
 
         # Store attributes
         self._interval: float = interval
@@ -61,6 +61,7 @@ class CpldInitModule(DaxModule):
         if not self.cpld:
             # Disable CPLD initialization kernel if there are no devices
             self.init_kernel = self._nop  # type: ignore[assignment]
+            self.logger.debug('Initialization kernel disabled due to the lack of CPLD devices')
 
     def init(self, *, force: bool = False) -> None:
         """Initialize this module.
@@ -74,6 +75,11 @@ class CpldInitModule(DaxModule):
 
     @kernel
     def init_kernel(self):  # type: () -> None
+        """Kernel function to initialize this module.
+
+        This function is called automatically during initialization unless the user configured otherwise.
+        In that case, this function has to be called manually.
+        """
         # Reset the core
         self.core.reset()
 

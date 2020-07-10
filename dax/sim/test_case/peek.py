@@ -102,7 +102,7 @@ class PeekTestCase(unittest.TestCase):
 
         :param scope: The scope (device) of the signal
         :param signal: The name of the signal
-        :return: The value of the signal at the current time.
+        :return: The value of the signal at the current time
         """
         # Peek the value using the signal manager
         value = self.__signal_manager.peek(scope, signal)

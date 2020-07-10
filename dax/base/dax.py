@@ -157,7 +157,7 @@ class DaxBase(artiq.experiment.HasEnvironment, abc.ABC):
         Kernel invariants are attributes that are not changed during kernel execution.
         Marking attributes as invariant enables more aggressive compiler optimizations.
 
-        :param keys: The keys to add to the set of kernel invariants.
+        :param keys: The keys to add to the set of kernel invariants
         """
 
         assert all(isinstance(k, str) for k in keys), 'All keys must be of type str'
@@ -174,7 +174,7 @@ class DaxBase(artiq.experiment.HasEnvironment, abc.ABC):
     def __repr__(self) -> str:
         """Returns a string representation of the object.
 
-        :return: The object identifier string.
+        :return: The object identifier string
         """
         return self.get_identifier()
 
@@ -296,7 +296,7 @@ class DaxHasSystem(DaxBase, abc.ABC):
         If one or more keys are provided, the provided keys are appended to the system key.
 
         :param keys: The keys to append to the system key
-        :return: The system key with provided keys appended.
+        :return: The system key with provided keys appended
         :raises ValueError: Raised if the key has an invalid format
         """
 

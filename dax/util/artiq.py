@@ -80,7 +80,7 @@ def get_manager_or_parent(device_db: typing.Union[typing.Dict[str, typing.Any], 
     scheduler.expid['arguments'] = arguments
 
     # Create a unique temp dir
-    tempdir = _TemporaryDirectory(prefix='dax_util_artiq_')
+    tempdir = _TemporaryDirectory()
 
     if isinstance(device_db, dict) or device_db is None:
         # Create a temporally device DB file
@@ -118,7 +118,7 @@ def get_manager_or_parent(device_db: typing.Union[typing.Dict[str, typing.Any], 
 
 
 class _TemporaryDirectory(tempfile.TemporaryDirectory):  # type: ignore[type-arg]
-    """Custom `tempfile.TemporaryDirectory` class."""
+    """Custom `TemporaryDirectory` class."""
 
     _refs: typing.List[_TemporaryDirectory] = []
     """List of references to instances of this class."""

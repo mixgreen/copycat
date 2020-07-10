@@ -28,11 +28,11 @@ class RtioBenchmarkModule(DaxModule):
         :param ttl_out: Key of the TTLInOut device to use
         :param dma: Enable the DMA features of this module
         :param max_burst: The maximum burst size
-        :param init: Enable initialization of this module
+        :param init: Call initialization kernel during module initialization
         """
         assert isinstance(dma, bool), 'DMA flag should be of type bool'
         assert isinstance(max_burst, int), 'Max burst should be of type int'
-        assert isinstance(init, bool), 'Initialization flag must be of type bool'
+        assert isinstance(init, bool), 'Init flag must be of type bool'
 
         # Store attributes
         self._dma_enabled: bool = dma
@@ -60,12 +60,6 @@ class RtioBenchmarkModule(DaxModule):
         self._dma_enabled = self._dma_enabled and self.hasattr(self.EVENT_PERIOD_KEY, self.EVENT_BURST_KEY)
         self.logger.debug(f'DMA enabled: {self._dma_enabled}')
 
-        if self.hasattr(self.EVENT_BURST_KEY):
-            # Limit event burst size
-            self.event_burst_size = np.int32(min(self.event_burst, self._max_burst))  # type: ignore[attr-defined]
-            self.update_kernel_invariants('event_burst_size')
-            self.logger.debug(f'Event burst size set to: {self.event_burst_size:d}')
-
         if self._dma_enabled:
             # Assign DMA burst as default burst
             self.burst = self.burst_dma  # type: ignore[assignment]
@@ -74,6 +68,12 @@ class RtioBenchmarkModule(DaxModule):
             self.burst = self.burst_slow  # type: ignore[assignment]
             # Disable DMA recording during initialization
             self._record_dma_burst = self._nop  # type: ignore[assignment]
+
+        if self.hasattr(self.EVENT_BURST_KEY):
+            # Limit event burst size
+            self.event_burst_size = np.int32(min(self.event_burst, self._max_burst))  # type: ignore[attr-defined]
+            self.update_kernel_invariants('event_burst_size')
+            self.logger.debug(f'Event burst size set to: {self.event_burst_size:d}')
 
         if self._init or force:
             # Call the init kernel function

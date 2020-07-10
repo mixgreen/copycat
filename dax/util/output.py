@@ -18,7 +18,7 @@ def temp_dir() -> typing.Generator[None, None, None]:
     # Remember the original directory
     orig_dir = os.getcwd()
 
-    with tempfile.TemporaryDirectory(suffix='dax_util_output_') as tmp_dir:
+    with tempfile.TemporaryDirectory() as tmp_dir:
         # Change the directory
         os.chdir(tmp_dir)
         try:
