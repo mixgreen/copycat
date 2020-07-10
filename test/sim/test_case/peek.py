@@ -94,13 +94,18 @@ class PeekTestCaseTestCase(dax.sim.test_case.PeekTestCase):
                         self.expect(scope, signal, v)
 
     def test_expect_notset(self):
-        test_data = {
-            self.sys.ttl0: ('state', SignalNotSet),  # bool
-            self.sys.ec: ('count', 'z'),  # int
-            self.sys.ad9912: ('freq', SignalNotSet),  # float
-        }
+        test_data = [
+            (self.sys.ttl0, 'state', SignalNotSet),  # bool
+            (self.sys.ttl0, 'state', 'x'),  # bool
+            (self.sys.ttl0, 'state', 'X'),  # bool
+            (self.sys.ec, 'count', 'z'),  # int with initialization value
+            (self.sys.ec, 'count', 'Z'),  # int with initialization value
+            (self.sys.ad9912, 'freq', SignalNotSet),  # float
+            (self.sys.ad9912, 'freq', 'x'),  # float
+            (self.sys.ad9912, 'freq', 'X'),  # float
+        ]
 
-        for scope, (signal, v) in test_data.items():
+        for scope, signal, v in test_data:
             with self.subTest(scope=scope, signal=signal):
                 self.assertIsNone(self.expect(scope, signal, v))
 

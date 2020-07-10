@@ -129,10 +129,9 @@ class PeekTestCase(unittest.TestCase):
             # Raise if the signal has an unsupported
             raise TypeError(f'Signal "{scope.key:s}.{signal:s}" of type "{type_}" can not be tested')
 
-        # Match with special values for supported types
-        if type_ in {bool, int}:
-            if any(value in s and peek in s for s in [{'x', 'X', SignalNotSet}, {'z', 'Z'}]):  # type: ignore
-                return  # We have a match on a special value
+        # Match with special values
+        if any(value in s and peek in s for s in [{'x', 'X', SignalNotSet}, {'z', 'Z'}]):  # type: ignore
+            return  # We have a match on a special value
 
         if msg is None:
             # Set default error message
