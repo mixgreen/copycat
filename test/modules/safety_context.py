@@ -3,10 +3,7 @@ import collections
 
 from dax.experiment import *
 from dax.modules.safety_context import *
-from dax.util.artiq import get_manager_or_parent, disable_logging
-
-# Disable logging
-disable_logging()
+from dax.util.artiq import get_manager_or_parent
 
 
 class _ReentrantTestSystem(DaxSystem):

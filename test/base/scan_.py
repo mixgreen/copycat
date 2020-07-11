@@ -7,10 +7,7 @@ from artiq.experiment import *
 
 from dax.base.scan import *
 from dax.base.dax import DaxSystem
-from dax.util.artiq import get_manager_or_parent, disable_logging
-
-# Disable logging
-disable_logging()
+from dax.util.artiq import get_manager_or_parent
 
 
 class _MockSystem(DaxSystem):

@@ -12,10 +12,7 @@ import artiq.coredevice.ad9912  # type: ignore
 from dax.experiment import DaxSystem
 from dax.sim import enable_dax_sim
 from dax.sim.signal import get_signal_manager, PeekSignalManager, SignalNotSet
-from dax.util.artiq import get_manager_or_parent, disable_logging
-
-# Disable logging
-disable_logging()
+from dax.util.artiq import get_manager_or_parent
 
 
 class PeekSignalManagerTestCase(unittest.TestCase):
