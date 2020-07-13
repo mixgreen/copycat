@@ -23,13 +23,13 @@ class TimeResolvedContext(DaxModule):
     This module can be used as a sub-module of a service.
     """
 
-    PLOT_RESULT_KEY: str = 'plot.dax.time_resolved_context.result'
+    PLOT_RESULT_KEY_FORMAT: str = 'plot.{base:s}.time_resolved_context.result'
     """Dataset name for plotting latest result graph (Y-axis)."""
-    PLOT_TIME_KEY: str = 'plot.dax.time_resolved_context.time'
+    PLOT_TIME_KEY_FORMAT: str = 'plot.{base:s}.time_resolved_context.time'
     """Dataset name for plotting latest result graph (X-axis)."""
     PLOT_NAME: str = 'time resolved detection'
     """Name of the plot applet."""
-    PLOT_GROUP: str = 'dax.time_resolved_context'
+    PLOT_GROUP_FORMAT: str = '{base:s}.time_resolved_context'
     """Group to which the plot applets belong."""
 
     DATASET_GROUP: str = 'time_resolved_context'
@@ -41,13 +41,20 @@ class TimeResolvedContext(DaxModule):
     DATASET_COLUMNS: typing.Tuple[str, ...] = ('width', 'time', 'result')
     """Column names of data within each sub-dataset."""
 
-    def build(self, *, default_dataset_key: typing.Optional[str] = None) -> None:  # type: ignore
+    def build(self, *,  # type: ignore
+              default_dataset_key: typing.Optional[str] = None, plot_base_key: str = 'dax') -> None:
         """Build the time resolved context module.
 
+        The plot base key can be used to group plot datasets and applets as desired.
+        The base key is formatted with the `scheduler` object which allows users to
+        add experiment-specific information in the base key.
+
         :param default_dataset_key: Default dataset name used for storing trace data
+        :param plot_base_key: Base key for plot dataset keys and applets
         """
         assert isinstance(default_dataset_key, str) or default_dataset_key is None, \
             'Provided default dataset key must be None or of type str'
+        assert isinstance(plot_base_key, str), 'Plot base key must be of type str'
 
         # Store default dataset key
         if default_dataset_key is None:
@@ -71,11 +78,18 @@ class TimeResolvedContext(DaxModule):
 
         # Target dataset key
         self._dataset_key: str = self._default_dataset_key
+        # Store plot base key
+        self._plot_base_key: str = plot_base_key
         # Datasets that are initialized with a counter, which represents the length of the data
         self._open_datasets: typing.Counter[str] = collections.Counter()
 
     def init(self) -> None:
-        pass
+        # Generate plot keys
+        base: str = self._plot_base_key.format(scheduler=self.get_device('scheduler'))
+        self._plot_result_key: str = self.PLOT_RESULT_KEY_FORMAT.format(base=base)
+        self._plot_time_key: str = self.PLOT_TIME_KEY_FORMAT.format(base=base)
+        # Generate applet plot group
+        self._plot_group: str = self.PLOT_GROUP_FORMAT.format(base=base)
 
     def post_init(self) -> None:
         pass
@@ -371,8 +385,8 @@ class TimeResolvedContext(DaxModule):
             for column in self.DATASET_COLUMNS:
                 self.set_dataset(sub_dataset_keys[column], result_dict[column], archive=True)
             # Write result to plotting dataset
-            self.set_dataset(self.PLOT_TIME_KEY, time + (width * 0.5), broadcast=True, archive=False)
-            self.set_dataset(self.PLOT_RESULT_KEY, np.column_stack(result), broadcast=True, archive=False)
+            self.set_dataset(self._plot_time_key, time + (width * 0.5), broadcast=True, archive=False)
+            self.set_dataset(self._plot_result_key, np.column_stack(result), broadcast=True, archive=False)
 
         else:
             # Add empty element to the archive (keeps indexing consistent)
@@ -399,18 +413,18 @@ class TimeResolvedContext(DaxModule):
         kwargs.setdefault('x_label', 'Time')
         kwargs.setdefault('y_label', 'Number of counts')
         # Plot
-        self._ccb.plot_xy_multi(self.PLOT_NAME, self.PLOT_RESULT_KEY,
-                                x=self.PLOT_TIME_KEY, group=self.PLOT_GROUP, **kwargs)
+        self._ccb.plot_xy_multi(self.PLOT_NAME, self._plot_result_key,
+                                x=self._plot_time_key, group=self._plot_group, **kwargs)
 
     @rpc(flags={'async'})
     def disable_plot(self):  # type: () -> None
         """Close the plot."""
-        self._ccb.disable_applet(self.PLOT_NAME, self.PLOT_GROUP)
+        self._ccb.disable_applet(self.PLOT_NAME, self._plot_group)
 
     @rpc(flags={'async'})
     def disable_all_plots(self):  # type: () -> None
         """Close all context related plots."""
-        self._ccb.disable_applet_group(self.PLOT_GROUP)
+        self._ccb.disable_applet_group(self._plot_group)
 
     """Data access functions"""
 

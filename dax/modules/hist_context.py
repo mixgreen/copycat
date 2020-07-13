@@ -30,22 +30,22 @@ class HistogramContext(DaxModule):
     "input parameters".
     """
 
-    HISTOGRAM_PLOT_KEY: str = 'plot.dax.histogram_context.histogram'
+    HISTOGRAM_PLOT_KEY_FORMAT: str = 'plot.{base:s}.histogram_context.histogram'
     """Dataset name for plotting latest histogram."""
     HISTOGRAM_PLOT_NAME: str = 'histogram'
     """Name of the histogram plot applet."""
 
-    PROBABILITY_PLOT_KEY: str = 'plot.dax.histogram_context.probability'
+    PROBABILITY_PLOT_KEY_FORMAT: str = 'plot.{base:s}.histogram_context.probability'
     """Dataset name for plotting latest probability graph."""
     PROBABILITY_PLOT_NAME: str = 'probability'
     """Name of the probability plot applet."""
 
-    MEAN_COUNT_PLOT_KEY: str = 'plot.dax.histogram_context.mean_count'
+    MEAN_COUNT_PLOT_KEY_FORMAT: str = 'plot.{base:s}.histogram_context.mean_count'
     """Dataset name for plotting latest mean count graph."""
     MEAN_COUNT_PLOT_NAME: str = 'mean count'
     """Name of the probability plot applet."""
 
-    PLOT_GROUP: str = 'dax.histogram_context'
+    PLOT_GROUP_FORMAT: str = '{base:s}.histogram_context'
     """Group to which the plot applets belong."""
 
     DATASET_GROUP: str = 'histogram_context'
@@ -55,13 +55,20 @@ class HistogramContext(DaxModule):
     DEFAULT_DATASET_KEY: str = 'histogram'
     """The default name of the output sub-dataset."""
 
-    def build(self, *, default_dataset_key: typing.Optional[str] = None) -> None:  # type: ignore
+    def build(self, *,  # type: ignore
+              default_dataset_key: typing.Optional[str] = None, plot_base_key: str = 'dax') -> None:
         """Build the histogram context module.
 
+        The plot base key can be used to group plot datasets and applets as desired.
+        The base key is formatted with the `scheduler` object which allows users to
+        add experiment-specific information in the base key.
+
         :param default_dataset_key: Default dataset name used for storing histogram data
+        :param plot_base_key: Base key for plot dataset keys and applets
         """
         assert isinstance(default_dataset_key, str) or default_dataset_key is None, \
             'Provided default dataset key must be None or of type str'
+        assert isinstance(plot_base_key, str), 'Plot base key must be of type str'
 
         # Store default dataset key
         if default_dataset_key is None:
@@ -84,10 +91,20 @@ class HistogramContext(DaxModule):
 
         # Target dataset key
         self._dataset_key: str = self._default_dataset_key
+        # Store plot base key
+        self._plot_base_key: str = plot_base_key
         # Datasets that are initialized with a counter, which represents the length of the data
         self._open_datasets: typing.Counter[str] = collections.Counter()
 
     def init(self) -> None:
+        # Generate plot keys
+        base: str = self._plot_base_key.format(scheduler=self.get_device('scheduler'))
+        self._histogram_plot_key: str = self.HISTOGRAM_PLOT_KEY_FORMAT.format(base=base)
+        self._probability_plot_key: str = self.PROBABILITY_PLOT_KEY_FORMAT.format(base=base)
+        self._mean_count_plot_key: str = self.MEAN_COUNT_PLOT_KEY_FORMAT.format(base=base)
+        # Generate applet plot group
+        self._plot_group: str = self.PLOT_GROUP_FORMAT.format(base=base)
+
         # Prepare the probability and mean count plot datasets by clearing them
         self.clear_probability_plot()
         self.clear_mean_count_plot()
@@ -226,17 +243,17 @@ class HistogramContext(DaxModule):
             # Write result to sub-dataset for archiving
             self.set_dataset(sub_dataset_key, flat_histograms, archive=True)
             # Write result to histogram plotting dataset
-            self.set_dataset(self.HISTOGRAM_PLOT_KEY, flat_histograms, broadcast=True, archive=False)
+            self.set_dataset(self._histogram_plot_key, flat_histograms, broadcast=True, archive=False)
 
             # Calculate state probabilities
             probabilities: typing.List[float] = [self._histogram_to_probability(h) for h in histograms]
             # Append result to probability plotting dataset
-            self.append_to_dataset(self.PROBABILITY_PLOT_KEY, probabilities)
+            self.append_to_dataset(self._probability_plot_key, probabilities)
 
             # Calculate average count per histogram
             mean_counts: typing.List[float] = [sum(c * v for c, v in h.items()) / sum(h.values()) for h in histograms]
             # Append result to mean count plotting dataset
-            self.append_to_dataset(self.MEAN_COUNT_PLOT_KEY, mean_counts)
+            self.append_to_dataset(self._mean_count_plot_key, mean_counts)
 
         else:
             # Add empty element to the archive (keeps indexing consistent)
@@ -275,7 +292,7 @@ class HistogramContext(DaxModule):
         kwargs.setdefault('x_label', 'Number of counts')
         kwargs.setdefault('y_label', 'Frequency')
         # Plot
-        self._ccb.plot_hist(self.HISTOGRAM_PLOT_NAME, self.HISTOGRAM_PLOT_KEY, group=self.PLOT_GROUP, **kwargs)
+        self._ccb.plot_hist(self.HISTOGRAM_PLOT_NAME, self._histogram_plot_key, group=self._plot_group, **kwargs)
 
     @rpc(flags={'async'})
     def plot_probability(self, **kwargs):  # type: (typing.Any) -> None
@@ -290,7 +307,8 @@ class HistogramContext(DaxModule):
         # Set default label
         kwargs.setdefault('y_label', 'State probability')
         # Plot
-        self._ccb.plot_xy_multi(self.PROBABILITY_PLOT_NAME, self.PROBABILITY_PLOT_KEY, group=self.PLOT_GROUP, **kwargs)
+        self._ccb.plot_xy_multi(self.PROBABILITY_PLOT_NAME, self._probability_plot_key,
+                                group=self._plot_group, **kwargs)
 
     @rpc(flags={'async'})
     def plot_mean_count(self, **kwargs):  # type: (typing.Any) -> None
@@ -302,39 +320,39 @@ class HistogramContext(DaxModule):
         # Set default label
         kwargs.setdefault('y_label', 'Mean count')
         # Plot
-        self._ccb.plot_xy_multi(self.MEAN_COUNT_PLOT_NAME, self.MEAN_COUNT_PLOT_KEY, group=self.PLOT_GROUP, **kwargs)
+        self._ccb.plot_xy_multi(self.MEAN_COUNT_PLOT_NAME, self._mean_count_plot_key, group=self._plot_group, **kwargs)
 
     @rpc(flags={'async'})
     def clear_probability_plot(self):  # type: () -> None
         """Clear the probability plot."""
         # Set the probability dataset to an empty list
-        self.set_dataset(self.PROBABILITY_PLOT_KEY, [], broadcast=True, archive=False)
+        self.set_dataset(self._probability_plot_key, [], broadcast=True, archive=False)
 
     @rpc(flags={'async'})
     def clear_mean_count_plot(self):  # type: () -> None
         """Clear the average count plot."""
         # Set the mean count dataset to an empty list
-        self.set_dataset(self.MEAN_COUNT_PLOT_KEY, [], broadcast=True, archive=False)
+        self.set_dataset(self._mean_count_plot_key, [], broadcast=True, archive=False)
 
     @rpc(flags={'async'})
     def disable_histogram_plot(self):  # type: () -> None
         """Close the histogram plot."""
-        self._ccb.disable_applet(self.HISTOGRAM_PLOT_NAME, self.PLOT_GROUP)
+        self._ccb.disable_applet(self.HISTOGRAM_PLOT_NAME, self._plot_group)
 
     @rpc(flags={'async'})
     def disable_probability_plot(self):  # type: () -> None
         """Close the probability plot."""
-        self._ccb.disable_applet(self.PROBABILITY_PLOT_NAME, self.PLOT_GROUP)
+        self._ccb.disable_applet(self.PROBABILITY_PLOT_NAME, self._plot_group)
 
     @rpc(flags={'async'})
     def disable_mean_count_plot(self):  # type: () -> None
         """Close the probability plot."""
-        self._ccb.disable_applet(self.MEAN_COUNT_PLOT_NAME, self.PLOT_GROUP)
+        self._ccb.disable_applet(self.MEAN_COUNT_PLOT_NAME, self._plot_group)
 
     @rpc(flags={'async'})
     def disable_all_plots(self):  # type: () -> None
         """Close all histogram context plots."""
-        self._ccb.disable_applet_group(self.PLOT_GROUP)
+        self._ccb.disable_applet_group(self._plot_group)
 
     """Data access functions"""
 

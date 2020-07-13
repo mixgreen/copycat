@@ -34,8 +34,7 @@ class DaxSimConfig:
             self.__output_enabled = True
 
             # Generate output file name for the signal manager
-            scheduler = dmgr.get('scheduler')
-            output_file_name = get_file_name(scheduler, 'trace', 'vcd')
+            output_file_name = get_file_name(dmgr.get('scheduler'), 'trace', 'vcd')
 
             # Set the VCD signal manager
             _logger.debug('Initializing VCD signal manager...')
@@ -47,9 +46,11 @@ class DaxSimConfig:
             self.__output_enabled = False
 
             # Set the peek signal manager
+            _logger.debug('Initializing peek signal manager...')
             if signal_mgr_kwargs:
                 raise TypeError('PeekSignalManager() takes no arguments')
             set_signal_manager(PeekSignalManager())
+            _logger.debug('Peek signal manager initialized')
 
         else:
             # Output type was not supported
