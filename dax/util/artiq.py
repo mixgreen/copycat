@@ -3,7 +3,6 @@ from __future__ import annotations  # Postponed evaluation of annotations
 import os
 import tempfile
 import typing
-import logging
 
 import artiq.language.environment
 import artiq.master.worker_db
@@ -11,7 +10,7 @@ import artiq.master.databases
 import artiq.frontend.artiq_run  # type: ignore
 
 __all__ = ['is_kernel', 'is_portable', 'is_host_only',
-           'disable_logging', 'get_manager_or_parent']
+           'get_manager_or_parent']
 
 
 def is_kernel(func: typing.Any) -> bool:
@@ -42,14 +41,6 @@ def is_host_only(func: typing.Any) -> bool:
     """
     meta = getattr(func, 'artiq_embedded', None)
     return False if meta is None else bool(meta.forbidden)
-
-
-def disable_logging() -> None:
-    """Disable ARTIQ logging by setting logging level high.
-
-    This function is primarily used for testing purposes.
-    """
-    logging.basicConfig(level=logging.CRITICAL)
 
 
 def get_manager_or_parent(device_db: typing.Union[typing.Dict[str, typing.Any], str, None] = None,

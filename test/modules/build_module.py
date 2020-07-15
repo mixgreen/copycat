@@ -3,15 +3,12 @@ import unittest
 
 from dax.experiment import *
 from dax.sim import enable_dax_sim
-from dax.util.artiq import get_manager_or_parent, disable_logging
+from dax.util.artiq import get_manager_or_parent
 
 import dax.modules.cpld_init
 import dax.modules.led
 import dax.modules.rpc_benchmark
 import dax.modules.rtio_benchmark
-
-# Disable logging
-disable_logging()
 
 
 class _TestSystem(DaxSystem):

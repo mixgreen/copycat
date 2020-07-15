@@ -3,11 +3,8 @@ import graphviz
 
 import dax.base.dax
 import dax.util.introspect
-from dax.util.artiq import get_manager_or_parent, disable_logging
+from dax.util.artiq import get_manager_or_parent
 from dax.util.output import temp_dir
-
-# Disable logging
-disable_logging()
 
 
 class _TestSystem(dax.base.dax.DaxSystem):

@@ -1,6 +1,14 @@
 dax.modules package
 ===================
 
+dax.modules.beam\_manager module
+-----------------------------------
+
+.. automodule:: dax.modules.beam_manager
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 dax.modules.cpld\_init module
 -----------------------------
 
@@ -13,14 +21,6 @@ dax.modules.hist\_context module
 --------------------------------
 
 .. automodule:: dax.modules.hist_context
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
-dax.modules.indv\_beam\_mems module
------------------------------------
-
-.. automodule:: dax.modules.indv_beam_mems
     :members:
     :undoc-members:
     :show-inheritance:
