@@ -15,17 +15,17 @@ class DaxSimConfig:
     """Virtual device class that configures the simulation through the device DB."""
 
     def __init__(self, dmgr: typing.Any, *,
-                 logging_level: typing.Union[int, str], output: typing.Optional[str],
+                 logging_level: typing.Union[int, str], output: str,
                  signal_mgr_kwargs: typing.Dict[str, typing.Any]):
         assert isinstance(logging_level, (int, str)), 'Logging level must be of type int or str'
-        assert isinstance(output, str) or output is None, 'Invalid type for output parameter'
+        assert isinstance(output, str), 'Output must be of type str'
         assert isinstance(signal_mgr_kwargs, dict), 'Signal manager kwargs must be of type dict'
 
         # Set the dax.sim logging level and report that simulation is enabled
         _logger.setLevel(logging_level)
         _logger.info(f'DAX.sim enabled ({_dax_version:s})')
 
-        if output is None:
+        if output == 'null':
             # Disable output
             self.__output_enabled = False
 

@@ -117,6 +117,7 @@ class VcdSignalManager(DaxSignalManager[_VS_T]):
         Signals have to be registered before any events are committed.
 
         Possible types and expected arguments:
+
         - `bool` (a register with bit values `0`, `1`, `X`, `Z`), provide a size of the register
         - `int`, `np.int32`, `np.int64`
         - `float`

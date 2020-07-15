@@ -46,51 +46,50 @@ DAX_SIM_CONFIG_KEY: str = '_dax_sim_config'
 def enable_dax_sim(ddb: typing.Dict[str, typing.Any], *,
                    enable: typing.Optional[bool] = None,
                    logging_level: typing.Union[int, str] = logging.NOTSET,
-                   output: typing.Optional[str] = 'vcd',
-                   sim_config_module: str = 'dax.sim.config',
-                   sim_config_class: str = 'DaxSimConfig',
+                   output: str = 'vcd',
                    moninj_service: bool = True,
                    **signal_mgr_kwargs: typing.Any) -> typing.Dict[str, typing.Any]:
     """Enable the DAX simulation package by applying this function on your device DB.
 
     This function will modify your device DB in-place to configure it for simulation.
 
-    The simulation can be configured through the function parameters.
-    If the `enable` argument is not set the value will be looked up in the configuration
-    files (section `[dax.sim]` option `enable`). The possible configuration files
-    in order of priority currently are `'.dax'` and `'setup.cfg'`.
+    The simulation can be configured through the function parameters or by using the
+    configuration files. If given, function parameters are always prioritized over
+    configuration file parameters. The possible configuration files in order of
+    priority currently are `'.dax'` and `'setup.cfg'`.
 
-    If supported by a specific simulated device, extra simulation-specific arguments
+    The following options can currently be set through the configuration files
+    using the section `[dax.sim]`:
+
+     - `enable`, required if not provided as a function parameter
+     - `coredevice_packages`, additional packages to search for coredevice drivers (in order of priority)
+     - `config_module`, the module of the simulation configuration class (defaults to DAX.sim config module)
+     - `config_class`, the class of the simulation configuration object (defaults to DAX.sim config class)
+
+    If supported by a specific simulated device driver, extra simulation-specific arguments
     can be added by adding a `sim_args` dict to the device entry in the device DB.
-    The `arguments` dict of the device will be updated with the content of the `sim_args` dict.
+    The `arguments` dict of the device will be updated with the contents of the `sim_args` dict.
 
     The DAX.sim package provides a limited list of simulated coredevice drivers.
-    It is possible to add additional packages to the coredevice path which will
-    be searched for simulated coredevice drivers in given order.
-    Additional packages can be added in the configuration files
-    (section `[dax.sim]` option `coredevice_packages`).
+    Additional packages with simulated coredevice drivers can be added using the configuration files.
     If no coredevice driver was found, the device will be assigned a generic driver.
     Note that custom simulated coredevice drivers need to be a subclass of
-    :class:`dax.sim.device.DaxSimDevice` to be compatible with other DAX software.
+    :class:`dax.sim.device.DaxSimDevice` to be compatible with other DAX.sim components.
 
     :param ddb: The device DB (will be updated if simulation is enabled)
     :param enable: Flag to enable DAX simulation
     :param logging_level: The logging level
-    :param output: Simulation output type (`None`, `'vcd'`, or `'peek'`)
-    :param sim_config_module: The module name of the simulation configuration class
-    :param sim_config_class: The class name of the simulation configuration class
+    :param output: Simulation output type (`'null'`, `'vcd'`, or `'peek'`)
     :param moninj_service: Start the dummy MonInj service for the dashboard to connect to
     :param signal_mgr_kwargs: Arguments for the signal manager if output is enabled
     :return: The updated device DB
-    :raises FileNotFoundError: Raised if configuration files are used but none are found
+    :raises FileNotFoundError: Raised if configuration files are required but none are found
     """
 
     assert isinstance(ddb, dict), 'The device DB argument must be a dict'
     assert isinstance(enable, bool) or enable is None, 'The enable flag must be None or of type bool'
     assert isinstance(logging_level, (int, str)), 'Logging level must be of type int or str'
-    assert isinstance(output, str) or output is None, 'Invalid type for output parameter'
-    assert isinstance(sim_config_module, str), 'Simulation configuration module name must be of type str'
-    assert isinstance(sim_config_class, str), 'Simulation configuration class name must be of type str'
+    assert isinstance(output, str), 'Output parameter must be of type str'
     assert isinstance(moninj_service, bool), 'MonInj service flag must be of type bool'
 
     # Set the logging level to the given value
@@ -98,10 +97,10 @@ def enable_dax_sim(ddb: typing.Dict[str, typing.Any], *,
 
     # Read configuration file
     _logger.debug('Reading configuration file')
-    config = configparser.ConfigParser()
+    config: configparser.ConfigParser = configparser.ConfigParser()
 
     if not config.read(_CONFIG_FILES) and enable is None:
-        # No files were successfully read but one or more fields demand a configuration file
+        # No files were successfully read but one or more fields require a configuration file
         _logger.error(f'Could not find a configuration file at any of the following '
                       f'locations: {", ".join(_CONFIG_FILES)}')
         raise FileNotFoundError('Configuration file not found')
@@ -136,7 +135,9 @@ def enable_dax_sim(ddb: typing.Dict[str, typing.Any], *,
 
         # Prepare virtual device used for passing simulation configuration
         sim_config = {DAX_SIM_CONFIG_KEY: {
-            'type': 'local', 'module': sim_config_module, 'class': sim_config_class,
+            'type': 'local',
+            'module': config.get('dax.sim', 'config_module', fallback='dax.sim.config'),
+            'class': config.get('dax.sim', 'config_class', fallback='DaxSimConfig'),
             # Simulation configuration is passed through the arguments
             'arguments': {'logging_level': logging_level,
                           'output': output,
