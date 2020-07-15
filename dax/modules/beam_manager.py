@@ -3,19 +3,11 @@ import typing
 
 from dax.experiment import *
 
-__all__ = ['NO_BEAM', 'BeamAssignmentError', 'BeamManager']
-
-NO_BEAM: np.int32 = np.int32(-1)
-"""Constant value for no beam."""
-
-
-class BeamAssignmentError(RuntimeError):
-    """Exception type in case of errors during beam assignment."""
-    pass
+__all__ = ['BeamAssignmentError', 'BeamManager']
 
 
 class BeamManager(DaxModule):
-    """Module for managing a set of beams shared over a larger number of targets.
+    """Module for managing a set of beams shared over a number of targets.
 
     The beam manager contains a kernel-friendly reservation algorithm that is able to manage
     the state of a set of beams shared over a number of targets. The manager object only
@@ -26,12 +18,15 @@ class BeamManager(DaxModule):
     are shared over an ion chain using mirrors for targeting.
     """
 
+    NO_BEAM: np.int32 = np.int32(-1)
+    """Constant value for no beam."""
+
     class _BeamConfig:
         """Class that holds the configuration/state of a beam."""
 
         def __init__(self):
             # Initially we assume the beam is not targeted
-            self.target: np.int32 = NO_BEAM
+            self.target: np.int32 = BeamManager.NO_BEAM
             # We assume beams are initially off
             self.state: bool = False
 
@@ -46,6 +41,9 @@ class BeamManager(DaxModule):
         self._num_beams: np.int32 = np.int32(num_beams)
         self.logger.debug(f'Number of beams: {self._num_beams:d}')
         self.update_kernel_invariants('_num_beams')
+
+        # Mark class constant as kernel invariant
+        self.update_kernel_invariants('NO_BEAM')
 
         # Current beam configurations
         self._beam_config: typing.List[BeamManager._BeamConfig] = [self._BeamConfig() for _ in range(num_beams)]
@@ -67,13 +65,15 @@ class BeamManager(DaxModule):
         for acting on the results returned by the reservation system.
 
         When switching to the on state:
-         - Returns :attr:`NO_BEAM` if a beam was already on and targeted (no action required)
-         - Returns a beam index when a beam is available but not targeted
-         - Raises exception when no beam was targeted and no beams are available
+
+        - Returns :attr:`NO_BEAM` if a beam was already on and targeted (no action required)
+        - Returns a beam index when a beam is available but not targeted
+        - Raises exception when no beam was targeted and no beams are available
 
         When switching to the off state:
-         - Returns :attr:`NO_BEAM` if no beam is on targeted (no action required)
-         - Returns a beam index when a beam is on and targeted
+
+        - Returns :attr:`NO_BEAM` if no beam is on and targeted (no action required)
+        - Returns a beam index when a beam is on and targeted
 
         :param target: The desired beam target
         :param state: The desired state
@@ -83,7 +83,7 @@ class BeamManager(DaxModule):
 
         if state:  # We switch a beam on, which means we need to find a beam
             # Keep track of available beams in case we do not find a beam matching the target
-            available_beam = NO_BEAM
+            available_beam = self.NO_BEAM
 
             for b in range(self._num_beams):
                 # Search for a beam matching the target
@@ -92,7 +92,7 @@ class BeamManager(DaxModule):
                     # We found a beam matching the target
                     if c.state == state:
                         # Beam already targeted and in the correct state, nothing needs to be done
-                        return NO_BEAM
+                        return self.NO_BEAM
                     else:
                         # We found a beam matching the target with a different state, update state and return beam index
                         c.state = state
@@ -102,7 +102,7 @@ class BeamManager(DaxModule):
                     available_beam = b
 
             # We exhausted the search which means that no beam is targeted at the given target
-            if available_beam != NO_BEAM:
+            if available_beam != self.NO_BEAM:
                 # Save configuration
                 self._beam_config[available_beam].target = np.int32(target)  # Extra conversion for type safety
                 self._beam_config[available_beam].state = state
@@ -120,14 +120,14 @@ class BeamManager(DaxModule):
                     # We found a beam matching the target
                     if c.state == state:
                         # Beam already targeted and in the correct state, nothing needs to be done
-                        return NO_BEAM
+                        return self.NO_BEAM
                     else:
                         # We found a beam matching the target with a different state, update state and return beam index
                         c.state = state
                         return b
 
             # We exhausted the search which means that no beam is targeted at the given target
-            return NO_BEAM
+            return self.NO_BEAM
 
     @portable
     def set_beam(self, beam: TInt32, target: TInt32, state: TBool):
@@ -142,3 +142,8 @@ class BeamManager(DaxModule):
         """
         self._beam_config[beam].target = np.int32(target)  # Extra conversion for type safety
         self._beam_config[beam].state = state
+
+
+class BeamAssignmentError(RuntimeError):
+    """Exception type in case of errors during beam assignment."""
+    pass
