@@ -49,7 +49,6 @@ def enable_dax_sim(ddb: typing.Dict[str, typing.Any], *,
                    output: typing.Optional[str] = 'vcd',
                    sim_config_module: str = 'dax.sim.config',
                    sim_config_class: str = 'DaxSimConfig',
-                   coredevice_packages: typing.Union[None, str, typing.List[str]] = None,
                    moninj_service: bool = True,
                    **signal_mgr_kwargs: typing.Any) -> typing.Dict[str, typing.Any]:
     """Enable the DAX simulation package by applying this function on your device DB.
@@ -57,7 +56,7 @@ def enable_dax_sim(ddb: typing.Dict[str, typing.Any], *,
     This function will modify your device DB in-place to configure it for simulation.
 
     The simulation can be configured through the function parameters.
-    If the `enable` argument is not set the value will be looked up in configuration
+    If the `enable` argument is not set the value will be looked up in the configuration
     files (section `[dax.sim]` option `enable`). The possible configuration files
     in order of priority currently are `'.dax'` and `'setup.cfg'`.
 
@@ -68,6 +67,8 @@ def enable_dax_sim(ddb: typing.Dict[str, typing.Any], *,
     The DAX.sim package provides a limited list of simulated coredevice drivers.
     It is possible to add additional packages to the coredevice path which will
     be searched for simulated coredevice drivers in given order.
+    Additional packages can be added in the configuration files
+    (section `[dax.sim]` option `coredevice_packages`).
     If no coredevice driver was found, the device will be assigned a generic driver.
     Note that custom simulated coredevice drivers need to be a subclass of
     :class:`dax.sim.device.DaxSimDevice` to be compatible with other DAX software.
@@ -78,7 +79,6 @@ def enable_dax_sim(ddb: typing.Dict[str, typing.Any], *,
     :param output: Simulation output type (`None`, `'vcd'`, or `'peek'`)
     :param sim_config_module: The module name of the simulation configuration class
     :param sim_config_class: The class name of the simulation configuration class
-    :param coredevice_packages: Additional packages to search for simulated coredevice drivers
     :param moninj_service: Start the dummy MonInj service for the dashboard to connect to
     :param signal_mgr_kwargs: Arguments for the signal manager if output is enabled
     :return: The updated device DB
@@ -93,34 +93,25 @@ def enable_dax_sim(ddb: typing.Dict[str, typing.Any], *,
     assert isinstance(sim_config_class, str), 'Simulation configuration class name must be of type str'
     assert isinstance(moninj_service, bool), 'MonInj service flag must be of type bool'
 
-    # Handle the coredevice packages
-    if coredevice_packages is None:
-        # Default is just the DAX coredevice package
-        coredevice_packages = [_DAX_COREDEVICE_PACKAGE]
-    elif isinstance(coredevice_packages, str):
-        # Make a list of the given package and the DAX coredevice package
-        coredevice_packages = [coredevice_packages, _DAX_COREDEVICE_PACKAGE]
-    elif isinstance(coredevice_packages, list):
-        # Already a list, just append the DAX coredevice package
-        coredevice_packages.append(_DAX_COREDEVICE_PACKAGE)
-    else:
-        raise TypeError('The coredevice path argument has an invalid type')
-
-    assert isinstance(coredevice_packages, list) and all(isinstance(p, str) for p in coredevice_packages)
-
     # Set the logging level to the given value
     _logger.setLevel(logging_level)
 
-    if enable is None:
-        # Read configuration file
-        _logger.debug('Reading configuration file')
-        config = configparser.ConfigParser()
-        if not config.read(_CONFIG_FILES):
-            # No files were successfully read
-            _logger.error(f'Could not find a configuration file at any of the following '
-                          f'locations: {", ".join(_CONFIG_FILES)}')
-            raise FileNotFoundError('Configuration file not found')
+    # Read configuration file
+    _logger.debug('Reading configuration file')
+    config = configparser.ConfigParser()
 
+    if not config.read(_CONFIG_FILES) and enable is None:
+        # No files were successfully read but one or more fields demand a configuration file
+        _logger.error(f'Could not find a configuration file at any of the following '
+                      f'locations: {", ".join(_CONFIG_FILES)}')
+        raise FileNotFoundError('Configuration file not found')
+
+    # Get coredevice packages from config file
+    coredevice_packages: typing.List[str] = config.get('dax.sim', 'coredevice_packages', fallback='').split()
+    # Append the DAX coredevice package
+    coredevice_packages.append(_DAX_COREDEVICE_PACKAGE)
+
+    if enable is None:
         # Get the boolean value (can raise various exceptions)
         enable = config.getboolean('dax.sim', 'enable')
 
