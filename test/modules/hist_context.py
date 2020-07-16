@@ -2,6 +2,7 @@ import typing
 import unittest
 import collections
 import numpy as np
+import h5py  # type: ignore
 
 import artiq.coredevice
 
@@ -181,7 +182,7 @@ class HistogramContextTestCase(unittest.TestCase):
         for h in histograms[1]:  # Channel 1
             self.assertDictEqual(h, {8: 2, 9: 4}, 'Obtained histograms did not meet expected format')
 
-    def test_ddb_histograms(self):
+    def test_dataset_histograms(self):
         # Add data to the archive
         num_histograms = 8
         data = [
@@ -263,7 +264,8 @@ class HistogramContextTestCase(unittest.TestCase):
 class HistogramAnalyzerTestCase(unittest.TestCase):
 
     def setUp(self) -> None:
-        self.s = _TestSystem(get_manager_or_parent())
+        self.mop = get_manager_or_parent()
+        self.s = _TestSystem(self.mop)
         self.s.dax_init()
         self.h = self.s.hist_context
 
@@ -315,6 +317,67 @@ class HistogramAnalyzerTestCase(unittest.TestCase):
 
         for ref, res in zip(reference, result):
             self.assertListEqual(ref, list(res), 'Histograms did not converted correctly to probabilities')
+
+    def test_hdf5_read(self):
+        # Add data to the archive
+        num_histograms = 8
+        dataset_key = 'foo'
+        data_0 = [
+            [1, 9],
+            [2, 9],
+            [2, 9],
+            [3, 9],
+            [3, 8],
+            [3, 8],
+        ]
+        data_1 = [
+            [4, 1, 0],
+            [5, 2, 0],
+            [6, 3, 0],
+            [7, 4, 0],
+            [8, 5, 0],
+        ]
+
+        # Store in a specific dataset
+        self.h.config_dataset(dataset_key)
+        for _ in range(num_histograms):
+            with self.h:
+                for d in data_0:
+                    self.h.append(d)
+
+        # Store other data too in the default dataset
+        self.h.config_dataset()
+        for _ in range(num_histograms):
+            with self.h:
+                for d in data_1:
+                    self.h.append(d)
+
+        with temp_dir():
+            # Write data to HDF5 file
+            file_name = 'result.h5'
+            _, dataset_mgr, _, _ = self.mop
+            with h5py.File(file_name, 'w') as f:
+                dataset_mgr.write_hdf5(f)
+
+            # Read file with HistogramAnalyzer
+            a = HistogramAnalyzer(file_name, self.s.detection.get_state_detection_threshold())
+
+            # Compare results
+            self.assertSetEqual(set(a.keys), set(self.h.get_keys()), 'Keys did not match')
+            for k in a.keys:
+                for v, w in zip(a.histograms[k], self.h.get_histograms(k)):
+                    self.assertListEqual(v, list(w), 'Histograms did not match')
+                for v, w in zip(a.probabilities[k], self.h.get_probabilities(k)):
+                    self.assertListEqual(list(v), w, 'Probabilities did not match')
+
+            # Compare to analyzer from object source
+            b = HistogramAnalyzer(self.s, self.s.detection.get_state_detection_threshold())
+            self.assertSetEqual(set(a.keys), set(b.keys), 'Keys did not match')
+            for k in a.keys:
+                for v, w in zip(a.histograms[k], b.histograms[k]):
+                    self.assertListEqual(v, list(w), 'Histograms did not match')
+                for v, w in zip(a.probabilities[k], b.probabilities[k]):
+                    self.assertListEqual(list(v), list(w), 'Probabilities did not match')
 
 
 if __name__ == '__main__':

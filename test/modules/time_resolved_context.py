@@ -1,5 +1,6 @@
 import unittest
 import numpy as np
+import h5py  # type: ignore
 
 from dax.experiment import *
 import dax.util.matplotlib_backend  # noqa: F401
@@ -201,7 +202,7 @@ class TimeResolvedContextTestCase(unittest.TestCase):
         self.assertTrue(np.allclose(trace[0]['time'], r),
                         'Trace time did not match expected outcome')
 
-    def test_ddb_traces(self):
+    def test_dataset_traces(self):
         bin_width = 1 * us
         bin_spacing = 1 * ns
         offset = 5 * ns
@@ -283,7 +284,8 @@ class TimeResolvedContextTestCase(unittest.TestCase):
 class TimeResolvedAnalyzerTestCase(unittest.TestCase):
 
     def setUp(self) -> None:
-        self.s = _TestSystem(get_manager_or_parent())
+        self.mop = get_manager_or_parent()
+        self.s = _TestSystem(self.mop)
         self.s.dax_init()
         self.t = self.s.time_resolved_context
 
@@ -298,6 +300,51 @@ class TimeResolvedAnalyzerTestCase(unittest.TestCase):
         # To prevent unnecessary directories after testing, we switch to a temp dir
         with temp_dir():
             TimeResolvedAnalyzer(self.t)
+
+    def test_hdf5_read(self):
+        # Add data to the archive
+        bin_width = 1 * us
+        bin_spacing = 1 * ns
+        offset = 5 * ns
+        offset_mu = 10
+        data_0 = [[1, 2], [3, 4], [2, 6], [4, 5], [9, 9], [9, 7], [7, 8]]
+        data_1 = [[16, 25, 56], [66, 84, 83], [45, 77, 96], [88, 63, 79], [62, 93, 49], [29, 25, 7], [6, 17, 80]]
+
+        # Store data
+        with self.t:
+            self.t.append(data_0, bin_width, bin_spacing, offset, offset_mu)
+        self.t.config_dataset('foo')
+        with self.t:
+            self.t.append(data_1, bin_width, bin_spacing, offset, offset_mu)
+
+        with temp_dir():
+            # Write data to HDF5 file
+            file_name = 'result.h5'
+            _, dataset_mgr, _, _ = self.mop
+            with h5py.File(file_name, 'w') as f:
+                dataset_mgr.write_hdf5(f)
+
+            # Read file with TimeResolvedAnalyzer
+            a = TimeResolvedAnalyzer(file_name)
+
+            # Compare results
+            self.assertSetEqual(set(a.keys), set(self.t.get_keys()), 'Keys did not match')
+            for k in a.keys:
+                for v, w in zip(a.traces[k], self.t.get_traces(k)):
+                    for c in TimeResolvedContext.DATASET_COLUMNS:
+                        self.assertIn(c, v, 'Did not found expected dataset columns')
+                        self.assertIn(c, w, 'Did not found expected dataset columns')
+                        self.assertTrue(np.array_equal(v[c], w[c]), f'Column/data "{c:s}" of trace did not match')
+
+            # Compare to analyzer from object source
+            b = TimeResolvedAnalyzer(self.s)
+            self.assertSetEqual(set(a.keys), set(b.keys), 'Keys did not match')
+            for k in a.keys:
+                for v, w in zip(a.traces[k], b.traces[k]):
+                    for c in TimeResolvedContext.DATASET_COLUMNS:
+                        self.assertIn(c, v, 'Did not found expected dataset columns')
+                        self.assertIn(c, w, 'Did not found expected dataset columns')
+                        self.assertTrue(np.array_equal(v[c], w[c]), f'Column/data "{c:s}" of trace did not match')
 
 
 if __name__ == '__main__':

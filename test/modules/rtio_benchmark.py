@@ -1,5 +1,6 @@
 import unittest
 import typing
+import numpy as np
 
 from dax.experiment import *
 from dax.modules.rtio_benchmark import RtioBenchmarkModule, RtioLoopBenchmarkModule
@@ -54,10 +55,8 @@ class RtioBenchmarkModuleTestCase(dax.sim.test_case.PeekTestCase):
         },
     }
 
-    _SYS_TYPE: type = _TestSystem
-
     def _construct_env(self, **kwargs):
-        return self.construct_env(self._SYS_TYPE, device_db=self._DEVICE_DB, build_kwargs=kwargs)
+        return self.construct_env(_TestSystem, device_db=self._DEVICE_DB, build_kwargs=kwargs)
 
     def test_dax_init(self):
         s = self._construct_env(init_kernel=True)
@@ -104,10 +103,33 @@ class RtioBenchmarkModuleTestCase(dax.sim.test_case.PeekTestCase):
         s.rtio.init(force=True)
         self.expect(s.rtio.ttl_out, 'state', 'x')
         self.expect(s.rtio.ttl_out, 'direction', 1)
+
+    def test_event_throughput(self):
+        s = self._construct_env()
+        s.dax_init()
+
+        with self.assertRaises(RuntimeWarning, msg='Did not raise expected RuntimeWarning in simulation'):
+            s.rtio.benchmark_event_throughput(np.arange(200 * ns, 600 * ns, 10 * ns), 5, 1000, 5)
+
+    def test_dma_throughput(self):
+        s = self._construct_env()
+        s.dax_init()
+
+        with self.assertRaises(RuntimeWarning, msg='Did not raise expected RuntimeWarning in simulation'):
+            s.rtio.benchmark_dma_throughput(np.arange(200 * us, 600 * us, 10 * us), 5, 1000, 5)
+
+    def test_latency_core_rtio(self):
+        s = self._construct_env()
+        s.dax_init()
+
+        with self.assertRaises(RuntimeWarning, msg='Did not raise expected RuntimeWarning in simulation'):
+            s.rtio.benchmark_latency_core_rtio(1 * ms, 100 * ms, 1 * ms, 5, 5)
 
 
 class RtioLoopBenchmarkModuleTestCase(RtioBenchmarkModuleTestCase):
-    _SYS_TYPE = _LoopTestSystem
+
+    def _construct_env(self, **kwargs):
+        return self.construct_env(_LoopTestSystem, device_db=self._DEVICE_DB, build_kwargs=kwargs)
 
     def test_dax_init(self):
         s = self._construct_env(init_kernel=True)
@@ -190,6 +212,34 @@ class RtioLoopBenchmarkModuleTestCase(RtioBenchmarkModuleTestCase):
         self.expect(s.rtio.ttl_in, 'state', 'z')
         self.expect(s.rtio.ttl_in, 'sensitivity', 0)
         self.expect(s.rtio.ttl_in, 'direction', 0)
+
+    def test_loop_connection(self):
+        s = self._construct_env()
+        self.assertFalse(s.rtio.test_loop_connection())
+
+    def test_input_buffer_size(self):
+        s = self._construct_env()
+        s.dax_init()
+
+        with self.assertRaises(RuntimeError,
+                               msg='Did not raise expected RuntimeError in simulation (loop not connected)'):
+            s.rtio.benchmark_input_buffer_size(1, 2048)
+
+    def test_latency_rtio_core(self):
+        s = self._construct_env()
+        s.dax_init()
+
+        with self.assertRaises(RuntimeError,
+                               msg='Did not raise expected RuntimeError in simulation (loop not connected)'):
+            s.rtio.benchmark_latency_rtio_core(100)
+
+    def test_latency_rtt(self):
+        s = self._construct_env()
+        s.dax_init()
+
+        with self.assertRaises(RuntimeError,
+                               msg='Did not raise expected RuntimeError in simulation (loop not connected)'):
+            s.rtio.benchmark_latency_rtt(1 * ms, 100 * ms, 1 * ms, 5, 5)
 
 
 if __name__ == '__main__':

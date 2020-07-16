@@ -5,10 +5,12 @@ from dax.experiment import *
 from dax.sim import enable_dax_sim
 from dax.util.artiq import get_manager_or_parent
 
+import dax.modules.beam_manager
 import dax.modules.cpld_init
 import dax.modules.led
 import dax.modules.rpc_benchmark
 import dax.modules.rtio_benchmark
+import dax.modules.time_resolved_context
 
 
 class _TestSystem(DaxSystem):
@@ -20,11 +22,13 @@ class BuildModuleTestCase(unittest.TestCase):
     """Test case that builds and initializes modules as a basic test."""
 
     _MODULES = {
+        dax.modules.beam_manager.BeamManager: dict(num_beams=2),
         dax.modules.cpld_init.CpldInitModule: {},
         dax.modules.led.LedModule: {},
         dax.modules.rpc_benchmark.RpcBenchmarkModule: {},
         dax.modules.rtio_benchmark.RtioBenchmarkModule: dict(ttl_out='ttl0'),
         dax.modules.rtio_benchmark.RtioLoopBenchmarkModule: dict(ttl_out='ttl0', ttl_in='ttl1'),
+        dax.modules.time_resolved_context.TimeResolvedContext: {},
     }
     """List of module types and kwargs."""
 

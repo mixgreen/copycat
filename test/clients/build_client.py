@@ -79,10 +79,11 @@ class BuildClientTestCase(unittest.TestCase):
                 manager = get_manager_or_parent(
                     enable_dax_sim(ddb=_device_db, enable=True, logging_level=30, output='null', moninj_service=False))
                 client = _InstantiatedClient(manager)
-                self.assertIsInstance(client, _InstantiatedClient)
+                self.assertIsInstance(client, DaxClient)
                 # Get system
                 system = client.registry.find_module(DaxSystem)
                 self.assertIsInstance(system, _TestSystem)
+                # Initialize system
                 self.assertIsNone(system.dax_init())
 
 

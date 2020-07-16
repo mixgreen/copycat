@@ -11,12 +11,14 @@ from dax.sim.signal import get_signal_manager
 
 
 class _DMARecordContext:
+    """DMA recording class, which is used as a context handler."""
 
-    def __init__(self, core: typing.Any, name: str, epoch: int, record_signal: typing.Any):
+    def __init__(self, core: typing.Any, name: str, record_signal: typing.Any):
+        assert isinstance(name, str)
+
         # Store attributes
         self._core: typing.Any = core
         self._name: str = name
-        self._epoch: int = epoch
 
         # Signals
         self._signal_manager = get_signal_manager()
@@ -32,10 +34,6 @@ class _DMARecordContext:
     @property
     def name(self) -> str:
         return self._name
-
-    @property
-    def epoch(self) -> int:
-        return self._epoch
 
     @property
     def duration(self) -> np.int64:
@@ -54,6 +52,26 @@ class _DMARecordContext:
         self._duration = now_mu() - self.duration
         # Reset record signal
         self._signal_manager.event(self._record_signal, None)  # Shows up as Z in the graphical interface
+
+
+class _DMAHandle:
+    """DMA handle class."""
+
+    def __init__(self, dma_recording: _DMARecordContext, epoch: int):
+        assert isinstance(dma_recording, _DMARecordContext)
+        assert isinstance(epoch, int) and epoch > 0
+
+        # Store attributes
+        self._recording: _DMARecordContext = dma_recording
+        self._epoch: int = epoch
+
+    @property
+    def recording(self) -> _DMARecordContext:
+        return self._recording
+
+    @property
+    def epoch(self) -> int:
+        return self._epoch
 
 
 class CoreDMA(DaxSimDevice):
@@ -81,7 +99,7 @@ class CoreDMA(DaxSimDevice):
         self._epoch += 1
 
         # Create and store new DMA trace
-        recorder = _DMARecordContext(self.core, name, self._epoch, self._dma_record)
+        recorder = _DMARecordContext(self.core, name, self._dma_record)
         self._dma_traces[name] = recorder
 
         # Return the record context
@@ -106,34 +124,40 @@ class CoreDMA(DaxSimDevice):
         if name not in self._dma_traces:
             raise KeyError(f'DMA trace "{name:s}" does not exist, can not be played')
 
-        # Playback DMA trace
-        self.playback_handle(self._dma_traces[name])
+        # Playback recording
+        self._playback_recording(self._dma_traces[name])
 
     @kernel
-    def get_handle(self, name: str) -> _DMARecordContext:
+    def get_handle(self, name: str) -> _DMAHandle:
         assert isinstance(name, str), 'DMA trace name must be of type str'
 
         if name not in self._dma_traces:
             raise KeyError(f'DMA trace "{name:s}" does not exist, can not obtain handle')
 
         # Return the record context as the handle
-        return self._dma_traces[name]
+        return _DMAHandle(self._dma_traces[name], self._epoch)
 
     @kernel
-    def playback_handle(self, handle: _DMARecordContext) -> None:
-        assert isinstance(handle, _DMARecordContext), 'DMA handle has an incorrect type'
+    def playback_handle(self, handle: _DMAHandle) -> None:
+        assert isinstance(handle, _DMAHandle), 'DMA handle has an incorrect type'
 
         # Verify handle
         if self._epoch != handle.epoch:
             # An epoch mismatch occurs when adding or erasing a DMA trace after obtaining the handle
-            raise DMAError(f'Invalid DMA handle "{handle.name:s}", epoch mismatch')
+            raise DMAError(f'Invalid DMA handle for recording "{handle.recording.name:s}", epoch mismatch')
+
+        # Playback recording
+        self._playback_recording(handle.recording)
+
+    def _playback_recording(self, recording: _DMARecordContext) -> None:
+        assert isinstance(recording, _DMARecordContext), 'DMA recording has an incorrect type'
 
         # Place events for DMA playback
         self._signal_manager.event(self._dma_play, True)  # Represents the event of playing a trace
-        self._signal_manager.event(self._dma_play_name, handle.name)  # Represents the duration of the event
+        self._signal_manager.event(self._dma_play_name, recording.name)  # Represents the duration of the event
 
         # Forward time by the duration of the DMA trace
-        delay_mu(handle.duration)
+        delay_mu(recording.duration)
 
         # Record ending of DMA trace (shows up as Z in the graphical interface)
         self._signal_manager.event(self._dma_play_name, None)
