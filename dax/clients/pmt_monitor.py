@@ -28,7 +28,7 @@ class PmtMonitor(DaxClient, EnvExperiment):
         # Obtain the PMT array
         self.pmt_array = self.detection.get_pmt_array()
         self.update_kernel_invariants('detection', 'pmt_array')
-        self.logger.debug('Found PMT array with {:d} channel(s)'.format(len(self.pmt_array)))
+        self.logger.debug(f'Found PMT array with {len(self.pmt_array)} channel(s)')
 
         # Get the scheduler and CCB tool
         self.scheduler = self.get_device('scheduler')
@@ -75,7 +75,7 @@ class PmtMonitor(DaxClient, EnvExperiment):
         if self.sliding_window > 0 and self.detection_window > 0.0:
             # Convert window size to dataset size
             self.sliding_window = int(self.sliding_window / self.detection_window)
-            self.logger.debug('Window size set to {:d}'.format(self.sliding_window))
+            self.logger.debug(f'Window size set to {self.sliding_window}')
 
         # Convert count scale
         self.count_scale = self.COUNT_SCALES[self.count_scale_label]
@@ -92,7 +92,7 @@ class PmtMonitor(DaxClient, EnvExperiment):
 
         if self.create_applet:
             # Use the CCB to create an applet
-            y_label = 'Counts per second ({:s})'.format(self.count_scale_label)
+            y_label = f'Counts per second ({self.count_scale_label})'
             self.ccb.plot_xy(self.APPLET_NAME, self.dataset_key, group=self.APPLET_GROUP,
                              sliding_window=self.sliding_window,
                              x_label='Sample', y_label=y_label, update_delay=self.applet_update_delay)

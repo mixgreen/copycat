@@ -3,7 +3,7 @@ import typing
 import itertools
 import re
 import numpy as np
-from collections import OrderedDict
+import collections
 
 from artiq.experiment import *
 
@@ -22,7 +22,7 @@ def _is_valid_key(key: str) -> bool:
     return bool(_KEY_RE.fullmatch(key))
 
 
-class ScanProductGenerator:
+class _ScanProductGenerator:
     """Generator class for a cartesian product of scans.
 
     This class is inspired by the ARTIQ MultiScanManager class.
@@ -35,13 +35,13 @@ class ScanProductGenerator:
 
         def __repr__(self) -> str:
             """Return a string representation of this object."""
-            attributes: str = ', '.join(f'{k:s}={getattr(self, k)}' for k in self.kernel_invariants)
+            attributes: str = ', '.join(f'{k}={getattr(self, k)}' for k in self.kernel_invariants)
             return f'{self.__class__.__name__}: {attributes}'
 
     class ScanPoint(_ScanItem):
         def __init__(self, **kwargs: typing.Any):
             # Call super
-            super(ScanProductGenerator.ScanPoint, self).__init__(**kwargs)
+            super(_ScanProductGenerator.ScanPoint, self).__init__(**kwargs)
             # Set the attributes of this object
             for k, v in kwargs.items():
                 setattr(self, k, v)
@@ -49,7 +49,7 @@ class ScanProductGenerator:
     class ScanIndex(_ScanItem):
         def __init__(self, **kwargs: int):
             # Call super
-            super(ScanProductGenerator.ScanIndex, self).__init__(**kwargs)
+            super(_ScanProductGenerator.ScanIndex, self).__init__(**kwargs)
             # Set the attributes of this object
             for k, v in kwargs.items():
                 setattr(self, k, np.int32(v))
@@ -152,9 +152,13 @@ class DaxScan(dax.base.dax.DaxBase, abc.ABC):
     ENABLE_INDEX: bool = True
     """Flag to enable the index argument in the run_point() function."""
 
-    SCAN_KEY_FORMAT: str = 'scan/{key:s}'
+    SCAN_GROUP: str = 'scan'
+    """The group name for archiving data."""
+    SCAN_KEY_FORMAT: str = SCAN_GROUP + '/{key}'
     """Dataset key format for archiving independent scans."""
-    SCAN_PRODUCT_KEY_FORMAT: str = 'scan/product/{key:s}'
+    SCAN_PRODUCT_GROUP: str = 'product'
+    """The sub-group name for archiving product data."""
+    SCAN_PRODUCT_KEY_FORMAT: str = f'{SCAN_GROUP}/{SCAN_PRODUCT_GROUP}/{{key}}'
     """Dataset key format for archiving scan products."""
 
     def build(self, *args: typing.Any, **kwargs: typing.Any) -> None:
@@ -177,7 +181,7 @@ class DaxScan(dax.base.dax.DaxBase, abc.ABC):
         super(DaxScan, self).build(*args, **kwargs)
 
         # Collection of scannables
-        self._dax_scan_scannables: OrderedDict[str, typing.Iterable[typing.Any]] = OrderedDict()
+        self._dax_scan_scannables: collections.OrderedDict[str, typing.Iterable[typing.Any]] = collections.OrderedDict()
 
         # The scheduler object
         self._dax_scan_scheduler: typing.Any = self.get_device('scheduler')
@@ -253,9 +257,9 @@ class DaxScan(dax.base.dax.DaxBase, abc.ABC):
 
         # Verify the key is valid and not in use
         if not _is_valid_key(key):
-            raise ValueError(f'Provided key "{key:s}" is not valid')
+            raise ValueError(f'Provided key "{key}" is not valid')
         if key in self._dax_scan_scannables:
-            raise LookupError(f'Provided key "{key:s}" was already in use')
+            raise LookupError(f'Provided key "{key}" was already in use')
 
         # Add argument to the list of scannables
         self._dax_scan_scannables[key] = self.get_argument(name, scannable, group=group, tooltip=tooltip)
@@ -331,13 +335,13 @@ class DaxScan(dax.base.dax.DaxBase, abc.ABC):
         # Make the scan elements
         if self._dax_scan_scannables:
             self._dax_scan_elements: typing.List[typing.Any] = list(
-                ScanProductGenerator(*self._dax_scan_scannables.items(),  # type: ignore[arg-type]
-                                     enable_index=self.ENABLE_INDEX))
+                _ScanProductGenerator(*self._dax_scan_scannables.items(),  # type: ignore[arg-type]
+                                      enable_index=self.ENABLE_INDEX))
         else:
             self._dax_scan_elements = []
         self.update_kernel_invariants('_dax_scan_elements')
-        self.logger.debug('Prepared {:d} scan point(s) with {:d} scan parameter(s)'.
-                          format(len(self._dax_scan_elements), len(self._dax_scan_scannables)))
+        self.logger.debug(f'Prepared {len(self._dax_scan_elements)} scan point(s) '
+                          f'with {len(self._dax_scan_scannables)} scan parameter(s)')
 
         if not self._dax_scan_elements:
             # There are no scan points

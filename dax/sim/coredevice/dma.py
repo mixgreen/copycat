@@ -110,7 +110,7 @@ class CoreDMA(DaxSimDevice):
         assert isinstance(name, str), 'DMA trace name must be of type str'
 
         if name not in self._dma_traces:
-            raise KeyError(f'DMA trace "{name:s}" does not exist, can not be erased')
+            raise KeyError(f'DMA trace "{name}" does not exist, can not be erased')
         self._dma_traces.pop(name)
 
         # Increment epoch
@@ -122,7 +122,7 @@ class CoreDMA(DaxSimDevice):
 
         # Get handle
         if name not in self._dma_traces:
-            raise KeyError(f'DMA trace "{name:s}" does not exist, can not be played')
+            raise KeyError(f'DMA trace "{name}" does not exist, can not be played')
 
         # Playback recording
         self._playback_recording(self._dma_traces[name])
@@ -132,7 +132,7 @@ class CoreDMA(DaxSimDevice):
         assert isinstance(name, str), 'DMA trace name must be of type str'
 
         if name not in self._dma_traces:
-            raise KeyError(f'DMA trace "{name:s}" does not exist, can not obtain handle')
+            raise KeyError(f'DMA trace "{name}" does not exist, can not obtain handle')
 
         # Return the record context as the handle
         return _DMAHandle(self._dma_traces[name], self._epoch)
@@ -144,7 +144,7 @@ class CoreDMA(DaxSimDevice):
         # Verify handle
         if self._epoch != handle.epoch:
             # An epoch mismatch occurs when adding or erasing a DMA trace after obtaining the handle
-            raise DMAError(f'Invalid DMA handle for recording "{handle.recording.name:s}", epoch mismatch')
+            raise DMAError(f'Invalid DMA handle for recording "{handle.recording.name}", epoch mismatch')
 
         # Playback recording
         self._playback_recording(handle.recording)

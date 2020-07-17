@@ -48,7 +48,7 @@ def get_base_path(scheduler: typing.Any) -> pathlib.Path:
         class_name = str(None)
 
     # Make absolute base path
-    base_path = pathlib.Path(os.path.abspath(f'{rid:09d}-{class_name:s}'))
+    base_path = pathlib.Path(os.path.abspath(f'{rid:09d}-{class_name}'))
     # Ensure directory exists
     base_path.mkdir(parents=True, exist_ok=True)
 

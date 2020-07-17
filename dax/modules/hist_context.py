@@ -30,27 +30,27 @@ class HistogramContext(DaxModule):
     "input parameters".
     """
 
-    HISTOGRAM_PLOT_KEY_FORMAT: str = 'plot.{base:s}.histogram_context.histogram'
+    HISTOGRAM_PLOT_KEY_FORMAT: str = 'plot.{base}.histogram_context.histogram'
     """Dataset name for plotting latest histogram."""
     HISTOGRAM_PLOT_NAME: str = 'histogram'
     """Name of the histogram plot applet."""
 
-    PROBABILITY_PLOT_KEY_FORMAT: str = 'plot.{base:s}.histogram_context.probability'
+    PROBABILITY_PLOT_KEY_FORMAT: str = 'plot.{base}.histogram_context.probability'
     """Dataset name for plotting latest probability graph."""
     PROBABILITY_PLOT_NAME: str = 'probability'
     """Name of the probability plot applet."""
 
-    MEAN_COUNT_PLOT_KEY_FORMAT: str = 'plot.{base:s}.histogram_context.mean_count'
+    MEAN_COUNT_PLOT_KEY_FORMAT: str = 'plot.{base}.histogram_context.mean_count'
     """Dataset name for plotting latest mean count graph."""
     MEAN_COUNT_PLOT_NAME: str = 'mean count'
     """Name of the probability plot applet."""
 
-    PLOT_GROUP_FORMAT: str = '{base:s}.histogram_context'
+    PLOT_GROUP_FORMAT: str = '{base}.histogram_context'
     """Group to which the plot applets belong."""
 
     DATASET_GROUP: str = 'histogram_context'
     """The group name for archiving data."""
-    DATASET_KEY_FORMAT: str = DATASET_GROUP + '/{dataset_key:s}/{index:d}'
+    DATASET_KEY_FORMAT: str = DATASET_GROUP + '/{dataset_key}/{index}'
     """Format string for sub-dataset keys."""
     DEFAULT_DATASET_KEY: str = 'histogram'
     """The default name of the output sub-dataset."""
@@ -86,8 +86,8 @@ class HistogramContext(DaxModule):
         # The count buffer (buffer appending is a bit faster than dict operations)
         self._buffer: typing.List[typing.Sequence[int]] = []
 
-        # Archive to analyze high level data at the end of the experiment
-        self._histogram_archive: typing.Dict[str, typing.List[typing.Sequence[collections.Counter]]] = {}
+        # Cache for processed data
+        self._cache: typing.Dict[str, typing.List[typing.Sequence[collections.Counter]]] = {}
 
         # Target dataset key
         self._dataset_key: str = self._default_dataset_key
@@ -232,8 +232,8 @@ class HistogramContext(DaxModule):
 
             # Transform buffer data to pack counts per ion and convert into histograms
             histograms: typing.List[typing.Counter[int]] = [collections.Counter(c) for c in zip(*self._buffer)]
-            # Store histograms in the archive
-            self._histogram_archive.setdefault(self._dataset_key, []).append(histograms)
+            # Store histograms in the cache
+            self._cache.setdefault(self._dataset_key, []).append(histograms)
 
             # Obtain maximum count over all histograms (HDF5 only supports fixed size arrays)
             max_count: int = max(max(h) for h in histograms)
@@ -256,8 +256,8 @@ class HistogramContext(DaxModule):
             self.append_to_dataset(self._mean_count_plot_key, mean_counts)
 
         else:
-            # Add empty element to the archive (keeps indexing consistent)
-            self._histogram_archive.setdefault(self._dataset_key, []).append([])
+            # Add empty element to the cache (keeps indexing consistent)
+            self._cache.setdefault(self._dataset_key, []).append([])
             # Write empty element to sub-dataset for archiving (keeps indexing consistent)
             self.set_dataset(sub_dataset_key, [], archive=True)
 
@@ -364,7 +364,7 @@ class HistogramContext(DaxModule):
 
         :return: A list with keys
         """
-        return list(self._histogram_archive)
+        return list(self._cache)
 
     @host_only
     def get_histograms(self, dataset_key: typing.Optional[str] = None) \
@@ -379,7 +379,7 @@ class HistogramContext(DaxModule):
         :param dataset_key: Key of the dataset to obtain the histograms of
         :return: All histogram data for the specified key
         """
-        return list(zip(*self._histogram_archive[self._default_dataset_key if dataset_key is None else dataset_key]))
+        return list(zip(*self._cache[self._default_dataset_key if dataset_key is None else dataset_key]))
 
     @host_only
     def get_probabilities(self, dataset_key: typing.Optional[str] = None,
@@ -427,9 +427,9 @@ class HistogramAnalyzer:
     stored as a Counter object to an array representation and vice versa.
     """
 
-    HISTOGRAM_PLOT_FILE_FORMAT: str = '{key:s}_{index:d}'
+    HISTOGRAM_PLOT_FILE_FORMAT: str = '{key}_{index}'
     """File name format for histogram plot files."""
-    PROBABILITY_PLOT_FILE_FORMAT: str = '{key:s}_probability'
+    PROBABILITY_PLOT_FILE_FORMAT: str = '{key}_probability'
     """File name format for probability plot files."""
 
     def __init__(self, source: typing.Union[DaxSystem, HistogramContext, str, h5py.File],
@@ -580,7 +580,7 @@ class HistogramAnalyzer:
             y_values = [[c[x] for x in x_values] for c in h]
 
             # Current labels
-            current_labels = [f'Plot {i:d}' for i in range(len(y_values))] if labels is None else labels
+            current_labels = [f'Plot {i}' for i in range(len(y_values))] if labels is None else labels
             if len(current_labels) < len(y_values):
                 # Not enough labels
                 raise IndexError('Number of labels is less than the number of plots')
@@ -659,7 +659,7 @@ class HistogramAnalyzer:
             probabilities = [p[ind] for p in probabilities]
 
         # Current labels
-        current_labels = [f'Plot {i:d}' for i in range(len(probabilities))] if labels is None else labels
+        current_labels = [f'Plot {i}' for i in range(len(probabilities))] if labels is None else labels
         if len(current_labels) < len(probabilities):
             # Not enough labels
             raise IndexError('Number of labels is less than the number of plots')

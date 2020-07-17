@@ -106,7 +106,7 @@ class PeekTestCase(unittest.TestCase):
         """
         # Peek the value using the signal manager
         value = self.__signal_manager.peek(scope, signal)
-        _logger.info(f'PEEK {scope}.{signal:s} -> {value}')
+        _logger.info(f'PEEK {scope}.{signal} -> {value}')
 
         # Return the value
         return value
@@ -123,11 +123,11 @@ class PeekTestCase(unittest.TestCase):
         """
         # Get the value and the type
         peek, type_ = self.__signal_manager.peek_and_type(typing.cast(DaxSimDevice, scope), signal)
-        _logger.info(f'EXPECT {scope}.{signal:s} -> {value} == {peek}')
+        _logger.info(f'EXPECT {scope}.{signal} -> {value} == {peek}')
 
         if type_ not in {bool, int, float}:
             # Raise if the signal has an unsupported
-            raise TypeError(f'Signal "{scope.key:s}.{signal:s}" of type "{type_}" can not be tested')
+            raise TypeError(f'Signal "{scope.key}.{signal}" of type "{type_}" can not be tested')
 
         # Match with special values
         if any(value in s and peek in s for s in [{'x', 'X', SignalNotSet}, {'z', 'Z'}]):  # type: ignore
@@ -135,7 +135,7 @@ class PeekTestCase(unittest.TestCase):
 
         if msg is None:
             # Set default error message
-            msg = f'at {now_mu():d} mu'
+            msg = f'at {now_mu()} mu'
 
         # Assert if values are not equal
         self.assertEqual(value, peek, msg=msg)

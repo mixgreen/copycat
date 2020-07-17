@@ -50,11 +50,11 @@ class GraphvizBase(graphviz.Digraph):
 
         # Add module to the graph
         graph.node(module.get_system_key(), label=module.get_name(), **self.MODULE_NODE_ATTR)
-        _logger.debug(f'Added module "{module.get_system_key():s}"')
+        _logger.debug(f'Added module "{module.get_system_key()}"')
 
         # Inspect children of this module for modules
         child_modules = {child for child in module.children if isinstance(child, dax.base.dax.DaxModuleBase)}
-        _logger.debug(f'Found {len(child_modules):d} child module(s)')
+        _logger.debug(f'Found {len(child_modules)} child module(s)')
 
         for child in child_modules:
             # Recursive call
@@ -71,8 +71,8 @@ class GraphvizBase(graphviz.Digraph):
         # Check if there are any unexpected attributes
         unexpected_modules = attr_modules - child_modules
         if unexpected_modules:
-            _logger.warning(f'Found {len(unexpected_modules):d} unexpected module(s) '
-                            f'in module "{module.get_system_key():s}"')
+            _logger.warning(f'Found {len(unexpected_modules)} unexpected module(s) '
+                            f'in module "{module.get_system_key()}"')
 
         if to_module_edges:
             for m in unexpected_modules:
@@ -96,12 +96,12 @@ class GraphvizBase(graphviz.Digraph):
         for s in services:
             # Add service to the graph
             graph.node(s.get_system_key(), label=s.get_name(), **self.SERVICE_NODE_ATTR)
-            _logger.debug(f'Added service "{s.get_system_key():s}"')
+            _logger.debug(f'Added service "{s.get_system_key()}"')
 
             if to_service_edges:
                 # Inspect attributes of this service for services
                 attr_services = [attr for attr in _get_attributes(s) if isinstance(attr, dax.base.dax.DaxService)]
-                _logger.debug(f'Found {len(attr_services):d} edge(s) to other services')
+                _logger.debug(f'Found {len(attr_services)} edge(s) to other services')
 
                 for attr in attr_services:
                     # Add edge to other service
@@ -120,7 +120,7 @@ class GraphvizBase(graphviz.Digraph):
         for s in services:
             # Inspect children of this service for modules
             child_modules = [child for child in s.children if isinstance(child, dax.base.dax.DaxModuleBase)]
-            _logger.debug(f'Found {len(child_modules):d} child module(s) for service "{s.get_system_key():s}"')
+            _logger.debug(f'Found {len(child_modules)} child module(s) for service "{s.get_system_key()}"')
 
             for child in child_modules:
                 # Add modules
@@ -146,7 +146,7 @@ class GraphvizBase(graphviz.Digraph):
 
             # Obtain difference
             modules = attr_modules - child_modules
-            _logger.debug(f'Found {len(modules):d} edge(s) to other modules for service "{s.get_system_key():s}"')
+            _logger.debug(f'Found {len(modules)} edge(s) to other modules for service "{s.get_system_key()}"')
 
             for module in modules:
                 # Add edge to connect service to module
@@ -167,7 +167,7 @@ class GraphvizBase(graphviz.Digraph):
         if not isinstance(module, dax.base.dax.DaxSystem):
             # Inspect attributes of this module for services
             attr_services = [attr for attr in _get_attributes(module) if isinstance(attr, dax.base.dax.DaxService)]
-            _logger.debug(f'Found {len(attr_services):d} edge(s) to services for module "{module.get_system_key():s}"')
+            _logger.debug(f'Found {len(attr_services)} edge(s) to services for module "{module.get_system_key()}"')
 
             for attr in attr_services:
                 # Add edge

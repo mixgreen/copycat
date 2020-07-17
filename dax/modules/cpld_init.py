@@ -36,7 +36,7 @@ class CpldInitModule(DaxModule):
         # Store attributes
         self._interval: float = interval
         self.update_kernel_invariants('_interval')
-        self.logger.debug(f'Interval set to {dax.util.units.time_to_str(self._interval):s}')
+        self.logger.debug(f'Interval set to {dax.util.units.time_to_str(self._interval)}')
         self._init_kernel: bool = init_kernel
         self.logger.debug(f'Init kernel: {self._init_kernel}')
 
@@ -47,7 +47,7 @@ class CpldInitModule(DaxModule):
             if devices:
                 # Warn the user that devices using CPLD already have been registered
                 self.logger.warning(f'The following devices that use CPLD have already been registered '
-                                    f'before this module was created: {", ".join(devices):s}')
+                                    f'before this module was created: {", ".join(devices)}')
 
         # List of CPLD device keys
         cpld_device_keys = [k for k, v in self.get_device_db().items()
@@ -56,7 +56,7 @@ class CpldInitModule(DaxModule):
         # CPLD array
         self.cpld = [self.get_device(key, artiq.coredevice.urukul.CPLD) for key in cpld_device_keys]
         self.update_kernel_invariants('cpld')
-        self.logger.debug(f'Number of CPLD devices: {len(self.cpld):d}')
+        self.logger.debug(f'Number of CPLD devices: {len(self.cpld)}')
 
         if not self.cpld:
             # Disable CPLD initialization kernel if there are no devices

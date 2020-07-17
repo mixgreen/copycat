@@ -175,7 +175,7 @@ def _mutate_ddb_entry(key: str, value: typing.Any, coredevice_packages: typing.L
         # Get the type entry of this value
         type_ = value.get('type')
         if not isinstance(type_, str):
-            raise TypeError(f'The type key of local device "{key:s}" must be of type str')
+            raise TypeError(f'The type key of local device "{key}" must be of type str')
 
         # Mutate entry
         if type_ == 'local':
@@ -183,7 +183,7 @@ def _mutate_ddb_entry(key: str, value: typing.Any, coredevice_packages: typing.L
         elif type_ == 'controller':
             _mutate_controller(key, value)
         else:
-            _logger.debug(f'Skipped entry "{key:s}"')
+            _logger.debug(f'Skipped entry "{key}"')
     else:
         # Value is not a dict, it can be ignored
         pass
@@ -201,17 +201,17 @@ def _mutate_local(key: str, value: typing.Dict[str, typing.Any], coredevice_pack
     # Add key of the device to the device arguments
     arguments = value.setdefault('arguments', {})
     if not isinstance(arguments, dict):
-        raise TypeError(f'The arguments key of local device "{key:s}" must be of type dict')
+        raise TypeError(f'The arguments key of local device "{key}" must be of type dict')
     arguments.update(_key=key)
 
     # Add simulation arguments to normal arguments
     sim_args = value.setdefault('sim_args', {})
     if not isinstance(sim_args, dict):
-        raise TypeError(f'The sim_args key of local device "{key:s}" must be of type dict')
+        raise TypeError(f'The sim_args key of local device "{key}" must be of type dict')
     arguments.update(sim_args)
 
     # Debug message
-    _logger.debug(f'Converted local device "{key:s}" to class "{value["module"]:s}.{value["class"]:s}"')
+    _logger.debug(f'Converted local device "{key}" to class "{value["module"]}.{value["class"]}"')
 
 
 def _update_module(key: str, value: typing.Dict[str, typing.Any], coredevice_packages: typing.List[str]) -> None:
@@ -220,7 +220,7 @@ def _update_module(key: str, value: typing.Dict[str, typing.Any], coredevice_pac
     # Get the module of the device
     module = value.get('module')
     if not isinstance(module, str):
-        raise TypeError(f'The module key of local device "{key:s}" must be of type str')
+        raise TypeError(f'The module key of local device "{key}" must be of type str')
 
     # Keep the tail of the module
     tail = module.rsplit('.', maxsplit=1)[-1]
@@ -241,7 +241,7 @@ def _update_module(key: str, value: typing.Dict[str, typing.Any], coredevice_pac
             # Get the class of the device
             class_ = value.get('class')
             if not isinstance(class_, str):
-                raise TypeError(f'The class key of local device "{key:s}" must be of type str')
+                raise TypeError(f'The class key of local device "{key}" must be of type str')
 
             if hasattr(m, class_):
                 # Both module and class were found, update module and return
@@ -263,19 +263,19 @@ def _mutate_controller(key: str, value: typing.Dict[str, typing.Any]) -> None:
 
     if command is None:
         # No command was set
-        _logger.debug(f'No command found for controller "{key:s}"')
+        _logger.debug(f'No command found for controller "{key}"')
     elif isinstance(command, str):
         # Check if the controller was already set to simulation mode
         if _SIMULATION_ARG not in command:
             # Simulation argument not found, append it
-            _logger.debug(f'Added simulation argument to command for controller "{key:s}"')
+            _logger.debug(f'Added simulation argument to command for controller "{key}"')
             value['command'] = ' '.join([command, _SIMULATION_ARG])
         else:
             # Debug message
-            _logger.debug(f'Controller "{key:s}" was not modified')
+            _logger.debug(f'Controller "{key}" was not modified')
     else:
         # Command was not of type str
-        raise TypeError(f'The command key of controller "{key:s}" must be of type str')
+        raise TypeError(f'The command key of controller "{key}" must be of type str')
 
 
 def _start_moninj_service() -> None:

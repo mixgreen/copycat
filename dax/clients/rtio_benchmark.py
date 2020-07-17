@@ -47,8 +47,8 @@ class RtioBenchmarkEventThroughput(DaxClient, EnvExperiment):
         # Report result
         last_period = self.rtio_bench.get_dataset_sys(self.rtio_bench.EVENT_PERIOD_KEY)
         throughput = dax.util.units.freq_to_str(1.0 / last_period)
-        period = '{:s} period'.format(dax.util.units.time_to_str(last_period))
-        self.logger.info('RTIO event throughput is {:s} ({:s})'.format(throughput, period))
+        period = f'{dax.util.units.time_to_str(last_period)} period'
+        self.logger.info(f'RTIO event throughput is {throughput} ({period})')
 
 
 @dax_client_factory
@@ -82,7 +82,7 @@ class RtioBenchmarkEventBurst(DaxClient, EnvExperiment):
     def analyze(self):
         # Report result
         last_num_events = self.rtio_bench.get_dataset_sys(self.rtio_bench.EVENT_BURST_KEY)
-        self.logger.info('RTIO event burst size is {:d}'.format(last_num_events))
+        self.logger.info(f'RTIO event burst size is {last_num_events}')
 
 
 @dax_client_factory
@@ -123,8 +123,8 @@ class RtioBenchmarkDmaThroughput(DaxClient, EnvExperiment):
         # Report result
         last_period = self.rtio_bench.get_dataset_sys(self.rtio_bench.DMA_EVENT_PERIOD_KEY)
         throughput = dax.util.units.freq_to_str(1.0 / last_period)
-        period = '{:s} period'.format(dax.util.units.time_to_str(last_period))
-        self.logger.info('RTIO DMA event throughput is {:s} ({:s})'.format(throughput, period))
+        period = f'{dax.util.units.time_to_str(last_period)} period'
+        self.logger.info(f'RTIO DMA event throughput is {throughput} ({period})')
 
 
 @dax_client_factory
@@ -157,7 +157,7 @@ class RtioBenchmarkLatencyCoreRtio(DaxClient, EnvExperiment):
     def analyze(self):
         # Report result
         core_rtio = dax.util.units.time_to_str(self.rtio_bench.get_dataset_sys(self.rtio_bench.LATENCY_CORE_RTIO_KEY))
-        self.logger.info('Core-RTIO latency is {:s}'.format(core_rtio))
+        self.logger.info(f'Core-RTIO latency is {core_rtio}')
 
 
 @dax_client_factory
@@ -186,7 +186,7 @@ class RtioBenchmarkInputBufferSize(DaxClient, EnvExperiment):
     def analyze(self):
         # Report result
         input_buffer_size = self.rtio_bench.get_dataset_sys(self.rtio_bench.INPUT_BUFFER_SIZE_KEY)
-        self.logger.info('RTIO input buffer size is {:d}'.format(input_buffer_size))
+        self.logger.info(f'RTIO input buffer size is {input_buffer_size}')
 
 
 @dax_client_factory
@@ -208,8 +208,8 @@ class RtioBenchmarkLatencyRtioCore(DaxClient, EnvExperiment):
         # Report result
         rtio_rtio = dax.util.units.time_to_str(self.rtio_bench.get_dataset_sys(self.rtio_bench.LATENCY_RTIO_RTIO_KEY))
         rtio_core = dax.util.units.time_to_str(self.rtio_bench.get_dataset_sys(self.rtio_bench.LATENCY_RTIO_CORE_KEY))
-        self.logger.info('RTIO-RTIO latency is {:s}'.format(rtio_rtio))
-        self.logger.info('RTIO-core latency is {:s}'.format(rtio_core))
+        self.logger.info(f'RTIO-RTIO latency is {rtio_rtio}')
+        self.logger.info(f'RTIO-core latency is {rtio_core}')
 
 
 @dax_client_factory
@@ -242,4 +242,4 @@ class RtioBenchmarkLatencyRtt(DaxClient, EnvExperiment):
     def analyze(self):
         # Report result
         rtt = dax.util.units.time_to_str(self.rtio_bench.get_dataset_sys(self.rtio_bench.LATENCY_RTT_KEY))
-        self.logger.info('RTIO RTT is {:s}'.format(rtt))
+        self.logger.info(f'RTIO RTT is {rtt}')

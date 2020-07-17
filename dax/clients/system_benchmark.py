@@ -68,7 +68,7 @@ class SystemBenchmarkDaxInit(DaxClient, EnvExperiment):
     def analyze(self) -> None:
         # Report result
         init_time = dax.util.units.time_to_str(self.system.get_dataset_sys(self.system.DAX_INIT_TIME_KEY))
-        self.logger.info('Average execution time of dax_init() is {:s}'.format(init_time))
+        self.logger.info(f'Average execution time of dax_init() is {init_time}')
 
 
 @dax_client_factory

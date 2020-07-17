@@ -189,13 +189,13 @@ class _MockScan2ValueCheckReordered(_MockScan2):
         point_foo = next(self.scan_foo)
         point_bar = next(self.scan_bar)
         assert point.foo == point_foo, '{} != {}'.format(point.foo, point_foo)
-        assert point.bar == point_bar, '{} != {}'.format(point.bar, point_bar)
+        assert point.bar == point_bar, f'{point.bar} != {point_bar}'
 
         # Check indices
         index_foo = next(self.index_foo)
         index_bar = next(self.index_bar)
-        assert index.foo == index_foo, '{} != {}'.format(index.foo, index_foo)
-        assert index.bar == index_bar, '{} != {}'.format(index.bar, index_bar)
+        assert index.foo == index_foo, f'{index.foo} != {index_foo}'
+        assert index.bar == index_bar, f'{index.bar} != {index_bar}'
 
 
 class Scan1TestCase(unittest.TestCase):

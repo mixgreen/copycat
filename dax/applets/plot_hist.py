@@ -36,7 +36,7 @@ class HistogramPlot(PlotWidget):
         self.clear()
         for i, counts in enumerate(y):
             # Name of the plot
-            name = f'{args.plot_names:s} {i:d}'
+            name = f'{args.plot_names} {i}'
             # Convert dict to plot values and plot
             color = pyqtgraph.intColor(i)
             self.plot(x, counts, stepMode=True, fillLevel=0, brush=color, name=name)

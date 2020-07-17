@@ -39,7 +39,7 @@ class BeamManager(DaxModule):
 
         # Store attributes
         self._num_beams: np.int32 = np.int32(num_beams)
-        self.logger.debug(f'Number of beams: {self._num_beams:d}')
+        self.logger.debug(f'Number of beams: {self._num_beams}')
         self.update_kernel_invariants('_num_beams')
 
         # Mark class constant as kernel invariant

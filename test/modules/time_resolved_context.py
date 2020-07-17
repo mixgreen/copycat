@@ -334,7 +334,7 @@ class TimeResolvedAnalyzerTestCase(unittest.TestCase):
                     for c in TimeResolvedContext.DATASET_COLUMNS:
                         self.assertIn(c, v, 'Did not found expected dataset columns')
                         self.assertIn(c, w, 'Did not found expected dataset columns')
-                        self.assertTrue(np.array_equal(v[c], w[c]), f'Column/data "{c:s}" of trace did not match')
+                        self.assertTrue(np.array_equal(v[c], w[c]), f'Column/data "{c}" of trace did not match')
 
             # Compare to analyzer from object source
             b = TimeResolvedAnalyzer(self.s)
@@ -344,7 +344,7 @@ class TimeResolvedAnalyzerTestCase(unittest.TestCase):
                     for c in TimeResolvedContext.DATASET_COLUMNS:
                         self.assertIn(c, v, 'Did not found expected dataset columns')
                         self.assertIn(c, w, 'Did not found expected dataset columns')
-                        self.assertTrue(np.array_equal(v[c], w[c]), f'Column/data "{c:s}" of trace did not match')
+                        self.assertTrue(np.array_equal(v[c], w[c]), f'Column/data "{c}" of trace did not match')
 
 
 if __name__ == '__main__':

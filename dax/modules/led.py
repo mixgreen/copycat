@@ -29,7 +29,7 @@ class LedModule(DaxModule):
         # LED array
         self.led = [self.get_device(led, artiq.coredevice.ttl.TTLOut) for led in leds]
         self.update_kernel_invariants('led')
-        self.logger.debug(f"Number of LED's: {len(self.led):d}")
+        self.logger.debug(f"Number of LED's: {len(self.led)}")
 
     def init(self, *, force: bool = False) -> None:
         """Initialize this module.

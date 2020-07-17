@@ -27,7 +27,7 @@ class TestCodeStyle(unittest.TestCase):
                 result = style.check_files([dax_dir])
 
             # Format message and assert
-            msg = '\n\nCode style report:\n{:s}'.format(buf.getvalue())
+            msg = f'\n\nCode style report:\n{buf.getvalue()}'
             self.assertEqual(result.total_errors, 0, msg)
 
 

@@ -73,7 +73,7 @@ class RtioBenchmarkModule(DaxModule):
             # Limit event burst size
             self.event_burst_size = np.int32(min(self.event_burst, self._max_burst))  # type: ignore[attr-defined]
             self.update_kernel_invariants('event_burst_size')
-            self.logger.debug(f'Event burst size set to: {self.event_burst_size:d}')
+            self.logger.debug(f'Event burst size set to: {self.event_burst_size}')
 
         if self._init_kernel or force:
             # Call the init kernel function
@@ -336,7 +336,7 @@ class RtioBenchmarkModule(DaxModule):
     @rpc(flags={"async"})
     def _message_current_period(self, current_period):  # type: (float) -> None
         # Message current period
-        self.logger.info(f'Using period {dax.util.units.time_to_str(current_period):s}')
+        self.logger.info(f'Using period {dax.util.units.time_to_str(current_period)}')
 
     @kernel
     def _benchmark_event_burst(self, num_events_min: TInt32, num_events_max: TInt32, num_events_step: TInt32,
@@ -692,7 +692,7 @@ class RtioLoopBenchmarkModule(RtioBenchmarkModule):
 
     def init(self, **kwargs) -> None:
         # Log edge delay setting
-        self.logger.debug(f'Edge delay set to: {dax.util.units.time_to_str(self.EDGE_DELAY):s}')
+        self.logger.debug(f'Edge delay set to: {dax.util.units.time_to_str(self.EDGE_DELAY)}')
 
         # Load parameters
         self.setattr_dataset_sys(self.INPUT_BUFFER_SIZE_KEY)

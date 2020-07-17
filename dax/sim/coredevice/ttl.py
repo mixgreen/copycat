@@ -203,7 +203,7 @@ class TTLInOut(TTLOut):
             return self._sample_buffer.popleft()
         else:
             # Not samples available
-            raise IndexError(f'Device "{self.key:s}" has no sample to return')
+            raise IndexError(f'Device "{self.key}" has no sample to return')
 
     @kernel
     def sample_get_nonrt(self):

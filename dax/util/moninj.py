@@ -56,7 +56,7 @@ class MonInjDummyService:
         self._auto_close: int = auto_close
 
         if self._auto_close:
-            _logger.debug(f'Server is configured to automatically close after {self._auto_close:d} connection(s)')
+            _logger.debug(f'Server is configured to automatically close after {self._auto_close} connection(s)')
 
     def run(self) -> None:
         """Regular method to run the server in an infinite loop.
@@ -77,7 +77,7 @@ class MonInjDummyService:
         :raises MonInjBindError: Raised if the server could not bind
         """
 
-        _logger.info(f'Binding to ({self._host!r}, {self._port:d})')
+        _logger.info(f'Binding to ({self._host!r}, {self._port})')
         try:
             # Start server
             self._server = await asyncio.start_server(self._handler, self._host, self._port)
@@ -126,7 +126,7 @@ class MonInjDummyService:
         elif self._auto_close > 1:
             # Decrement counter
             self._auto_close -= 1
-            _logger.debug(f'Serving {self._auto_close:d} more connection(s) before automatically closing')
+            _logger.debug(f'Serving {self._auto_close} more connection(s) before automatically closing')
 
 
 if __name__ == '__main__':

@@ -23,18 +23,18 @@ class TimeResolvedContext(DaxModule):
     This module can be used as a sub-module of a service.
     """
 
-    PLOT_RESULT_KEY_FORMAT: str = 'plot.{base:s}.time_resolved_context.result'
+    PLOT_RESULT_KEY_FORMAT: str = 'plot.{base}.time_resolved_context.result'
     """Dataset name for plotting latest result graph (Y-axis)."""
-    PLOT_TIME_KEY_FORMAT: str = 'plot.{base:s}.time_resolved_context.time'
+    PLOT_TIME_KEY_FORMAT: str = 'plot.{base}.time_resolved_context.time'
     """Dataset name for plotting latest result graph (X-axis)."""
     PLOT_NAME: str = 'time resolved detection'
     """Name of the plot applet."""
-    PLOT_GROUP_FORMAT: str = '{base:s}.time_resolved_context'
+    PLOT_GROUP_FORMAT: str = '{base}.time_resolved_context'
     """Group to which the plot applets belong."""
 
     DATASET_GROUP: str = 'time_resolved_context'
     """The group name for archiving data."""
-    DATASET_KEY_FORMAT: str = DATASET_GROUP + '/{dataset_key:s}/{index:d}/{column:s}'
+    DATASET_KEY_FORMAT: str = DATASET_GROUP + '/{dataset_key}/{index}/{column}'
     """Format string for sub-dataset keys."""
     DEFAULT_DATASET_KEY: str = 'time_resolved'
     """The default name of the output dataset in archive."""
@@ -73,8 +73,8 @@ class TimeResolvedContext(DaxModule):
         self._buffer_data: typing.List[typing.Tuple[typing.Sequence[typing.Sequence[int]], float]] = []
         self._buffer_meta: typing.List[typing.Tuple[float, float, float]] = []
 
-        # Archive to analyze high level data at the end of the experiment
-        self._archive: typing.Dict[str, typing.List[typing.Dict[str, typing.Sequence[float]]]] = {}
+        # Cache for processed data
+        self._cache: typing.Dict[str, typing.List[typing.Dict[str, typing.Sequence[float]]]] = {}
 
         # Target dataset key
         self._dataset_key: str = self._default_dataset_key
@@ -378,8 +378,8 @@ class TimeResolvedContext(DaxModule):
             # Format results in a dict for easier access
             result_dict = {'result': result, 'time': time, 'width': width}
 
-            # Store results in the local archive
-            self._archive.setdefault(self._dataset_key, []).append(result_dict)
+            # Store results in the cache
+            self._cache.setdefault(self._dataset_key, []).append(result_dict)
 
             # Write results to sub-dataset for archiving
             for column in self.DATASET_COLUMNS:
@@ -389,8 +389,8 @@ class TimeResolvedContext(DaxModule):
             self.set_dataset(self._plot_result_key, np.column_stack(result), broadcast=True, archive=False)
 
         else:
-            # Add empty element to the archive (keeps indexing consistent)
-            self._archive.setdefault(self._dataset_key, []).append({c: [] for c in self.DATASET_COLUMNS})
+            # Add empty element to the cache (keeps indexing consistent)
+            self._cache.setdefault(self._dataset_key, []).append({c: [] for c in self.DATASET_COLUMNS})
             # Write empty element to sub-dataset for archiving (keeps indexing consistent)
             for column in self.DATASET_COLUMNS:
                 self.set_dataset(sub_dataset_keys[column], [], archive=True)
@@ -436,7 +436,7 @@ class TimeResolvedContext(DaxModule):
 
         :return: A list with keys
         """
-        return list(self._archive)
+        return list(self._cache)
 
     @host_only
     def get_traces(self, dataset_key: typing.Optional[str] = None) \
@@ -453,7 +453,7 @@ class TimeResolvedContext(DaxModule):
         :param dataset_key: Key of the dataset to obtain the trace of
         :return: All trace data for the specified key
         """
-        return self._archive[self._default_dataset_key if dataset_key is None else dataset_key]
+        return self._cache[self._default_dataset_key if dataset_key is None else dataset_key]
 
 
 class TimeResolvedAnalyzer:
@@ -471,7 +471,7 @@ class TimeResolvedAnalyzer:
     and the second dimension are the values.
     """
 
-    PLOT_FILE_FORMAT: str = '{key:s}_{index:d}'
+    PLOT_FILE_FORMAT: str = '{key}_{index}'
     """File name format for plot files."""
 
     def __init__(self, source: typing.Union[DaxSystem, TimeResolvedContext, str, h5py.File]):
@@ -557,7 +557,7 @@ class TimeResolvedAnalyzer:
             x_values = time + width / 2  # Points are plotted in the middle of the bin
 
             # Current labels
-            current_labels = [f'Plot {i:d}' for i in range(len(results))] if labels is None else labels
+            current_labels = [f'Plot {i}' for i in range(len(results))] if labels is None else labels
             if len(current_labels) < len(results):
                 # Not enough labels
                 raise IndexError('Number of labels is less than the number of plots')

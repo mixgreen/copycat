@@ -148,7 +148,7 @@ class VcdSignalManager(DaxSignalManager[_VS_T]):
         # Register the signal with the VCD writer
         # Note: The "ident" keyword argument is removed in pyvcd>=0.2.1
         return self._vcd.register_var(scope.key, name, var_type=var_type, size=size, init=init,
-                                      ident=f'{scope.key:s}.{name:s}')
+                                      ident=f'{scope.key}.{name}')
 
     def event(self, signal: _VS_T, value: _VV_T, *,
               time: typing.Optional[np.int64] = None, offset: typing.Optional[np.int64] = None) -> None:
@@ -301,7 +301,7 @@ class PeekSignalManager(DaxSignalManager[_PS_T]):
         signals = self._event_buffer.setdefault(scope, dict())
         # Check if signal was already registered
         if name in signals:
-            raise LookupError(f'Signal "{scope.key:s}.{name:s}" was already registered')
+            raise LookupError(f'Signal "{scope.key}.{name}" was already registered')
 
         # Check size
         if type_ is bool:
@@ -400,7 +400,7 @@ class PeekSignalManager(DaxSignalManager[_PS_T]):
             # Get the signal
             type_, _, events = device[signal]
         except KeyError:
-            raise KeyError(f'Signal "{scope.key:s}.{signal:s}" could not be found') from None
+            raise KeyError(f'Signal "{scope.key}.{signal}" could not be found') from None
 
         if time is None:
             # Use the default time if none was provided

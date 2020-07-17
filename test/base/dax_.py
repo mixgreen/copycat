@@ -1053,7 +1053,7 @@ class DaxSystemTestCase(unittest.TestCase):
         # Assemble system and modules
         self.system = self.InitTestSystem(get_manager_or_parent(_device_db), self)
         for i in range(self.num_modules):
-            self.InitTestModule(self.system, 'module_{:d}'.format(i), i, self)
+            self.InitTestModule(self.system, 'module_{}'.format(i), i, self)
 
     def test_dax_init(self):
         # Call DAX init

@@ -85,7 +85,7 @@ class DdbTestCase(unittest.TestCase):
             if type_ == 'local':
                 module = v['module']
                 self.assertTrue(module.startswith('dax.sim.coredevice.') or module == 'dax.sim.config',
-                                'Device module was not correctly updated: {:s}'.format(module))
+                                'Device module was not correctly updated: {}'.format(module))
             elif type_ == 'controller':
                 self.assertTrue('--simulation' in v['command'], 'Controller command was not correctly updated')
             else:
