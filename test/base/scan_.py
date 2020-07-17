@@ -2,12 +2,14 @@ import unittest
 import collections
 import typing
 import itertools
+import h5py  # type: ignore
 
 from artiq.experiment import *
 
 from dax.base.scan import *
 from dax.base.dax import DaxSystem
 from dax.util.artiq import get_manager_or_parent
+from dax.util.output import temp_dir
 
 
 class _MockSystem(DaxSystem):
@@ -201,7 +203,8 @@ class _MockScan2ValueCheckReordered(_MockScan2):
 class Scan1TestCase(unittest.TestCase):
 
     def setUp(self) -> None:
-        self.scan = _MockScan1(get_manager_or_parent())
+        self.mop = get_manager_or_parent()
+        self.scan = _MockScan1(self.mop)
 
     def test_is_infinite(self):
         self.assertFalse(self.scan.is_infinite_scan, 'Scan reported incorrectly it was infinite')
@@ -226,6 +229,12 @@ class Scan1TestCase(unittest.TestCase):
         with self.assertRaises(TypeError, msg='Adding scan outside build did not raise'):
             self.scan.add_scan('bar', 'bar', Scannable(NoScan(1)))
 
+    def test_get_scan_points_too_early(self):
+        with self.assertRaises(AttributeError, msg='Scan point request before run did not raise'):
+            self.scan.get_scan_points()
+        self.scan.run()
+        self.scan.get_scan_points()
+
     def test_get_scan_points(self):
         self.scan.run()
         points = self.scan.get_scan_points()
@@ -235,6 +244,30 @@ class Scan1TestCase(unittest.TestCase):
         scannables = self.scan.get_scannables()
         self.assertIn('foo', scannables)
         self.assertEqual(len(scannables['foo']), self.scan.FOO)
+
+    def test_scan_reader(self):
+        self.scan.run()
+
+        with temp_dir():
+            # Write data to HDF5 file
+            file_name = 'result.h5'
+            _, dataset_mgr, _, _ = self.mop
+            with h5py.File(file_name, 'w') as f:
+                dataset_mgr.write_hdf5(f)
+
+            # Read HDF5 file with scan reader
+            r = DaxScanReader(file_name)
+
+            # Verify if the data matches
+            scannables = self.scan.get_scannables()
+            scan_points = self.scan.get_scan_points()
+            keys = list(scannables.keys())
+            self.assertSetEqual(set(r.keys), set(keys), 'Keys in reader did not match object keys')
+            for k in keys:
+                self.assertListEqual(scannables[k], list(r.scannables[k]),
+                                     'Scannable in reader did not match object scannable')
+                self.assertListEqual(scan_points[k], list(r.scan_points[k]),
+                                     'Scan points in reader did not match object scan points')
 
 
 class BuildScanTestCase(unittest.TestCase):
@@ -288,10 +321,11 @@ class EmptyScanTestCase(unittest.TestCase):
         self.scan.run()
 
 
-class Scan2TestCase(unittest.TestCase):
+class Scan2TestCase(Scan1TestCase):
 
     def setUp(self) -> None:
-        self.scan = _MockScan2(get_manager_or_parent())
+        self.mop = get_manager_or_parent()
+        self.scan = _MockScan2(self.mop)
 
     def test_call_counters(self):
         # Run the scan
@@ -309,9 +343,6 @@ class Scan2TestCase(unittest.TestCase):
         }
         self.assertDictEqual(self.scan.counter, counter_ref, 'Function counters did not match expected values')
 
-    def test_is_infinite(self):
-        self.assertFalse(self.scan.is_infinite_scan, 'Scan reported incorrectly it was infinite')
-
     def test_get_scan_points(self):
         self.scan.run()
         points = self.scan.get_scan_points()
@@ -319,12 +350,6 @@ class Scan2TestCase(unittest.TestCase):
         self.assertIn('bar', points)
         self.assertEqual(len(points['foo']), self.scan.FOO * self.scan.BAR)
         self.assertEqual(len(points['bar']), self.scan.FOO * self.scan.BAR)
-
-    def test_get_scan_points_too_early(self):
-        with self.assertRaises(AttributeError, msg='Scan point request before run did not raise'):
-            self.scan.get_scan_points()
-        self.scan.run()
-        self.scan.get_scan_points()
 
     def test_get_scannables(self):
         scannables = self.scan.get_scannables()
@@ -450,14 +475,16 @@ class ScanValueTestCase(Scan2TestCase):
 
     def setUp(self) -> None:
         # Exceptions are raised if values don't match
-        self.scan = _MockScan2ValueCheck(get_manager_or_parent())
+        self.mop = get_manager_or_parent()
+        self.scan = _MockScan2ValueCheck(self.mop)
 
 
 class ScanValueReorderedTestCase(Scan2TestCase):
 
     def setUp(self) -> None:
         # Exceptions are raised if values don't match
-        self.scan = _MockScan2ValueCheckReordered(get_manager_or_parent())
+        self.mop = get_manager_or_parent()
+        self.scan = _MockScan2ValueCheckReordered(self.mop)
 
     def test_raise_scan_order(self):
         with self.assertRaises(TypeError, msg='Reordering scan outside build did not raise'):

@@ -4,13 +4,15 @@ import itertools
 import re
 import numpy as np
 import collections
+import os
+import h5py  # type: ignore
 
 from artiq.experiment import *
 
 import dax.base.dax
 import dax.util.artiq
 
-__all__ = ['DaxScan']
+__all__ = ['DaxScan', 'DaxScanReader']
 
 _KEY_RE: typing.Pattern[str] = re.compile(r'[a-zA-Z_]\w*')
 """Regex for matching valid keys."""
@@ -296,7 +298,8 @@ class DaxScan(dax.base.dax.DaxBase, abc.ABC):
 
         To get the values without applying the product, see :func:`get_scannables`.
 
-        This function can only be used after the :func:`run` function was called.
+        This function can only be used after the :func:`run` function was called
+        which normally means it is not available during the build and prepare phase.
 
         :return: A dict containing all the scan points on a per-key basis
         """
@@ -483,3 +486,56 @@ class DaxScan(dax.base.dax.DaxBase, abc.ABC):
     def host_exit(self) -> None:
         """6. Exit code on the host, called if the scan finished without exceptions."""
         pass
+
+
+class DaxScanReader:
+    """Reader class to retrieve scan data from and HDF5 archive or a live :class:`DaxScan` object.
+
+    This class will read an HDF5 file, extract scan data, and expose it through attributes.
+    It is also possible to provide a :class:`DaxScan` object as source and the same data
+    will be exposed, though :class:`DaxScan` also provides methods to obtain data directly.
+
+    :attr:`keys` is a list of keys for which scan data is available.
+
+    :attr:`scannables` is a dict which for each key contains the list of values.
+    These values are the individual values for each key, without applying the product.
+
+    :attr:`scan_points` is a dict with for each key contains the list of scan points.
+    The values are returned in the same sequence as was provided to the actual run,
+    as the cartesian product of all scannables.
+    """
+
+    def __init__(self, source: typing.Union[DaxScan, str, h5py.File]):
+        """Create a new DAX scan reader object.
+
+        :param source: The source of the scan data
+        """
+
+        # Input conversion
+        if isinstance(source, str):
+            # Open HDF5 file
+            source = h5py.File(os.path.expanduser(source), mode='r')
+
+        if isinstance(source, DaxScan):
+            # Get data from scan object
+            self.scannables: typing.Dict[str, typing.List[typing.Any]] = source.get_scannables()
+            self.scan_points: typing.Dict[str, typing.List[typing.Any]] = source.get_scan_points()
+            self.keys: typing.List[str] = list(self.scannables.keys())
+
+        elif isinstance(source, h5py.File):
+            # Verify format of HDF5 file
+            group_name = 'datasets/' + DaxScan.SCAN_GROUP
+            if group_name not in source:
+                raise KeyError('The HDF5 file does not contain scanning data')
+
+            # Get the group which contains all data
+            group = source[group_name]
+
+            # Read and convert data from HDF5 file
+            self.keys = [k for k in group.keys() if k != DaxScan.SCAN_PRODUCT_GROUP]
+            self.scannables = {k: group[k][()] for k in self.keys}
+            group = group[DaxScan.SCAN_PRODUCT_GROUP]  # Switch to group that contains scan points
+            self.scan_points = {k: group[k][()] for k in self.keys}
+
+        else:
+            raise TypeError('Unsupported source type')
