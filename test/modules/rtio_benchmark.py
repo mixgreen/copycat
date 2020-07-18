@@ -51,7 +51,14 @@ class RtioBenchmarkModuleTestCase(dax.sim.test_case.PeekTestCase):
         'ttl_in': {
             'type': 'local',
             'module': 'artiq.coredevice.ttl',
-            'class': 'TTLInOut'
+            'class': 'TTLInOut',
+            'sim_args': {'input_freq': 0.0}  # Zero input frequency, loop is disconnected
+        },
+        'ttl_in_connected': {
+            'type': 'local',
+            'module': 'artiq.coredevice.ttl',
+            'class': 'TTLInOut',
+            'sim_args': {'input_freq': 1e7}
         },
     }
 
@@ -128,8 +135,11 @@ class RtioBenchmarkModuleTestCase(dax.sim.test_case.PeekTestCase):
 
 class RtioLoopBenchmarkModuleTestCase(RtioBenchmarkModuleTestCase):
 
-    def _construct_env(self, **kwargs):
-        return self.construct_env(_LoopTestSystem, device_db=self._DEVICE_DB, build_kwargs=kwargs)
+    def _construct_env(self, *, loop_connected=False, **kwargs):
+        ddb = self._DEVICE_DB.copy()
+        if loop_connected:
+            ddb['ttl_in'] = 'ttl_in_connected'
+        return self.construct_env(_LoopTestSystem, device_db=ddb, build_kwargs=kwargs)
 
     def test_dax_init(self):
         s = self._construct_env(init_kernel=True)
@@ -213,33 +223,62 @@ class RtioLoopBenchmarkModuleTestCase(RtioBenchmarkModuleTestCase):
         self.expect(s.rtio.ttl_in, 'sensitivity', 0)
         self.expect(s.rtio.ttl_in, 'direction', 0)
 
-    def test_loop_connection(self):
+    def test_loop_connection_disconnected(self):
         s = self._construct_env()
         self.assertFalse(s.rtio.test_loop_connection())
 
-    def test_input_buffer_size(self):
+    def test_loop_connection_connected(self):
+        s = self._construct_env(loop_connected=True)
+        self.assertTrue(s.rtio.test_loop_connection())
+
+    def test_input_buffer_size_disconnected(self):
         s = self._construct_env()
         s.dax_init()
 
         with self.assertRaises(RuntimeError,
                                msg='Did not raise expected RuntimeError in simulation (loop not connected)'):
-            s.rtio.benchmark_input_buffer_size(1, 2048)
+            s.rtio.benchmark_input_buffer_size(1, 32)
 
-    def test_latency_rtio_core(self):
+    def test_input_buffer_size_connected(self):
+        s = self._construct_env(loop_connected=True)
+        s.dax_init()
+
+        with self.assertRaises(RuntimeWarning,
+                               msg='Did not raise expected RuntimeWarning in simulation '
+                                   '(could not determine buffer size)'):
+            s.rtio.benchmark_input_buffer_size(1, 32)
+
+    def test_latency_rtio_core_disconnected(self):
         s = self._construct_env()
         s.dax_init()
 
         with self.assertRaises(RuntimeError,
                                msg='Did not raise expected RuntimeError in simulation (loop not connected)'):
-            s.rtio.benchmark_latency_rtio_core(100)
+            s.rtio.benchmark_latency_rtio_core(10)
 
-    def test_latency_rtt(self):
+    def test_latency_rtio_core_connected(self):
+        s = self._construct_env(loop_connected=True)
+        s.dax_init()
+
+        # Function works correctly as it receives input, but data is random
+        s.rtio.benchmark_latency_rtio_core(10)
+
+    def test_latency_rtt_disconnected(self):
         s = self._construct_env()
         s.dax_init()
 
         with self.assertRaises(RuntimeError,
                                msg='Did not raise expected RuntimeError in simulation (loop not connected)'):
-            s.rtio.benchmark_latency_rtt(1 * ms, 100 * ms, 1 * ms, 5, 5)
+            s.rtio.benchmark_latency_rtt(1 * ms, 100 * ms, 10 * ms, 5, 5)
+
+    def test_latency_rtt_connected(self):
+        s = self._construct_env(loop_connected=True)
+        s.dax_init()
+
+        with self.assertRaises(RuntimeWarning,
+                               msg='Did not raise expected RuntimeWarning in simulation '
+                                   '(no underflow exceptions raised)'):
+            s.rtio.benchmark_latency_rtt(1 * ms, 100 * ms, 10 * ms, 5, 5)
 
 
 if __name__ == '__main__':
