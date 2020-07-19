@@ -1591,14 +1591,14 @@ def dax_client_factory(c: typing.Type[__DCF_C_T]) -> typing.Callable[[typing.Typ
     # Use the wraps decorator, but do not inherit the docstring
     @functools.wraps(c, assigned=[e for e in functools.WRAPPER_ASSIGNMENTS if e != '__doc__'])
     def wrapper(system_type: typing.Type[__DCF_S_T],
-                *sys_args: typing.Any, **sys_kwargs: typing.Any) -> typing.Type[__DCF_C_T]:
+                *system_args: typing.Any, **system_kwargs: typing.Any) -> typing.Type[__DCF_C_T]:
         """Create a new DAX client class.
 
         This factory function will create a new client class for a given system type.
 
         :param system_type: The system type used by the client
-        :param sys_args: Positional arguments forwarded to the systems :func:`build` function
-        :param sys_kwargs: Keyword arguments forwarded to the systems :func:`build` function
+        :param system_args: Positional arguments forwarded to the systems :func:`build` function
+        :param system_kwargs: Keyword arguments forwarded to the systems :func:`build` function
         :return: A fusion of the client and system class
         :raises TypeError: Raised if the provided `system_type` parameter is not a subclass of `DaxSystem`
         """
@@ -1618,7 +1618,7 @@ def dax_client_factory(c: typing.Type[__DCF_C_T]) -> typing.Callable[[typing.Typ
             def __init__(self, managers_or_parent: typing.Any,
                          *args: typing.Any, **kwargs: typing.Any):
                 # Create the system
-                self.__system: DaxSystem = system_type(managers_or_parent, *sys_args, **sys_kwargs)
+                self.__system: DaxSystem = system_type(managers_or_parent, *system_args, **system_kwargs)
                 # Call constructor of the client class and give it the system as parent
                 super(WrapperClass, self).__init__(self.__system, *args, **kwargs)
 

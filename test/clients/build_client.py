@@ -69,6 +69,11 @@ class BuildClientTestCase(unittest.TestCase):
     ]
     """List of client types."""
 
+    _CUSTOM_CLIENTS = [
+        dax.clients.system_benchmark.SystemBenchmarkBuildProfile,
+    ]
+    """List of custom client types (not subclasses of DaxClient)."""
+
     def test_build_client(self):
         for client_type in self._CLIENTS:
             with self.subTest(client_type=client_type.__name__):
@@ -85,6 +90,17 @@ class BuildClientTestCase(unittest.TestCase):
                 self.assertIsInstance(system, _TestSystem)
                 # Initialize system
                 self.assertIsNone(system.dax_init())
+
+    def test_build_custom_clients(self):
+        for client_type in self._CUSTOM_CLIENTS:
+            with self.subTest(client_type=client_type.__name__):
+                class _InstantiatedClient(client_type(_TestSystem)):
+                    pass
+
+                # Create client
+                manager = get_manager_or_parent(
+                    enable_dax_sim(ddb=_device_db, enable=True, logging_level=30, output='null', moninj_service=False))
+                _InstantiatedClient(manager)
 
 
 _device_db = {
