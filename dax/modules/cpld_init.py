@@ -50,7 +50,7 @@ class CpldInitModule(DaxModule):
                                     f'before this module was created: {", ".join(devices)}')
 
         # List of CPLD device keys
-        cpld_device_keys = [k for k, v in self.get_device_db().items()
+        cpld_device_keys = [k for k, v in self.registry.device_db.items()
                             if isinstance(v, dict) and v.get('class') == 'CPLD']
 
         # CPLD array

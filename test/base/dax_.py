@@ -136,50 +136,46 @@ class DaxHelpersTestCase(unittest.TestCase):
     def test_unique_device_key(self):
         # Test system and device DB
         s = _TestSystem(get_manager_or_parent(_device_db))
-        d = s.get_device_db()
 
         # Test against various keys
-        self.assertEqual(dax.base.dax._get_unique_device_key(d, 'ttl0'), 'ttl0',
+        self.assertEqual(s.registry.get_unique_device_key('ttl0'), 'ttl0',
                          'Unique device key not returned correctly')
-        self.assertEqual(dax.base.dax._get_unique_device_key(d, 'alias_0'), 'ttl1',
+        self.assertEqual(s.registry.get_unique_device_key('alias_0'), 'ttl1',
                          'Alias key key does not return correct unique key')
-        self.assertEqual(dax.base.dax._get_unique_device_key(d, 'alias_1'), 'ttl1',
+        self.assertEqual(s.registry.get_unique_device_key('alias_1'), 'ttl1',
                          'Multi-alias key does not return correct unique key')
-        self.assertEqual(dax.base.dax._get_unique_device_key(d, 'alias_2'), 'ttl1',
+        self.assertEqual(s.registry.get_unique_device_key('alias_2'), 'ttl1',
                          'Multi-alias key does not return correct unique key')
 
     def test_looped_device_key(self):
         # Test system and device DB
         s = _TestSystem(get_manager_or_parent(_device_db))
-        d = s.get_device_db()
 
         # Test looped alias
         loop_aliases = ['loop_alias_1', 'loop_alias_4']
         for key in loop_aliases:
             with self.assertRaises(LookupError, msg='Looped key alias did not raise'):
-                dax.base.dax._get_unique_device_key(d, key)
+                s.registry.get_unique_device_key(key)
 
     def test_unavailable_device_key(self):
         # Test system and device DB
         s = _TestSystem(get_manager_or_parent(_device_db))
-        d = s.get_device_db()
 
         # Test non-existing keys
         loop_aliases = ['not_existing_key_0', 'not_existing_key_1', 'dead_alias_2']
         for key in loop_aliases:
             with self.assertRaises(KeyError, msg='Non-existing key did not raise'):
-                dax.base.dax._get_unique_device_key(d, key)
+                s.registry.get_unique_device_key(key)
 
     def test_virtual_device_key(self):
         # Test system and device DB
         s = _TestSystem(get_manager_or_parent(_device_db))
-        d = s.get_device_db()
         # Test virtual devices
         virtual_devices = {'scheduler', 'ccb'}
         self.assertSetEqual(virtual_devices, dax.base.dax._ARTIQ_VIRTUAL_DEVICES,
                             'List of virtual devices in test does not match DAX base virtual device list')
         for k in virtual_devices:
-            self.assertEqual(dax.base.dax._get_unique_device_key(d, k), k, 'Virtual device key not returned correctly')
+            self.assertEqual(s.registry.get_unique_device_key(k), k, 'Virtual device key not returned correctly')
 
     def test_cwd_commit_hash(self):
         self.assertIsInstance(dax.base.dax._CWD_COMMIT, (str, type(None)), 'Unexpected type for CWD commit hash')

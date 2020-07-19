@@ -71,47 +71,6 @@ _ARTIQ_VIRTUAL_DEVICES: typing.Set[str] = {'scheduler', 'ccb'}
 """ARTIQ virtual devices."""
 
 
-def _get_unique_device_key(d: typing.Dict[str, typing.Any], key: str) -> str:
-    """Get the unique device key."""
-
-    assert isinstance(key, str), 'Key must be a string'
-
-    if key in _ARTIQ_VIRTUAL_DEVICES:
-        # Virtual devices always have unique names
-        return key
-    else:
-        # Resolve the unique device key
-        return _resolve_unique_device_key(d, key, set())
-
-
-def _resolve_unique_device_key(d: typing.Dict[str, typing.Any], key: str, trace: typing.Set[str]) -> str:
-    """Recursively resolve aliases until we find the unique device name."""
-
-    assert isinstance(d, dict), 'First argument must be a dict to search in'
-    assert isinstance(key, str), 'Key must be a string'
-    assert isinstance(trace, set), 'Trace must be a set'
-
-    # Check if we are not stuck in a loop
-    if key in trace:
-        # We are in an alias loop
-        raise LookupError(f'Key "{key}" caused an alias loop')
-    # Add key to the trace
-    trace.add(key)
-
-    # Get value (could raise KeyError)
-    v = d[key]
-
-    if isinstance(v, str):
-        # Recurse if we are still dealing with an alias
-        return _resolve_unique_device_key(d, v, trace)
-    elif isinstance(v, dict):
-        # We reached a dict, key must be the unique key
-        return key
-    else:
-        # We ended up with an unexpected type
-        raise TypeError(f'Key "{key}" returned an unexpected type')
-
-
 class DaxBase(artiq.experiment.HasEnvironment, abc.ABC):
     """Base class for all DAX base classes."""
 
@@ -186,24 +145,22 @@ class DaxHasSystem(DaxBase, abc.ABC):
 
     __CORE_DEVICES: typing.Tuple[str, ...] = ('core', 'core_dma', 'core_cache')
     """Attribute names of core devices."""
-    __CORE_ATTRIBUTES: typing.Tuple[str, ...] = __CORE_DEVICES + ('data_store',)
+    __CORE_ATTRIBUTES: typing.Tuple[str, ...] = __CORE_DEVICES + ('registry', 'data_store')
     """Attribute names of core objects created in build() or inherited from parents."""
 
     def __init__(self, managers_or_parent: typing.Any, *args: typing.Any,
-                 name: str, system_key: str, registry: DaxNameRegistry, **kwargs: typing.Any):
+                 name: str, system_key: str, **kwargs: typing.Any):
         """Constructor of a DAX base class.
 
         :param managers_or_parent: The manager or parent object
+        :param args: Positional arguments forwarded to the :func:`build` function
         :param name: The name of this object
         :param system_key: The unique system key, used for object identification
-        :param registry: The shared registry object
-        :param args: Positional arguments forwarded to the :func:`build` function
         :param kwargs: Keyword arguments forwarded to the :func:`build` function
         """
 
         assert isinstance(name, str), 'Name must be a string'
         assert isinstance(system_key, str), 'System key must be a string'
-        assert isinstance(registry, DaxNameRegistry), 'Registry must be a DAX name registry'
 
         # Check name and system key
         if not _is_valid_name(name):
@@ -214,27 +171,18 @@ class DaxHasSystem(DaxBase, abc.ABC):
         # Store constructor arguments as attributes
         self.__name: str = name
         self.__system_key: str = system_key
-        self.__registry: DaxNameRegistry = registry
 
         # Call super, which will result in a call to build()
         super(DaxHasSystem, self).__init__(managers_or_parent, *args, **kwargs)
 
         # Verify that all core attributes are available
-        if not all(hasattr(self, n) for n in self.__CORE_ATTRIBUTES):
+        if not all(hasattr(self, n) for n in self.__CORE_ATTRIBUTES):  # hasattr() checks properties too
             msg: str = 'Missing core attributes (super.build() was probably not called)'
             self.logger.error(msg)
             raise AttributeError(msg)
 
         # Make core devices kernel invariants
         self.update_kernel_invariants(*self.__CORE_DEVICES)
-
-    @property
-    def registry(self) -> DaxNameRegistry:
-        """Get the DAX registry.
-
-        :return: The logger object
-        """
-        return self.__registry
 
     @property
     def core(self) -> artiq.coredevice.core.Core:
@@ -261,6 +209,14 @@ class DaxHasSystem(DaxBase, abc.ABC):
         return self.__core_cache
 
     @property
+    def registry(self) -> DaxNameRegistry:
+        """Get the DAX registry.
+
+        :return: The logger object
+        """
+        return self.__registry
+
+    @property
     def data_store(self) -> DaxDataStore:
         """Get the data store.
 
@@ -274,10 +230,11 @@ class DaxHasSystem(DaxBase, abc.ABC):
         If this object does not construct its own core attributes, it should take them from their parent.
         """
         try:
-            # Take core attributes from parent, attributes are taken one by one to allow typing
+            # Take core attributes from parent
             self.__core: artiq.coredevice.core.Core = parent.core
             self.__core_dma: artiq.coredevice.dma.CoreDMA = parent.core_dma
             self.__core_cache: artiq.coredevice.cache.CoreCache = parent.core_cache
+            self.__registry: DaxNameRegistry = parent.registry
             self.__data_store: DaxDataStore = parent.data_store
         except AttributeError:
             parent.logger.exception('Missing core attributes (super.build() was probably not called)')
@@ -408,13 +365,13 @@ class DaxHasSystem(DaxBase, abc.ABC):
 
         try:
             # Get the unique key, which will also check the keys and aliases
-            unique: str = _get_unique_device_key(self.get_device_db(), key)
+            unique: str = self.registry.get_unique_device_key(key)
         except (LookupError, TypeError) as e:
             # Device was not found in the device DB
             raise KeyError(f'Device "{key}" could not be found in the device DB') from e
 
-        # Get the device using the initial key (let ARTIQ resolve the aliases)
-        device: typing.Any = super(DaxHasSystem, self).get_device(key)
+        # Get the device using the unique key
+        device: typing.Any = super(DaxHasSystem, self).get_device(unique)
 
         if type_ is not None and not isinstance(device, (type_, artiq.master.worker_db.DummyDevice,
                                                          dax.sim.device.DaxSimDevice)):
@@ -658,21 +615,20 @@ class DaxHasSystem(DaxBase, abc.ABC):
 class DaxModuleBase(DaxHasSystem, abc.ABC):
     """Base class for all DAX modules and systems."""
 
-    def __init__(self, managers_or_parent: typing.Any, module_name: str, module_key: str, registry: DaxNameRegistry,
-                 *args: typing.Any, **kwargs: typing.Any):
+    def __init__(self, managers_or_parent: typing.Any, *args: typing.Any,
+                 module_name: str, module_key: str, **kwargs: typing.Any):
         """Construct the module base class.
 
         :param managers_or_parent: Manager or parent of this module
+        :param args: Positional arguments forwarded to the :func:`build` function
         :param module_name: Name of the module
         :param module_key: Unique and complete key of this module
-        :param registry: The shared registry object
-        :param args: Positional arguments forwarded to the :func:`build` function
         :param kwargs: Keyword arguments forwarded to the :func:`build` function
         """
 
         # Call super
         super(DaxModuleBase, self).__init__(managers_or_parent, *args,
-                                            name=module_name, system_key=module_key, registry=registry, **kwargs)
+                                            name=module_name, system_key=module_key, **kwargs)
 
         # Register this module
         self.registry.add_module(self)
@@ -701,9 +657,12 @@ class DaxModule(DaxModuleBase, abc.ABC):
         # Take core attributes from parent
         self._take_parent_core_attributes(managers_or_parent)
 
-        # Call super, use parent to assemble arguments
-        super(DaxModule, self).__init__(managers_or_parent, module_name, managers_or_parent.get_system_key(module_name),
-                                        managers_or_parent.registry, *args, **kwargs)
+        # Crate system key based on parent key
+        module_key: str = managers_or_parent.get_system_key(module_name)
+
+        # Call super
+        super(DaxModule, self).__init__(managers_or_parent, *args,
+                                        module_name=module_name, module_key=module_key, **kwargs)
 
 
 class DaxSystem(DaxModuleBase):
@@ -731,7 +690,7 @@ class DaxSystem(DaxModuleBase):
     """Key of the DAX Influx DB controller."""
 
     DAX_INIT_TIME_KEY: str = 'dax_init_time'
-    """DAX initialization time dataset key."""
+    """DAX initialization time system dataset key."""
 
     def __init__(self, managers_or_parent: typing.Any,
                  *args: typing.Any, **kwargs: typing.Any):
@@ -753,8 +712,8 @@ class DaxSystem(DaxModuleBase):
         assert self.SYS_VER >= 0, 'Invalid system version, set version number larger or equal to zero'
 
         # Call super, add names, add a new registry
-        super(DaxSystem, self).__init__(managers_or_parent, self.SYS_NAME, self.SYS_NAME, DaxNameRegistry(self),
-                                        *args, **kwargs)
+        super(DaxSystem, self).__init__(managers_or_parent, *args,
+                                        module_name=self.SYS_NAME, module_key=self.SYS_NAME, **kwargs)
 
     @property
     def core(self) -> artiq.coredevice.core.Core:
@@ -781,6 +740,14 @@ class DaxSystem(DaxModuleBase):
         return self.__core_cache
 
     @property
+    def registry(self) -> DaxNameRegistry:
+        """Get the DAX registry.
+
+        :return: The logger object
+        """
+        return self.__registry
+
+    @property
     def data_store(self) -> DaxDataStore:
         """Get the data store.
 
@@ -799,12 +766,15 @@ class DaxSystem(DaxModuleBase):
     def build(self, *args: typing.Any, **kwargs: typing.Any) -> None:
         """Override this method to build your DAX system. (Do not forget to call `super.build()` first!)"""
 
-        # Log DAX version
-        self.logger.debug(f'DAX version {_dax_version}')
-
         # Call super and forward arguments, for compatibility with other libraries
         # noinspection PyArgumentList
         super(DaxSystem, self).build(*args, **kwargs)
+
+        # Log DAX version
+        self.logger.debug(f'DAX version {_dax_version}')
+
+        # Create registry
+        self.__registry: DaxNameRegistry = DaxNameRegistry(self)
 
         try:
             # Get the virtual simulation configuration device
@@ -919,12 +889,11 @@ class DaxService(DaxHasSystem, abc.ABC):
         self._take_parent_core_attributes(managers_or_parent)
 
         # Use name registry of parent to obtain a system key
-        registry: DaxNameRegistry = managers_or_parent.registry
-        system_key: str = registry.make_service_key(self.SERVICE_NAME)
+        system_key: str = managers_or_parent.registry.make_service_key(self.SERVICE_NAME)
 
         # Call super
         super(DaxService, self).__init__(managers_or_parent, *args,
-                                         name=self.SERVICE_NAME, system_key=system_key, registry=registry, **kwargs)
+                                         name=self.SERVICE_NAME, system_key=system_key, **kwargs)
 
         # Register this service
         self.registry.add_service(self)
@@ -973,7 +942,7 @@ class DaxClient(DaxHasSystem, abc.ABC):
         # Call super and identify with system name and system key
         super(DaxClient, self).__init__(managers_or_parent, *args,
                                         name=managers_or_parent.SYS_NAME, system_key=managers_or_parent.SYS_NAME,
-                                        registry=managers_or_parent.registry, **kwargs)
+                                        **kwargs)
 
     def init(self) -> None:
         pass
@@ -1007,6 +976,8 @@ class DaxNameRegistry:
 
         # Store system services key
         self._sys_services_key: str = system.SYS_SERVICES  # Access attribute directly
+        # Store device DB
+        self._device_db: typing.Dict[str, typing.Any] = system.get_device_db()
 
         # A dict containing registered modules
         self._modules: typing.Dict[str, DaxModuleBase] = {}
@@ -1014,6 +985,19 @@ class DaxNameRegistry:
         self._devices: typing.Dict[str, typing.Tuple[typing.Any, DaxHasSystem]] = {}
         # A dict containing registered services
         self._services: typing.Dict[str, DaxService] = {}
+
+    @property
+    def device_db(self) -> typing.Dict[str, typing.Any]:
+        """Return the current device DB.
+
+        Requesting the device DB using `HasEnvironment.get_device_db()` is slow as it
+        connects to the ARTIQ master to obtain the database.
+        The registry caches the device DB and by using this property the number
+        of calls to the ARTIQ master can be minimized.
+
+        :return: The current device DB
+        """
+        return self._device_db.copy()
 
     def add_module(self, module: __M_T) -> None:
         """Register a module.
@@ -1124,6 +1108,56 @@ class DaxNameRegistry:
         :return: A list with module objects
         """
         return list(self._modules.values())
+
+    def get_unique_device_key(self, key: str) -> str:
+        """Get the unique device key by resolving it recursively in the device DB.
+
+        :param key: The key to resolve
+        :return: The resolved unique device key
+        :raises LookupError: Raised if an alias loop was detected in the trace while resolving
+        :raises TypeError: Raised if a key returned an unexpected type
+        :raises KeyError: Raised if a key was not found
+        """
+
+        assert isinstance(key, str), 'Key must be of type str'
+
+        if key in _ARTIQ_VIRTUAL_DEVICES:
+            # Virtual devices always have unique names
+            return key
+        else:
+            # Resolve the unique device key
+            return self._resolve_unique_device_key(key, set())
+
+    def _resolve_unique_device_key(self, key: str, trace: typing.Set[str]) -> str:
+        """Recursively resolve aliases until we find the unique device name.
+
+        :param key: The key to resolve
+        :param trace: A set with already visited keys
+        :return: The resolved unique device key
+        :raises LookupError: Raised if an alias loop was detected in the trace while resolving
+        :raises TypeError: Raised if a key returned an unexpected type
+        :raises KeyError: Raised if a key was not found
+        """
+
+        # Check if we are not stuck in a loop
+        if key in trace:
+            # We are in an alias loop
+            raise LookupError(f'Key "{key}" caused an alias loop')
+        # Add key to the trace
+        trace.add(key)
+
+        # Get value (could raise KeyError)
+        v: typing.Any = self._device_db[key]
+
+        if isinstance(v, str):
+            # Recurse if we are still dealing with an alias
+            return self._resolve_unique_device_key(v, trace)
+        elif isinstance(v, dict):
+            # We reached a dict, key must be the unique key
+            return key
+        else:
+            # We ended up with an unexpected type
+            raise TypeError(f'Key "{key}" returned an unexpected type')
 
     def add_device(self, key: str, device: typing.Any, parent: DaxHasSystem) -> None:
         """Register a device.

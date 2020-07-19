@@ -351,6 +351,9 @@ class DaxScan(dax.base.dax.DaxBase, abc.ABC):
             self.logger.warning('No scan points found, aborting experiment')
             return
 
+        # Reporting infinite scan flag
+        self.logger.debug(f'Infinite scan: {self.is_infinite_scan}')
+
         for key, scannable in self._dax_scan_scannables.items():
             # Archive values of independent scan
             self.set_dataset(self.SCAN_KEY_FORMAT.format(key=key), [e for e in scannable], archive=True)
