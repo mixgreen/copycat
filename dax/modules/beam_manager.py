@@ -30,12 +30,12 @@ class BeamManager(DaxModule):
             # We assume beams are initially off
             self.state: bool = False
 
-    def build(self, *, num_beams: int):  # type: ignore
+    def build(self, *, num_beams: typing.Union[int, np.integer]):  # type: ignore
         """Build the beam manager object.
 
         :param num_beams: The number of beams
         """
-        assert isinstance(num_beams, int) and num_beams > 0, 'Number of beams must be of type int and > 0'
+        assert isinstance(num_beams, (int, np.integer)) and num_beams > 0, 'Number of beams must be of type int and > 0'
 
         # Store attributes
         self._num_beams: np.int32 = np.int32(num_beams)

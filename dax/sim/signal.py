@@ -3,7 +3,6 @@ import typing
 import vcd.writer  # type: ignore
 import operator
 import numpy as np
-import numbers
 
 import artiq.language.core
 from artiq.language.units import *
@@ -242,9 +241,9 @@ class PeekSignalManager(DaxSignalManager[_PS_T]):
     }
     """Dict to convert Python types to peek signal manager internal types."""
 
-    _CHECK_TYPE: typing.Dict[_PT_T, type] = {
+    _CHECK_TYPE: typing.Dict[_PT_T, typing.Union[type, typing.Tuple[type, ...]]] = {
         bool: bool,
-        int: numbers.Integral,
+        int: (int, np.integer),
         float: float,
         str: str,
         object: bool,
@@ -346,7 +345,7 @@ class PeekSignalManager(DaxSignalManager[_PS_T]):
 
         assert isinstance(signal, tuple) and len(signal) == 2, 'Invalid signal object'
         assert time is None or isinstance(time, np.int64), 'Time must be of type np.int64 or None'
-        assert offset is None or isinstance(offset, numbers.Integral), 'Invalid type for offset'
+        assert offset is None or isinstance(offset, (int, np.integer)), 'Invalid type for offset'
 
         # Unpack device list
         device, name = signal
@@ -370,7 +369,7 @@ class PeekSignalManager(DaxSignalManager[_PS_T]):
         # noinspection PyTypeHints
         if value in self._SPECIAL_VALUES[type_]:
             return  # Value is legal (special value)
-        elif size is not None and isinstance(value, numbers.Integral) and 0 <= value <= 2 ** size - 1:
+        elif size is not None and isinstance(value, (int, np.integer)) and 0 <= value <= 2 ** size - 1:
             return  # Value is legal (within given size)
         elif isinstance(value, self._CHECK_TYPE[type_]):  # PyCharm inspection wrongly flags a type hint error
             return  # Value is legal (expected type)

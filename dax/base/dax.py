@@ -9,7 +9,6 @@ import natsort
 import typing
 import pygit2  # type: ignore
 import os
-import numbers
 import collections
 import numpy as np
 
@@ -1164,7 +1163,7 @@ class DaxNameRegistry:
 
         Devices are added to the registry to ensure every device is only owned by a single parent.
 
-        :param key: The unique key of the device
+        :param key: The key of the device
         :param device: The device object
         :param parent: The parent that requested the device
         :return: The requested device driver
@@ -1175,7 +1174,10 @@ class DaxNameRegistry:
         assert isinstance(parent, DaxHasSystem), 'Parent is not a DaxHasSystem type'
 
         if key in _ARTIQ_VIRTUAL_DEVICES:
-            return  # Virtual devices always have unique names are excluded from the registry
+            return  # Virtual devices always have unique names and are excluded from the registry
+
+        # Ensure key is unique
+        key = self.get_unique_device_key(key)
 
         # Get the device value object (None if the device was not registered before)
         device_value = self._devices.get(key)
@@ -1205,7 +1207,7 @@ class DaxNameRegistry:
     def get_device_key_list(self) -> typing.List[str]:
         """Return a sorted list of registered device keys.
 
-        :return: A list of device keys that were registered
+        :return: A list of unique device keys that were registered
         """
         device_key_list = natsort.natsorted(self._devices.keys())  # Natural sort the list
         return device_key_list
@@ -1414,11 +1416,11 @@ class DaxDataStoreInfluxDb(DaxDataStore):
     push data to an Influx database.
     """
 
-    __F_T = typing.Union[bool, float, int, np.int32, np.int64, str]  # Field type variable for Influx DB supported types
+    __F_T = typing.Union[bool, float, int, np.integer, str]  # Field type variable for Influx DB supported types
     __FD_T = typing.Dict[str, __F_T]  # Field dict type variable
     __P_T = typing.Dict[str, typing.Union[str, __FD_T]]  # Point type variable
 
-    _FIELD_TYPES: typing.Tuple[type, ...] = (bool, float, int, np.int32, np.int64, str)
+    _FIELD_TYPES: typing.Tuple[type, ...] = (bool, float, int, np.integer, str)
     """Legal field types for Influx DB."""
 
     def __init__(self, system: DaxSystem, key: str):
@@ -1510,7 +1512,7 @@ class DaxDataStoreInfluxDb(DaxDataStore):
         """
 
         if isinstance(value, self._FIELD_TYPES):
-            if isinstance(index, numbers.Integral):
+            if isinstance(index, (int, np.integer)):
                 # Write a single point
                 self._write_points([self._make_point(key, value, index)])
             else:
@@ -1547,7 +1549,7 @@ class DaxDataStoreInfluxDb(DaxDataStore):
             # Unsupported type, do not raise but warn user instead
             self._logger.warning(f'Could not append value for key "{key}", unsupported value type for value "{value}"')
 
-    def _make_point(self, key: str, value: __F_T, index: typing.Union[None, int, numbers.Integral] = None) -> __P_T:
+    def _make_point(self, key: str, value: __F_T, index: typing.Union[None, int, np.integer] = None) -> __P_T:
         """Make a point object from a key-value pair, optionally with an index.
 
         This function does not check the type of the value and the index, which should be checked before.

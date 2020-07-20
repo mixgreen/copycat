@@ -1,6 +1,5 @@
 import typing
 import collections
-import numbers
 import math
 import numpy as np
 import h5py  # type: ignore
@@ -113,8 +112,8 @@ class TimeResolvedContext(DaxModule):
         :param bin_spacing: The spacing between bins
         :return: A list with tuples that can be used for automatic partitioning at runtime
         """
-        assert isinstance(num_bins, numbers.Integral), 'Number of bins must be an integer'
-        assert isinstance(max_partition_size, numbers.Integral), 'Max partition size must be an integer'
+        assert isinstance(num_bins, (int, np.integer)), 'Number of bins must be an integer'
+        assert isinstance(max_partition_size, (int, np.integer)), 'Max partition size must be an integer'
         assert isinstance(bin_width, float), 'Bin width must be of type float'
         assert isinstance(bin_spacing, float), 'Bin spacing must be of type float'
 

@@ -3,6 +3,7 @@ import numpy as np
 import logging
 import os
 import pygit2  # type: ignore
+import collections
 
 from artiq.experiment import HasEnvironment
 import artiq.coredevice.edge_counter
@@ -192,6 +193,11 @@ class DaxHelpersTestCase(unittest.TestCase):
         self.assertIsInstance(dax.base.dax._CWD_COMMIT, str, 'Unexpected type for CWD commit hash')
         self.assertEqual(dax.base.dax._CWD_COMMIT, str(pygit2.Repository(path).head.target.hex),
                          'CWD commit hash did not match reference')
+
+    def test_ndarray_isinstance_sequence(self):
+        # See https://github.com/numpy/numpy/issues/2776 for more information
+        a = np.zeros(4)
+        self.assertIsInstance(a, collections.abc.Sequence, 'numpy ndarray is not considered an abstract sequence')
 
 
 class DaxNameRegistryTestCase(unittest.TestCase):

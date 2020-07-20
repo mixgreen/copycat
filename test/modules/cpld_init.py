@@ -41,7 +41,9 @@ class CpldInitModuleTestCase(dax.sim.test_case.PeekTestCase):
     }
 
     def _construct_env(self, **kwargs):
-        return self.construct_env(_TestSystem, device_db=self._DEVICE_DB, build_kwargs=kwargs)
+        env = self.construct_env(_TestSystem, device_db=self._DEVICE_DB, build_kwargs=kwargs)
+        self.assertEqual(len(env.cpld.cpld), 1, 'Did not found the expected number of CPLD devices')
+        return env
 
     def test_dax_init(self):
         s = self._construct_env(init_kernel=True)
