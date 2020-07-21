@@ -24,10 +24,12 @@ class BuildModuleTestCase(unittest.TestCase):
     _MODULES = {
         dax.modules.beam_manager.BeamManager: dict(num_beams=2),
         dax.modules.cpld_init.CpldInitModule: {},
+        # HistogramContext not tested here due to system interface requirements
         dax.modules.led.LedModule: {},
         dax.modules.rpc_benchmark.RpcBenchmarkModule: {},
         dax.modules.rtio_benchmark.RtioBenchmarkModule: dict(ttl_out='ttl0'),
         dax.modules.rtio_benchmark.RtioLoopBenchmarkModule: dict(ttl_out='ttl0', ttl_in='ttl1'),
+        # SafetyContext not tested here due to build argument requirements
         dax.modules.time_resolved_context.TimeResolvedContext: {},
     }
     """List of module types and kwargs."""
@@ -41,12 +43,23 @@ class BuildModuleTestCase(unittest.TestCase):
                         self.module = module_type(self, module_type.__name__, *args, **module_kwargs)
 
                 # Create system
-                manager = get_manager_or_parent(
-                    enable_dax_sim(ddb=_device_db, enable=True, logging_level=30, output='null', moninj_service=False))
+                manager = get_manager_or_parent(enable_dax_sim(ddb=_device_db, enable=True, logging_level=30,
+                                                               output='null', moninj_service=False))
                 system = _WrappedTestSystem(manager, **module_kwargs)
                 self.assertIsInstance(system, DaxSystem)
+
                 # Initialize system
                 self.assertIsNone(system.dax_init())
+
+                # Test module kernel invariants
+                for m in system.registry.get_module_list():
+                    self._test_kernel_invariants(m)
+
+    def _test_kernel_invariants(self, component: dax.base.dax.DaxHasSystem):
+        # Test kernel invariants of this component
+        for k in component.kernel_invariants:
+            self.assertTrue(hasattr(component, k), f'Name "{k:s}" of "{component.get_system_key():s}" was marked '
+                                                   f'kernel invariant, but this attribute does not exist')
 
 
 _device_db = {

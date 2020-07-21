@@ -4,6 +4,7 @@ import collections
 from dax.experiment import *
 from dax.modules.safety_context import *
 from dax.util.artiq import get_manager_or_parent
+import dax.base.dax
 
 
 class _ReentrantTestSystem(DaxSystem):
@@ -133,6 +134,17 @@ class _GenericSafetyContextTestCase(unittest.TestCase):
         self.assertTrue(enter_flag, 'Context was never entered')
         self.assertDictEqual(self.counter, {'enter': 1, 'exit': 1}, 'Counters did not match expected values')
         self.assertDictEqual(counter_b, {'enter': 1, 'exit': 1}, 'Counters (b) did not match expected values')
+
+    def test_kernel_invariants(self):
+        # Test module kernel invariants
+        for m in self.s.registry.get_module_list():
+            self._test_kernel_invariants(m)
+
+    def _test_kernel_invariants(self, component: dax.base.dax.DaxHasSystem):
+        # Test kernel invariants of this component
+        for k in component.kernel_invariants:
+            self.assertTrue(hasattr(component, k), f'Name "{k:s}" of "{component.get_system_key():s}" was marked '
+                                                   f'kernel invariant, but this attribute does not exist')
 
 
 class ReentrantSafetyContextTestCase(_GenericSafetyContextTestCase):

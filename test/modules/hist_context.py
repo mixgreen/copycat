@@ -260,6 +260,17 @@ class HistogramContextTestCase(unittest.TestCase):
         self.h.disable_mean_count_plot()
         self.h.disable_all_plots()
 
+    def test_kernel_invariants(self):
+        # Test module kernel invariants
+        for m in self.s.registry.get_module_list():
+            self._test_kernel_invariants(m)
+
+    def _test_kernel_invariants(self, component: dax.base.dax.DaxHasSystem):
+        # Test kernel invariants of this component
+        for k in component.kernel_invariants:
+            self.assertTrue(hasattr(component, k), f'Name "{k:s}" of "{component.get_system_key():s}" was marked '
+                                                   f'kernel invariant, but this attribute does not exist')
+
 
 class HistogramAnalyzerTestCase(unittest.TestCase):
 

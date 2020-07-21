@@ -132,6 +132,43 @@ class RtioBenchmarkModuleTestCase(dax.sim.test_case.PeekTestCase):
         with self.assertRaises(RuntimeWarning, msg='Did not raise expected RuntimeWarning in simulation'):
             s.rtio.benchmark_latency_core_rtio(1 * ms, 100 * ms, 1 * ms, 5, 5)
 
+    def test_burst_slow(self):
+        s = self._construct_env(dma=False)
+
+        # Inject burst size and period
+        s.rtio.set_dataset_sys(s.rtio.EVENT_PERIOD_KEY, 500 * ns)
+        s.rtio.set_dataset_sys(s.rtio.EVENT_BURST_KEY, 5000)
+
+        # Initialize
+        s.dax_init()
+
+        # Slow burst possible
+        s.rtio.burst()
+        s.rtio.burst_slow()
+        self.assertEqual(s.rtio.burst, s.rtio.burst_slow, 'Burst function did not default to slow burst')
+        with self.assertRaises(AttributeError, msg='Did not raise attribute error for burst DMA'):
+            # Not possible since DMA was disabled
+            s.rtio.burst_dma()
+
+    def test_burst_dma(self):
+        s = self._construct_env(dma=True)
+
+        # Inject burst size and period
+        s.rtio.set_dataset_sys(s.rtio.EVENT_PERIOD_KEY, 500 * ns)
+        s.rtio.set_dataset_sys(s.rtio.EVENT_BURST_KEY, 50)
+
+        # Initialize
+        s.dax_init()
+
+        # Verify DMA is still enabled
+        self.assertTrue(s.rtio._dma_enabled, 'DMA enabled flag was not set correctly')
+
+        # Burst possible
+        s.rtio.burst()
+        s.rtio.burst_slow()
+        s.rtio.burst_dma()
+        self.assertEqual(s.rtio.burst, s.rtio.burst_dma, 'Burst function did not default to DMA burst')
+
 
 class RtioLoopBenchmarkModuleTestCase(RtioBenchmarkModuleTestCase):
 

@@ -18,9 +18,6 @@ class RtioBenchmarkModule(DaxModule):
     DMA_EVENT_PERIOD_KEY: str = 'dma_event_period'
     LATENCY_CORE_RTIO_KEY: str = 'latency_core_rtio'
 
-    # Unique DMA tags
-    DMA_BURST: str = 'rtio_benchmark_burst'
-
     def build(self, *,  # type: ignore
               ttl_out: str, dma: bool = False, max_burst: int = 10000, init_kernel: bool = True) -> None:
         """Build the RTIO benchmark module.
@@ -36,10 +33,11 @@ class RtioBenchmarkModule(DaxModule):
 
         # Store attributes
         self._dma_enabled: bool = dma
+        self._dma_burst_name: str = self.get_system_key('burst')
         self._max_burst: int = max(max_burst, 0)
         self._init_kernel: bool = init_kernel
         self.logger.debug(f'Init kernel: {self._init_kernel}')
-        self.update_kernel_invariants('_dma_enabled', '_max_burst', 'DMA_BURST')
+        self.update_kernel_invariants('_dma_enabled', '_dma_burst_name', '_max_burst')
 
         # TTL output device
         self.ttl_out = self.get_device(ttl_out, artiq.coredevice.ttl.TTLInOut)
@@ -53,8 +51,9 @@ class RtioBenchmarkModule(DaxModule):
         # Load parameters
         self.setattr_dataset_sys(self.EVENT_PERIOD_KEY)
         self.setattr_dataset_sys(self.EVENT_BURST_KEY)
-        self.setattr_dataset_sys(self.DMA_EVENT_PERIOD_KEY)
-        self.setattr_dataset_sys(self.LATENCY_CORE_RTIO_KEY)
+        # Prototypes to assist type checkers
+        self.event_period: float
+        self.event_burst: float
 
         # Update DMA enabled flag
         self._dma_enabled = self._dma_enabled and self.hasattr(self.EVENT_PERIOD_KEY, self.EVENT_BURST_KEY)
@@ -71,9 +70,9 @@ class RtioBenchmarkModule(DaxModule):
 
         if self.hasattr(self.EVENT_BURST_KEY):
             # Limit event burst size
-            self.event_burst_size = np.int32(min(self.event_burst, self._max_burst))  # type: ignore[attr-defined]
-            self.update_kernel_invariants('event_burst_size')
-            self.logger.debug(f'Event burst size set to: {self.event_burst_size}')
+            self._event_burst_size = np.int32(min(self.event_burst, self._max_burst))
+            self.update_kernel_invariants('_event_burst_size')
+            self.logger.debug(f'Event burst size set to: {self._event_burst_size}')
 
         if self._init_kernel or force:
             # Call the init kernel function
@@ -102,11 +101,11 @@ class RtioBenchmarkModule(DaxModule):
     @kernel
     def _record_dma_burst(self):  # type: () -> None
         # Record the DMA burst trace
-        with self.core_dma.record(self.DMA_BURST):
-            for _ in range(self.event_burst_size):
-                delay(self.event_period / 2)  # type: ignore[attr-defined]
+        with self.core_dma.record(self._dma_burst_name):
+            for _ in range(self._event_burst_size):
+                delay(self.event_period / 2)
                 self.ttl_out.on()
-                delay(self.event_period / 2)  # type: ignore[attr-defined]
+                delay(self.event_period / 2)
                 self.ttl_out.off()
 
     @kernel
@@ -117,8 +116,8 @@ class RtioBenchmarkModule(DaxModule):
     def post_init(self) -> None:
         if self._dma_enabled:
             # Obtain DMA handle
-            self.burst_dma_handle = self.core_dma.get_handle(self.DMA_BURST)
-            self.update_kernel_invariants('burst_dma_handle')
+            self._dma_burst_handle = self.core_dma.get_handle(self._dma_burst_name)
+            self.update_kernel_invariants('_dma_burst_handle')
 
     """Module functionality"""
 
@@ -131,16 +130,16 @@ class RtioBenchmarkModule(DaxModule):
     @kernel
     def burst_slow(self):  # type: () -> None
         """Burst by spawning events one by one."""
-        for _ in range(self.event_burst_size):
-            delay(self.event_period * 2)  # type: ignore[attr-defined]
+        for _ in range(self._event_burst_size):
+            delay(self.event_period * 2)
             self.ttl_out.on()
-            delay(self.event_period * 2)  # type: ignore[attr-defined]
+            delay(self.event_period * 2)
             self.ttl_out.off()
 
     @kernel
     def burst_dma(self):  # type: () -> None
         """Burst by DMA handle playback."""
-        self.core_dma.playback_handle(self.burst_dma_handle)
+        self.core_dma.playback_handle(self._dma_burst_handle)
 
     """Benchmark event throughput"""
 
@@ -349,7 +348,7 @@ class RtioBenchmarkModule(DaxModule):
         # A flag to mark if at least one underflow happened
         underflow_flag = False
         # Current period
-        current_period = self.event_period  # type: ignore[attr-defined]
+        current_period = self.event_period
 
         while num_step_cutoff > 0:
             # Reset variables
@@ -694,12 +693,6 @@ class RtioLoopBenchmarkModule(RtioBenchmarkModule):
         # Log edge delay setting
         self.logger.debug(f'Edge delay set to: {dax.util.units.time_to_str(self.EDGE_DELAY)}')
 
-        # Load parameters
-        self.setattr_dataset_sys(self.INPUT_BUFFER_SIZE_KEY)
-        self.setattr_dataset_sys(self.LATENCY_RTIO_RTIO_KEY)
-        self.setattr_dataset_sys(self.LATENCY_RTIO_CORE_KEY)
-        self.setattr_dataset_sys(self.LATENCY_RTT_KEY)
-
         # Call super
         super(RtioLoopBenchmarkModule, self).init(**kwargs)
 
@@ -722,6 +715,8 @@ class RtioLoopBenchmarkModule(RtioBenchmarkModule):
 
         # Record DMA burst
         self._record_dma_burst()
+
+    """Module functionality"""
 
     @kernel
     def test_loop_connection(self, retry: TInt32 = np.int32(1)):
