@@ -15,7 +15,7 @@
 import os
 import sys
 
-sys.path.insert(0, os.path.abspath('../..'))
+sys.path.insert(0, os.path.abspath(os.path.join(os.pardir, os.pardir)))
 from dax import __version__ as dax_version  # noqa: E402
 
 # -- Project information -----------------------------------------------------

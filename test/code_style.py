@@ -1,6 +1,7 @@
 import unittest
 import io
 import contextlib
+import os
 
 
 class TestCodeStyle(unittest.TestCase):
@@ -16,9 +17,13 @@ class TestCodeStyle(unittest.TestCase):
             # Get DAX directory
             from dax import __dax_dir__ as dax_dir
 
-            # Create a style object
-            style = pycodestyle.StyleGuide(max_line_length=120)  # Increase line length
+            # Get a path to the configuration file
+            config_file = os.path.join(os.path.dirname(__file__), os.pardir, 'setup.cfg')
+            if not os.path.isfile(config_file):
+                self.skipTest('Could not find config file')
 
+            # Create a style object using the config file
+            style = pycodestyle.StyleGuide(config_file=config_file)
             # Buffer to store stdout output
             buf = io.StringIO()
 
