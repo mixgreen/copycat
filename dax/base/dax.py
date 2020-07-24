@@ -91,12 +91,10 @@ class DaxBase(artiq.experiment.HasEnvironment, abc.ABC):
             # Call super, which will call build()
             super(DaxBase, self).__init__(managers_or_parent, *args, **kwargs)
         except dax.base.exceptions.BuildError:
-            raise  # Exception was already logged
+            raise  # Re-raise build errors
         except Exception as e:
-            # Log the exception to provide more context
-            self.logger.exception(e)
-            # Raise a different exception type to prevent that the caught exception is logged again by the parent
-            raise dax.base.exceptions.BuildError(e) from None  # Do not duplicate full traceback again
+            # Raise a build error and add context
+            raise dax.base.exceptions.BuildError(f'Build error in {self.get_identifier()}') from e
         else:
             self.logger.debug('Build finished')
 
