@@ -285,6 +285,8 @@ class HistogramContext(DaxModule):
     def plot_histogram(self, **kwargs):  # type: (typing.Any) -> None
         """Open the applet that shows a plot of the latest histogram.
 
+        This function can only be called after the module is initialized.
+
         :param kwargs: Extra keyword arguments for the plot
         """
 
@@ -301,6 +303,8 @@ class HistogramContext(DaxModule):
         Note that if the data points are randomized the user should provide X values
         to sort the points and plot the graph correctly (`x` kwarg).
 
+        This function can only be called after the module is initialized.
+
         :param kwargs: Extra keyword arguments for the plot
         """
 
@@ -314,6 +318,8 @@ class HistogramContext(DaxModule):
     def plot_mean_count(self, **kwargs):  # type: (typing.Any) -> None
         """Open the applet that shows a plot of average count per histogram.
 
+        This function can only be called after the module is initialized.
+
         :param kwargs: Extra keyword arguments for the plot
         """
 
@@ -324,34 +330,52 @@ class HistogramContext(DaxModule):
 
     @rpc(flags={'async'})
     def clear_probability_plot(self):  # type: () -> None
-        """Clear the probability plot."""
+        """Clear the probability plot.
+
+        This function can only be called after the module is initialized.
+        """
         # Set the probability dataset to an empty list
         self.set_dataset(self._probability_plot_key, [], broadcast=True, archive=False)
 
     @rpc(flags={'async'})
     def clear_mean_count_plot(self):  # type: () -> None
-        """Clear the average count plot."""
+        """Clear the average count plot.
+
+        This function can only be called after the module is initialized.
+        """
         # Set the mean count dataset to an empty list
         self.set_dataset(self._mean_count_plot_key, [], broadcast=True, archive=False)
 
     @rpc(flags={'async'})
     def disable_histogram_plot(self):  # type: () -> None
-        """Close the histogram plot."""
+        """Close the histogram plot.
+
+        This function can only be called after the module is initialized.
+        """
         self._ccb.disable_applet(self.HISTOGRAM_PLOT_NAME, self._plot_group)
 
     @rpc(flags={'async'})
     def disable_probability_plot(self):  # type: () -> None
-        """Close the probability plot."""
+        """Close the probability plot.
+
+        This function can only be called after the module is initialized.
+        """
         self._ccb.disable_applet(self.PROBABILITY_PLOT_NAME, self._plot_group)
 
     @rpc(flags={'async'})
     def disable_mean_count_plot(self):  # type: () -> None
-        """Close the probability plot."""
+        """Close the probability plot.
+
+        This function can only be called after the module is initialized.
+        """
         self._ccb.disable_applet(self.MEAN_COUNT_PLOT_NAME, self._plot_group)
 
     @rpc(flags={'async'})
     def disable_all_plots(self):  # type: () -> None
-        """Close all histogram context plots."""
+        """Close all histogram context plots.
+
+        This function can only be called after the module is initialized.
+        """
         self._ccb.disable_applet_group(self._plot_group)
 
     """Data access functions"""

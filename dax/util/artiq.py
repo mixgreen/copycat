@@ -56,7 +56,7 @@ def get_manager_or_parent(device_db: typing.Union[typing.Dict[str, typing.Any], 
     :param device_db: A device DB as dict or a file name (optional)
     :param expid: Dict for the scheduler expid attribute (optional)
     :param arguments: Arguments for the ProcessArgumentManager object
-    :return: A dummy ARTIQ manager object
+    :return: A dummy ARTIQ manager object: (`DeviceManager`, `DatasetManager`, `ProcessArgumentManager`, `dict`)
     """
     assert isinstance(expid, dict) or expid is None
     assert isinstance(arguments, dict)

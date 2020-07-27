@@ -405,6 +405,8 @@ class TimeResolvedContext(DaxModule):
     def plot(self, **kwargs):  # type: (typing.Any) -> None
         """Open the applet that shows a plot of the latest results.
 
+        This function can only be called after the module is initialized.
+
         :param kwargs: Extra keyword arguments for the plot
         """
 
@@ -417,12 +419,18 @@ class TimeResolvedContext(DaxModule):
 
     @rpc(flags={'async'})
     def disable_plot(self):  # type: () -> None
-        """Close the plot."""
+        """Close the plot.
+
+        This function can only be called after the module is initialized.
+        """
         self._ccb.disable_applet(self.PLOT_NAME, self._plot_group)
 
     @rpc(flags={'async'})
     def disable_all_plots(self):  # type: () -> None
-        """Close all context related plots."""
+        """Close all context related plots.
+
+        This function can only be called after the module is initialized.
+        """
         self._ccb.disable_applet_group(self._plot_group)
 
     """Data access functions"""

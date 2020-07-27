@@ -70,7 +70,6 @@ class VcdSignalManagerTestCase(unittest.TestCase):
                 sys.ad9912: {'init', 'freq', 'phase', 'att', 'sw'},
                 sys.core: {'reset'},
                 sys.core_dma: {'record', 'play', 'play_name'},
-                sys.core_cache: {},
             }
 
             # Verify signals are registered

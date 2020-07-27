@@ -1,6 +1,7 @@
 import unittest
 import inspect
 
+import artiq.coredevice.cache  # type: ignore
 import artiq.coredevice.core  # type: ignore
 import artiq.coredevice.dma  # type: ignore
 import artiq.coredevice.ttl  # type: ignore
@@ -9,6 +10,7 @@ import artiq.coredevice.ad9910  # type: ignore
 import artiq.coredevice.ad9912  # type: ignore
 import artiq.coredevice.urukul  # type: ignore
 
+import dax.sim.coredevice.cache
 import dax.sim.coredevice.core
 import dax.sim.coredevice.dma
 import dax.sim.coredevice.ttl
@@ -20,6 +22,7 @@ import dax.sim.coredevice.urukul
 
 class CoredeviceSignatureTestCase(unittest.TestCase):
     class_list = [
+        (dax.sim.coredevice.cache.CoreCache, artiq.coredevice.cache.CoreCache),
         (dax.sim.coredevice.core.Core, artiq.coredevice.core.Core),
         (dax.sim.coredevice.dma.CoreDMA, artiq.coredevice.dma.CoreDMA),
         (dax.sim.coredevice.ttl.TTLOut, artiq.coredevice.ttl.TTLOut),
