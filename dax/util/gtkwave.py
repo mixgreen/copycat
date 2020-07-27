@@ -1,5 +1,5 @@
 import typing
-import vcd.gtkw  # type: ignore
+import vcd.gtkw
 import datetime
 import itertools
 import operator

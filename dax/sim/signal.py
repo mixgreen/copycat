@@ -1,6 +1,6 @@
 import abc
 import typing
-import vcd.writer  # type: ignore
+import vcd.writer
 import operator
 import numpy as np
 import datetime
@@ -72,10 +72,7 @@ class NullSignalManager(DaxSignalManager[None]):
         pass
 
 
-_VS_T = typing.Union[vcd.writer.RealVariable,
-                     vcd.writer.ScalarVariable,
-                     vcd.writer.StringVariable,
-                     vcd.writer.VectorVariable]  # The VCD signal type
+_VS_T = vcd.writer.Variable  # The VCD signal type
 _VT_T = typing.Type[typing.Union[bool, int, np.int32, np.int64, float, str, object]]  # The VCD signal-type type
 _VV_T = typing.Union[bool, int, np.int32, np.int64, float, str, None]  # The VCD value types
 
@@ -114,7 +111,7 @@ class VcdSignalManager(DaxSignalManager[_VS_T]):
                                          version=_dax_version)
 
         # Create event buffer to support reverting time
-        self._event_buffer: typing.List[typing.Tuple[int, _VS_T, _VV_T]] = []
+        self._event_buffer: typing.List[typing.Tuple[typing.Union[int, np.int64], _VS_T, _VV_T]] = []
         # Create a registered signals data structure
         self._registered_signals: typing.Dict[DaxSimDevice, typing.List[str]] = {}
 
@@ -192,11 +189,15 @@ class VcdSignalManager(DaxSignalManager[_VS_T]):
 
         # Sort the list of events (VCD writer can only handle a linear timeline)
         self._event_buffer.sort(key=operator.itemgetter(0))
+        # Get a timestamp for now
+        now: typing.Union[int, np.int64] = self._get_timestamp()
 
         if ref_period != self._timescale:
             # Scale the timestamps if the reference period does not match the timescale
             scalar = ref_period / self._timescale
             self._event_buffer = [(int(time * scalar), signal, value) for time, signal, value in self._event_buffer]
+            # Scale the timestamp for now
+            now = int(now * scalar)
 
         try:
             # Submit sorted events to the VCD writer
@@ -205,6 +206,9 @@ class VcdSignalManager(DaxSignalManager[_VS_T]):
         except vcd.writer.VCDPhaseError as e:
             # Occurs when we try to submit a timestamp which is earlier than the last submitted timestamp
             raise RuntimeError('Attempt to go back in time too much') from e
+        else:
+            # Flush the VCD writer
+            self._vcd.flush(now)
 
         # Clear the event buffer
         self._event_buffer.clear()
