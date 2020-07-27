@@ -80,7 +80,7 @@ _VV_T = typing.Union[bool, int, np.int32, np.int64, float, str, None]  # The VCD
 class VcdSignalManager(DaxSignalManager[_VS_T]):
     """VCD signal manager."""
 
-    _CONVERT_TYPE = {
+    _CONVERT_TYPE: typing.Dict[type, str] = {
         bool: 'reg',
         int: 'integer',
         np.int32: 'integer',
@@ -113,7 +113,7 @@ class VcdSignalManager(DaxSignalManager[_VS_T]):
         # Create event buffer to support reverting time
         self._event_buffer: typing.List[typing.Tuple[typing.Union[int, np.int64], _VS_T, _VV_T]] = []
         # Create a registered signals data structure
-        self._registered_signals: typing.Dict[DaxSimDevice, typing.List[str]] = {}
+        self._registered_signals: typing.Dict[DaxSimDevice, typing.List[typing.Tuple[str, type]]] = {}
 
     def register(self, scope: DaxSimDevice, name: str, type_: _VT_T, *,
                  size: typing.Optional[int] = None, init: _VV_T = None) -> _VS_T:
@@ -151,7 +151,7 @@ class VcdSignalManager(DaxSignalManager[_VS_T]):
             init = ''  # Shows up as `Z` instead of string value 'x'
 
         # Register signal locally
-        self._registered_signals.setdefault(scope, []).append(name)
+        self._registered_signals.setdefault(scope, []).append((name, type_))
         # Register the signal with the VCD writer and return the signal object
         return self._vcd.register_var(scope.key, name, var_type=var_type, size=size, init=init)
 
@@ -220,7 +220,7 @@ class VcdSignalManager(DaxSignalManager[_VS_T]):
         # Close the VCD file
         self._vcd_file.close()
 
-    def get_registered_signals(self) -> typing.Dict[DaxSimDevice, typing.List[str]]:
+    def get_registered_signals(self) -> typing.Dict[DaxSimDevice, typing.List[typing.Tuple[str, type]]]:
         """Return the registered signals.
 
         :return: A dictionary with devices and a list of signal names

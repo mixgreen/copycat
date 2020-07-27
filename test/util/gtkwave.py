@@ -5,7 +5,7 @@ from dax.base.dax import DaxSystem
 from dax.util.artiq import get_manager_or_parent
 from dax.util.output import temp_dir
 from dax.sim import enable_dax_sim
-from dax.sim.signal import get_signal_manager
+from dax.sim.signal import get_signal_manager, VcdSignalManager
 from dax.util.gtkwave import GTKWSaveGenerator
 
 _DEVICE_DB: typing.Dict[str, typing.Any] = {
@@ -34,6 +34,10 @@ class _TestSystem(DaxSystem):
 
 
 class GTKWaveTestCase(unittest.TestCase):
+
+    def test_signal_types(self):
+        self.assertSetEqual(set(VcdSignalManager._CONVERT_TYPE), set(GTKWSaveGenerator._CONVERT_TYPE),
+                            'Signal types did not match VCD signal types.')
 
     def test_gtk_wave_save_generator(self):
         with temp_dir():

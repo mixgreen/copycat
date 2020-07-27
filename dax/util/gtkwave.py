@@ -1,5 +1,6 @@
 import typing
 import vcd.gtkw
+import numpy as np
 import datetime
 import itertools
 import operator
@@ -13,7 +14,25 @@ __all__ = ['GTKWSaveGenerator']
 
 
 class GTKWSaveGenerator:
-    """Generator for GTKWave save files based on a given DAX system object."""
+    """Generator for GTKWave save file based on a given DAX system object.
+
+    This class integrates tightly with the :class:`VcdSignalManager` to obtain
+    signals while the DAX system object is used for the save file organization.
+    Functionality to generate a save file was explicitly decoupled from the
+    :class:`VcdSignalManager` class to maintain separation between the DAX
+    base code and the simulation backend.
+    """
+
+    _CONVERT_TYPE: typing.Dict[type, str] = {
+        bool: 'hex',
+        int: 'dec',
+        np.int32: 'dec',
+        np.int64: 'dec',
+        float: 'real',
+        str: 'ascii',
+        object: 'hex',
+    }
+    """Dict to convert Python types to GTKWave types."""
 
     def __init__(self, system: DaxSystem):
         """Instantiate a new GTKWave save file generator.
@@ -62,5 +81,5 @@ class GTKWSaveGenerator:
                             if signals is not None:
                                 # Create a group for the signals of this device
                                 with gtkw.group(d, closed=True):
-                                    for s in signals:
-                                        gtkw.trace(f'{d}.{s}')
+                                    for s, t in signals:
+                                        gtkw.trace(f'{d}.{s}', datafmt=self._CONVERT_TYPE[t])

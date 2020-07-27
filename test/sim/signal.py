@@ -16,6 +16,9 @@ from dax.sim.signal import NullSignalManager, VcdSignalManager, PeekSignalManage
 from dax.util.artiq import get_manager_or_parent
 from dax.util.output import temp_dir
 
+_SIGNAL_TYPES = {bool, int, np.int32, np.int64, float, str, object}
+"""Signal types that need to be supported by every signal manager."""
+
 
 class NullSignalManagerTestCase(unittest.TestCase):
 
@@ -30,6 +33,9 @@ class NullSignalManagerTestCase(unittest.TestCase):
 
 
 class VcdSignalManagerTestCase(unittest.TestCase):
+
+    def test_signal_types(self):
+        self.assertSetEqual(set(VcdSignalManager._CONVERT_TYPE), _SIGNAL_TYPES, 'Signal types did not match reference.')
 
     def test_signal_manager(self) -> None:
         with temp_dir():
@@ -73,7 +79,8 @@ class VcdSignalManagerTestCase(unittest.TestCase):
             for d, s in signals.items():
                 with self.subTest(device_type=type(d)):
                     if s:
-                        self.assertSetEqual(set(registered_signals[d]), s, 'Registered signals did not match')
+                        self.assertSetEqual({n for n, _ in registered_signals[d]}, s,
+                                            'Registered signals did not match')
 
             # Manually close signal manager before leaving temp dir
             sm.close()
@@ -89,6 +96,9 @@ class PeekSignalManagerTestCase(unittest.TestCase):
         # Get the peek signal manager
         self.sm = typing.cast(PeekSignalManager, get_signal_manager())
         self.assertIsInstance(self.sm, PeekSignalManager)
+
+    def test_signal_types(self):
+        self.assertSetEqual(set(self.sm._CONVERT_TYPE), _SIGNAL_TYPES, 'Signal types did not match reference.')
 
     def _test_all_not_set(self):
         for ttl in self.sys.ttl_list:
