@@ -3,11 +3,13 @@ import typing
 import vcd.writer  # type: ignore
 import operator
 import numpy as np
+import datetime
 
 import artiq.language.core
 from artiq.language.units import *
 
 from dax.sim.device import DaxSimDevice
+from dax import __version__ as _dax_version
 import dax.util.units
 
 __all__ = ['DaxSignalManager', 'NullSignalManager', 'VcdSignalManager', 'PeekSignalManager', 'SignalNotSet',
@@ -52,14 +54,14 @@ class DaxSignalManager(abc.ABC, typing.Generic[_S_T]):
         return time
 
 
-class NullSignalManager(DaxSignalManager[typing.Any]):
+class NullSignalManager(DaxSignalManager[None]):
     """A signal manager that does nothing."""
 
     def register(self, scope: DaxSimDevice, name: str, type_: type, *,
-                 size: typing.Optional[int] = None, init: typing.Any = None) -> typing.Any:
+                 size: typing.Optional[int] = None, init: typing.Any = None) -> None:
         pass
 
-    def event(self, signal: typing.Any, value: typing.Any, *,
+    def event(self, signal: None, value: typing.Any, *,
               time: typing.Optional[np.int64] = None, offset: typing.Optional[np.int64] = None) -> None:
         pass
 
@@ -92,8 +94,8 @@ class VcdSignalManager(DaxSignalManager[_VS_T]):
     }
     """Dict to convert Python types to VCD types."""
 
-    def __init__(self, output_file: str, timescale: float = ns):
-        assert isinstance(output_file, str), 'Output file must be of type str'
+    def __init__(self, file_name: str, timescale: float = ns):
+        assert isinstance(file_name, str), 'Output file name must be of type str'
         assert isinstance(timescale, float), 'Timescale must be of type float'
         assert timescale > 0.0, 'Timescale must be > 0.0'
 
@@ -101,13 +103,20 @@ class VcdSignalManager(DaxSignalManager[_VS_T]):
         self._timescale: float = timescale
 
         # Open file
-        self._output_file = open(output_file, mode='w')
+        self._vcd_file = open(file_name, mode='w')
 
         # Create VCD writer
         timescale_str = dax.util.units.time_to_str(timescale, precision=0)
-        self._vcd = vcd.writer.VCDWriter(self._output_file, timescale=timescale_str, comment=output_file)
+        self._vcd = vcd.writer.VCDWriter(self._vcd_file,
+                                         timescale=timescale_str,
+                                         date=datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                                         comment=file_name,
+                                         version=_dax_version)
+
         # Create event buffer to support reverting time
         self._event_buffer: typing.List[typing.Tuple[int, _VS_T, _VV_T]] = []
+        # Create a registered signals data structure
+        self._registered_signals: typing.Dict[DaxSimDevice, typing.List[str]] = {}
 
     def register(self, scope: DaxSimDevice, name: str, type_: _VT_T, *,
                  size: typing.Optional[int] = None, init: _VV_T = None) -> _VS_T:
@@ -144,10 +153,10 @@ class VcdSignalManager(DaxSignalManager[_VS_T]):
         if type_ is str and init is None:
             init = ''  # Shows up as `Z` instead of string value 'x'
 
-        # Register the signal with the VCD writer
-        # Note: The "ident" keyword argument is removed in pyvcd>=0.2.1
-        return self._vcd.register_var(scope.key, name, var_type=var_type, size=size, init=init,
-                                      ident=f'{scope.key}.{name}')
+        # Register signal locally
+        self._registered_signals.setdefault(scope, []).append(name)
+        # Register the signal with the VCD writer and return the signal object
+        return self._vcd.register_var(scope.key, name, var_type=var_type, size=size, init=init)
 
     def event(self, signal: _VS_T, value: _VV_T, *,
               time: typing.Optional[np.int64] = None, offset: typing.Optional[np.int64] = None) -> None:
@@ -193,9 +202,9 @@ class VcdSignalManager(DaxSignalManager[_VS_T]):
             # Submit sorted events to the VCD writer
             for time, signal, value in self._event_buffer:
                 self._vcd.change(signal, time, value)
-        except vcd.writer.VCDPhaseError:
+        except vcd.writer.VCDPhaseError as e:
             # Occurs when we try to submit a timestamp which is earlier than the last submitted timestamp
-            raise RuntimeError('Attempt to go back in time too much') from None
+            raise RuntimeError('Attempt to go back in time too much') from e
 
         # Clear the event buffer
         self._event_buffer.clear()
@@ -204,8 +213,15 @@ class VcdSignalManager(DaxSignalManager[_VS_T]):
         """Close the VCD file."""
         # Close the VCD writer
         self._vcd.close()
-        # Close the file
-        self._output_file.close()
+        # Close the VCD file
+        self._vcd_file.close()
+
+    def get_registered_signals(self) -> typing.Dict[DaxSimDevice, typing.List[str]]:
+        """Return the registered signals.
+
+        :return: A dictionary with devices and a list of signal names
+        """
+        return self._registered_signals
 
 
 _PS_T = typing.Tuple[DaxSimDevice, str]  # The peek signal manager signal type
@@ -297,7 +313,7 @@ class PeekSignalManager(DaxSignalManager[_PS_T]):
         type_ = self._CONVERT_TYPE[type_]
 
         # Get signals of the given device
-        signals = self._event_buffer.setdefault(scope, dict())
+        signals = self._event_buffer.setdefault(scope, {})
         # Check if signal was already registered
         if name in signals:
             raise LookupError(f'Signal "{scope.key}.{name}" was already registered')

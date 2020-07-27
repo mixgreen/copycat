@@ -84,7 +84,7 @@ def get_file_name_generator(scheduler: typing.Any):  # type: ignore
 
         if ext is not None:
             # Add file extension
-            name = '.'.join((name, ext))
+            name = f'{name}.{ext}'
         # Join base path and provided name
         file_name = base_path.joinpath(name)
         # Return full file name as a string
@@ -112,7 +112,7 @@ def dummy_file_name_generator(name: str, ext: typing.Optional[str] = None) -> st
 
     if ext is not None:
         # Add file extension
-        name = '.'.join((name, ext))
+        name = f'{name}.{ext}'
 
     # Return name
     return name

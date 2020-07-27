@@ -1210,6 +1210,13 @@ class DaxNameRegistry:
         device_key_list = natsort.natsorted(self._devices.keys())  # Natural sort the list
         return device_key_list
 
+    def get_device_parents(self) -> typing.Dict[str, DaxHasSystem]:
+        """Return a dict with device keys and their corresponding parent.
+
+        :return: A dict of unique device keys with their parent
+        """
+        return {k: parent for k, (_, parent) in self._devices.items()}
+
     def make_service_key(self, service_name: str) -> str:
         """Return the system key for a service name.
 
@@ -1376,7 +1383,7 @@ class DaxDataStore:
     override the :func:`set`, :func:`mutate`, and :func:`append` methods.
     """
 
-    def __init__(self) -> None:  # Constructor return type required if no parameters are given
+    def __init__(self) -> None:
         """Construct a new DAX data store object."""
         # Create a logger object
         self._logger: logging.Logger = logging.getLogger(f'{self.__module__}.{self.__class__.__name__}')

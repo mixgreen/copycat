@@ -1,6 +1,8 @@
 from dax.experiment import *
 from dax.util.introspect import ComponentGraphviz, RelationGraphviz
 
+__all__ = ['Introspect']
+
 
 @dax_client_factory
 class Introspect(DaxClient, EnvExperiment):

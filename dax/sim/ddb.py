@@ -13,14 +13,14 @@ _DAX_COREDEVICE_PACKAGE: str = 'dax.sim.coredevice'
 
 _GENERIC_DEVICE: typing.Dict[str, str] = {
     'type': 'local',
-    'module': '.'.join([_DAX_COREDEVICE_PACKAGE, 'generic']),
+    'module': f'{_DAX_COREDEVICE_PACKAGE}.generic',
     'class': 'Generic',
 }
 """The properties of a generic device."""
 
 _DUMMY_DEVICE: typing.Dict[str, str] = {
     'type': 'local',
-    'module': '.'.join([_DAX_COREDEVICE_PACKAGE, 'dummy']),
+    'module': f'{_DAX_COREDEVICE_PACKAGE}.dummy',
     'class': 'Dummy',
 }
 """The properties of a dummy device."""
@@ -227,16 +227,14 @@ def _update_module(key: str, value: typing.Dict[str, typing.Any], coredevice_pac
 
     for package in coredevice_packages:
         # Convert module name based on the current package
-        module = '.'.join([package, tail])
+        module = f'{package}.{tail}'
 
         try:
             # Check if the module exists by importing it
             m = importlib.import_module(module)
-
         except ImportError:
             # Module was not found, continue to next package
             continue
-
         else:
             # Get the class of the device
             class_ = value.get('class')

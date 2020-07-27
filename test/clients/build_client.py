@@ -11,6 +11,7 @@ import dax.modules.rtio_benchmark
 import dax.modules.rpc_benchmark
 import dax.interfaces.detection
 
+import dax.clients.gtkwave
 import dax.clients.introspect
 import dax.clients.pmt_monitor
 import dax.clients.rpc_benchmark
@@ -54,6 +55,7 @@ class BuildClientTestCase(unittest.TestCase):
     """Test case that builds and initializes clients as a basic test."""
 
     _CLIENTS = [
+        dax.clients.gtkwave.GTKWaveSaveGenerator,
         dax.clients.introspect.Introspect,
         dax.clients.pmt_monitor.PmtMonitor,
         dax.clients.rpc_benchmark.RpcBenchmarkLatency,

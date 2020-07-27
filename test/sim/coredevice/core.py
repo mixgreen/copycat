@@ -1,9 +1,13 @@
 import unittest
 
 import dax.sim.coredevice.core
+from dax.sim.signal import set_signal_manager, NullSignalManager
 
 
 class CoreTestCase(unittest.TestCase):
+    def setUp(self) -> None:
+        set_signal_manager(NullSignalManager())
+
     def test_constructor_signature(self):
         # Make sure the signature is as expected
         with self.assertRaises(TypeError, msg='Core class constructor did not match expected signature'):
@@ -18,7 +22,7 @@ class CoreTestCase(unittest.TestCase):
         self.assertIsNotNone(dax.sim.coredevice.core.Core(dmgr={}, ref_period=1e-9, _key='core'))
 
 
-class BaseCoreTestCase(unittest.TestCase):
+class BaseCoreTestCase(CoreTestCase):
     def test_constructor_signature(self):
         # Should be able to construct base core without arguments
         self.assertIsNotNone(dax.sim.coredevice.core.BaseCore())

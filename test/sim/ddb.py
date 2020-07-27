@@ -60,6 +60,17 @@ class DdbTestCase(unittest.TestCase):
         # Compare if the dicts are the same
         self.assertDictEqual(d0, d1, 'Substitute and in-place usage of enable_dax_sim() did not yielded same result')
 
+    def test_double_application(self):
+        # Apply once
+        d0 = enable_dax_sim(copy.deepcopy(self.DEVICE_DB), enable=True, logging_level=logging.WARNING,
+                            moninj_service=False)
+
+        # Apply twice on deep copy
+        d1 = enable_dax_sim(copy.deepcopy(d0), enable=True, logging_level=logging.WARNING, moninj_service=False)
+
+        # Compare if the dicts are the same
+        self.assertDictEqual(d0, d1, 'Second application did modify ddb while it should not')
+
     def test_ddb_shallow_copy(self):
         # Modify a shallow copy of the device db
         ddb = enable_dax_sim(self.DEVICE_DB.copy(), enable=True, logging_level=logging.WARNING, moninj_service=False)

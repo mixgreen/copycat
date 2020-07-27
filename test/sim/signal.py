@@ -11,23 +11,87 @@ import artiq.coredevice.ad9912  # type: ignore
 
 from dax.experiment import DaxSystem
 from dax.sim import enable_dax_sim
-from dax.sim.signal import get_signal_manager, PeekSignalManager, SignalNotSet
+from dax.sim.signal import get_signal_manager, SignalNotSet
+from dax.sim.signal import NullSignalManager, VcdSignalManager, PeekSignalManager
 from dax.util.artiq import get_manager_or_parent
+from dax.util.output import temp_dir
+
+
+class NullSignalManagerTestCase(unittest.TestCase):
+
+    def test_signal_manager(self) -> None:
+        # Create the system
+        ddb = enable_dax_sim(_DEVICE_DB.copy(), enable=True, output='null', moninj_service=False)
+        _TestSystem(get_manager_or_parent(ddb))
+
+        # Verify the signal manager type
+        sm = typing.cast(NullSignalManager, get_signal_manager())
+        self.assertIsInstance(sm, NullSignalManager)
+
+
+class VcdSignalManagerTestCase(unittest.TestCase):
+
+    def test_signal_manager(self) -> None:
+        with temp_dir():
+            # Create the system
+            ddb = enable_dax_sim(_DEVICE_DB.copy(), enable=True, output='vcd', moninj_service=False)
+            _TestSystem(get_manager_or_parent(ddb))
+
+            # Verify the signal manager type
+            sm = typing.cast(VcdSignalManager, get_signal_manager())
+            self.assertIsInstance(sm, VcdSignalManager)
+
+            # Manually close signal manager before leaving temp dir
+            sm.close()
+            sm.close()  # Close twice, should not raise an exception
+
+    def test_registered_signals(self):
+        with temp_dir():
+            # Create the system
+            ddb = enable_dax_sim(_DEVICE_DB.copy(), enable=True, output='vcd', moninj_service=False)
+            sys = _TestSystem(get_manager_or_parent(ddb))
+
+            # Verify the signal manager type
+            sm = typing.cast(VcdSignalManager, get_signal_manager())
+            self.assertIsInstance(sm, VcdSignalManager)
+
+            signals = {
+                sys.ttl0: {'state', 'direction', 'sensitivity'},
+                sys.ttl1: {'state', 'direction', 'sensitivity'},
+                sys.ec: {'count'},
+                sys.ad9910.cpld: {'init', 'init_att'},
+                sys.ad9910: {'init', 'freq', 'phase', 'phase_mode', 'att', 'amp', 'sw'},
+                sys.ad9912: {'init', 'freq', 'phase', 'att', 'sw'},
+                sys.core: {'reset'},
+                sys.core_dma: {'record', 'play', 'play_name'},
+                sys.core_cache: {},
+            }
+
+            # Verify signals are registered
+            registered_signals = sm.get_registered_signals()
+            self.assertSetEqual(set(signals), set(registered_signals), 'Registered devices did not match')
+            for d, s in signals.items():
+                with self.subTest(device_type=type(d)):
+                    if s:
+                        self.assertSetEqual(set(registered_signals[d]), s, 'Registered signals did not match')
+
+            # Manually close signal manager before leaving temp dir
+            sm.close()
 
 
 class PeekSignalManagerTestCase(unittest.TestCase):
 
     def setUp(self) -> None:
         # Create the system
-        ddb = enable_dax_sim(_DEVICE_DB, enable=True, output='peek', moninj_service=False)
+        ddb = enable_dax_sim(_DEVICE_DB.copy(), enable=True, output='peek', moninj_service=False)
         self.sys = _TestSystem(get_manager_or_parent(ddb))
 
         # Get the peek signal manager
         self.sm = typing.cast(PeekSignalManager, get_signal_manager())
-        assert isinstance(self.sm, PeekSignalManager)
+        self.assertIsInstance(self.sm, PeekSignalManager)
 
     def _test_all_not_set(self):
-        for ttl in self.sys.ttls:
+        for ttl in self.sys.ttl_list:
             for s in ['state', 'direction', 'sensitivity']:
                 self.assertEqual(self.sm.peek(ttl, s), SignalNotSet)
 
@@ -40,10 +104,10 @@ class PeekSignalManagerTestCase(unittest.TestCase):
         self._test_all_not_set()
 
         # Set direction
-        for ttl in self.sys.ttls:
+        for ttl in self.sys.ttl_list:
             ttl.input()
 
-        for ttl in self.sys.ttls:
+        for ttl in self.sys.ttl_list:
             self.assertEqual(self.sm.peek(ttl, 'direction'), 0)
             self.assertEqual(self.sm.peek(ttl, 'sensitivity'), 0)
             self.assertEqual(self.sm.peek(ttl, 'state'), 'z')
@@ -53,10 +117,10 @@ class PeekSignalManagerTestCase(unittest.TestCase):
         self._test_all_not_set()
 
         # Set direction
-        for ttl in self.sys.ttls:
+        for ttl in self.sys.ttl_list:
             ttl.output()
 
-        for ttl in self.sys.ttls:
+        for ttl in self.sys.ttl_list:
             self.assertEqual(self.sm.peek(ttl, 'direction'), 1)
             self.assertEqual(self.sm.peek(ttl, 'sensitivity'), 'z')
             self.assertEqual(self.sm.peek(ttl, 'state'), 'x')
@@ -66,12 +130,12 @@ class PeekSignalManagerTestCase(unittest.TestCase):
         self._test_all_not_set()
 
         # Set direction
-        for ttl in self.sys.ttls:
+        for ttl in self.sys.ttl_list:
             ttl.output()
 
         delay(10 * us)
 
-        for ttl in self.sys.ttls:
+        for ttl in self.sys.ttl_list:
             self.assertEqual(self.sm.peek(ttl, 'direction'), 1)
             self.assertEqual(self.sm.peek(ttl, 'sensitivity'), 'z')
             self.assertEqual(self.sm.peek(ttl, 'state'), 'x')
@@ -81,14 +145,14 @@ class PeekSignalManagerTestCase(unittest.TestCase):
         self._test_all_not_set()
 
         # Set direction
-        for ttl in self.sys.ttls:
+        for ttl in self.sys.ttl_list:
             ttl.output()
 
         delay_mu(-1)
         self._test_all_not_set()
 
         delay_mu(1)
-        for ttl in self.sys.ttls:
+        for ttl in self.sys.ttl_list:
             self.assertEqual(self.sm.peek(ttl, 'direction'), 1)
             self.assertEqual(self.sm.peek(ttl, 'sensitivity'), 'z')
             self.assertEqual(self.sm.peek(ttl, 'state'), 'x')
@@ -98,14 +162,14 @@ class PeekSignalManagerTestCase(unittest.TestCase):
         self._test_all_not_set()
 
         # Set direction
-        for ttl in self.sys.ttls:
+        for ttl in self.sys.ttl_list:
             ttl.output()
 
-        for ttl in self.sys.ttls:
+        for ttl in self.sys.ttl_list:
             for s in ['state', 'direction', 'sensitivity']:
                 self.assertEqual(self.sm.peek(ttl, s, time=now_mu() - 1), SignalNotSet)
 
-        for ttl in self.sys.ttls:
+        for ttl in self.sys.ttl_list:
             self.assertEqual(self.sm.peek(ttl, 'direction'), 1)
             self.assertEqual(self.sm.peek(ttl, 'sensitivity'), 'z')
             self.assertEqual(self.sm.peek(ttl, 'state'), 'x')
@@ -115,12 +179,12 @@ class PeekSignalManagerTestCase(unittest.TestCase):
         self._test_all_not_set()
 
         # Set direction
-        for ttl in self.sys.ttls:
+        for ttl in self.sys.ttl_list:
             ttl.output()
-        for ttl in self.sys.ttls:
+        for ttl in self.sys.ttl_list:
             ttl.input()
 
-        for ttl in self.sys.ttls:
+        for ttl in self.sys.ttl_list:
             self.assertEqual(self.sm.peek(ttl, 'direction'), 0)
             self.assertEqual(self.sm.peek(ttl, 'sensitivity'), 0)
             self.assertEqual(self.sm.peek(ttl, 'state'), 'z')
@@ -130,15 +194,15 @@ class PeekSignalManagerTestCase(unittest.TestCase):
         self._test_all_not_set()
 
         # Set direction
-        for ttl in self.sys.ttls:
+        for ttl in self.sys.ttl_list:
             ttl.output()
-        for ttl in self.sys.ttls:
+        for ttl in self.sys.ttl_list:
             ttl.input()
         delay(3 * us)
-        for ttl in self.sys.ttls:
+        for ttl in self.sys.ttl_list:
             ttl.output()
 
-        for ttl in self.sys.ttls:
+        for ttl in self.sys.ttl_list:
             for i in range(10):
                 delay(2 * us)
                 ttl.set_o(i % 2)
@@ -151,10 +215,10 @@ class PeekSignalManagerTestCase(unittest.TestCase):
         self._test_all_not_set()
 
         # Set direction
-        for ttl in self.sys.ttls:
+        for ttl in self.sys.ttl_list:
             ttl.output()
 
-        for ttl in self.sys.ttls:
+        for ttl in self.sys.ttl_list:
             with parallel:
                 with sequential:
                     for i in range(10):
@@ -227,7 +291,7 @@ class _TestSystem(DaxSystem):
 
         self.ttl0 = self.get_device('ttl0', artiq.coredevice.ttl.TTLInOut)
         self.ttl1 = self.get_device('ttl1', artiq.coredevice.ttl.TTLInOut)
-        self.ttls = [self.ttl0, self.ttl1]
+        self.ttl_list = [self.ttl0, self.ttl1]
 
         self.ec = self.get_device('ec', artiq.coredevice.edge_counter.EdgeCounter)
 

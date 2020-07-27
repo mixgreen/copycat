@@ -19,7 +19,7 @@ class _GenericBase:
 
     def __getattr__(self, item: str) -> typing.Any:
         # Non-existing attributes are added
-        attr_name = item if self._attr_name is None else '.'.join([self._attr_name, item])
+        attr_name = item if self._attr_name is None else f'{self._attr_name}.{item}'
         obj = _GenericBase(attr_name, self._signal_manager, self._signal_call, self._signal_function)
         setattr(self, item, obj)
         return obj

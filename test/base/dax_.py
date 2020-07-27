@@ -252,6 +252,8 @@ class DaxNameRegistryTestCase(unittest.TestCase):
         s = _TestSystem(get_manager_or_parent(_device_db))
         # List of core devices
         core_devices = ['core', 'core_cache', 'core_dma']
+        # Dict with device keys and parents
+        device_parents = {k: s for k in core_devices}
         # Registry
         r = s.registry
 
@@ -259,6 +261,8 @@ class DaxNameRegistryTestCase(unittest.TestCase):
         self.assertListEqual(r.get_device_key_list(), core_devices, 'Core devices were not found in device list')
         self.assertSetEqual(r.search_devices(artiq.coredevice.core.Core), {'core'},
                             'Search devices did not returned the expected set of results')
+        self.assertDictEqual(r.get_device_parents(), device_parents,
+                             'Device parents dict did not match expected result')
 
     def test_service(self):
         # Test system
