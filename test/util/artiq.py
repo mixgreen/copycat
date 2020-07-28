@@ -4,6 +4,7 @@ from artiq.language.core import rpc, portable, kernel, host_only
 import artiq.experiment
 
 import dax.util.artiq
+import dax.util.output
 
 __all__ = ['ArtiqTestCase']
 
@@ -14,6 +15,20 @@ class ArtiqTestCase(unittest.TestCase):
         # Create an experiment object using the helper get_manager_or_parent() function
         self.assertIsInstance(artiq.experiment.EnvExperiment(dax.util.artiq.get_manager_or_parent()),
                               artiq.experiment.HasEnvironment)
+
+    def test_get_manager_or_parent_dataset_db(self):
+        with dax.util.output.temp_dir():
+            dataset_db = 'dataset_db.pyon'
+            key = 'foo'
+            value = 99
+
+            with open(dataset_db, mode='x') as f:
+                # Write pyon file
+                f.write(f'{{\n    "{key}": {value}\n}}')
+
+            # Create environment
+            env = artiq.experiment.EnvExperiment(dax.util.artiq.get_manager_or_parent(dataset_db=dataset_db))
+            self.assertEqual(env.get_dataset(key), value, 'Retrieved dataset did not match earlier set value')
 
     def test_is_kernel(self):
         self.assertFalse(dax.util.artiq.is_kernel(self._undecorated_func),

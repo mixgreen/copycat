@@ -87,7 +87,7 @@ class PeekTestCase(unittest.TestCase):
 
         # Construct environment, which will also construct a new signal manager
         _logger.debug('Constructing environment')
-        env = env_class(get_manager_or_parent(device_db, expid, **env_kwargs), *build_args, **build_kwargs)
+        env = env_class(get_manager_or_parent(device_db, expid=expid, **env_kwargs), *build_args, **build_kwargs)
 
         # Store the new signal manager
         _logger.debug('Retrieving peek signal manager')

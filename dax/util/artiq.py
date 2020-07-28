@@ -43,7 +43,8 @@ def is_host_only(func: typing.Any) -> bool:
     return False if meta is None else bool(meta.forbidden)
 
 
-def get_manager_or_parent(device_db: typing.Union[typing.Dict[str, typing.Any], str, None] = None,
+def get_manager_or_parent(device_db: typing.Union[typing.Dict[str, typing.Any], str, None] = None, *,
+                          dataset_db: typing.Optional[str] = None,
                           expid: typing.Optional[typing.Dict[str, typing.Any]] = None,
                           **arguments: typing.Any) -> typing.Any:
     """Returns an object that can function as a `manager_or_parent` for ARTIQ HasEnvironment.
@@ -53,12 +54,14 @@ def get_manager_or_parent(device_db: typing.Union[typing.Dict[str, typing.Any], 
     If a full ARTIQ environment is not required but only a core device driver is sufficient,
     please take a look at the `dax.sim.coredevice.core.BaseCore` class.
 
-    :param device_db: A device DB as dict or a file name (optional)
-    :param expid: Dict for the scheduler expid attribute (optional)
+    :param device_db: A device DB as dict or a file name
+    :param dataset_db: A dataset DB as a file name
+    :param expid: Dict for the scheduler expid attribute
     :param arguments: Arguments for the ProcessArgumentManager object
     :return: A dummy ARTIQ manager object: (`DeviceManager`, `DatasetManager`, `ProcessArgumentManager`, `dict`)
     """
-    assert isinstance(expid, dict) or expid is None
+    assert isinstance(dataset_db, str) or dataset_db is None, 'Dataset DB must be a str or None'
+    assert isinstance(expid, dict) or expid is None, 'expid must be a dict or None'
     assert isinstance(arguments, dict)
 
     # Scheduler
@@ -95,10 +98,9 @@ def get_manager_or_parent(device_db: typing.Union[typing.Dict[str, typing.Any], 
         }
     )
 
-    # Dataset DB and manager for testing in tmp directory
-    dataset_db_file_name = os.path.join(tempdir.name, 'dataset_db.pyon')
-    dataset_db = artiq.master.databases.DatasetDB(dataset_db_file_name)
-    dataset_mgr = artiq.master.worker_db.DatasetManager(dataset_db)
+    # Dataset DB and manager
+    dataset_db_file_name = os.path.join(tempdir.name, 'dataset_db.pyon') if dataset_db is None else dataset_db
+    dataset_mgr = artiq.master.worker_db.DatasetManager(artiq.master.databases.DatasetDB(dataset_db_file_name))
 
     # Argument manager
     argument_mgr = artiq.language.environment.ProcessArgumentManager(arguments)
