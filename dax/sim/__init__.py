@@ -1,5 +1,5 @@
 """
-This module is intended to be imported by users.
+This package is intended to be imported by users.
 It will import the components required to enable and configure DAX.sim.
 """
 

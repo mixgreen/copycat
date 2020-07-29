@@ -1,6 +1,14 @@
 dax.clients package
 ===================
 
+dax.clients.gtkwave module
+--------------------------
+
+.. automodule:: dax.clients.gtkwave
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 dax.clients.introspect module
 -----------------------------
 

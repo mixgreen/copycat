@@ -17,6 +17,14 @@ dax.util.ccb module
     :undoc-members:
     :show-inheritance:
 
+dax.util.gtkwave module
+-----------------------
+
+.. automodule:: dax.util.gtkwave
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 dax.util.introspect module
 --------------------------
 

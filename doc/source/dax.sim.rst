@@ -53,10 +53,7 @@ dax.sim.device module
 dax.sim.test_case package
 =========================
 
-dax.sim.test\_case.peek module
-------------------------------
-
-.. automodule:: dax.sim.test_case.peek
+.. automodule:: dax.sim.test_case
     :members:
     :undoc-members:
     :show-inheritance:
