@@ -4,6 +4,7 @@ import logging
 import os
 import pygit2  # type: ignore
 import collections
+from unittest.mock import MagicMock, call
 
 from artiq.experiment import HasEnvironment
 import artiq.coredevice.edge_counter
@@ -75,6 +76,14 @@ _device_db = {
 class _TestSystem(DaxSystem):
     SYS_ID = 'unittest_system'
     SYS_VER = 0
+
+    def __init__(self, *args, **kwargs):
+        self._data_store = MagicMock(spec=dax.base.dax.DaxDataStore)
+        super(_TestSystem, self).__init__(*args, **kwargs)
+
+    @property
+    def data_store(self):
+        return self._data_store
 
 
 class _TestModule(DaxModule):
@@ -865,8 +874,16 @@ class DaxModuleBaseTestCase(unittest.TestCase):
 
         self.assertIsNone(s.setattr_device('ttl0'), 'setattr_device() did not return None')
         self.assertTrue(hasattr(s, 'ttl0'), 'setattr_device() did not set the attribute correctly')
-        self.assertIsNone(s.setattr_device('alias_2', 'foo'), 'setattr_device() with attribute name failed')
-        self.assertTrue(hasattr(s, 'foo'), 'setattr_device() with attribute name did not set attribute correctly')
+
+        with self.assertRaises(TypeError, msg='setattr_device() type check did not raise'):
+            s.setattr_device('alias_2', artiq.coredevice.ttl.TTLInOut)
+        self.assertFalse(hasattr(s, 'alias_2'), 'Failed setattr_device() did occupy attribute')
+
+        self.assertIsNone(s.setattr_device('alias_2', artiq.coredevice.ttl.TTLOut),
+                          'setattr_device() did not return None')
+        self.assertTrue(hasattr(s, 'alias_2'), 'setattr_device() did not set the attribute correctly')
+        self.assertIsInstance(s.alias_2, artiq.coredevice.ttl.TTLOut,
+                              'setattr_device() did not returned correct device type')
 
     def test_get_device(self):
         # Test system
@@ -912,7 +929,7 @@ class DaxModuleBaseTestCase(unittest.TestCase):
         self.assertSetEqual(r.search_devices((artiq.coredevice.ttl.TTLInOut, artiq.coredevice.ttl.TTLOut)),
                             {'ttl0', 'ttl1'}, 'Search devices did not returned expected result')
 
-    def test_dataset(self):
+    def test_get_dataset(self):
         s = _TestSystem(get_manager_or_parent(_device_db))
 
         key = 'key1'
@@ -922,29 +939,84 @@ class DaxModuleBaseTestCase(unittest.TestCase):
         self.assertListEqual(s.get_dataset_sys(key), value,
                              'get_dataset_sys() did not write the default value to the dataset')
 
+        key2 = 'key2'
+        self.assertListEqual(s.get_dataset_sys(key2, default=value, data_store=False), value,
+                             'get_dataset_sys() did not returned the provided default value')
+
+        # Check data store calls
+        self.assertListEqual(s.data_store.method_calls, [call.set(s.get_system_key(key), value)],
+                             'Data store calls did not match expected pattern')
+
+    def test_set_dataset(self):
+        s = _TestSystem(get_manager_or_parent(_device_db))
+
+        key = 'key1'
+        value = [11, 12, 13]
+        s.set_dataset_sys(key, value)
+        self.assertListEqual(s.get_dataset_sys(key, 'not_used_default_value'), value,
+                             'set_dataset_sys() did not write the value to the dataset')
+
+        key2 = 'key2'
+        s.set_dataset_sys(key2, value, data_store=False)
+        self.assertListEqual(s.get_dataset_sys(key2), value,
+                             'set_dataset_sys() did not write the value to the dataset')
+
+        # Check data store calls
+        self.assertListEqual(s.data_store.method_calls, [call.set(s.get_system_key(key), value)],
+                             'Data store calls did not match expected pattern')
+
     def test_setattr_dataset(self):
         s = _TestSystem(get_manager_or_parent(_device_db))
 
         key = 'key3'
-        self.assertIsNone(s.setattr_dataset_sys(key, 10), 'setattr_dataset_sys() failed')
+        self.assertIsNone(s.setattr_dataset_sys(key, 10, data_store=True), 'setattr_dataset_sys() failed')
         self.assertTrue(hasattr(s, key), 'setattr_dataset_sys() did not set the attribute correctly')
         self.assertEqual(getattr(s, key), 10, 'Returned system dataset value does not match expected result')
         self.assertIn(key, s.kernel_invariants,
                       'setattr_dataset_sys() did not added the attribute to kernel_invariants by default')
 
+        key = 'key2'
+        self.assertIsNone(s.setattr_dataset_sys(key, 12, data_store=False), 'setattr_dataset_sys() failed')
+        self.assertTrue(hasattr(s, key), 'setattr_dataset_sys() did not set the attribute correctly')
+        self.assertEqual(getattr(s, key), 12, 'Returned system dataset value does not match expected result')
+        self.assertIn(key, s.kernel_invariants,
+                      'setattr_dataset_sys() did not added the attribute to kernel_invariants by default')
+
+        key = 'key1'
+        self.assertIsNone(s.setattr_dataset_sys(key, 100, kernel_invariant=False), 'setattr_dataset_sys() failed')
+        self.assertTrue(hasattr(s, key), 'setattr_dataset_sys() did not set the attribute correctly')
+        self.assertEqual(getattr(s, key), 100, 'Returned system dataset value does not match expected result')
+        self.assertNotIn(key, s.kernel_invariants,
+                         'setattr_dataset_sys() added the attribute to kernel_invariants while it was not supposed to')
+
         key = 'key5'
-        s.set_dataset_sys(key, 5)
-        self.assertIsNone(s.setattr_dataset_sys(key), 'setattr_dataset_sys() failed')
+        s.set_dataset_sys(key, 5, data_store=True)
+        self.assertIsNone(s.setattr_dataset_sys(key, kernel_invariant=True, data_store=False),
+                          'setattr_dataset_sys() failed')
         self.assertTrue(hasattr(s, key), 'setattr_dataset_sys() did not set the attribute correctly')
         self.assertEqual(getattr(s, key), 5, 'Returned system dataset value does not match expected result')
         self.assertIn(key, s.kernel_invariants,
-                      'setattr_dataset_sys() did not added the attribute to kernel_invariants by default')
+                      'setattr_dataset_sys() did not added the attribute to kernel_invariants')
 
         key = 'key4'
         self.assertIsNone(s.setattr_dataset_sys(key), 'setattr_dataset_sys() failed')
         self.assertFalse(hasattr(s, key), 'setattr_dataset_sys() set the attribute while it should not')
         self.assertNotIn(key, s.kernel_invariants,
                          'setattr_dataset_sys() did added the attribute to kernel_invariants while it should not')
+
+        key = 'key6'
+        s.set_dataset_sys(key, 6, data_store=False)
+        self.assertIsNone(s.setattr_dataset_sys(key, data_store=True), 'setattr_dataset_sys() failed')
+        self.assertTrue(hasattr(s, key), 'setattr_dataset_sys() did not set the attribute correctly')
+        self.assertEqual(getattr(s, key), 6, 'Returned system dataset value does not match expected result')
+        self.assertIn(key, s.kernel_invariants,
+                      'setattr_dataset_sys() did not added the attribute to kernel_invariants')
+
+        # Check data store calls
+        self.assertListEqual(s.data_store.method_calls, [call.set(s.get_system_key('key3'), 10),
+                                                         call.set(s.get_system_key('key1'), 100),
+                                                         call.set(s.get_system_key('key5'), 5),
+                                                         ], 'Data store calls did not match expected pattern')
 
     @unittest.expectedFailure
     def test_dataset_append(self):
@@ -957,6 +1029,25 @@ class DaxModuleBaseTestCase(unittest.TestCase):
         self.assertIsNone(s.append_to_dataset_sys(key, 1), 'Appending to system dataset failed')
         self.assertListEqual(s.get_dataset_sys(key), [1], 'Appending to system dataset has incorrect behavior')
         # NOTE: This test fails for unknown reasons (ARTIQ library) while real-life tests show correct behavior
+
+    def test_dataset_append_data_store(self):
+        s = _TestSystem(get_manager_or_parent(_device_db))
+
+        key = 'key2'
+        self.assertIsNone(s.set_dataset_sys(key, []), 'Setting new system dataset failed')
+        self.assertListEqual(s.get_dataset_sys(key), [],
+                             'Returned system dataset value does not match expected result')
+
+        # Check data store calls (test early due to mutating list values)
+        self.assertEqual(s.data_store.method_calls[-1], call.set(s.get_system_key(key), []),
+                         'Data store calls did not match expected pattern')
+
+        self.assertIsNone(s.append_to_dataset_sys(key, 1), 'Appending to system dataset failed')
+        self.assertIsNone(s.append_to_dataset_sys(key, 2, data_store=False), 'Appending to system dataset failed')
+
+        # Check data store calls
+        self.assertEqual(s.data_store.method_calls[-1], call.append(s.get_system_key(key), 1),
+                         'Data store calls did not match expected pattern')
 
     def test_dataset_append_nonempty(self):
         s = _TestSystem(get_manager_or_parent(_device_db))
@@ -982,9 +1073,19 @@ class DaxModuleBaseTestCase(unittest.TestCase):
         self.assertIsNone(s.set_dataset_sys(key, [0, 0, 0, 0]), 'Setting new system dataset failed')
         self.assertListEqual(s.get_dataset_sys(key), [0, 0, 0, 0],
                              'Returned system dataset value does not match expected result')
+
+        # Check data store calls (test early due to mutating list values)
+        self.assertListEqual(s.data_store.method_calls, [call.set(s.get_system_key(key), [0, 0, 0, 0])],
+                             'Data store calls did not match expected pattern')
+
         self.assertIsNone(s.mutate_dataset_sys(key, 1, 9), 'Mutating system dataset failed')
-        self.assertIsNone(s.mutate_dataset_sys(key, 3, 99), 'Mutating system dataset failed')
+        self.assertIsNone(s.mutate_dataset_sys(key, 3, 99, data_store=False), 'Mutating system dataset failed')
         self.assertListEqual(s.get_dataset_sys(key), [0, 9, 0, 99], 'Mutating system dataset has incorrect behavior')
+
+        # Check data store calls
+        self.assertEqual(len(s.data_store.method_calls), 2)
+        self.assertEqual(s.data_store.method_calls[-1], call.mutate(s.get_system_key(key), 1, 9),
+                         'Data store calls did not match expected pattern')
 
     def test_identifier(self):
         s = _TestSystem(get_manager_or_parent(_device_db))

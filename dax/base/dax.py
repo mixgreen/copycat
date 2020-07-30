@@ -382,11 +382,8 @@ class DaxHasSystem(DaxBase, abc.ABC):
         return device
 
     @artiq.experiment.host_only
-    def setattr_device(self, key: str, attr_name: typing.Optional[str] = None,
-                       type_: typing.Optional[typing.Type[__D_T]] = None) -> None:
+    def setattr_device(self, key: str, type_: typing.Optional[typing.Type[__D_T]] = None) -> None:
         """Sets a device driver as attribute.
-
-        If no attr_name is provided, the key will be the attribute name.
 
         Users can optionally specify an expected device type.
         If the device does not match the expected type, an exception is raised.
@@ -394,7 +391,6 @@ class DaxHasSystem(DaxBase, abc.ABC):
         The attribute used to set the device driver is automatically added to the kernel invariants.
 
         :param key: The key of the device
-        :param attr_name: The attribute name to assign the device driver to
         :param type_: The expected type of the device
         :raises KeyError: Raised when the device could not be obtained from the device DB
         :raises TypeError: Raised when the device does not match the expected type
@@ -402,24 +398,18 @@ class DaxHasSystem(DaxBase, abc.ABC):
         :raises AttributeError: Raised if the attribute name was already assigned
         """
 
-        assert isinstance(attr_name, str) or attr_name is None, 'Attribute name must be of type str or None'
-
         # Get the device
         device = self.get_device(key, type_=type_)  # type: ignore[arg-type]
 
-        if attr_name is None:
-            # Set attribute name to key if no attribute name was given
-            attr_name = key
-
         # Set the device as attribute
-        if not _is_valid_name(attr_name):
-            raise ValueError(f'Attribute name "{attr_name}" not valid')
-        if hasattr(self, attr_name):
-            raise AttributeError(f'Attribute name "{attr_name}" was already assigned')
-        setattr(self, attr_name, device)
+        if not _is_valid_name(key):
+            raise ValueError(f'Attribute name "{key}" not valid')
+        if hasattr(self, key):
+            raise AttributeError(f'Attribute name "{key}" was already assigned')
+        setattr(self, key, device)
 
         # Add attribute to kernel invariants
-        self.update_kernel_invariants(attr_name)
+        self.update_kernel_invariants(key)
 
     @artiq.experiment.rpc(flags={'async'})
     def set_dataset_sys(self, key, value, data_store=True):  # type: (str, typing.Any, bool) -> None
@@ -430,6 +420,8 @@ class DaxHasSystem(DaxBase, abc.ABC):
         :param data_store: Flag to archive the value in the data store
         :raises ValueError: Raised if the key has an invalid format
         """
+
+        assert isinstance(data_store, bool), 'Data store flag must be of type bool'
 
         # Get the full system key
         system_key: str = self.get_system_key(key)
@@ -461,6 +453,8 @@ class DaxHasSystem(DaxBase, abc.ABC):
         :raises ValueError: Raised if the key has an invalid format
         """
 
+        assert isinstance(data_store, bool), 'Data store flag must be of type bool'
+
         # Get the full system key
         system_key: str = self.get_system_key(key)
 
@@ -483,6 +477,8 @@ class DaxHasSystem(DaxBase, abc.ABC):
         :raises ValueError: Raised if the key has an invalid format
         """
 
+        assert isinstance(data_store, bool), 'Data store flag must be of type bool'
+
         # Get the full system key
         system_key: str = self.get_system_key(key)
 
@@ -494,7 +490,8 @@ class DaxHasSystem(DaxBase, abc.ABC):
             # Archive value using the data store
             self.data_store.append(system_key, value)
 
-    def get_dataset_sys(self, key: str, default: typing.Any = artiq.experiment.NoDefault) -> typing.Any:
+    def get_dataset_sys(self, key: str, default: typing.Any = artiq.experiment.NoDefault,
+                        data_store: bool = True) -> typing.Any:
         """Returns the contents of a system dataset.
 
         If the key is present, its value will be returned.
@@ -504,20 +501,25 @@ class DaxHasSystem(DaxBase, abc.ABC):
 
         The above behavior differs slightly from :func:`get_dataset` since it will write
         the default value to the dataset in case the key was not present.
-        If the default value is written to the dataset, it is also archived in the data store.
 
         Values that are retrieved using this method can not be added to the kernel invariants.
         The user is responsible for adding the attribute to the list of kernel invariants.
 
         :param key: The key of the system dataset
         :param default: The default value to set the system dataset to if not present
+        :param data_store: Flag to archive the value in the data store if the default value is used
         :return: The value of the system dataset or the default value
         :raises KeyError: Raised if the key was not present and no default was provided
         :raises ValueError: Raised if the key has an invalid format
         """
 
+        assert isinstance(data_store, bool), 'Data store flag must be of type bool'
+
         # Get the full system key
         system_key: str = self.get_system_key(key)
+
+        # Modify logging level of worker_db logger to suppress an unwanted warning message
+        artiq.master.worker_db.logger.setLevel(logging.WARNING + 1)
 
         try:
             # Get value from system dataset with extra flags
@@ -532,17 +534,22 @@ class DaxHasSystem(DaxBase, abc.ABC):
                 self.set_dataset(system_key, default, broadcast=True, persist=True, archive=False)
                 # Get the value again and make sure it is archived
                 value = self.get_dataset(system_key, archive=True)  # Should never raise a KeyError
-                # Archive value using the data store
-                self.data_store.set(system_key, value)
+
+                if data_store:
+                    # Archive value using the data store
+                    self.data_store.set(system_key, value)
         else:
             self.logger.debug(f'System dataset key "{key}" returned value "{value}"')
+        finally:
+            # Restore original logging level of worker_db logger
+            artiq.master.worker_db.logger.setLevel(logging.NOTSET)
 
         # Return value
         return value
 
     @artiq.experiment.host_only
     def setattr_dataset_sys(self, key: str, default: typing.Any = artiq.experiment.NoDefault,
-                            kernel_invariant: bool = True) -> None:
+                            data_store: bool = True, kernel_invariant: bool = True) -> None:
         """Sets the contents of a system dataset as attribute.
 
         If the key is present, its value will be loaded to the attribute.
@@ -555,9 +562,6 @@ class DaxHasSystem(DaxBase, abc.ABC):
         Exceptions will be raised when an attribute is missing while being accessed in Python
         or when a kernel is compiled that needs the attribute.
 
-        An other difference from :func:`setattr_dataset` is that if the function falls back on the
-        default value, the default value will be written to the dataset and archived in the data store.
-
         The function :func:`hasattr` can be used for conditional initialization in case it is possible that a
         certain attribute is not present (i.e. when this function is used without a default value).
 
@@ -566,7 +570,8 @@ class DaxHasSystem(DaxBase, abc.ABC):
 
         :param key: The key of the system dataset
         :param default: The default value to set the system dataset to if not present
-        :param kernel_invariant: Flag to set the attribute as kernel invariant or not
+        :param data_store: Flag to archive the value in the data store if the default value is used
+        :param kernel_invariant: Flag to set the attribute as kernel invariant
         :raises KeyError: Raised if the key was not present
         :raises ValueError: Raised if the key has an invalid format
         """
@@ -575,7 +580,7 @@ class DaxHasSystem(DaxBase, abc.ABC):
 
         try:
             # Get the value from system dataset
-            value: typing.Any = self.get_dataset_sys(key, default)
+            value: typing.Any = self.get_dataset_sys(key, default, data_store=data_store)
         except KeyError:
             # The value was not available in the system dataset and no default was provided, attribute will not be set
             self.logger.debug(f'System attribute "{key}" not set')
