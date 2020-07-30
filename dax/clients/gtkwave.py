@@ -9,7 +9,7 @@ class GTKWaveSaveGenerator(DaxClient, EnvExperiment):
     """GTKWave save file generator."""
 
     DAX_INIT: bool = False
-    """DAX init should not run."""
+    """Disable DAX init."""
 
     def prepare(self):
         # Get the system

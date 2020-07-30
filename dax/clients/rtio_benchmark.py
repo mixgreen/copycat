@@ -17,7 +17,7 @@ class RtioBenchmarkEventThroughput(DaxClient, EnvExperiment):
         # Arguments
         time_kwargs = {'unit': 'ns', 'scale': 1, 'step': 1, 'ndecimals': 0}
         number_kwargs = {'scale': 1, 'step': 1, 'ndecimals': 0}
-        self.setattr_argument('period_min', NumberValue(100, min=1, **time_kwargs))
+        self.setattr_argument('period_min', NumberValue(200, min=1, **time_kwargs))
         self.setattr_argument('period_max', NumberValue(1000, min=1, **time_kwargs))
         self.setattr_argument('period_step', NumberValue(1, min=1, **time_kwargs))
         self.setattr_argument('num_samples', NumberValue(5, min=1, **number_kwargs))

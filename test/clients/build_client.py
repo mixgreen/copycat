@@ -58,6 +58,7 @@ class BuildClientTestCase(unittest.TestCase):
         dax.clients.gtkwave.GTKWaveSaveGenerator,
         dax.clients.introspect.Introspect,
         dax.clients.pmt_monitor.PmtMonitor,
+        dax.clients.pmt_monitor.MultiPmtMonitor,
         dax.clients.rpc_benchmark.RpcBenchmarkLatency,
         dax.clients.rtio_benchmark.RtioBenchmarkEventThroughput,
         dax.clients.rtio_benchmark.RtioBenchmarkEventBurst,
@@ -87,11 +88,16 @@ class BuildClientTestCase(unittest.TestCase):
                     enable_dax_sim(ddb=_device_db, enable=True, logging_level=30, output='null', moninj_service=False))
                 client = _InstantiatedClient(manager)
                 self.assertIsInstance(client, DaxClient)
+
                 # Get system
                 system = client.registry.find_module(DaxSystem)
                 self.assertIsInstance(system, _TestSystem)
-                # Initialize system
-                self.assertIsNone(system.dax_init())
+
+                if client.DAX_INIT:
+                    # Call the prepare function
+                    client.prepare()
+                    # Initialize system
+                    self.assertIsNone(system.dax_init())
 
     def test_build_custom_clients(self):
         for client_type in self._CUSTOM_CLIENTS:

@@ -929,6 +929,8 @@ class DaxClient(DaxHasSystem, abc.ABC):
         :param args: Positional arguments forwarded to the :func:`build` function
         :param kwargs: Keyword arguments forwarded to the :func:`build` function
         """
+        assert isinstance(self.DAX_INIT, bool), 'The DAX_INIT flag must be of type bool'
+
         # Check if the decorator was used
         if not isinstance(managers_or_parent, DaxSystem):
             raise TypeError(f'DAX client class {self.__class__.__name__} must be decorated with @dax_client_factory')
@@ -1363,10 +1365,11 @@ class DaxNameRegistry:
 
         # Search for all modules and services matching the interface type
         iterator = itertools.chain(self._modules.values(), self._services.values())
-        results = {itf.get_system_key(): itf for itf in iterator if isinstance(itf, type_)}
+        results = {itf.get_system_key(): typing.cast(DaxNameRegistry.__I_T, itf)
+                   for itf in iterator if isinstance(itf, type_)}
 
         # Return the list with results
-        return typing.cast(typing.Dict[str, DaxNameRegistry.__I_T], results)
+        return results
 
 
 class DaxDataStore:
@@ -1588,14 +1591,14 @@ class DaxDataStoreInfluxDb(DaxDataStore):
         fields[key] = value  # The full key and the value are the actual field
 
         # Create the point object
-        point = {
+        point: DaxDataStoreInfluxDb.__P_T = {
             'measurement': self._sys_id,
             'tags': tags,
             'fields': fields,
         }
 
         # Return point
-        return typing.cast(DaxDataStoreInfluxDb.__P_T, point)
+        return point
 
     def _get_driver(self, system: DaxSystem, key: str) -> None:
         """Get the required driver.

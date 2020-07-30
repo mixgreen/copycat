@@ -19,10 +19,7 @@ class RpcBenchmarkModule(DaxModule):
         pass
 
     def init(self) -> None:
-        # Load parameters
-        self.setattr_dataset_sys(self.LATENCY_HOST_CORE_HOST_KEY)
-        self.setattr_dataset_sys(self.LATENCY_CORE_HOST_CORE_KEY)
-        self.setattr_dataset_sys(self.LATENCY_CORE_HOST_CORE_ASYNC_KEY)
+        pass
 
     def post_init(self) -> None:
         pass

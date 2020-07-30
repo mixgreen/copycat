@@ -91,7 +91,7 @@ class PeekTestCase(unittest.TestCase):
 
         # Store the new signal manager
         _logger.debug('Retrieving peek signal manager')
-        self.__signal_manager = typing.cast(PeekSignalManager, get_signal_manager())
+        self.__signal_manager: PeekSignalManager = typing.cast(PeekSignalManager, get_signal_manager())
         assert isinstance(self.__signal_manager, PeekSignalManager), 'Did not obtained correct signal manager type'
 
         # Return the environment

@@ -9,6 +9,9 @@ __all__ = ['RpcBenchmarkLatency']
 class RpcBenchmarkLatency(DaxClient, EnvExperiment):
     """RPC latency benchmark."""
 
+    DAX_INIT: bool = False
+    """Disable DAX init."""
+
     def build(self) -> None:  # type: ignore
         # Arguments
         self.num_samples = self.get_argument('num_samples', NumberValue(100, min=1, step=1, ndecimals=0))

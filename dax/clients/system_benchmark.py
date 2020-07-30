@@ -18,7 +18,7 @@ class SystemBenchmarkDaxInit(DaxClient, EnvExperiment):
     """DAX system initialization benchmark."""
 
     DAX_INIT: bool = False
-    """DAX init should not run."""
+    """Disable DAX init."""
 
     def build(self) -> None:  # type: ignore
         # Arguments
@@ -77,7 +77,7 @@ class SystemBenchmarkDaxInitProfile(DaxClient, EnvExperiment):
     """DAX system initialization profiler."""
 
     DAX_INIT: bool = False
-    """DAX init should not run."""
+    """Disable DAX init."""
 
     SORT_KEYS = [k.value for k in pstats.SortKey]  # type: ignore[attr-defined]
     """Profile stats sort keys."""

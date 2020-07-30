@@ -9,7 +9,7 @@ class Introspect(DaxClient, EnvExperiment):
     """System introspection tool."""
 
     DAX_INIT: bool = False
-    """DAX init should not run for introspect."""
+    """Disable DAX init."""
 
     GRAPHS = {
         'All': [ComponentGraphviz, RelationGraphviz],
