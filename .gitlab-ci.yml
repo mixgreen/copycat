@@ -34,7 +34,7 @@ stages:
     - conda create -y -n artiq artiq
     - conda activate artiq
     # Install DAX dependencies
-    - conda install -y numpy scipy pyvcd natsort pygit2 pyqt pyqtgraph matplotlib python-graphviz h5py
+    - conda install -y numpy scipy pyvcd natsort pygit2 matplotlib python-graphviz h5py
 
 test_nix:
   extends: .nix_env

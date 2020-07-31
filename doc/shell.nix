@@ -13,8 +13,6 @@ in
                 ps.pyvcd
                 ps.natsort
                 ps.pygit2
-                ps.pyqt5
-                artiq-full.pyqtgraph-qt5
                 ps.matplotlib
                 ps.graphviz
                 ps.h5py
