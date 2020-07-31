@@ -39,7 +39,7 @@ class CcbTool:
 
     ARTIQ_APPLET = '${artiq_applet}'
     """The ARTIQ applet variable which can be used in CCB commands."""
-    DAX_APPLET = '${python} -m dax.applets.'
+    DAX_APPLET = '${python} -m dax_applets.'
     """The DAX applet starting command which can be used in CCB commands."""
 
     def __init__(self, ccb: typing.Any):

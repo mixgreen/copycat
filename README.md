@@ -11,6 +11,8 @@ combine it with generic components and utilities provided by DAX.
 
 Supplementary communication tools for DAX are available in the
 [DAX comtools package](https://gitlab.com/duke-artiq/dax-comtools).
+Optional applets for DAX are available in the
+[DAX applets package](https://gitlab.com/duke-artiq/dax-applets).
 Nix scripts for this project can be found in the
 [Nix scripts repository](https://gitlab.com/duke-artiq/nix-scripts).
 
