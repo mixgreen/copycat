@@ -177,15 +177,25 @@ class PmtMonitor(_PmtMonitorBase):
         pmt_channel_max = len(self.pmt_array) - 1
         assert pmt_channel_max >= 0, 'PMT array can not be empty'
 
+        # Dict with available applet types
+        live_plot = 'Live plot'
+        self._applet_types: typing.Dict[str, typing.Callable[..., None]] = {
+            live_plot: self.ccb.live_plot,
+            'Plot XY': self.ccb.plot_xy,
+        }
+
         # Arguments
         self.pmt_channel = self.get_argument('PMT channel',
                                              NumberValue(default=0, step=1, min=0, max=pmt_channel_max, ndecimals=0),
                                              tooltip='PMT channel to monitor')
+        self.applet_type = self.get_argument('Applet type',
+                                             EnumerationValue(list(self._applet_types), live_plot),
+                                             tooltip='Choose an applet type (requires applet restart)')
         self.update_kernel_invariants('pmt_channel')
 
     def _create_applet(self, *args: typing.Any, **kwargs: typing.Any) -> None:
-        # Use normal plot XY applet
-        self.ccb.plot_xy(*args, **kwargs)
+        # Create applet based on chosen applet type
+        self._applet_types[self.applet_type](*args, **kwargs)
 
     @kernel
     def _count(self):  # type: () -> None

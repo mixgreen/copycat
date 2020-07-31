@@ -124,6 +124,31 @@ class CcbTool:
         # Create applet
         self.create_applet(name, command, group=group)
 
+    def live_plot(self, name: str, y: str, *,
+                  sliding_window: typing.Optional[int] = None,
+                  title: typing.Optional[str] = None,
+                  x_label: typing.Optional[str] = None, y_label: typing.Optional[str] = None,
+                  update_delay: typing.Optional[float] = None, group: typing.Optional[_G_T] = None,
+                  **kwargs: typing.Any) -> None:
+        """Create a live plot applet.
+
+        :param name: Name of the applet
+        :param y: Y-value dataset
+        :param sliding_window: Set size of the sliding window, or `None` for the default size
+        :param title: Graph title
+        :param x_label: X-axis label
+        :param y_label: Y-axis label
+        :param update_delay: Time to wait after a modification before updating graph
+        :param group: Optional group of the applet
+        :param kwargs: Other optional arguments for the applet
+        """
+        # Assemble command
+        command = f'{self.DAX_APPLET}live_plot {y}'
+        command = _generate_command(command, points=sliding_window, title=title,
+                                    x_label=x_label, y_label=y_label, update_delay=update_delay, **kwargs)
+        # Create applet
+        self.create_applet(name, command, group=group)
+
     def plot_xy(self, name: str, y: str, *,
                 x: typing.Optional[str] = None,
                 error: typing.Optional[str] = None, fit: typing.Optional[str] = None,

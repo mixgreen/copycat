@@ -7,6 +7,7 @@ import h5py  # type: ignore
 import artiq.coredevice
 
 from dax.experiment import *
+import dax.base.dax
 import dax.util.matplotlib_backend  # noqa: F401
 from dax.modules.hist_context import *
 from dax.interfaces.detection import DetectionInterface
