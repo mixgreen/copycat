@@ -15,26 +15,54 @@ def _get_attributes(o: typing.Any) -> typing.Iterator[typing.Any]:
 
 
 _logger: logging.Logger = logging.getLogger(__name__)
-"""Module logger object"""
+"""Module logger object."""
 
 
 class GraphvizBase(graphviz.Digraph):
+    """Graphviz base class with helper functions."""
+
     __A_T = typing.Dict[str, str]  # Type of attribute dicts
 
-    MODULE_NODE_ATTR: __A_T = {'color': 'blue'}
-    """Node attributes for modules."""
-    MODULE_EDGE_ATTR: __A_T = {'K': '0.8'}
-    """Edge attributes for modules."""
-    SYSTEM_EDGE_ATTR: __A_T = {'len': '1.5'}
-    """Edge attributes for the system."""
+    MODULE_EDGE_K: float = 0.8
+    """The default module edge spring constant."""
+    SYSTEM_EDGE_LEN: float = 1.5
+    """The default system edge length in inch."""
+    CLUSTER_EDGE_LEN: float = 2.5
+    """The default cluster edge length in inch."""
 
-    SERVICE_NODE_ATTR: __A_T = {'color': 'red'}
-    """Node attributes for services."""
-    SERVICE_EDGE_ATTR: __A_T = {}
-    """Edge attributes for services."""
+    def __init__(self, *,
+                 module_edge_k: float = MODULE_EDGE_K,
+                 system_edge_len: float = SYSTEM_EDGE_LEN,
+                 cluster_edge_len: float = CLUSTER_EDGE_LEN,
+                 **kwargs: typing.Any):
+        """Create a new Graphviz base class with the given parameters.
 
-    INTER_CLUSTER_EDGE_ATTR: __A_T = {'len': '2.5'}
-    """Edge attributes for inter-cluster edges."""
+        :param module_edge_k: Module edge spring constant
+        :param system_edge_len: System edge preferred length in inch
+        :param cluster_edge_len: Cluster edge preferred length in inch
+        :param kwargs: Keyword arguments for the Graphviz parent class
+        """
+        assert isinstance(module_edge_k, float), 'Module edge K must be of type float'
+        assert isinstance(system_edge_len, float), 'System edge len must be of type float'
+        assert isinstance(cluster_edge_len, float), 'Cluster edge len must be of type float'
+
+        self._module_node_attr: GraphvizBase.__A_T = {'color': 'blue'}
+        """Node attributes for modules."""
+        self._module_edge_attr: GraphvizBase.__A_T = {'K': str(module_edge_k)}
+        """Edge attributes for modules."""
+        self._system_edge_attr: GraphvizBase.__A_T = {'len': str(system_edge_len)}
+        """Edge attributes for the system."""
+
+        self._service_node_attr: GraphvizBase.__A_T = {'color': 'red'}
+        """Node attributes for services."""
+        self._service_edge_attr: GraphvizBase.__A_T = {}
+        """Edge attributes for services."""
+
+        self._cluster_edge_attr: GraphvizBase.__A_T = {'len': str(cluster_edge_len)}
+        """Edge attributes for inter-cluster edges."""
+
+        # Call super
+        super(GraphvizBase, self).__init__(**kwargs)
 
     def _add_modules(self, graph: graphviz.Digraph,
                      module: dax.base.dax.DaxModuleBase,
@@ -49,7 +77,7 @@ class GraphvizBase(graphviz.Digraph):
         assert isinstance(to_module_edges, bool)
 
         # Add module to the graph
-        graph.node(module.get_system_key(), label=module.get_name(), **self.MODULE_NODE_ATTR)
+        graph.node(module.get_system_key(), label=module.get_name(), **self._module_node_attr)
         _logger.debug(f'Added module "{module.get_system_key()}"')
 
         # Inspect children of this module for modules
@@ -62,8 +90,8 @@ class GraphvizBase(graphviz.Digraph):
             if to_module_edges:
                 # Add edge
                 graph.edge(module.get_system_key(), child.get_system_key(),
-                           **(self.SYSTEM_EDGE_ATTR if isinstance(module, dax.base.dax.DaxSystem)
-                              else self.MODULE_EDGE_ATTR))
+                           **(self._system_edge_attr if isinstance(module, dax.base.dax.DaxSystem)
+                              else self._module_edge_attr))
 
         # Inspect attributes of this module for modules
         attr_modules = {attr for attr in _get_attributes(module) if isinstance(attr, dax.base.dax.DaxModuleBase)}
@@ -78,8 +106,8 @@ class GraphvizBase(graphviz.Digraph):
             for m in unexpected_modules:
                 # Add edge
                 graph.edge(module.get_system_key(), m.get_system_key(), style='dashed',
-                           **(self.SYSTEM_EDGE_ATTR if isinstance(module, dax.base.dax.DaxSystem)
-                              else self.MODULE_EDGE_ATTR))
+                           **(self._system_edge_attr if isinstance(module, dax.base.dax.DaxSystem)
+                              else self._module_edge_attr))
 
     def _add_services(self, graph: graphviz.Digraph,
                       services: typing.Sequence[dax.base.dax.DaxService],
@@ -95,7 +123,7 @@ class GraphvizBase(graphviz.Digraph):
 
         for s in services:
             # Add service to the graph
-            graph.node(s.get_system_key(), label=s.get_name(), **self.SERVICE_NODE_ATTR)
+            graph.node(s.get_system_key(), label=s.get_name(), **self._service_node_attr)
             _logger.debug(f'Added service "{s.get_system_key()}"')
 
             if to_service_edges:
@@ -105,7 +133,7 @@ class GraphvizBase(graphviz.Digraph):
 
                 for attr in attr_services:
                     # Add edge to other service
-                    graph.edge(s.get_system_key(), attr.get_system_key(), **self.SERVICE_EDGE_ATTR)
+                    graph.edge(s.get_system_key(), attr.get_system_key(), **self._service_edge_attr)
 
     def _add_service_modules(self, graph: graphviz.Digraph,
                              services: typing.Sequence[dax.base.dax.DaxService]) -> None:
@@ -126,7 +154,7 @@ class GraphvizBase(graphviz.Digraph):
                 # Add modules
                 self._add_modules(graph, child, to_module_edges=True)
                 # Add edge
-                graph.edge(s.get_system_key(), child.get_system_key(), **self.MODULE_EDGE_ATTR)
+                graph.edge(s.get_system_key(), child.get_system_key(), **self._module_edge_attr)
 
     def _add_service_system_edges(self, graph: graphviz.Digraph,
                                   services: typing.Sequence[dax.base.dax.DaxService]) -> None:
@@ -150,8 +178,7 @@ class GraphvizBase(graphviz.Digraph):
 
             for module in modules:
                 # Add edge to connect service to module
-                graph.edge(module.get_system_key(), s.get_system_key(),
-                           dir='back', **self.INTER_CLUSTER_EDGE_ATTR)
+                graph.edge(module.get_system_key(), s.get_system_key(), dir='back', **self._cluster_edge_attr)
 
     def _add_system_service_edges(self, graph: graphviz.Digraph,
                                   module: dax.base.dax.DaxModuleBase) -> None:
@@ -171,8 +198,7 @@ class GraphvizBase(graphviz.Digraph):
 
             for attr in attr_services:
                 # Add edge
-                graph.edge(module.get_system_key(), attr.get_system_key(),
-                           style='dashed', **self.INTER_CLUSTER_EDGE_ATTR)
+                graph.edge(module.get_system_key(), attr.get_system_key(), style='dashed', **self._cluster_edge_attr)
 
         # Inspect children of this module for modules
         child_modules = [child for child in module.children if isinstance(child, dax.base.dax.DaxModuleBase)]
@@ -182,8 +208,16 @@ class GraphvizBase(graphviz.Digraph):
 
 
 class ComponentGraphviz(GraphvizBase):
+    """Component graph class which visualizes the relations between system modules."""
 
     def __init__(self, system: dax.base.dax.DaxSystem, **kwargs: typing.Any):
+        """Create a new component Graphviz object.
+
+        :param system: The system to visualize
+        :param kwargs: Keyword arguments for :class:`GraphvizBase` and the Graphviz parent class
+        """
+        assert isinstance(system, dax.base.dax.DaxSystem), 'System must be a DAX system'
+
         # Set default arguments
         kwargs.setdefault('engine', 'fdp')
         kwargs.setdefault('name', 'component_graph')
@@ -217,8 +251,16 @@ class ComponentGraphviz(GraphvizBase):
 
 
 class RelationGraphviz(GraphvizBase):
+    """Relation graph class which visualizes relations between the system modules and the services."""
 
     def __init__(self, system: dax.base.dax.DaxSystem, **kwargs: typing.Any):
+        """Create a new relation Graphviz object.
+
+        :param system: The system to visualize
+        :param kwargs: Keyword arguments for :class:`GraphvizBase` and the Graphviz parent class
+        """
+        assert isinstance(system, dax.base.dax.DaxSystem), 'System must be a DAX system'
+
         # Set default arguments
         kwargs.setdefault('engine', 'dot')
         kwargs.setdefault('name', 'relations_graph')
