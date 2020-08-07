@@ -27,9 +27,7 @@ _DUMMY_DEVICE: typing.Dict[str, str] = {
 
 _SPECIAL_ENTRIES: typing.Dict[str, typing.Callable[[typing.Dict[str, typing.Any]], typing.Any]] = {
     # Set core host address to ::1 to prevent any undesired connections
-    'core': lambda d: d.get('arguments', {}).update({'host': '::1'}),
-    # Core log controller should not start in simulation, replace with dummy device
-    'core_log': lambda d: d.update(_DUMMY_DEVICE),
+    'core': lambda d: d.get('arguments', {}).update({'host': '::1'})
 }
 """Special keys/entries in the device DB that will be replaced."""
 
