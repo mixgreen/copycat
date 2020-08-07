@@ -122,9 +122,10 @@ def enable_dax_sim(ddb: typing.Dict[str, typing.Any], *,
             # Convert the device DB
             _logger.debug('Converting device DB')
             try:
+                used_ports: typing.Set[int] = set()
                 for k, v in ddb.items():
                     # Mutate every entry in-place
-                    _mutate_ddb_entry(k, v, coredevice_packages)
+                    _mutate_ddb_entry(k, v, coredevice_packages, used_ports)
             except Exception as e:
                 # Log exception to provide more context
                 _logger.exception(e)
@@ -162,7 +163,8 @@ def enable_dax_sim(ddb: typing.Dict[str, typing.Any], *,
         return ddb
 
 
-def _mutate_ddb_entry(key: str, value: typing.Any, coredevice_packages: typing.List[str]) -> typing.Any:
+def _mutate_ddb_entry(key: str, value: typing.Any, coredevice_packages: typing.List[str],
+                      used_ports: typing.Set[int]) -> typing.Any:
     """Mutate a device DB entry to use it for simulation."""
 
     assert isinstance(key, str), 'The key must be of type str'
@@ -181,7 +183,7 @@ def _mutate_ddb_entry(key: str, value: typing.Any, coredevice_packages: typing.L
         if type_ == 'local':
             _mutate_local(key, value, coredevice_packages)
         elif type_ == 'controller':
-            _mutate_controller(key, value)
+            _mutate_controller(key, value, used_ports)
         else:
             _logger.debug(f'Skipped entry "{key}"')
     else:
@@ -253,7 +255,7 @@ def _update_module(key: str, value: typing.Dict[str, typing.Any], coredevice_pac
     value.update(_GENERIC_DEVICE)
 
 
-def _mutate_controller(key: str, value: typing.Dict[str, typing.Any]) -> None:
+def _mutate_controller(key: str, value: typing.Dict[str, typing.Any], used_ports: typing.Set[int]) -> None:
     """Mutate a device DB controller entry to use it for simulation."""
 
     # Get the command of this controller
@@ -274,6 +276,20 @@ def _mutate_controller(key: str, value: typing.Dict[str, typing.Any]) -> None:
     else:
         # Command was not of type str
         raise TypeError(f'The command key of controller "{key}" must be of type str')
+
+    # Set controller to run on localhost
+    if 'host' not in value:
+        raise KeyError(f'No host field present for controller "{key}"')
+    value['host'] = '::1'
+    _logger.debug(f'Controller "{key}" set to run on ::1')
+
+    # Check that there are no port conflicts and add port to used_ports
+    if isinstance(value['port'], int):
+        if value['port'] in used_ports:
+            raise ValueError(f'Port {value["port"]} used by controller "{key}" has already been used')
+        used_ports.add(value['port'])
+    else:
+        raise TypeError(f'The port key of controller "{key}" must be of type int')
 
 
 def _start_moninj_service() -> None:
