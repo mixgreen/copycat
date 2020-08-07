@@ -13,7 +13,12 @@ class DdbTestCase(unittest.TestCase):
             'class': 'Core',
             'arguments': {'host': '1.2.3.4', 'ref_period': 1e-9}
         },
-        'core_log': {},
+        'core_log': {
+            'type': 'controller',
+            'host': '::1',
+            'port': 1,
+            'command': 'some_command'
+        },
         'ttl0': {
             'type': 'local',
             'module': 'artiq.coredevice.ttl',
@@ -23,13 +28,13 @@ class DdbTestCase(unittest.TestCase):
         'controller': {
             'type': 'controller',
             'host': 'some_host',
-            'port': 1,
+            'port': 2,
             'command': 'some_command'
         },
         'controller2': {
             'type': 'controller',
             'host': 'some_host',
-            'port': 2,
+            'port': 3,
             'command': 'some_command'
         },
     }
@@ -130,13 +135,6 @@ class DdbTestCase(unittest.TestCase):
         with self.assertRaises(ValueError, msg='Conflicting ports did not raise'):
             enable_dax_sim(self.DEVICE_DB_CONFLICTING_PORTS.copy(), enable=True,
                            logging_level=logging.CRITICAL, moninj_service=False)
-
-    def test_core_log(self):
-        ddb = enable_dax_sim(self.DEVICE_DB.copy(), enable=True, logging_level=logging.WARNING, moninj_service=False)
-        # Core log controller is substituted by a dummy device since the controller should not start
-        self.assertEqual(ddb['core_log']['type'], 'local')
-        self.assertEqual(ddb['core_log']['module'], 'dax.sim.coredevice.dummy')
-        self.assertEqual(ddb['core_log']['class'], 'Dummy')
 
     def test_core_address(self):
         ddb = enable_dax_sim(self.DEVICE_DB.copy(), enable=True, logging_level=logging.WARNING, moninj_service=False)
