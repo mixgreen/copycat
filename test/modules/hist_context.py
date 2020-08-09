@@ -269,7 +269,7 @@ class HistogramContextTestCase(unittest.TestCase):
     def _test_kernel_invariants(self, component: dax.base.dax.DaxHasSystem):
         # Test kernel invariants of this component
         for k in component.kernel_invariants:
-            self.assertTrue(hasattr(component, k), f'Name "{k:s}" of "{component.get_system_key():s}" was marked '
+            self.assertTrue(hasattr(component, k), f'Name "{k}" of "{component.get_system_key()}" was marked '
                                                    f'kernel invariant, but this attribute does not exist')
 
 
