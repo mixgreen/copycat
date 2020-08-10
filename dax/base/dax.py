@@ -823,15 +823,10 @@ class DaxSystem(DaxModuleBase):
             if not self.dax_sim_enabled:
                 # Log a warning (if we are not in simulation)
                 self.logger.warning(f'Influx DB controller "{self.DAX_INFLUX_DB_KEY}" not found in device DB')
-            # Fall back on base data store
-            self.logger.debug('Fall back on base data store (Influx DB controller not found in device DB)')
             self.__data_store = DaxDataStore()
         except artiq.master.worker_db.DeviceError:
             # Failed to create Influx DB driver
-            if not self.dax_sim_enabled:
-                self.logger.warning(f'Failed to create Influx DB driver "{self.DAX_INFLUX_DB_KEY}"', exc_info=True)
-            # Fall back on base data store
-            self.logger.debug('Fall back on base data store (Failed to create Influx DB driver)')
+            self.logger.warning(f'Failed to create Influx DB driver "{self.DAX_INFLUX_DB_KEY}"', exc_info=True)
             self.__data_store = DaxDataStore()
 
     @artiq.experiment.host_only

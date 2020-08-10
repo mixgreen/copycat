@@ -121,6 +121,9 @@ def dummy_file_name_generator(name: str, ext: typing.Optional[str] = None) -> st
 def get_file_name(scheduler: typing.Any, name: str, ext: typing.Optional[str] = None) -> str:
     """Generate a single uniformly styled output file name based on the experiment metadata.
 
+    When using this function in combination with :func:`temp_dir`, make sure
+    this function is called before leaving the context.
+
     :param scheduler: The scheduler object
     :param name: Name of the file
     :param ext: The extension of the file

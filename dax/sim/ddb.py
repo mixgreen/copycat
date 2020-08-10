@@ -25,14 +25,6 @@ _DUMMY_DEVICE: typing.Dict[str, str] = {
 }
 """The properties of a dummy device."""
 
-_SPECIAL_ENTRIES: typing.Dict[str, typing.Callable[[typing.Dict[str, typing.Any]], typing.Any]] = {
-    # Set core host address to ::1 to prevent any undesired connections
-    'core': lambda d: d.get('arguments', {}).update({'host': '::1'}),
-    # Core log controller should not start in simulation, replace with dummy device
-    'core_log': lambda d: d.update(_DUMMY_DEVICE),
-}
-"""Special keys/entries in the device DB that will be replaced."""
-
 _SIMULATION_ARG: str = '--simulation'
 """The simulation argument/option for controllers as proposed by the ARTIQ manual."""
 
@@ -65,6 +57,7 @@ def enable_dax_sim(ddb: typing.Dict[str, typing.Any], *,
      - `coredevice_packages`, additional packages to search for coredevice drivers (in order of priority)
      - `config_module`, the module of the simulation configuration class (defaults to DAX.sim config module)
      - `config_class`, the class of the simulation configuration object (defaults to DAX.sim config class)
+     - `core_device`, the name of the core device (defaults to `'core'`)
 
     If supported by a specific simulated device driver, extra simulation-specific arguments
     can be added by adding a `sim_args` dict to the device entry in the device DB.
@@ -121,10 +114,20 @@ def enable_dax_sim(ddb: typing.Dict[str, typing.Any], *,
         if DAX_SIM_CONFIG_KEY not in ddb:
             # Convert the device DB
             _logger.debug('Converting device DB')
+
+            # Obtain the core device name
+            core_device: str = config.get('dax.sim', 'core_device', fallback='core')
+
             try:
+                # Set with port numbers used by controllers
+                used_ports: typing.Set[int] = set()
+
                 for k, v in ddb.items():
                     # Mutate every entry in-place
-                    _mutate_ddb_entry(k, v, coredevice_packages)
+                    _mutate_ddb_entry(k, v,
+                                      core_device=core_device,
+                                      coredevice_packages=coredevice_packages,
+                                      used_ports=used_ports)
             except Exception as e:
                 # Log exception to provide more context
                 _logger.exception(e)
@@ -162,14 +165,13 @@ def enable_dax_sim(ddb: typing.Dict[str, typing.Any], *,
         return ddb
 
 
-def _mutate_ddb_entry(key: str, value: typing.Any, coredevice_packages: typing.List[str]) -> typing.Any:
+def _mutate_ddb_entry(key: str, value: typing.Any, *,
+                      core_device: str,
+                      coredevice_packages: typing.List[str],
+                      used_ports: typing.Set[int]) -> typing.Any:
     """Mutate a device DB entry to use it for simulation."""
 
     assert isinstance(key, str), 'The key must be of type str'
-
-    if key in _SPECIAL_ENTRIES:
-        # Special entries receive pre-processing
-        _SPECIAL_ENTRIES[key](value)
 
     if isinstance(value, dict):  # If value is a dict, further processing is needed
         # Get the type entry of this value
@@ -179,11 +181,11 @@ def _mutate_ddb_entry(key: str, value: typing.Any, coredevice_packages: typing.L
 
         # Mutate entry
         if type_ == 'local':
-            _mutate_local(key, value, coredevice_packages)
+            _mutate_local(key, value, core_device=core_device, coredevice_packages=coredevice_packages)
         elif type_ == 'controller':
-            _mutate_controller(key, value)
+            _mutate_controller(key, value, used_ports=used_ports)
         else:
-            _logger.debug(f'Skipped entry "{key}"')
+            _logger.debug(f'Skipped entry "{key}" with unknown type "{type_}"')
     else:
         # Value is not a dict, it can be ignored
         pass
@@ -192,11 +194,12 @@ def _mutate_ddb_entry(key: str, value: typing.Any, coredevice_packages: typing.L
     return value
 
 
-def _mutate_local(key: str, value: typing.Dict[str, typing.Any], coredevice_packages: typing.List[str]) -> None:
+def _mutate_local(key: str, value: typing.Dict[str, typing.Any], *,
+                  core_device: str, coredevice_packages: typing.List[str]) -> None:
     """Mutate a device DB local entry to use it for simulation."""
 
     # Update the module of the current device to a simulation-capable coredevice driver
-    _update_module(key, value, coredevice_packages)
+    _update_module(key, value, coredevice_packages=coredevice_packages)
 
     # Add key of the device to the device arguments
     arguments = value.setdefault('arguments', {})
@@ -210,11 +213,18 @@ def _mutate_local(key: str, value: typing.Dict[str, typing.Any], coredevice_pack
         raise TypeError(f'The sim_args key of local device "{key}" must be of type dict')
     arguments.update(sim_args)
 
+    if key == core_device:
+        # Set the host of the core device to localhost
+        if 'host' not in arguments:
+            raise KeyError(f'No host argument present for core device "{key}"')
+        arguments['host'] = '::1'
+
     # Debug message
     _logger.debug(f'Converted local device "{key}" to class "{value["module"]}.{value["class"]}"')
 
 
-def _update_module(key: str, value: typing.Dict[str, typing.Any], coredevice_packages: typing.List[str]) -> None:
+def _update_module(key: str, value: typing.Dict[str, typing.Any], *,
+                   coredevice_packages: typing.List[str]) -> None:
     """Update the module of a local device to a simulation-capable coredevice driver."""
 
     # Get the module of the device
@@ -253,7 +263,8 @@ def _update_module(key: str, value: typing.Dict[str, typing.Any], coredevice_pac
     value.update(_GENERIC_DEVICE)
 
 
-def _mutate_controller(key: str, value: typing.Dict[str, typing.Any]) -> None:
+def _mutate_controller(key: str, value: typing.Dict[str, typing.Any], *,
+                       used_ports: typing.Set[int]) -> None:
     """Mutate a device DB controller entry to use it for simulation."""
 
     # Get the command of this controller
@@ -266,14 +277,28 @@ def _mutate_controller(key: str, value: typing.Dict[str, typing.Any]) -> None:
         # Check if the controller was already set to simulation mode
         if _SIMULATION_ARG not in command:
             # Simulation argument not found, append it
+            value['command'] = f'{command} {_SIMULATION_ARG}'
             _logger.debug(f'Added simulation argument to command for controller "{key}"')
-            value['command'] = ' '.join([command, _SIMULATION_ARG])
         else:
             # Debug message
             _logger.debug(f'Controller "{key}" was not modified')
     else:
         # Command was not of type str
         raise TypeError(f'The command key of controller "{key}" must be of type str')
+
+    # Set controller to run on localhost
+    if 'host' not in value:
+        raise KeyError(f'No host field present for controller "{key}"')
+    value['host'] = '::1'
+    _logger.debug(f'Controller "{key}" set to run host {value["host"]}')
+
+    # Check that there are no port conflicts and add port to used_ports
+    if isinstance(value['port'], int):
+        if value['port'] in used_ports:
+            raise ValueError(f'Port {value["port"]} used by controller "{key}" has already been used')
+        used_ports.add(value['port'])
+    else:
+        raise TypeError(f'The port key of controller "{key}" must be of type int')
 
 
 def _start_moninj_service() -> None:
