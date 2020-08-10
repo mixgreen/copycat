@@ -13,7 +13,7 @@ from dax.sim.time import DaxTimeManager
 from dax.sim.coredevice.comm_kernel import CommKernelDummy
 from dax.sim.config import DaxSimConfig
 from dax.util.units import time_to_str
-from dax.util.output import get_file_name
+from dax.util.output import get_file_name_generator, dummy_file_name_generator
 
 __all__ = ['BaseCore', 'Core']
 
@@ -161,6 +161,14 @@ class Core(BaseCore):
         # Store arguments
         self._device_manager = dmgr
 
+        # Get file name generator (explicitly in constructor to not obtain file name too late)
+        if self._sim_config.output_enabled:
+            # Requesting the generator creates the parent directory, only create if output is enabled
+            self._file_name_generator = get_file_name_generator(self._device_manager.get('scheduler'))
+        else:
+            # For completeness, set a dummy file name generator if output is disabled
+            self._file_name_generator = dummy_file_name_generator
+
         # Get the signal manager and register signals
         self._signal_manager = get_signal_manager()
         self._reset_signal: typing.Any = self._signal_manager.register(self, 'reset', bool, size=1)
@@ -204,9 +212,8 @@ class Core(BaseCore):
     def close(self) -> None:
         # The SimConfig object will be available, even if it was closed earlier
         if self._sim_config.output_enabled:
-            # Create an output file name
-            scheduler = self._device_manager.get('scheduler')
-            output_file_name: str = get_file_name(scheduler, 'profile', 'csv')
+            # Create an output file name with the earlier created file name generator
+            output_file_name: str = self._file_name_generator('profile', 'csv')
 
             # Create a profiling report
             _logger.debug('Writing profiling report')
