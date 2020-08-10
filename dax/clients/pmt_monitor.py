@@ -5,6 +5,7 @@ import abc
 from dax.experiment import *
 from dax.interfaces.detection import DetectionInterface
 from dax.util.ccb import get_ccb_tool
+from dax.util.artiq import is_kernel
 
 __all__ = ['PmtMonitor', 'MultiPmtMonitor']
 
@@ -26,9 +27,10 @@ class _PmtMonitorBase(DaxClient, EnvExperiment, abc.ABC):
     """Disable DAX init."""
 
     def build(self) -> None:  # type: ignore
-        assert isinstance(self.APPLET_NAME, str)
-        assert isinstance(self.APPLET_GROUP, str)
-        assert isinstance(self.DEFAULT_DATASET, str)
+        assert isinstance(self.APPLET_NAME, str), 'Applet name must be of type str'
+        assert isinstance(self.APPLET_GROUP, str), 'Applet group must be of type str'
+        assert isinstance(self.DEFAULT_DATASET, str), 'Default dataset must be of type str'
+        assert is_kernel(self.device_setup), 'device_setup() must be a kernel function'
 
         # Obtain the detection interface
         detection = self.registry.find_interface(DetectionInterface)  # type: ignore[misc]
@@ -123,6 +125,8 @@ class _PmtMonitorBase(DaxClient, EnvExperiment, abc.ABC):
         try:
             # Only stop when termination is requested
             while True:
+                # Host setup
+                self.host_setup()
                 # Monitor
                 self.monitor()
 
@@ -141,8 +145,8 @@ class _PmtMonitorBase(DaxClient, EnvExperiment, abc.ABC):
 
     @kernel
     def monitor(self):  # type: () -> None
-        # Reset the core
-        self.core.reset()
+        # Device setup
+        self.device_setup()
 
         while True:
             # Check for pause condition and return if true
@@ -162,6 +166,21 @@ class _PmtMonitorBase(DaxClient, EnvExperiment, abc.ABC):
     def _count(self) -> None:
         """Perform detection, get counts, and store result."""
         pass
+
+    """Customization functions"""
+
+    def host_setup(self) -> None:
+        """Preparation on the host, called once at entry and after a pause."""
+        pass
+
+    @kernel
+    def device_setup(self):  # type: () -> None
+        """Preparation on the core device, called once at entry and after a pause.
+
+        Should at least reset the core.
+        """
+        # Reset the core
+        self.core.reset()
 
 
 @dax_client_factory
