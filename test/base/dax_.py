@@ -4,6 +4,7 @@ import logging
 import os
 import pygit2  # type: ignore
 import collections
+import typing
 from unittest.mock import MagicMock, call
 
 from artiq.experiment import HasEnvironment
@@ -808,6 +809,60 @@ class DaxModuleBaseTestCase(unittest.TestCase):
 
         # Test if it is possible to create a system with version 0
         TestSystemVerZero(get_manager_or_parent(_device_db))
+
+    def test_build_controller_warnings(self):
+        class TestSystem(_TestSystem):
+            # noinspection PyMethodParameters
+            def build(self_, *args: typing.Any, **kwargs: typing.Any) -> None:
+                self.assertIsNotNone(self_.CORE_LOG_KEY, 'Core log controller key was not configured')
+                self.assertIsNotNone(self_.DAX_INFLUX_DB_KEY, 'Data store controller key was not configured')
+
+                # There should be warnings due to the lack of controllers
+                with self.assertLogs(self_.logger, logging.WARNING):
+                    super(TestSystem, self_).build(*args, **kwargs)
+
+        class NoCoreLogTestSystem(_TestSystem):
+            CORE_LOG_KEY = None
+
+            # noinspection PyMethodParameters
+            def build(self_, *args: typing.Any, **kwargs: typing.Any) -> None:
+                self.assertIsNone(self_.CORE_LOG_KEY, 'Core log controller key was not disabled')
+                self.assertIsNotNone(self_.DAX_INFLUX_DB_KEY, 'Data store controller key was not configured')
+
+                # There should be warnings due to the lack of controllers
+                with self.assertLogs(self_.logger, logging.WARNING):
+                    super(NoCoreLogTestSystem, self_).build(*args, **kwargs)
+
+        class NoDataStoreTestSystem(_TestSystem):
+            DAX_INFLUX_DB_KEY = None
+
+            # noinspection PyMethodParameters
+            def build(self_, *args: typing.Any, **kwargs: typing.Any) -> None:
+                self.assertIsNotNone(self_.CORE_LOG_KEY, 'Core log controller key was not configured')
+                self.assertIsNone(self_.DAX_INFLUX_DB_KEY, 'Data store controller key was not disabled')
+
+                # There should be warnings due to the lack of controllers
+                with self.assertLogs(self_.logger, logging.WARNING):
+                    super(NoDataStoreTestSystem, self_).build(*args, **kwargs)
+
+        class NoControllerTestSystem(_TestSystem):
+            CORE_LOG_KEY = None
+            DAX_INFLUX_DB_KEY = None
+
+            # noinspection PyMethodParameters
+            def build(self_, *args: typing.Any, **kwargs: typing.Any) -> None:
+                self.assertIsNone(self_.CORE_LOG_KEY, 'Core log controller key was not disabled')
+                self.assertIsNone(self_.DAX_INFLUX_DB_KEY, 'Data store controller key was not disabled')
+
+                # There should be no warnings, controllers are disabled
+                with self.assertRaises(self.failureException), self.assertLogs(self_.logger, logging.WARNING):
+                    super(NoControllerTestSystem, self_).build(*args, **kwargs)
+
+        # Build test systems
+        TestSystem(get_manager_or_parent(_device_db))
+        NoCoreLogTestSystem(get_manager_or_parent(_device_db))
+        NoDataStoreTestSystem(get_manager_or_parent(_device_db))
+        NoControllerTestSystem(get_manager_or_parent(_device_db))
 
     def test_init(self):
         manager_or_parent = get_manager_or_parent(_device_db)

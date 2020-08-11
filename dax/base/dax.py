@@ -686,9 +686,9 @@ class DaxSystem(DaxModuleBase):
     """Key of the core DMA device."""
     CORE_CACHE_KEY: str = 'core_cache'
     """Key of the core cache device."""
-    CORE_LOG_KEY: str = 'core_log'
+    CORE_LOG_KEY: typing.Optional[str] = 'core_log'
     """Key of the core log controller."""
-    DAX_INFLUX_DB_KEY: str = 'dax_influx_db'
+    DAX_INFLUX_DB_KEY: typing.Optional[str] = 'dax_influx_db'
     """Key of the DAX Influx DB controller."""
 
     DAX_INIT_TIME_KEY: str = 'dax_init_time'
@@ -801,33 +801,34 @@ class DaxSystem(DaxModuleBase):
         self.__core_cache: artiq.coredevice.cache.CoreCache = self.get_device(self.CORE_CACHE_KEY,
                                                                               artiq.coredevice.cache.CoreCache)
 
-        # Verify existence of core log controller
-        try:
-            # Register the core log controller with the system
-            self.get_device(self.CORE_LOG_KEY)
-        except KeyError:
-            # Core log controller was not found in the device DB
-            if not self.dax_sim_enabled:
-                # Log a warning (if we are not in simulation)
+        if self.CORE_LOG_KEY is not None:
+            # Verify existence of core log controller
+            try:
+                # Register the core log controller with the system
+                self.get_device(self.CORE_LOG_KEY)
+            except KeyError:
+                # Core log controller was not found in the device DB
                 self.logger.warning(f'Core log controller "{self.CORE_LOG_KEY}" not found in device DB')
-        except artiq.master.worker_db.DeviceError:
-            # Failed to create core log driver
-            self.logger.warning(f'Failed to create core log driver "{self.CORE_LOG_KEY}"', exc_info=True)
+            except artiq.master.worker_db.DeviceError:
+                # Failed to create core log driver
+                self.logger.warning(f'Failed to create core log driver "{self.CORE_LOG_KEY}"', exc_info=True)
 
-        # Instantiate the data store (needs to be done in build() since it requests a controller)
-        try:
-            # Create an Influx DB data store
-            self.__data_store: DaxDataStore = DaxDataStoreInfluxDb(self, self.DAX_INFLUX_DB_KEY)
-        except KeyError:
-            # Influx DB controller was not found in the device DB
-            if not self.dax_sim_enabled:
-                # Log a warning (if we are not in simulation)
+        # Instantiate the data store
+        if self.DAX_INFLUX_DB_KEY is not None:
+            try:
+                # Create an Influx DB data store
+                self.__data_store = DaxDataStoreInfluxDb(self, self.DAX_INFLUX_DB_KEY)
+            except KeyError:
+                # Influx DB controller was not found in the device DB
                 self.logger.warning(f'Influx DB controller "{self.DAX_INFLUX_DB_KEY}" not found in device DB')
-            self.__data_store = DaxDataStore()
-        except artiq.master.worker_db.DeviceError:
-            # Failed to create Influx DB driver
-            self.logger.warning(f'Failed to create Influx DB driver "{self.DAX_INFLUX_DB_KEY}"', exc_info=True)
-            self.__data_store = DaxDataStore()
+                self.__data_store = DaxDataStore()
+            except artiq.master.worker_db.DeviceError:
+                # Failed to create Influx DB driver
+                self.logger.warning(f'Failed to create Influx DB driver "{self.DAX_INFLUX_DB_KEY}"', exc_info=True)
+                self.__data_store = DaxDataStore()
+        else:
+            # No data store configured
+            self.__data_store: DaxDataStore = DaxDataStore()
 
     @artiq.experiment.host_only
     def dax_init(self) -> None:
