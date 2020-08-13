@@ -102,7 +102,7 @@ class CcbTool:
         :param kwargs: Other optional arguments for the applet
         """
         # Assemble command
-        command = f'{self.ARTIQ_APPLET}big_number {dataset}'
+        command = f'{self.DAX_APPLET}big_number {dataset}'
         command = _generate_command(command, digit_count=digit_count, update_delay=update_delay, **kwargs)
         # Create applet
         self.create_applet(name, command, group=group)

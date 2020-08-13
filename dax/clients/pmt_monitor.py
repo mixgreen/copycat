@@ -83,7 +83,7 @@ class _PmtMonitorBase(DaxClient, EnvExperiment, abc.ABC):
                                                      group='Applet',
                                                      tooltip='Delay between plot interface updates')
         self.applet_auto_close = self.get_argument('Close applet automatically',
-                                                   BooleanValue(default=False),
+                                                   BooleanValue(default=True),
                                                    group='Applet',
                                                    tooltip='Close applet when experiment is terminated')
 
@@ -92,7 +92,7 @@ class _PmtMonitorBase(DaxClient, EnvExperiment, abc.ABC):
         pass
 
     @abc.abstractmethod
-    def _create_applet(self, *args, **kwargs) -> None:
+    def _create_applet(self, *args: typing.Any, **kwargs: typing.Any) -> None:
         """Create applet."""
         pass
 
@@ -118,9 +118,9 @@ class _PmtMonitorBase(DaxClient, EnvExperiment, abc.ABC):
         if self.create_applet:
             # Create the applet
             y_label = f'Counts per second ({self.count_scale_label})'
-            self._create_applet(name=self.APPLET_NAME, y=self.dataset_key, group=self.APPLET_GROUP,
-                                sliding_window=self.sliding_window,
-                                x_label='Sample', y_label=y_label, update_delay=self.applet_update_delay)
+            self._create_applet(self.APPLET_NAME, self.dataset_key,
+                                group=self.APPLET_GROUP, update_delay=self.applet_update_delay,
+                                sliding_window=self.sliding_window, x_label='Sample', y_label=y_label)
 
         try:
             # Only stop when termination is requested
@@ -191,16 +191,20 @@ class PmtMonitor(_PmtMonitorBase):
     APPLET_GROUP = 'dax'
     DEFAULT_DATASET = 'plot.dax.pmt_monitor_count'
 
+    NUM_DIGITS_BIG_NUMBER: int = 5
+    """Number of digits to display for the big number applet."""
+
     def _add_custom_arguments(self) -> None:
         # Get max for PMT channel argument
         pmt_channel_max = len(self.pmt_array) - 1
         assert pmt_channel_max >= 0, 'PMT array can not be empty'
 
         # Dict with available applet types
-        live_plot = 'Live plot'
+        default_applet = 'Plot XY'
         self._applet_types: typing.Dict[str, typing.Callable[..., None]] = {
-            live_plot: self.ccb.live_plot,
-            'Plot XY': self.ccb.plot_xy,
+            default_applet: self.ccb.plot_xy,
+            'Big number': self.ccb.big_number,
+            'Live plot': self.ccb.live_plot,
         }
 
         # Arguments
@@ -208,11 +212,16 @@ class PmtMonitor(_PmtMonitorBase):
                                              NumberValue(default=0, step=1, min=0, max=pmt_channel_max, ndecimals=0),
                                              tooltip='PMT channel to monitor')
         self.applet_type = self.get_argument('Applet type',
-                                             EnumerationValue(list(self._applet_types), live_plot),
+                                             EnumerationValue(list(self._applet_types), default_applet),
                                              tooltip='Choose an applet type (requires applet restart)')
         self.update_kernel_invariants('pmt_channel')
 
     def _create_applet(self, *args: typing.Any, **kwargs: typing.Any) -> None:
+        if self.applet_type == 'Big number':
+            # Modify keyword arguments
+            kwargs = {k: v for k, v in kwargs.items() if k in {'group', 'update_delay'}}
+            kwargs.setdefault('digit_count', self.NUM_DIGITS_BIG_NUMBER)
+
         # Create applet based on chosen applet type
         self._applet_types[self.applet_type](*args, **kwargs)
 
