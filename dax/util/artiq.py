@@ -3,6 +3,7 @@ from __future__ import annotations  # Postponed evaluation of annotations
 import os
 import tempfile
 import typing
+import weakref
 
 import artiq.language.environment
 import artiq.master.worker_db
@@ -90,13 +91,15 @@ def get_manager_or_parent(device_db: typing.Union[typing.Dict[str, typing.Any], 
         raise TypeError('Unsupported type for device DB parameter')
 
     # Create the device manager
-    device_mgr = _DeviceManager(
+    device_mgr = artiq.master.worker_db.DeviceManager(
         artiq.master.databases.DeviceDB(device_db_file_name),
         virtual_devices={
             "scheduler": scheduler,
             "ccb": artiq.frontend.artiq_run.DummyCCB()
         }
     )
+    # Add a finalizer to guarantee devices and connections are closed
+    weakref.finalize(device_mgr, device_mgr.close_devices)
 
     # Dataset DB and manager
     dataset_db_file_name = os.path.join(tempdir.name, 'dataset_db.pyon') if dataset_db is None else dataset_db
@@ -120,20 +123,10 @@ class _TemporaryDirectory(tempfile.TemporaryDirectory):  # type: ignore[type-arg
         # Call super
         super(_TemporaryDirectory, self).__init__(*args, **kwargs)
 
-        # Add self to list of references to make sure the object is not destructed too soon
+        # Add self to list of (strong) references to make sure the object is not destructed too soon
         _TemporaryDirectory._refs.append(self)
-
-    def __del__(self) -> None:
-        """Cleanup temp dir explicitly at destruction, prevents resource warning."""
-        self.cleanup()
-
-
-class _DeviceManager(artiq.master.worker_db.DeviceManager):
-    """Custom device manager class."""
-
-    def __del__(self) -> None:
-        """Close devices at destruction, prevents resource warnings."""
-        self.close_devices()
+        # Add a finalizer to cleanup this temp dir (prevents resource warning for implicit cleanup)
+        weakref.finalize(self, self.cleanup)
 
 
 # Default device DB
