@@ -62,7 +62,6 @@ class GTKWSaveGenerator:
                          f'System version: {system.SYS_VER}',
                          datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
                          f'DAX version: {_dax_version}')
-            gtkw.savefile(file_name)
 
             # Iterator of registered devices grouped by parent
             parents = itertools.groupby(system.registry.get_device_parents().items(), operator.itemgetter(1))
@@ -73,13 +72,26 @@ class GTKWSaveGenerator:
 
                 if devices:
                     # Create a group for this parent (Parents are not nested)
+                    gtkw.comment(f'Parent "{p}"')
                     with gtkw.group(p.get_system_key(), closed=True):
                         for d in devices:
                             # Add signals for each device in this parent
-                            signals = registered_signals.get(d)
+                            signals = registered_signals.pop(d, None)
 
                             if signals is not None:
                                 # Create a group for the signals of this device
-                                with gtkw.group(d, closed=True):
+                                gtkw.comment(f'Signals for device "{d}"')
+                                with gtkw.group(d, closed=False):
                                     for s, t in signals:
                                         gtkw.trace(f'{d}.{s}', datafmt=self._CONVERT_TYPE[t])
+
+            if registered_signals:
+                # Handle leftover registered signals
+                gtkw.comment('Leftover signals')
+
+                for d, signals in registered_signals.items():
+                    # Create a group for the signals of this device
+                    gtkw.comment(f'Signals for device "{d}"')
+                    with gtkw.group(d, closed=False):
+                        for s, t in signals:
+                            gtkw.trace(f'{d}.{s}', datafmt=self._CONVERT_TYPE[t])
