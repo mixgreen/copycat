@@ -63,6 +63,8 @@ class TimeResolvedContext(DaxModule):
 
         # Get CCB tool
         self._ccb = get_ccb_tool(self)
+        # Get scheduler
+        self._scheduler = self.get_device('scheduler')
         # Units formatter
         self._units_fmt: UnitsFormatter = UnitsFormatter()
 
@@ -84,7 +86,7 @@ class TimeResolvedContext(DaxModule):
 
     def init(self) -> None:
         # Generate plot keys
-        base: str = self._plot_base_key.format(scheduler=self.get_device('scheduler'))
+        base: str = self._plot_base_key.format(scheduler=self._scheduler)
         self._plot_result_key: str = self.PLOT_RESULT_KEY_FORMAT.format(base=base)
         self._plot_time_key: str = self.PLOT_TIME_KEY_FORMAT.format(base=base)
         # Generate applet plot group
@@ -413,6 +415,7 @@ class TimeResolvedContext(DaxModule):
         # Set default arguments
         kwargs.setdefault('x_label', 'Time')
         kwargs.setdefault('y_label', 'Number of counts')
+        kwargs.setdefault('title', f'RID {self._scheduler.rid}')
         # Plot
         self._ccb.plot_xy_multi(self.PLOT_NAME, self._plot_result_key,
                                 x=self._plot_time_key, group=self._plot_group, **kwargs)

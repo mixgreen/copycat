@@ -78,6 +78,8 @@ class HistogramContext(DaxModule):
 
         # Get CCB tool
         self._ccb = get_ccb_tool(self)
+        # Get scheduler
+        self._scheduler = self.get_device('scheduler')
         # Units formatter
         self._units_fmt: UnitsFormatter = UnitsFormatter()
 
@@ -98,7 +100,7 @@ class HistogramContext(DaxModule):
 
     def init(self) -> None:
         # Generate plot keys
-        base: str = self._plot_base_key.format(scheduler=self.get_device('scheduler'))
+        base: str = self._plot_base_key.format(scheduler=self._scheduler)
         self._histogram_plot_key: str = self.HISTOGRAM_PLOT_KEY_FORMAT.format(base=base)
         self._probability_plot_key: str = self.PROBABILITY_PLOT_KEY_FORMAT.format(base=base)
         self._mean_count_plot_key: str = self.MEAN_COUNT_PLOT_KEY_FORMAT.format(base=base)
@@ -293,6 +295,7 @@ class HistogramContext(DaxModule):
         # Set default arguments
         kwargs.setdefault('x_label', 'Number of counts')
         kwargs.setdefault('y_label', 'Frequency')
+        kwargs.setdefault('title', f'RID {self._scheduler.rid}')
         # Plot
         self._ccb.plot_hist(self.HISTOGRAM_PLOT_NAME, self._histogram_plot_key, group=self._plot_group, **kwargs)
 
@@ -310,6 +313,7 @@ class HistogramContext(DaxModule):
 
         # Set default label
         kwargs.setdefault('y_label', 'State probability')
+        kwargs.setdefault('title', f'RID {self._scheduler.rid}')
         # Plot
         self._ccb.plot_xy_multi(self.PROBABILITY_PLOT_NAME, self._probability_plot_key,
                                 group=self._plot_group, **kwargs)
@@ -325,6 +329,7 @@ class HistogramContext(DaxModule):
 
         # Set default label
         kwargs.setdefault('y_label', 'Mean count')
+        kwargs.setdefault('title', f'RID {self._scheduler.rid}')
         # Plot
         self._ccb.plot_xy_multi(self.MEAN_COUNT_PLOT_NAME, self._mean_count_plot_key, group=self._plot_group, **kwargs)
 

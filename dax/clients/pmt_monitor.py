@@ -194,17 +194,20 @@ class PmtMonitor(_PmtMonitorBase):
     NUM_DIGITS_BIG_NUMBER: int = 5
     """Number of digits to display for the big number applet."""
 
+    _PLOT_XY: str = 'Plot XY'
+    """Key for plot XY applet type."""
+    _BIG_NUMBER: str = 'Big number'
+    """Key for big number applet type."""
+
     def _add_custom_arguments(self) -> None:
         # Get max for PMT channel argument
         pmt_channel_max = len(self.pmt_array) - 1
         assert pmt_channel_max >= 0, 'PMT array can not be empty'
 
         # Dict with available applet types
-        default_applet = 'Plot XY'
         self._applet_types: typing.Dict[str, typing.Callable[..., None]] = {
-            default_applet: self.ccb.plot_xy,
-            'Big number': self.ccb.big_number,
-            'Live plot': self.ccb.live_plot,
+            self._PLOT_XY: self.ccb.plot_xy,
+            self._BIG_NUMBER: self.ccb.big_number,
         }
 
         # Arguments
@@ -212,12 +215,15 @@ class PmtMonitor(_PmtMonitorBase):
                                              NumberValue(default=0, step=1, min=0, max=pmt_channel_max, ndecimals=0),
                                              tooltip='PMT channel to monitor')
         self.applet_type = self.get_argument('Applet type',
-                                             EnumerationValue(list(self._applet_types), default_applet),
+                                             EnumerationValue(list(self._applet_types), self._PLOT_XY),
                                              tooltip='Choose an applet type (requires applet restart)')
         self.update_kernel_invariants('pmt_channel')
 
     def _create_applet(self, *args: typing.Any, **kwargs: typing.Any) -> None:
-        if self.applet_type == 'Big number':
+        if self.applet_type == self._PLOT_XY:
+            # Modify keyword arguments
+            kwargs.setdefault('last', True)
+        elif self.applet_type == self._BIG_NUMBER:
             # Modify keyword arguments
             kwargs = {k: v for k, v in kwargs.items() if k in {'group', 'update_delay'}}
             kwargs.setdefault('digit_count', self.NUM_DIGITS_BIG_NUMBER)

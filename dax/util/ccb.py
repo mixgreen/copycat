@@ -28,8 +28,9 @@ def _generate_command(base_command: str, **kwargs: typing.Any) -> str:
     :param kwargs: Optional arguments
     :return: The command string
     """
-    # Convert kwargs to string arguments if not None
-    arguments = (f'--{a.replace("_", "-")} "{v}"' for a, v in kwargs.items() if v is not None)
+    # Convert kwargs to string arguments if not None or False
+    arguments = ('--{}{}'.format(a.replace('_', '-'), '' if v is True else f' "{v}"')
+                 for a, v in kwargs.items() if v is not None and v is not False)
     # Return final command
     return f'{base_command} {" ".join(arguments)}'
 
@@ -124,36 +125,12 @@ class CcbTool:
         # Create applet
         self.create_applet(name, command, group=group)
 
-    def live_plot(self, name: str, y: str, *,
-                  sliding_window: typing.Optional[int] = None,
-                  title: typing.Optional[str] = None,
-                  x_label: typing.Optional[str] = None, y_label: typing.Optional[str] = None,
-                  update_delay: typing.Optional[float] = None, group: typing.Optional[_G_T] = None,
-                  **kwargs: typing.Any) -> None:
-        """Create a live plot applet.
-
-        :param name: Name of the applet
-        :param y: Y-value dataset
-        :param sliding_window: Set size of the sliding window, or `None` for the default size
-        :param title: Graph title
-        :param x_label: X-axis label
-        :param y_label: Y-axis label
-        :param update_delay: Time to wait after a modification before updating graph
-        :param group: Optional group of the applet
-        :param kwargs: Other optional arguments for the applet
-        """
-        # Assemble command
-        command = f'{self.DAX_APPLET}live_plot {y}'
-        command = _generate_command(command, points=sliding_window, title=title,
-                                    x_label=x_label, y_label=y_label, update_delay=update_delay, **kwargs)
-        # Create applet
-        self.create_applet(name, command, group=group)
-
     def plot_xy(self, name: str, y: str, *,
                 x: typing.Optional[str] = None,
                 error: typing.Optional[str] = None, fit: typing.Optional[str] = None,
                 v_lines: typing.Optional[str] = None, h_lines: typing.Optional[str] = None,
                 sliding_window: typing.Optional[int] = None,
+                crosshair: typing.Optional[bool] = None, last: typing.Optional[bool] = None,
                 title: typing.Optional[str] = None,
                 x_label: typing.Optional[str] = None, y_label: typing.Optional[str] = None,
                 update_delay: typing.Optional[float] = None, group: typing.Optional[_G_T] = None,
@@ -168,6 +145,8 @@ class CcbTool:
         :param v_lines: Vertical lines dataset
         :param h_lines: Horizontal lines dataset
         :param sliding_window: Set size of the sliding window, or `None` to disable
+        :param crosshair: Enable crosshair feature
+        :param last: Show the last value in the title
         :param title: Graph title
         :param x_label: X-axis label
         :param y_label: Y-axis label
@@ -179,7 +158,7 @@ class CcbTool:
         command = f'{self.DAX_APPLET}plot_xy {y}'
         command = _generate_command(command, x=x, error=error, fit=fit,
                                     v_lines=v_lines, h_lines=h_lines,
-                                    sliding_window=sliding_window, title=title,
+                                    sliding_window=sliding_window, title=title, crosshair=crosshair, last=last,
                                     x_label=x_label, y_label=y_label, update_delay=update_delay, **kwargs)
         # Create applet
         self.create_applet(name, command, group=group)
