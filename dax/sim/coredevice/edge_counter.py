@@ -5,6 +5,7 @@
 import typing
 import collections
 import enum
+import random
 import numpy as np
 
 from artiq.coredevice.edge_counter import CounterOverflow
@@ -25,8 +26,10 @@ class EdgeCounter(DaxSimDevice):
         FALLING = 2
         BOTH = 3
 
-    def __init__(self, dmgr: typing.Any, input_freq: float = 0.0, gateware_width: int = 31, **kwargs: typing.Any):
+    def __init__(self, dmgr: typing.Any, input_freq: float = 0.0, input_stdev: float = 0.0,
+                 seed: typing.Optional[int] = None, gateware_width: int = 31, **kwargs: typing.Any):
         assert isinstance(input_freq, float) and input_freq >= 0.0, 'Input frequency must be a positive float'
+        assert isinstance(input_stdev, float) and input_stdev >= 0.0, 'Input stdev must be a non-negative float'
         assert isinstance(gateware_width, int), 'Gateware width must be of type int'
 
         # Call super
@@ -37,6 +40,8 @@ class EdgeCounter(DaxSimDevice):
 
         # Store simulation settings
         self._input_freq: float = input_freq
+        self._input_stdev: float = input_stdev
+        self._rng = random.Random(seed)
 
         # Buffers to store counts
         self._count_buffer: typing.Deque[typing.Tuple[np.int64, int]] = collections.deque()
@@ -53,7 +58,7 @@ class EdgeCounter(DaxSimDevice):
         """Simulate input signal for a given duration."""
 
         # Decide event frequency
-        event_freq = self._input_freq
+        event_freq = self._rng.normalvariate(self._input_freq, self._input_stdev)
         if edge_type is self._EdgeType.BOTH:
             # Multiply by 2 in case we detect both edges
             event_freq *= 2
