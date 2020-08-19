@@ -8,6 +8,7 @@ import os
 import h5py  # type: ignore
 
 from artiq.experiment import *
+import artiq.coredevice.core  # type: ignore
 
 import dax.base.dax
 import dax.util.artiq
@@ -194,6 +195,11 @@ class DaxScan(dax.base.dax.DaxBase, abc.ABC):
         self.build_scan()
         self.__in_build = False
 
+        # Confirm we have a core attribute
+        if not hasattr(self, 'core'):
+            raise AttributeError('DaxScan could not find a "core" attribute')
+        self.core: artiq.coredevice.core.Core  # Type annotation for core attribute
+
         if self.INFINITE_SCAN_ARGUMENT:
             # Add an argument for infinite scan
             self._dax_scan_infinite: bool = self.get_argument('Infinite scan', BooleanValue(self.INFINITE_SCAN_DEFAULT),
@@ -373,7 +379,8 @@ class DaxScan(dax.base.dax.DaxBase, abc.ABC):
                 while self._dax_scan_scheduler.check_pause():
                     # Pause the scan
                     self.logger.debug('Pausing scan')
-                    self._dax_scan_scheduler.pause()
+                    self.core.comm.close()  # Close communications before pausing
+                    self._dax_scan_scheduler.pause()  # Can raise a TerminationRequested exception
                     self.logger.debug('Resuming scan')
 
                 try:
