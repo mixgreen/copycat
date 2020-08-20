@@ -243,8 +243,7 @@ class Core(BaseCore):
             if isinstance(d, DaxSimDevice):
                 d.core_reset()
 
-        # Reset signal back to 0
-        self._signal_manager.event(self._reset_signal, 0, offset=self.RESET_TIME_MU)
-
         # Move cursor
         delay_mu(self.RESET_TIME_MU)
+        # Reset signal back to 0
+        self._signal_manager.event(self._reset_signal, 0)

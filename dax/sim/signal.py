@@ -164,13 +164,14 @@ class VcdSignalManager(DaxSignalManager[_VS_T]):
         It is better to use the `time` or `offset` arguments to set events at different times.
 
         Bool type signals can have values `0`, `1`, `X`, `Z`.
+        A vector of a bool type signal has a value of type `str`.
 
         Integer type variables can have any int value or any bool value.
 
         Event (`object`) type signals represent timestamps and do not have a value.
         We recommend to always use value `True` for event type signals.
 
-        String type signals can use value `None` which is equivalent to `Z`
+        String type signals can use value `None` which is equivalent to `Z`.
 
         :param signal: The signal that changed
         :param value: The new value of the signal
@@ -270,12 +271,9 @@ class PeekSignalManager(DaxSignalManager[_PS_T]):
     }
     """Dict to convert internal types to peek signal manager type-checking types."""
 
-    _SPECIAL_BOOL_VALUES: typing.Set[str] = {'x', 'X', 'z', 'Z'}
-    """Special values for a bool or int type signal."""
-
     _SPECIAL_VALUES: typing.Dict[_PT_T, typing.Set[typing.Any]] = {
-        bool: _SPECIAL_BOOL_VALUES,
-        int: _SPECIAL_BOOL_VALUES,
+        bool: {'x', 'X', 'z', 'Z', 0, 1},  # Also matches NumPy int and float
+        int: {'x', 'X', 'z', 'Z'},
         float: set(),
         str: {None},
         object: set(),
@@ -332,7 +330,7 @@ class PeekSignalManager(DaxSignalManager[_PS_T]):
 
         if init is not None:
             # Check init value
-            self._check_value(type_, size, init)
+            init = self._check_value(type_, size, init)
 
         # Register and initialize signal
         signals[name] = (type_, size, {} if init is None else {0: init})
@@ -349,13 +347,14 @@ class PeekSignalManager(DaxSignalManager[_PS_T]):
         It is better to use the `time` or `offset` arguments to set events at different times.
 
         Bool type signals can have values `0`, `1`, `X`, `Z`.
+        A vector of a bool type signal has a value of type `str`.
 
         Integer type variables can have any int value or any bool value.
 
         Event (`object`) type signals represent timestamps and do not have a value.
         We recommend to always use value `True` for event type signals.
 
-        String type signals can use value `None` which is equivalent to `Z`
+        String type signals can use value `None` which is equivalent to `Z`.
 
         :param signal: The signal that changed
         :param value: The new value of the signal
@@ -371,11 +370,8 @@ class PeekSignalManager(DaxSignalManager[_PS_T]):
         device, name = signal
         type_, size, events = self._event_buffer[device][name]
 
-        # Check value
-        self._check_value(type_, size, value)
-
-        # Add value to event buffer (overwrites old values)
-        events[self._get_timestamp(time, offset)] = value
+        # Check value and add value to event buffer (overwrites old values)
+        events[self._get_timestamp(time, offset)] = self._check_value(type_, size, value)
 
     def flush(self, ref_period: float) -> None:
         pass
@@ -383,16 +379,18 @@ class PeekSignalManager(DaxSignalManager[_PS_T]):
     def close(self) -> None:
         pass
 
-    def _check_value(self, type_: _PT_T, size: typing.Optional[int], value: _PV_T) -> None:
+    def _check_value(self, type_: _PT_T, size: typing.Optional[int], value: _PV_T) -> _PV_T:
         """Check if value is valid, raise exception otherwise."""
 
-        # noinspection PyTypeHints
-        if value in self._SPECIAL_VALUES[type_]:
-            return  # Value is legal (special value)
-        elif size is not None and isinstance(value, (int, np.integer)) and 0 <= value <= 2 ** size - 1:
-            return  # Value is legal (within given size)
-        elif isinstance(value, self._CHECK_TYPE[type_]):  # PyCharm inspection wrongly flags a type hint error
-            return  # Value is legal (expected type)
+        if size in {None, 1}:
+            # noinspection PyTypeHints
+            if isinstance(value, self._CHECK_TYPE[type_]):
+                return value  # Value is legal (expected type)
+            elif value in self._SPECIAL_VALUES[type_]:
+                return value  # Value is legal (special value)
+        elif type_ is bool and isinstance(value, str) and len(value) == size and all(
+                v in {'x', 'X', 'z', 'Z', '0', '1'} for v in value):
+            return value.lower()  # Value is legal (bool vector) (store lower case)
 
         # Value did not pass check
         raise ValueError(f'Invalid value {value} for signal type {type_}')

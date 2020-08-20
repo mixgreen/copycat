@@ -16,6 +16,9 @@ PHASE_MODE_CONTINUOUS = 0
 PHASE_MODE_ABSOLUTE = 1
 PHASE_MODE_TRACKING = 2
 
+# Phase mode conversion dict
+_PHASE_MODE_DICT = {m: f'{m:02b}' for m in [PHASE_MODE_CONTINUOUS, PHASE_MODE_ABSOLUTE, PHASE_MODE_TRACKING]}
+
 
 class AD9910(DaxSimDevice):
 
@@ -48,7 +51,8 @@ class AD9910(DaxSimDevice):
         self._init = self._signal_manager.register(self, 'init', bool, size=1)
         self._freq = self._signal_manager.register(self, 'freq', float)
         self._phase = self._signal_manager.register(self, 'phase', float)
-        self._phase_mode = self._signal_manager.register(self, 'phase_mode', bool, size=2, init=self.phase_mode)
+        self._phase_mode = self._signal_manager.register(self, 'phase_mode', bool, size=2,
+                                                         init=_PHASE_MODE_DICT[self.phase_mode])
         self._att = self._signal_manager.register(self, 'att', float)
         self._amp = self._signal_manager.register(self, 'amp', float)
         self._sw = self._signal_manager.register(self, 'sw', bool, size=1)
@@ -59,7 +63,7 @@ class AD9910(DaxSimDevice):
         self.phase_mode = phase_mode
 
         # Update signal
-        self._signal_manager.event(self._phase_mode, phase_mode)
+        self._signal_manager.event(self._phase_mode, _PHASE_MODE_DICT[self.phase_mode])
 
     @kernel
     def write32(self, addr, data):

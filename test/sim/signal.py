@@ -243,6 +243,8 @@ class PeekSignalManagerTestCase(unittest.TestCase):
     def test_event(self):
         test_data = {
             self.sys.ttl0._state: [0, 1, 'x', 'X', 'z', 'Z', True, False, np.int32(0), np.int64(1)],  # bool
+            # Python hash(0) == hash(0.0), see https://docs.python.org/3/library/functions.html#hash
+            self.sys.ttl1._state: [0.0, 1.0],  # bool, side effect of Python hash()
             self.sys.ec._count: [0, 1, 'x', 'X', 'z', 'Z', True, False, 99, -34, np.int32(655), np.int64(7)],  # int
             self.sys.ad9912._freq: [1.7, -8.2, 7.7, np.float(300)],  # float
             self.sys.core_dma._dma_record: ['foo', 'bar', None, ''],  # str
@@ -256,9 +258,9 @@ class PeekSignalManagerTestCase(unittest.TestCase):
 
     def test_event_bad(self):
         test_data = {
-            self.sys.ttl0._state: ['foo', np.int32(9), np.int64(-1), 0.4, None],  # bool
-            self.sys.ec._count: ['foo', 0.3, object, complex(6, 7), None],  # int
-            self.sys.ad9912._freq: [True, 1, object, complex(6, 7), None],  # float
+            self.sys.ttl0._state: ['foo', '00', np.int32(9), np.int64(-1), 0.4, None, '0', '1'],  # bool
+            self.sys.ec._count: ['foo', 0.3, object, complex(6, 7), None, '0', '1'],  # int
+            self.sys.ad9912._freq: [True, 1, object, complex(6, 7), None, '1'],  # float
             self.sys.core_dma._dma_record: [True, 1, object, complex(6, 7), 1.1],  # str
             self.sys.core_dma._dma_play: [3, 4.4, 'a', object],  # object
         }
@@ -271,7 +273,7 @@ class PeekSignalManagerTestCase(unittest.TestCase):
 
     def test_bool_array(self):
         test_data = {
-            self.sys.ad9910._phase_mode: [True, 1, 2, 3, 0, False, np.int64(2), 'x', 'z'],  # bool array
+            self.sys.ad9910._phase_mode: ['xx', '10', '1z', 'XX', '00', 'ZZ'],  # bool array
         }
 
         for signal, values in test_data.items():
@@ -281,7 +283,9 @@ class PeekSignalManagerTestCase(unittest.TestCase):
 
     def test_bool_array_bad(self):
         test_data = {
-            self.sys.ad9910._phase_mode: ['foo', 0.3, object, complex(6, 7), None, 4, 9, -1, 1.0],  # bool array
+            self.sys.ad9910._phase_mode: ['foo', 0.3, object, complex(6, 7), None, 4, 9, -1, 1.0,
+                                          1, 2, 3, 0, True, False, np.int64(2), 'x', 'z', '000', '10z',
+                                          'a0', '1g'],  # bool array
         }
 
         for signal, values in test_data.items():

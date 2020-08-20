@@ -132,6 +132,9 @@ class PeekTestCase(unittest.TestCase):
         # Match with special values
         if any(value in s and peek in s for s in [{'x', 'X', SignalNotSet}, {'z', 'Z'}]):  # type: ignore
             return  # We have a match on a special value
+        # Special conversion for vector matching
+        if type_ is bool and isinstance(value, str):
+            value = value.lower()  # Apply conversion to allow string matching
 
         if msg is None:
             # Set default error message

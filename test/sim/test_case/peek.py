@@ -3,10 +3,12 @@ import numpy as np
 
 import artiq.coredevice.ttl  # type: ignore
 import artiq.coredevice.edge_counter
+import artiq.coredevice.ad9910  # type: ignore
 import artiq.coredevice.ad9912  # type: ignore
 
 from dax.experiment import *
 from dax.sim.signal import SignalNotSet
+from dax.sim.signal import get_signal_manager
 import dax.sim.test_case
 
 
@@ -23,7 +25,12 @@ class PeekTestCaseTestCase(dax.sim.test_case.PeekTestCase):
             (1, True),
             (True, 1),
             (True, True),
+            (0, False),
+            (False, 0),
             (np.int32(0), False),
+            (np.int32(1), True),
+            (np.int32(0), 0),
+            (np.int32(1), 1),
         ]
 
         # Device and scope
@@ -52,6 +59,40 @@ class PeekTestCaseTestCase(dax.sim.test_case.PeekTestCase):
                 self.expect(scope, signal, ref)
                 delay(1 * us)
                 self.expect(scope, signal, ref)
+
+    def test_expect_bool_vector(self):
+        test_data = [
+            ('XX', 'XX'),
+            ('xx', 'xx'),
+            ('xZ', 'Xz'),
+            ('ZX', 'zx'),
+            ('zx', 'ZX'),
+            ('Z0', 'z0'),
+            ('10', '10'),
+            ('01', '01'),
+            ('11', '11'),
+            ('00', '00'),
+        ]
+
+        # Get scope, signal name, and internal signal for manual adjustments
+        scope = self.sys.ad9910
+        signal_name = 'phase_mode'
+        signal = self.sys.ad9910._phase_mode
+        # Signal manager
+        sm = get_signal_manager()
+
+        # Test starting values
+        self.expect(scope, signal_name, '00')
+
+        for val, ref in test_data:
+            with self.subTest(value=val, reference=ref):
+                # Set new value
+                delay(1 * ns)
+                sm.event(signal, val)
+                # Test value
+                self.expect(scope, signal_name, ref)
+                delay(1 * us)
+                self.expect(scope, signal_name, ref)
 
     def test_expect_float(self):
         test_data = [
@@ -184,6 +225,7 @@ class _TestSystem(DaxSystem):
 
         self.ec = self.get_device('ec', artiq.coredevice.edge_counter.EdgeCounter)
 
+        self.ad9910 = self.get_device('ad9910', artiq.coredevice.ad9910.AD9910)
         self.ad9912 = self.get_device('ad9912', artiq.coredevice.ad9912.AD9912)
 
 
@@ -247,6 +289,24 @@ _DEVICE_DB = {
             "pll_n": 4,
             "chip_select": 5,
             "cpld_device": "cpld",
+        }
+    },
+    "cpld10": {
+        "type": "local",
+        "module": "artiq.coredevice.urukul",
+        "class": "CPLD",
+        "arguments": {
+            "refclk": 1e9,
+            "clk_div": 1
+        }
+    },
+    "ad9910": {
+        "type": "local",
+        "module": "artiq.coredevice.ad9910",
+        "class": "AD9910",
+        "arguments": {
+            "pll_en": 0,
+            "cpld_device": "cpld10",
         }
     },
 }
