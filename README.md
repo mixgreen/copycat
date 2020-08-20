@@ -13,8 +13,6 @@ Supplementary communication tools for DAX are available in the
 [DAX comtools package](https://gitlab.com/duke-artiq/dax-comtools).
 Optional applets for DAX are available in the
 [DAX applets package](https://gitlab.com/duke-artiq/dax-applets).
-Nix scripts for this project can be found in the
-[Nix scripts repository](https://gitlab.com/duke-artiq/nix-scripts).
 
 More information about ARTIQ can be found in the [ARTIQ manual](https://m-labs.hk/artiq/manual/).
 

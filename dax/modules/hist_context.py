@@ -231,6 +231,8 @@ class HistogramContext(DaxModule):
             # Check consistency of data in the buffer
             if any(len(b) != len(self._buffer[0]) for b in self._buffer):
                 raise RuntimeError('Data in the buffer is not consistent, data probably corrupt')
+            if len(self._buffer[0]) == 0:
+                raise RuntimeError('Data elements in the buffer are empty')
 
             # Transform buffer data to pack counts per ion and convert into histograms
             histograms: typing.List[typing.Counter[int]] = [collections.Counter(c) for c in zip(*self._buffer)]

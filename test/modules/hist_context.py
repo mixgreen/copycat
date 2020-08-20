@@ -118,6 +118,36 @@ class HistogramContextTestCase(unittest.TestCase):
             # Check buffer
             self.assertListEqual([], self.h._buffer, 'Buffer was not cleared when entering new context')
 
+    def test_empty_data(self):
+        data = [[], [], []]
+
+        # Open context manually
+        self.h.open()
+        # Check buffer
+        self.assertListEqual([], self.h._buffer, 'Buffer was not cleared when entering new context')
+        for d in data:
+            self.h.append(d)
+            self.assertEqual(d, self.h._buffer[-1], 'Append did not appended data to buffer')
+        # Check buffer
+        self.assertListEqual(data, self.h._buffer, 'Buffer did not contain expected data')
+        with self.assertRaises(RuntimeError, msg='Submitting empty data did not raise'):
+            self.h.close()
+
+    def test_inconsistent_data(self):
+        data = [[1, 2], [3, 4], [5, 6, 7]]
+
+        # Open context manually
+        self.h.open()
+        # Check buffer
+        self.assertListEqual([], self.h._buffer, 'Buffer was not cleared when entering new context')
+        for d in data:
+            self.h.append(d)
+            self.assertEqual(d, self.h._buffer[-1], 'Append did not appended data to buffer')
+        # Check buffer
+        self.assertListEqual(data, self.h._buffer, 'Buffer did not contain expected data')
+        with self.assertRaises(RuntimeError, msg='Submitting inconsistent data did not raise'):
+            self.h.close()
+
     def test_archive_histograms(self):
         # Add data to the archive
         num_histograms = 8

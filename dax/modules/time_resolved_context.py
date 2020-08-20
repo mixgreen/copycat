@@ -364,6 +364,8 @@ class TimeResolvedContext(DaxModule):
                 raise RuntimeError('Length of the data and meta buffer are not consistent, data probably corrupt')
             if any(len(b) != len(self._buffer_data[0][0]) for b, _ in self._buffer_data):
                 raise RuntimeError('Buffered data is not consistent, data probably corrupt')
+            if len(self._buffer_data[0][0]) == 0:
+                raise RuntimeError('Data elements in the buffer are empty')
             if any(len(s) != len(b[0]) for b, _ in self._buffer_data for s in b):
                 raise RuntimeError('Buffered data (inner series) is not consistent, data probably corrupt')
 

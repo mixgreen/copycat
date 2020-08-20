@@ -105,6 +105,103 @@ class TimeResolvedContextTestCase(unittest.TestCase):
             # Check buffer
             self.assertListEqual([], self.t._buffer_data, 'Buffer was not cleared when entering new context')
 
+    def test_data_meta_buffers_inconsistent(self):
+        data = [
+            ([[1, 2, 3, 1, 0, 0], [0, 0, 3, 7, 2, 0]], 180),
+            ([[2, 3, 4, 2, 1, 0], [0, 0, 2, 4, 2, 1]], 1801),
+        ]
+
+        # Manually open context
+        self.t.open()
+        # Check buffer
+        self.assertListEqual([], self.t._buffer_data, 'Buffer was not cleared when entering new context')
+        for d in data:
+            self.t.append_data(*d)
+            r = (d[0], self.s.core.mu_to_seconds(d[1]))
+            self.assertEqual(r, self.t._buffer_data[-1], 'Append did not appended data to buffer')
+        # Check buffer
+        r = [(d, self.s.core.mu_to_seconds(o)) for d, o in data]
+        self.assertListEqual(r, self.t._buffer_data, 'Buffer did not contain expected data')
+        # Add no meta to raise consistency errors
+
+        with self.assertRaises(RuntimeError, msg='Inconsistent data and meta buffer did not raise'):
+            self.t.close()
+
+    def test_data_inconsistent(self):
+        data = [
+            ([[1, 2, 3, 1, 0, 0], [0, 0, 3, 7, 2, 0]], 180),
+            ([[2, 3, 4, 2, 1, 0], [0, 0, 2, 4, 2]], 1801),
+        ]
+
+        # Manually open context
+        self.t.open()
+        # Check buffer
+        self.assertListEqual([], self.t._buffer_data, 'Buffer was not cleared when entering new context')
+        for d in data:
+            self.t.append_data(*d)
+            r = (d[0], self.s.core.mu_to_seconds(d[1]))
+            self.assertEqual(r, self.t._buffer_data[-1], 'Append did not appended data to buffer')
+        # Check buffer
+        r = [(d, self.s.core.mu_to_seconds(o)) for d, o in data]
+        self.assertListEqual(r, self.t._buffer_data, 'Buffer did not contain expected data')
+
+        # Add meta to prevent consistency errors
+        for _ in range(len(data)):
+            self.t.append_meta(2 * us, 0 * us, 0 * us)
+
+        with self.assertRaises(RuntimeError, msg='Inconsistent data in buffer did not raise'):
+            self.t.close()
+
+    def test_data_inconsistent_2(self):
+        data = [
+            ([[1, 2, 3, 1, 0, 0], [0, 0, 3, 7, 2, 0]], 180),
+            ([[2, 3, 4, 2, 1, 0]], 1801),
+        ]
+
+        # Manually open context
+        self.t.open()
+        # Check buffer
+        self.assertListEqual([], self.t._buffer_data, 'Buffer was not cleared when entering new context')
+        for d in data:
+            self.t.append_data(*d)
+            r = (d[0], self.s.core.mu_to_seconds(d[1]))
+            self.assertEqual(r, self.t._buffer_data[-1], 'Append did not appended data to buffer')
+        # Check buffer
+        r = [(d, self.s.core.mu_to_seconds(o)) for d, o in data]
+        self.assertListEqual(r, self.t._buffer_data, 'Buffer did not contain expected data')
+
+        # Add meta to prevent consistency errors
+        for _ in range(len(data)):
+            self.t.append_meta(2 * us, 0 * us, 0 * us)
+
+        with self.assertRaises(RuntimeError, msg='Inconsistent data in buffer did not raise'):
+            self.t.close()
+
+    def test_data_empty(self):
+        data = [
+            ([], 180),
+            ([], 1801),
+        ]
+
+        # Manually open context
+        self.t.open()
+        # Check buffer
+        self.assertListEqual([], self.t._buffer_data, 'Buffer was not cleared when entering new context')
+        for d in data:
+            self.t.append_data(*d)
+            r = (d[0], self.s.core.mu_to_seconds(d[1]))
+            self.assertEqual(r, self.t._buffer_data[-1], 'Append did not appended data to buffer')
+        # Check buffer
+        r = [(d, self.s.core.mu_to_seconds(o)) for d, o in data]
+        self.assertListEqual(r, self.t._buffer_data, 'Buffer did not contain expected data')
+
+        # Add meta to prevent consistency errors
+        for _ in range(len(data)):
+            self.t.append_meta(2 * us, 0 * us, 0 * us)
+
+        with self.assertRaises(RuntimeError, msg='Empty data in buffer did not raise'):
+            self.t.close()
+
     def test_append_meta(self):
         data = [
             (2 * us, 0 * us, 0 * us),
