@@ -256,12 +256,41 @@ class HistogramContextTestCase(unittest.TestCase):
                 for d in data:
                     self.h.append(d)
 
-        # Check histograms data format
+        # Check data format
         probabilities = self.h.get_probabilities(state_detection_threshold=5)
         for p in probabilities[0]:  # Channel 0
             self.assertEqual(p, 4 / len(data), 'Obtained probabilities did not meet expected format')
         for p in probabilities[1]:  # Channel 1
             self.assertEqual(p, 6 / len(data), 'Obtained probabilities did not meet expected format')
+
+    def test_archive_mean_counts(self):
+        # Add data to the archive
+        num_histograms = 8
+        data = [
+            [1, 9],
+            [2, 9],
+            [2, 9],
+            [3, 8],
+            [4, 7],
+            [5, 6],
+            [6, 5],
+            [7, 2],
+            [8, 1],
+            [9, 0],
+        ]
+        mean_count_ref = [sum(c) / len(data) for c in zip(*data)]
+
+        for _ in range(num_histograms):
+            with self.h:
+                for d in data:
+                    self.h.append(d)
+
+        # Check data format
+        mean_counts = self.h.get_mean_counts()
+        for counts, ref in zip(mean_counts, mean_count_ref):
+            self.assertEqual(len(counts), num_histograms)
+            for c in counts:
+                self.assertEqual(c, ref, 'Obtained mean count did not meet expected format')
 
     def test_default_dataset_key(self):
         dataset_key = 'foo'
@@ -360,6 +389,26 @@ class HistogramAnalyzerTestCase(unittest.TestCase):
         for ref, res in zip(reference, result):
             self.assertListEqual(ref, list(res), 'Histograms did not converted correctly to probabilities')
 
+    def test_histogram_to_mean_count(self):
+        data = [(collections.Counter([3]), 3.0),
+                (collections.Counter([5, 6, 7]), 6.0),
+                (collections.Counter([1, 2, 1, 2, 1, 2, 1, 2]), 1.5), ]
+
+        for d, r in data:
+            with self.subTest(histogram=d):
+                self.assertEqual(HistogramAnalyzer.histogram_to_mean_count(d), r,
+                                 'Single histogram did not converted correctly to mean count')
+
+    def test_histograms_to_mean_counts(self):
+        data = [[collections.Counter([3, 4, 5]), collections.Counter([5, 7, 9]), collections.Counter([1, 2, 1, 2])],
+                [collections.Counter([1, 1, 2, 2]), collections.Counter([2, 2]), collections.Counter([4])], ]
+        reference = [[4.0, 7.0, 1.5], [1.5, 2, 4]]
+
+        result = HistogramAnalyzer.histograms_to_mean_counts(data)
+
+        for ref, res in zip(reference, result):
+            self.assertListEqual(ref, list(res), 'Histograms did not converted correctly to mean counts')
+
     def test_hdf5_read(self):
         # Add data to the archive
         num_histograms = 8
@@ -411,6 +460,8 @@ class HistogramAnalyzerTestCase(unittest.TestCase):
                     self.assertListEqual(v, list(w), 'Histograms did not match')
                 for v, w in zip(a.probabilities[k], self.h.get_probabilities(k)):
                     self.assertListEqual(list(v), w, 'Probabilities did not match')
+                for v, w in zip(a.mean_counts[k], self.h.get_mean_counts(k)):
+                    self.assertListEqual(list(v), w, 'Mean counts did not match')
 
             # Compare to analyzer from object source
             b = HistogramAnalyzer(self.s, self.s.detection.get_state_detection_threshold())
@@ -420,6 +471,8 @@ class HistogramAnalyzerTestCase(unittest.TestCase):
                     self.assertListEqual(v, list(w), 'Histograms did not match')
                 for v, w in zip(a.probabilities[k], b.probabilities[k]):
                     self.assertListEqual(list(v), list(w), 'Probabilities did not match')
+                for v, w in zip(a.mean_counts[k], b.mean_counts[k]):
+                    self.assertListEqual(list(v), list(w), 'Mean counts did not match')
 
 
 if __name__ == '__main__':

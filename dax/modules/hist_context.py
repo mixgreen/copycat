@@ -255,7 +255,7 @@ class HistogramContext(DaxModule):
             self.append_to_dataset(self._probability_plot_key, probabilities)
 
             # Calculate average count per histogram
-            mean_counts: typing.List[float] = [sum(c * v for c, v in h.items()) / sum(h.values()) for h in histograms]
+            mean_counts: typing.List[float] = [HistogramAnalyzer.histogram_to_mean_count(h) for h in histograms]
             # Append result to mean count plotting dataset
             self.append_to_dataset(self._mean_count_plot_key, mean_counts)
 
@@ -276,7 +276,6 @@ class HistogramContext(DaxModule):
 
         Falls back on default state detection threshold if none is given.
         """
-
         if state_detection_threshold is None:
             # Use default state_detection_threshold if not set
             state_detection_threshold = self._state_detection_threshold
@@ -415,7 +414,7 @@ class HistogramContext(DaxModule):
     @host_only
     def get_probabilities(self, dataset_key: typing.Optional[str] = None,
                           state_detection_threshold: typing.Optional[int] = None) -> typing.List[typing.List[float]]:
-        """Obtain all state probabilities recorded by this histogram context.
+        """Obtain all state probabilities recorded by this histogram context for a specific key.
 
         The data is formatted as a list of probabilities per channel.
         So to access probability N of channel C: `get_probabilities()[C][N]`.
@@ -429,6 +428,21 @@ class HistogramContext(DaxModule):
         :return: All probability data for the specified key
         """
         return [[self._histogram_to_probability(h, state_detection_threshold) for h in histograms]
+                for histograms in self.get_histograms(dataset_key)]
+
+    @host_only
+    def get_mean_counts(self, dataset_key: typing.Optional[str] = None) -> typing.List[typing.List[float]]:
+        """Obtain all average counts recorded by this histogram context for a specific key.
+
+        The data is formatted as a list of counts per channel.
+        So to access mean count N of channel C: `get_mean_counts()[C][N]`.
+
+        For binary measurements, the mean count returns a value in the range [0..1].
+
+        :param dataset_key: Key of the dataset to obtain the mean counts of
+        :return: All mean count data for the specified key
+        """
+        return [[HistogramAnalyzer.histogram_to_mean_count(h) for h in histograms]
                 for histograms in self.get_histograms(dataset_key)]
 
 
@@ -445,8 +459,11 @@ class HistogramAnalyzer:
     The first dimension is the channel and the second dimension are the histograms.
     Note that histograms are stored as Counter objects, which behave like dicts.
 
-    :attr:`probabilities` is a dict with for each key contains a list of probabilities.
+    :attr:`probabilities` is a dict which for each key contains a list of probabilities.
     This attribute is only available if a state detection threshold was provided.
+    The probabilities are a mapped version of the :attr:`histograms` data.
+
+    :attr:`mean_counts` is a dict which for each key contains a list of mean counts.
     The probabilities are a mapped version of the :attr:`histograms` data.
 
     Various helper functions for data processing are also available.
@@ -454,6 +471,9 @@ class HistogramAnalyzer:
     Counter object, to a state probability based on a given state detection threshold.
     :func:`histograms_to_probabilities` maps a list of histograms per channel (2D array of Counter objects)
     to a list of probabilities per channel based on a given state detection threshold.
+    :func:`histogram_to_mean_count` converts a single histogram, formatted as a Counter object, to a mean count.
+    :func:`histograms_to_mean_counts` maps a list of histograms per channel (2D array of Counter objects)
+    to a list of mean counts per channel.
     :func:`counter_to_ndarray` and :func:`ndarray_to_counter` convert a single histogram
     stored as a Counter object to an array representation and vice versa.
     """
@@ -462,6 +482,8 @@ class HistogramAnalyzer:
     """File name format for histogram plot files."""
     PROBABILITY_PLOT_FILE_FORMAT: str = '{key}_probability'
     """File name format for probability plot files."""
+    MEAN_COUNT_PLOT_FILE_FORMAT: str = '{key}_mean_count'
+    """File name format for mean count plot files."""
 
     def __init__(self, source: typing.Union[DaxSystem, HistogramContext, str, h5py.File],
                  state_detection_threshold: typing.Optional[int] = None):
@@ -487,6 +509,8 @@ class HistogramAnalyzer:
                 {k: source.get_histograms(k) for k in self.keys}
             self.probabilities: typing.Dict[str, np.ndarray] = \
                 {k: np.asarray(source.get_probabilities(k, state_detection_threshold)) for k in self.keys}
+            self.mean_counts: typing.Dict[str, np.ndarray] = \
+                {k: np.asarray(source.get_mean_counts(k)) for k in self.keys}
 
             # Obtain the file name generator
             self._file_name_generator = get_file_name_generator(source.get_device('scheduler'))
@@ -508,6 +532,7 @@ class HistogramAnalyzer:
             if state_detection_threshold is not None:
                 self.probabilities = {k: self.histograms_to_probabilities(h, state_detection_threshold)
                                       for k, h in self.histograms.items()}
+            self.mean_counts = {k: self.histograms_to_mean_counts(h) for k, h in self.histograms.items()}
 
             # Get a file name generator
             self._file_name_generator = dummy_file_name_generator
@@ -553,6 +578,28 @@ class HistogramAnalyzer:
         probabilities = [[HistogramAnalyzer.histogram_to_probability(h, state_detection_threshold) for h in channel]
                          for channel in histograms]
         return np.asarray(probabilities)
+
+    @staticmethod
+    def histogram_to_mean_count(counter: collections.Counter) -> float:
+        """Helper function to calculate the average count of a histogram.
+
+        :param counter: The counter object representing the histogram
+        :return: The average count as a float
+        """
+        return sum(c * v for c, v in counter.items()) / sum(counter.values())
+
+    @staticmethod
+    def histograms_to_mean_counts(histograms: typing.Sequence[typing.Sequence[collections.Counter]]) -> np.ndarray:
+        """Convert histograms to average counts.
+
+        Histograms are provided as a 2D array of Counter objects.
+        The first dimension is the channel, the second dimension is the sequence of counters.
+
+        :param histograms: The input histograms
+        :return: Array of counts with the same shape as the input histograms
+        """
+        counts = [[HistogramAnalyzer.histogram_to_mean_count(h) for h in channel] for channel in histograms]
+        return np.asarray(counts)
 
     @staticmethod
     def counter_to_ndarray(histogram: collections.Counter) -> np.ndarray:
@@ -724,6 +771,87 @@ class HistogramAnalyzer:
         """
         for key in self.histograms:
             self.plot_probability(key, **kwargs)
+
+    def plot_mean_count(self, key: str,
+                        x_values: typing.Optional[typing.Sequence[typing.Union[float, int]]] = None,
+                        x_label: typing.Optional[str] = None, y_label: typing.Optional[str] = 'Mean count',
+                        labels: typing.Optional[typing.Sequence[str]] = None,
+                        legend_loc: typing.Optional[typing.Union[str, typing.Tuple[float, float]]] = None,
+                        ext: str = 'pdf',
+                        **kwargs: typing.Any) -> None:
+        """Plot the mean count graph for a given key.
+
+        Note that if the data points are randomized the user should provide X values
+        to sort the points and plot the graph correctly.
+
+        :param key: The key of the data to plot
+        :param x_values: The sequence with X values for the graph
+        :param x_label: X-axis label
+        :param y_label: Y-axis label
+        :param labels: List of plot labels
+        :param legend_loc: Location of the legend
+        :param ext: Output file extension
+        :param kwargs: Keyword arguments for the plot function
+        """
+        assert isinstance(key, str)
+        assert isinstance(x_values, collections.abc.Sequence) or x_values is None
+        assert isinstance(x_label, str) or x_label is None
+        assert isinstance(y_label, str) or y_label is None
+        assert isinstance(labels, collections.abc.Sequence) or labels is None
+        assert isinstance(ext, str)
+
+        # Get the counts associated with the provided key
+        mean_counts = [np.asarray(p) for p in self.mean_counts[key]]
+
+        if not len(mean_counts):
+            # No data to plot
+            return
+
+        if x_values is None:
+            # Generate generic X values
+            x_values = np.arange(len(mean_counts[0]))
+        else:
+            # Sort data based on the given x values
+            x_values = np.asarray(x_values)
+            ind = x_values.argsort()
+            x_values = x_values[ind]
+            mean_counts = [p[ind] for p in mean_counts]
+
+        # Current labels
+        current_labels = [f'Plot {i}' for i in range(len(mean_counts))] if labels is None else labels
+        if len(current_labels) < len(mean_counts):
+            # Not enough labels
+            raise IndexError('Number of labels is less than the number of plots')
+
+        # Plotting defaults
+        kwargs.setdefault('marker', 'o')
+
+        # Plot
+        fig, ax = plt.subplots()
+        for y, label in zip(mean_counts, current_labels):
+            ax.plot(x_values, y, label=label, **kwargs)
+
+        # Plot formatting
+        ax.set_xlabel(x_label)
+        ax.set_ylabel(y_label)
+        ax.ticklabel_format(axis='x', scilimits=(0, 1))
+        ax.legend(loc=legend_loc)
+
+        # Save and close figure
+        file_name = self._file_name_generator(self.MEAN_COUNT_PLOT_FILE_FORMAT.format(key=key), ext)
+        fig.savefig(file_name, bbox_inches='tight')
+        plt.close(fig)
+
+    def plot_all_mean_counts(self, **kwargs: typing.Any) -> None:
+        """Plot mean count graphs for all keys available in the data.
+
+        Note that if the data points are randomized the user should provide X values
+        to sort the points and plot the graph correctly (`x_values` kwarg).
+
+        :param kwargs: Keyword arguments passed to :func:`plot_mean_count`
+        """
+        for key in self.histograms:
+            self.plot_mean_count(key, **kwargs)
 
 
 class HistogramContextError(RuntimeError):
