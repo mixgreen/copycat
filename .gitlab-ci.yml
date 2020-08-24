@@ -61,12 +61,6 @@ test_conda:
     - python3 -m unittest -v
     - mypy --version; mypy
     - flake8 --version; flake8
-  rules:
-    # Rule to allow failure of conda test if variable is set
-    - if: '$CONDA_ALLOW_FAILURE'
-      allow_failure: true
-    # Default
-    - when: on_success
 
 pages:
   extends: .nix_env
