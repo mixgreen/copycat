@@ -443,6 +443,24 @@ class TimeResolvedAnalyzerTestCase(unittest.TestCase):
                         self.assertIn(c, w, 'Did not found expected dataset columns')
                         self.assertTrue(np.array_equal(v[c], w[c]), f'Column/data "{c}" of trace did not match')
 
+    def test_plot(self):
+        # Add data to the archive
+        bin_width = 1 * us
+        bin_spacing = 1 * ns
+        offset = 5 * ns
+        offset_mu = 10
+        data = [[16, 25, 56], [66, 84, 83], [45, 77, 96], [88, 63, 79]]
+
+        # Store data
+        with self.t:
+            self.t.append(data, bin_width, bin_spacing, offset, offset_mu)
+
+        with temp_dir():
+            # Make analyzer object
+            a = TimeResolvedAnalyzer(self.s)
+            # Call plot functions to see if no exceptions occur
+            a.plot_all_traces()
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -474,6 +474,30 @@ class HistogramAnalyzerTestCase(unittest.TestCase):
                 for v, w in zip(a.mean_counts[k], b.mean_counts[k]):
                     self.assertListEqual(list(v), list(w), 'Mean counts did not match')
 
+    def test_plot(self):
+        # Add data to the archive
+        num_histograms = 4
+        data = [
+            [4, 1, 0],
+            [5, 2, 0],
+            [6, 3, 0],
+            [7, 4, 0],
+        ]
+
+        # Store data
+        for _ in range(num_histograms):
+            with self.h:
+                for d in data:
+                    self.h.append(d)
+
+        with temp_dir():
+            # Make analyzer object
+            a = HistogramAnalyzer(self.s, self.s.detection.get_state_detection_threshold())
+            # Call plot functions to see if no exceptions occur
+            a.plot_all_histograms()
+            a.plot_all_probabilities()
+            a.plot_all_mean_counts()
+
 
 if __name__ == '__main__':
     unittest.main()
