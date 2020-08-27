@@ -1,5 +1,13 @@
 import unittest
 
+from dax.experiment import DaxSystem
+from dax.util.artiq import get_manager_or_parent
+
+
+class _TestSystem(DaxSystem):
+    SYS_ID = 'unittest_system'
+    SYS_VER = 0
+
 
 class CcbTestCase(unittest.TestCase):
 
@@ -37,6 +45,21 @@ class CcbTestCase(unittest.TestCase):
                     else:
                         self.assertIn(f'--{k.replace("_", "-")}', cmd, 'Argument not found in command')
                         self.assertIn(f'"{v}"', cmd, 'Argument value not found in command')
+
+    def test_ccb_tool(self):
+        from dax.util.ccb import get_ccb_tool
+        ccb = get_ccb_tool(_TestSystem(get_manager_or_parent()))
+
+        # Just call methods to see if no errors occur
+        self.assertIsNone(ccb.big_number('name', 'key'))
+        self.assertIsNone(ccb.image('name', 'key'))
+        self.assertIsNone(ccb.plot_xy('name', 'key'))
+        self.assertIsNone(ccb.plot_xy_multi('name', 'key'))
+        self.assertIsNone(ccb.plot_hist('name', 'key'))
+        self.assertIsNone(ccb.plot_hist_artiq('name', 'key'))
+        self.assertIsNone(ccb.plot_xy_hist('name', 'key', 'key', 'key'))
+        self.assertIsNone(ccb.disable_applet('name'))
+        self.assertIsNone(ccb.disable_applet_group('group'))
 
 
 if __name__ == '__main__':

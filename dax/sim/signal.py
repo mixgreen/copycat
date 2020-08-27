@@ -24,18 +24,59 @@ class DaxSignalManager(abc.ABC, typing.Generic[_S_T]):
     @abc.abstractmethod
     def register(self, scope: DaxSimDevice, name: str, type_: type, *,
                  size: typing.Optional[int] = None, init: typing.Any = None) -> _S_T:
-        """Method used by devices to register a signal."""
+        """Register a signal.
+
+        Signals have to be registered before any events are committed.
+
+        Possible types and expected arguments:
+
+        - `bool` (a register with bit values `0`, `1`, `'X'`, `'Z'`), provide a size of the register
+        - `int`, `np.int32`, `np.int64`
+        - `float`
+        - `str`
+        - `object` (an event type with no value)
+
+        :param scope: The scope of the signal, which is the device object
+        :param name: The name of the signal
+        :param type_: The type of the signal
+        :param size: The size of the data (only for type bool)
+        :param init: Initial value (defaults to `X`)
+        :return: The signal object to use when committing events
+        """
         pass
 
     @abc.abstractmethod
     def event(self, signal: _S_T, value: typing.Any, *,
               time: typing.Optional[np.int64] = None, offset: typing.Optional[np.int64] = None) -> None:
-        """Method used by devices to register events."""
+        """Commit an event.
+
+        Note that in a parallel context, :func:`delay` and :func:`delay_mu` do not directly
+        influence the time returned by :func:`now_mu`.
+        It is better to use the `time` or `offset` arguments to set events at different times.
+
+        Bool type signals can have values `0`, `1`, `'X'`, `'Z'`.
+        A vector of a bool type signal has a value of type `str` (e.g. `'1001XZ'`).
+
+        Integer type variables can have any int value or any bool value.
+
+        Event (`object`) type signals represent timestamps and do not have a value.
+        We recommend to always use value `True` for event type signals.
+
+        String type signals can use value `None` which is equivalent to `Z`.
+
+        :param signal: The signal that changed
+        :param value: The new value of the signal
+        :param time: Optional time in machine units when the event happened (:func:`now_mu` if no time was provided)
+        :param offset: Optional offset from :func:`now_mu` in machine units when the event happened (default is `0`)
+        """
         pass
 
     @abc.abstractmethod
     def flush(self, ref_period: float) -> None:
-        """Flush the output of the signal manager."""
+        """Flush the output of the signal manager.
+
+        :param ref_period: The reference period (i.e. the time of one machine unit)
+        """
         pass
 
     @abc.abstractmethod
@@ -117,25 +158,6 @@ class VcdSignalManager(DaxSignalManager[_VS_T]):
 
     def register(self, scope: DaxSimDevice, name: str, type_: _VT_T, *,
                  size: typing.Optional[int] = None, init: _VV_T = None) -> _VS_T:
-        """ Register a signal.
-
-        Signals have to be registered before any events are committed.
-
-        Possible types and expected arguments:
-
-        - `bool` (a register with bit values `0`, `1`, `X`, `Z`), provide a size of the register
-        - `int`, `np.int32`, `np.int64`
-        - `float`
-        - `str`
-        - `object` (an event type with no value)
-
-        :param scope: The scope of the signal, which is the device object
-        :param name: The name of the signal
-        :param type_: The type of the signal
-        :param size: The size of the data (only for type bool)
-        :param init: Initial value (defaults to `X`)
-        :return: The signal object to use when committing events
-        """
         assert isinstance(scope, DaxSimDevice), 'The scope of the signal must be of type DaxSimDevice'
         assert isinstance(name, str), 'The name of the signal must be of type str'
         assert isinstance(size, int) or size is None, 'The size must be an int or None'
@@ -157,37 +179,10 @@ class VcdSignalManager(DaxSignalManager[_VS_T]):
 
     def event(self, signal: _VS_T, value: _VV_T, *,
               time: typing.Optional[np.int64] = None, offset: typing.Optional[np.int64] = None) -> None:
-        """Commit an event.
-
-        Note that in a parallel context, :func:`delay` and :func:`delay_mu` do not directly
-        influence the time returned by :func:`now_mu`.
-        It is better to use the `time` or `offset` arguments to set events at different times.
-
-        Bool type signals can have values `0`, `1`, `X`, `Z`.
-        A vector of a bool type signal has a value of type `str`.
-
-        Integer type variables can have any int value or any bool value.
-
-        Event (`object`) type signals represent timestamps and do not have a value.
-        We recommend to always use value `True` for event type signals.
-
-        String type signals can use value `None` which is equivalent to `Z`.
-
-        :param signal: The signal that changed
-        :param value: The new value of the signal
-        :param time: Optional time in machine units when the event happened (:func:`now_mu` if no time was provided)
-        :param offset: Optional offset from :func:`now_mu` in machine units when the event happened (default is `0`)
-        """
-
         # Add event to buffer
         self._event_buffer.append((self._get_timestamp(time, offset), signal, value))
 
     def flush(self, ref_period: float) -> None:
-        """Commit all buffered events.
-
-        :param ref_period: The reference period (i.e. the time of one machine unit)
-        """
-
         # Sort the list of events (VCD writer can only handle a linear timeline)
         self._event_buffer.sort(key=operator.itemgetter(0))
         # Get a timestamp for now
@@ -215,7 +210,6 @@ class VcdSignalManager(DaxSignalManager[_VS_T]):
         self._event_buffer.clear()
 
     def close(self) -> None:
-        """Close the VCD file."""
         # Close the VCD writer
         self._vcd.close()
         # Close the VCD file
@@ -286,25 +280,6 @@ class PeekSignalManager(DaxSignalManager[_PS_T]):
 
     def register(self, scope: DaxSimDevice, name: str, type_: _PT_T, *,
                  size: typing.Optional[int] = None, init: _PV_T = None) -> _PS_T:
-        """ Register a signal.
-
-        Signals have to be registered before any events are committed.
-
-        Possible types and expected arguments:
-        - `bool` (a register with bit values `0`, `1`, `X`, `Z`), provide a size of the register
-        - `int`, `np.int32`, `np.int64`
-        - `float`
-        - `str`
-        - `object` (an event type with no value)
-
-        :param scope: The scope of the signal, which is the device object
-        :param name: The name of the signal
-        :param type_: The type of the signal
-        :param size: The size of the data (only for type bool)
-        :param init: Initial value (defaults to `X`)
-        :return: The signal object to use when committing events
-        """
-
         assert isinstance(scope, DaxSimDevice), 'The scope of the signal must be of type DaxSimDevice'
         assert isinstance(name, str), 'The name of the signal must be of type str'
         assert isinstance(size, int) or size is None, 'The size must be an int or None'
@@ -340,28 +315,6 @@ class PeekSignalManager(DaxSignalManager[_PS_T]):
 
     def event(self, signal: _PS_T, value: _PV_T, *,
               time: typing.Optional[np.int64] = None, offset: typing.Optional[np.int64] = None) -> None:
-        """Commit an event.
-
-        Note that in a parallel context, :func:`delay` and :func:`delay_mu` do not directly
-        influence the time returned by :func:`now_mu`.
-        It is better to use the `time` or `offset` arguments to set events at different times.
-
-        Bool type signals can have values `0`, `1`, `X`, `Z`.
-        A vector of a bool type signal has a value of type `str`.
-
-        Integer type variables can have any int value or any bool value.
-
-        Event (`object`) type signals represent timestamps and do not have a value.
-        We recommend to always use value `True` for event type signals.
-
-        String type signals can use value `None` which is equivalent to `Z`.
-
-        :param signal: The signal that changed
-        :param value: The new value of the signal
-        :param time: Optional time in machine units when the event happened (:func:`now_mu` if no time was provided)
-        :param offset: Optional offset from :func:`now_mu` in machine units when the event happened (default is `0`)
-        """
-
         assert isinstance(signal, tuple) and len(signal) == 2, 'Invalid signal object'
         assert time is None or isinstance(time, np.int64), 'Time must be of type np.int64 or None'
         assert offset is None or isinstance(offset, (int, np.integer)), 'Invalid type for offset'

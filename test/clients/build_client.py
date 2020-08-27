@@ -37,6 +37,9 @@ class _TestDetectionModule(DaxModule, dax.interfaces.detection.DetectionInterfac
     def get_state_detection_threshold(self) -> int:
         return 2
 
+    def get_default_detection_time(self) -> float:
+        return 100 * us
+
 
 class _TestSystem(DaxSystem):
     SYS_ID = 'unittest_system'

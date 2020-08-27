@@ -283,7 +283,8 @@ class TimeResolvedContext(DaxModule):
         The formatting function will be called on the host.
 
         The formatter uses an extended format and it is possible to convert float values
-        to human-readable format using conversion flags `{!t}` and `{!f}`.
+        to human-readable format using conversion flags such as `{!t}` and `{!f}`.
+        See :class:`dax.util.units.UnitsFormatter` for more information about the available conversion flags.
         Note that the formatter has the default precision of 6 digits which is not likely
         to generate unique keys. An other field can be added to make sure the keys are unique.
 

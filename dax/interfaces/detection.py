@@ -25,3 +25,11 @@ class DetectionInterface(DaxInterface, abc.ABC):
         :return: State detection threshold
         """
         pass
+
+    @abc.abstractmethod
+    def get_default_detection_time(self) -> float:
+        """Get the default detection time.
+
+        :return: Detection time
+        """
+        pass

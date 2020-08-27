@@ -4,7 +4,11 @@ import string
 from artiq.language.core import host_only
 from artiq.language.units import *  # noqa: F401
 
-__all__ = ['time_to_str', 'str_to_time', 'freq_to_str', 'str_to_freq',
+__all__ = ['time_to_str', 'str_to_time',
+           'freq_to_str', 'str_to_freq',
+           'volt_to_str', 'str_to_volt',
+           'ampere_to_str', 'str_to_ampere',
+           'watt_to_str', 'str_to_watt',
            'UnitsFormatter']
 
 
@@ -43,6 +47,24 @@ def freq_to_str(frequency: float, *, threshold: float = 1.0, precision: int = 2)
 
 
 @host_only
+def volt_to_str(volt: float, *, threshold: float = 1.0, precision: int = 2) -> str:
+    """Convert a voltage to a string for pretty printing."""
+    return _value_to_str(volt, threshold, precision, ['kV', 'V', 'mV', 'uV'])
+
+
+@host_only
+def ampere_to_str(ampere: float, *, threshold: float = 1.0, precision: int = 2) -> str:
+    """Convert an amperage to a string for pretty printing."""
+    return _value_to_str(ampere, threshold, precision, ['A', 'mA', 'uA'])
+
+
+@host_only
+def watt_to_str(watt: float, *, threshold: float = 1.0, precision: int = 2) -> str:
+    """Convert a wattage to a string for pretty printing."""
+    return _value_to_str(watt, threshold, precision, ['W', 'mW', 'uW'])
+
+
+@host_only
 def _str_to_value(string_: str, units: typing.Set[str]) -> float:
     assert isinstance(string_, str), 'Input must be of type str'
 
@@ -74,16 +96,54 @@ def str_to_freq(string_: str) -> float:
     return _str_to_value(string_, {'GHz', 'MHz', 'kHz', 'Hz', 'mHz'})
 
 
+@host_only
+def str_to_volt(string_: str) -> float:
+    """Convert a string to a voltage."""
+    return _str_to_value(string_, {'kV', 'V', 'mV', 'uV'})
+
+
+@host_only
+def str_to_ampere(string_: str) -> float:
+    """Convert a string to an amperage."""
+    return _str_to_value(string_, {'A', 'mA', 'uA'})
+
+
+@host_only
+def str_to_watt(string_: str) -> float:
+    """Convert a string to a wattage."""
+    return _str_to_value(string_, {'W', 'mW', 'uW'})
+
+
 class UnitsFormatter(string.Formatter):
     """String formatter supporting extended conversions.
 
-    Conversion available for time `t` and frequency `f`.
+    The following extra conversions are available:
+
+    - `{!t}`, conversion to time
+    - `{!f}`, conversion to frequency
+    - `{!v}`, conversion to volt
+    - `{!a}`, conversion to ampere (overrides default ascii conversion)
+    - `{!w}`, conversion to watt
     """
+
+    def __init__(self, *, precision: int = 6):
+        """Create a new units string formatter object.
+
+        :param precision: The number of digits displayed after the decimal point
+        """
+        assert isinstance(precision, int) and precision >= 0, 'Precision must be equal or greater than zero'
+        self._precision: int = precision
 
     def convert_field(self, value: typing.Any, conversion: str) -> typing.Any:
         if conversion == 't':
-            return time_to_str(value, precision=6)
-        if conversion == 'f':
-            return freq_to_str(value, precision=6)
+            return time_to_str(value, precision=self._precision)
+        elif conversion == 'f':
+            return freq_to_str(value, precision=self._precision)
+        elif conversion == 'v':
+            return volt_to_str(value, precision=self._precision)
+        elif conversion == 'a':
+            return ampere_to_str(value, precision=self._precision)
+        elif conversion == 'w':
+            return watt_to_str(value, precision=self._precision)
         else:
             return super(UnitsFormatter, self).convert_field(value, conversion)

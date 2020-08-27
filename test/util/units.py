@@ -20,6 +20,27 @@ class UnitsTestCase(unittest.TestCase):
         self.assertEqual(freq_to_str(0.010 * GHz, precision=0), '10 MHz')
         self.assertEqual(freq_to_str(4 * MHz, threshold=1000.0, precision=1), '4000.0 kHz')
 
+    def test_volt_to_str(self):
+        from dax.util.units import volt_to_str
+        self.assertEqual(volt_to_str(10 * mV, precision=3), '10.000 mV')
+        self.assertEqual(volt_to_str(0.010 * kV, precision=0), '10 V')
+        self.assertEqual(volt_to_str(1234567.8 * uV, precision=7), '1.2345678 V')
+        self.assertEqual(volt_to_str(4 * V, threshold=1000.0, precision=1), '4000.0 mV')
+
+    def test_ampere_to_str(self):
+        from dax.util.units import ampere_to_str
+        self.assertEqual(ampere_to_str(10 * mA, precision=3), '10.000 mA')
+        self.assertEqual(ampere_to_str(0.010 * mA, precision=0), '10 uA')
+        self.assertEqual(ampere_to_str(1234567 * uA, precision=7), '1.2345670 A')
+        self.assertEqual(ampere_to_str(4 * A, threshold=1000.0, precision=1), '4000.0 mA')
+
+    def test_watt_to_str(self):
+        from dax.util.units import watt_to_str
+        self.assertEqual(watt_to_str(46 * mW, precision=3), '46.000 mW')
+        self.assertEqual(watt_to_str(0.089 * mW, precision=0), '89 uW')
+        self.assertEqual(watt_to_str(1200567.8 * uW, precision=7), '1.2005678 W')
+        self.assertEqual(watt_to_str(8 * W, threshold=1000.0, precision=1), '8000.0 mW')
+
     def test_str_to_time(self):
         from dax.util.units import str_to_time
         self.assertEqual(str_to_time('10 ns'), 10 * ns)
@@ -37,6 +58,33 @@ class UnitsTestCase(unittest.TestCase):
         self.assertRaises(ValueError, str_to_freq, 'bar')
         self.assertRaises(ValueError, str_to_freq, '5mHz')
         self.assertRaises(ValueError, str_to_freq, '4.6 khz')
+
+    def test_str_to_volt(self):
+        from dax.util.units import str_to_volt
+        self.assertEqual(str_to_volt('10 kV'), 10 * kV)
+        self.assertEqual(str_to_volt('.10 V'), .1 * V)
+        self.assertEqual(str_to_volt('00050.001 mV'), 50.001 * mV)
+        self.assertRaises(ValueError, str_to_volt, 'bar')
+        self.assertRaises(ValueError, str_to_volt, '5V')
+        self.assertRaises(ValueError, str_to_volt, '4.6 MV')
+
+    def test_str_to_ampere(self):
+        from dax.util.units import str_to_ampere
+        self.assertEqual(str_to_ampere('10 uA'), 10 * uA)
+        self.assertEqual(str_to_ampere('.10 A'), .1 * A)
+        self.assertEqual(str_to_ampere('00050.001 mA'), 50.001 * mA)
+        self.assertRaises(ValueError, str_to_ampere, 'foo')
+        self.assertRaises(ValueError, str_to_ampere, '5mA')
+        self.assertRaises(ValueError, str_to_ampere, '4.6 UV')
+
+    def test_str_to_watt(self):
+        from dax.util.units import str_to_watt
+        self.assertEqual(str_to_watt('10 uW'), 10 * uW)
+        self.assertEqual(str_to_watt('.10 W'), .1 * W)
+        self.assertEqual(str_to_watt('00050.001 mW'), 50.001 * mW)
+        self.assertRaises(ValueError, str_to_watt, 'foo')
+        self.assertRaises(ValueError, str_to_watt, '5mW')
+        self.assertRaises(ValueError, str_to_watt, '4.6 UW')
 
 
 class UnitsFormatterTestCase(unittest.TestCase):
@@ -67,6 +115,51 @@ class UnitsFormatterTestCase(unittest.TestCase):
             ('{!f}', [5.333333333333 * kHz], {}, '5.333333 kHz'),
             ('{!f}-{!f}', [5.33333333333 * kHz, 4.5000066 * MHz], {}, '5.333333 kHz-4.500007 MHz'),
             ('{a!f}-{b!f}', [], dict(a=5.3333333 * kHz, b=4.5000066 * MHz), '5.333333 kHz-4.500007 MHz'),
+        ]
+
+        for fstring, args, kwargs, ref in test_data:
+            with self.subTest(input=fstring):
+                self.assertEqual(self.f.format(fstring, *args, **kwargs), ref)
+
+    def test_volt_format(self):
+        test_data = [
+            ('no formatting', [], {}, 'no formatting'),
+            ('aa{}', [1], {}, 'aa1'),
+            ('{!v}', [3 * kV], {}, '3.000000 kV'),
+            ('{!v}', [3000 * mV], {}, '3.000000 V'),
+            ('{!v}', [5.333333333333 * uV], {}, '5.333333 uV'),
+            ('{!v}-{!v}', [5.33333333333 * kV, 4.5000066 * mV], {}, '5.333333 kV-4.500007 mV'),
+            ('{a!v}-{b!v}', [], dict(a=5.3333333 * kV, b=4.5000066 * uV), '5.333333 kV-4.500007 uV'),
+        ]
+
+        for fstring, args, kwargs, ref in test_data:
+            with self.subTest(input=fstring):
+                self.assertEqual(self.f.format(fstring, *args, **kwargs), ref)
+
+    def test_ampere_format(self):
+        test_data = [
+            ('no formatting', [], {}, 'no formatting'),
+            ('aa{}', [1], {}, 'aa1'),
+            ('{!a}', [3 * A], {}, '3.000000 A'),
+            ('{!a}', [3000 * mA], {}, '3.000000 A'),
+            ('{!a}', [5.333333333333 * uA], {}, '5.333333 uA'),
+            ('{!a}-{!a}', [5.33333333333 * A, 4.5000066 * mA], {}, '5.333333 A-4.500007 mA'),
+            ('{a!a}-{b!a}', [], dict(a=5.3333333 * mA, b=4.5000066 * uA), '5.333333 mA-4.500007 uA'),
+        ]
+
+        for fstring, args, kwargs, ref in test_data:
+            with self.subTest(input=fstring):
+                self.assertEqual(self.f.format(fstring, *args, **kwargs), ref)
+
+    def test_watt_format(self):
+        test_data = [
+            ('no formatting', [], {}, 'no formatting'),
+            ('aa{}', [1], {}, 'aa1'),
+            ('{!w}', [3 * W], {}, '3.000000 W'),
+            ('{!w}', [3000 * mW], {}, '3.000000 W'),
+            ('{!w}', [5.333333333333 * uW], {}, '5.333333 uW'),
+            ('{!w}-{!w}', [5.33333333333 * W, 4.5000066 * mW], {}, '5.333333 W-4.500007 mW'),
+            ('{a!w}-{b!w}', [], dict(a=5.3333333 * mW, b=4.5000066 * uW), '5.333333 mW-4.500007 uW'),
         ]
 
         for fstring, args, kwargs, ref in test_data:

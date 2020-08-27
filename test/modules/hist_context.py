@@ -32,6 +32,9 @@ class _MockDetectionModule(DaxModule, DetectionInterface):
     def get_state_detection_threshold(self) -> int:
         return self.state_detection_threshold
 
+    def get_default_detection_time(self) -> float:
+        return 100 * us
+
 
 class _TestSystem(DaxSystem):
     SYS_ID = 'unittest_system'
