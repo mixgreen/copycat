@@ -64,6 +64,10 @@ class _PmtMonitorBase(DaxClient, EnvExperiment, abc.ABC):
                                             BooleanValue(default=True),
                                             group='Dataset',
                                             tooltip='Clear old data at start')
+        self.reset_data_resume = self.get_argument('Reset data when resuming',
+                                                   BooleanValue(default=False),
+                                                   group='Dataset',
+                                                   tooltip='Clear old data when resuming from a pause')
         self.sliding_window = self.get_argument('Data window size',
                                                 NumberValue(default=120 * s, unit='s', min=0, ndecimals=0, step=60),
                                                 group='Dataset',
@@ -113,7 +117,8 @@ class _PmtMonitorBase(DaxClient, EnvExperiment, abc.ABC):
         self.logger.debug('Appending to previous data' if init_value else 'Starting with empty list')
 
         # Set the result datasets to the correct mode
-        self.set_dataset(self.dataset_key, init_value, broadcast=True, archive=False)
+        dataset_kwargs = {'broadcast': True, 'archive': False}
+        self.set_dataset(self.dataset_key, init_value, **dataset_kwargs)
 
         if self.create_applet:
             # Create the applet
@@ -133,6 +138,10 @@ class _PmtMonitorBase(DaxClient, EnvExperiment, abc.ABC):
                 # To pause, close communications and call the pause function
                 self.core.comm.close()
                 self.scheduler.pause()  # Can raise a TerminationRequested exception
+
+                if self.reset_data_resume:
+                    # Reset dataset when resuming
+                    self.set_dataset(self.dataset_key, [], **dataset_kwargs)
 
         except TerminationRequested:
             # Experiment was terminated, gracefully end the experiment
