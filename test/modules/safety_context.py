@@ -11,10 +11,12 @@ class _ReentrantTestSystem(DaxSystem):
     SYS_ID = 'unittest_system'
     SYS_VER = 0
     SAFETY_CONTEXT_TYPE = ReentrantSafetyContext
+    EXIT_ERROR = True
 
     def build(self) -> None:  # type: ignore
         super(_ReentrantTestSystem, self).build()
-        self.context = self.SAFETY_CONTEXT_TYPE(self, 'context', enter_cb=self.enter, exit_cb=self.exit)
+        self.context = self.SAFETY_CONTEXT_TYPE(self, 'context',
+                                                enter_cb=self.enter, exit_cb=self.exit, exit_error=self.EXIT_ERROR)
         self.counter = collections.Counter({'enter': 0, 'exit': 0})
 
     def enter(self):
@@ -24,8 +26,16 @@ class _ReentrantTestSystem(DaxSystem):
         self.counter['exit'] += 1
 
 
+class _ReentrantExitErrorTestSystem(_ReentrantTestSystem):
+    EXIT_ERROR = False
+
+
 class _NonReentrantTestSystem(_ReentrantTestSystem):
     SAFETY_CONTEXT_TYPE = SafetyContext
+
+
+class _NonReentrantExitErrorTestSystem(_NonReentrantTestSystem):
+    EXIT_ERROR = False
 
 
 class _GenericSafetyContextTestCase(unittest.TestCase):
@@ -38,10 +48,16 @@ class _GenericSafetyContextTestCase(unittest.TestCase):
         self.context = self.s.context
 
     def test_exit_mismatch(self):
-        with self.assertRaises(SafetyContextError, msg='Out of sync exit did not raise'):
-            # Call exit manually (which is bad)
+        if self.SYSTEM_TYPE.EXIT_ERROR:
+            with self.assertRaises(SafetyContextError, msg='Out of sync exit did not raise'):
+                # Call exit manually (which is bad)
+                self.context.__exit__(None, None, None)
+        else:
+            # Call exit manually is allowed
+            self.context.__exit__(None, None, None)
             self.context.__exit__(None, None, None)
 
+        self.assertEqual(self.context._in_context, 0, 'In context counter is corrupted')
         self.assertDictEqual(self.counter, {'enter': 0, 'exit': 0}, 'Counters did not match expected values')
 
     def test_in_context(self):
@@ -179,7 +195,11 @@ class ReentrantSafetyContextTestCase(_GenericSafetyContextTestCase):
         self.assertDictEqual(self.counter, {'enter': 1, 'exit': 1}, 'Counters did not match expected values')
 
 
-class SafetyContextTestCase(_GenericSafetyContextTestCase):
+class ReentrantExitErrorSafetyContextTestCase(ReentrantSafetyContextTestCase):
+    SYSTEM_TYPE = _ReentrantExitErrorTestSystem
+
+
+class NonReentrantSafetyContextTestCase(_GenericSafetyContextTestCase):
     SYSTEM_TYPE = _NonReentrantTestSystem
 
     def test_nested_context(self):
@@ -201,6 +221,10 @@ class SafetyContextTestCase(_GenericSafetyContextTestCase):
                 self.fail()
 
         self.assertDictEqual(self.counter, {'enter': 1, 'exit': 1}, 'Counters did not match expected values')
+
+
+class NonReentrantExitErrorSafetyContextTestCase(NonReentrantSafetyContextTestCase):
+    SYSTEM_TYPE = _NonReentrantExitErrorTestSystem
 
 
 if __name__ == '__main__':

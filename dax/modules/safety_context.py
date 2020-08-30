@@ -36,14 +36,16 @@ class ReentrantSafetyContext(DaxModule):
     EXCEPTION_TYPE: type = SafetyContextError
     """The exception type raised (must be a subclass of :class:`SafetyContextError`)."""
 
-    def build(self, *, enter_cb: __CB_T, exit_cb: __CB_T) -> None:  # type: ignore
+    def build(self, *, enter_cb: __CB_T, exit_cb: __CB_T, exit_error: bool = False) -> None:  # type: ignore
         """Build the safety context module.
 
         :param enter_cb: The callback function for entering the context
         :param exit_cb: The callback function for exiting the context
+        :param exit_error: Raise an error if exit is called more times than enter
         """
         assert callable(enter_cb), 'Provided enter callback is not a callable'
         assert callable(exit_cb), 'Provided exit callback is not callable'
+        assert isinstance(exit_error, bool), 'Exit error flag must be of type bool'
 
         # Add class constants as kernel invariants
         assert issubclass(self.EXCEPTION_TYPE, SafetyContextError), \
@@ -55,9 +57,10 @@ class ReentrantSafetyContext(DaxModule):
         self._exit_cb: ReentrantSafetyContext.__CB_T = exit_cb
         self.update_kernel_invariants('_enter_cb', '_exit_cb')
 
-        # Store custom error messages
-        self._exit_err_msg: str = f'Safety context "{self.get_name()}" has been exited more times than entered'
-        self.update_kernel_invariants('_exit_err_msg')
+        # Store exit error flag and custom error message
+        self._exit_error: bool = exit_error
+        self._exit_error_msg: str = f'Safety context "{self.get_name()}" has been exited more times than entered'
+        self.update_kernel_invariants('_exit_error', '_exit_error_msg')
 
         # By default we are not in context
         self._in_context: np.int32 = np.int32(0)  # This variable is NOT kernel invariant
@@ -95,16 +98,17 @@ class ReentrantSafetyContext(DaxModule):
         It is not possible to assign default values to the argument as the ARTIQ compiler only
         accepts `__exit__` functions with exactly four positional arguments.
         """
-        if self._in_context <= 0:
+        if self._exit_error and self._in_context <= 0:
             # Enter and exit calls were out of sync
-            raise self.EXCEPTION_TYPE(self._exit_err_msg)
+            raise self.EXCEPTION_TYPE(self._exit_error_msg)
 
         if self._in_context == 1:
             # Call exit callback function
             self._exit_cb()
 
-        # Decrement context counter
-        self._in_context -= 1
+        if self._in_context > 0:
+            # Decrement context counter
+            self._in_context -= 1
 
 
 class SafetyContext(ReentrantSafetyContext):
