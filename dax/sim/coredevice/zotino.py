@@ -14,7 +14,7 @@ class Zotino(AD53xx):
         super(Zotino, self).__init__(dmgr, **kwargs)
 
         # Register additional signals
-        self._led = self._signal_manager.register(self, f'led', bool, size=8)
+        self._led = self._signal_manager.register(self, 'led', bool, size=8)
 
     @kernel
     def set_leds(self, leds):
