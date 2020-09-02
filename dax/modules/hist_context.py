@@ -87,6 +87,8 @@ class HistogramContext(DaxModule):
         self._in_context: np.int32 = np.int32(0)
         # The count buffer (buffer appending is a bit faster than dict operations)
         self._buffer: typing.List[typing.Sequence[int]] = []
+        # Flag for the first call to close()
+        self._first_close: bool = True
 
         # Cache for processed data
         self._cache: typing.Dict[str, typing.List[typing.Sequence[collections.Counter]]] = {}
@@ -95,7 +97,7 @@ class HistogramContext(DaxModule):
         self._dataset_key: str = self._default_dataset_key
         # Store plot base key
         self._plot_base_key: str = plot_base_key
-        # Datasets that are initialized with a counter, which represents the length of the data
+        # Open datasets stored as counters, which represent the length of the data
         self._open_datasets: typing.Counter[str] = collections.Counter()
 
     def init(self) -> None:
@@ -106,10 +108,6 @@ class HistogramContext(DaxModule):
         self._mean_count_plot_key: str = self.MEAN_COUNT_PLOT_KEY_FORMAT.format(base=base)
         # Generate applet plot group
         self._plot_group: str = self.PLOT_GROUP_FORMAT.format(base=base)
-
-        # Prepare the probability and mean count plot datasets by clearing them
-        self.clear_probability_plot()
-        self.clear_mean_count_plot()
 
     def post_init(self) -> None:
         # Obtain the state detection threshold
@@ -223,6 +221,13 @@ class HistogramContext(DaxModule):
         if not self._in_context:
             # Called exit out of context
             raise HistogramContextError('The exit function can only be called from inside the histogram context')
+
+        if self._first_close:
+            # Prepare the probability and mean count plot datasets by clearing them
+            self.clear_probability_plot()
+            self.clear_mean_count_plot()
+            # Clear flag
+            self._first_close = False
 
         # Create a sub-dataset key for this result (HDF5 only supports fixed size elements in a list)
         sub_dataset_key: str = self.DATASET_KEY_FORMAT.format(dataset_key=self._dataset_key,
