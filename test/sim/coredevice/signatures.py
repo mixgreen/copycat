@@ -1,37 +1,46 @@
 import unittest
 import inspect
 
-import artiq.coredevice.cache  # type: ignore
-import artiq.coredevice.core  # type: ignore
-import artiq.coredevice.dma  # type: ignore
-import artiq.coredevice.ttl  # type: ignore
-import artiq.coredevice.edge_counter
+import artiq.coredevice.ad53xx  # type: ignore
 import artiq.coredevice.ad9910  # type: ignore
 import artiq.coredevice.ad9912  # type: ignore
+import artiq.coredevice.cache  # type: ignore
+import artiq.coredevice.comm_kernel
+import artiq.coredevice.core  # type: ignore
+import artiq.coredevice.dma  # type: ignore
+import artiq.coredevice.edge_counter
+import artiq.coredevice.ttl  # type: ignore
 import artiq.coredevice.urukul  # type: ignore
+import artiq.coredevice.zotino  # type: ignore
 
-import dax.sim.coredevice.cache
-import dax.sim.coredevice.core
-import dax.sim.coredevice.dma
-import dax.sim.coredevice.ttl
-import dax.sim.coredevice.edge_counter
+import dax.sim.coredevice.ad53xx
 import dax.sim.coredevice.ad9910
 import dax.sim.coredevice.ad9912
+import dax.sim.coredevice.cache
+import dax.sim.coredevice.comm_kernel
+import dax.sim.coredevice.core
+import dax.sim.coredevice.dma
+import dax.sim.coredevice.edge_counter
+import dax.sim.coredevice.ttl
 import dax.sim.coredevice.urukul
+import dax.sim.coredevice.zotino
 
 
 class CoredeviceSignatureTestCase(unittest.TestCase):
     class_list = [
+        (dax.sim.coredevice.ad53xx.AD53xx, artiq.coredevice.ad53xx.AD53xx),
+        (dax.sim.coredevice.ad9910.AD9910, artiq.coredevice.ad9910.AD9910),
+        (dax.sim.coredevice.ad9912.AD9912, artiq.coredevice.ad9912.AD9912),
         (dax.sim.coredevice.cache.CoreCache, artiq.coredevice.cache.CoreCache),
+        (dax.sim.coredevice.comm_kernel.CommKernelDummy, artiq.coredevice.comm_kernel.CommKernelDummy),
         (dax.sim.coredevice.core.Core, artiq.coredevice.core.Core),
         (dax.sim.coredevice.dma.CoreDMA, artiq.coredevice.dma.CoreDMA),
+        (dax.sim.coredevice.edge_counter.EdgeCounter, artiq.coredevice.edge_counter.EdgeCounter),
         (dax.sim.coredevice.ttl.TTLOut, artiq.coredevice.ttl.TTLOut),
         (dax.sim.coredevice.ttl.TTLInOut, artiq.coredevice.ttl.TTLInOut),
         (dax.sim.coredevice.ttl.TTLClockGen, artiq.coredevice.ttl.TTLClockGen),
-        (dax.sim.coredevice.edge_counter.EdgeCounter, artiq.coredevice.edge_counter.EdgeCounter),
-        (dax.sim.coredevice.ad9910.AD9910, artiq.coredevice.ad9910.AD9910),
-        (dax.sim.coredevice.ad9912.AD9912, artiq.coredevice.ad9912.AD9912),
         (dax.sim.coredevice.urukul.CPLD, artiq.coredevice.urukul.CPLD),
+        (dax.sim.coredevice.zotino.Zotino, artiq.coredevice.zotino.Zotino),
     ]
 
     def test_methods(self):

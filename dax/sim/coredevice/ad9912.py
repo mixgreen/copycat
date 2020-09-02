@@ -6,6 +6,7 @@ import numpy as np
 
 from artiq.language.core import *
 from artiq.language.units import *
+from artiq.coredevice.ad9912_reg import *  # type: ignore
 
 from dax.sim.device import DaxSimDevice
 from dax.sim.signal import get_signal_manager
