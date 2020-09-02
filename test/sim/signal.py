@@ -12,7 +12,7 @@ import artiq.coredevice.ad9912  # type: ignore
 from dax.experiment import DaxSystem
 from dax.sim import enable_dax_sim
 from dax.sim.signal import get_signal_manager, SignalNotSet
-from dax.sim.signal import NullSignalManager, VcdSignalManager, PeekSignalManager
+from dax.sim.signal import DaxSignalManager, NullSignalManager, VcdSignalManager, PeekSignalManager
 from dax.util.artiq import get_manager_or_parent
 from dax.util.output import temp_dir
 
@@ -85,7 +85,51 @@ class VcdSignalManagerTestCase(unittest.TestCase):
             sm.close()
 
 
-class PeekSignalManagerTestCase(unittest.TestCase):
+class VcdSignalManagerEventTestCase(unittest.TestCase):
+
+    def setUp(self) -> None:
+        self._temp_dir = temp_dir()
+        self._temp_dir.__enter__()
+
+        # Create the system
+        ddb = enable_dax_sim(_DEVICE_DB.copy(), enable=True, output='vcd', moninj_service=False)
+        self.sys = _TestSystem(get_manager_or_parent(ddb))
+
+        # Get the signal manager
+        self.sm: DaxSignalManager = typing.cast(VcdSignalManager, get_signal_manager())
+        self.assertIsInstance(self.sm, VcdSignalManager)
+
+    def tearDown(self) -> None:
+        self._temp_dir.__exit__(None, None, None)
+
+    def test_event(self):
+        test_data = {
+            self.sys.ttl0._state: [0, 1, 'x', 'X', 'z', 'Z', True, False, np.int32(0), np.int64(1)],  # bool
+            # Python hash(0) == hash(0.0), see https://docs.python.org/3/library/functions.html#hash
+            self.sys.ttl1._state: [0.0, 1.0],  # bool, side effect of Python hash()
+            self.sys.ec._count: [0, 1, 'x', 'X', 'z', 'Z', True, False, 99, -34, np.int32(655), np.int64(7)],  # int
+            self.sys.ad9912._freq: [1.7, -8.2, 7.7, np.float(300)],  # float
+            self.sys.core_dma._dma_record: ['foo', 'bar', None, ''],  # str
+            self.sys.core_dma._dma_play: [True],  # object
+        }
+
+        for signal, values in test_data.items():
+            with self.subTest(signal=signal):
+                for v in values:
+                    self.assertIsNone(self.sm.event(signal, v))
+
+    def test_bool_array(self):
+        test_data = {
+            self.sys.ad9910._phase_mode: ['xx', '10', '1z', 'XX', '00', 'ZZ'],  # bool array
+        }
+
+        for signal, values in test_data.items():
+            for v in values:
+                with self.subTest(signal=signal, value=v):
+                    self.assertIsNone(self.sm.event(signal, v))
+
+
+class PeekSignalManagerTestCase(VcdSignalManagerEventTestCase):
 
     def setUp(self) -> None:
         # Create the system
@@ -95,6 +139,9 @@ class PeekSignalManagerTestCase(unittest.TestCase):
         # Get the peek signal manager
         self.sm = typing.cast(PeekSignalManager, get_signal_manager())
         self.assertIsInstance(self.sm, PeekSignalManager)
+
+    def tearDown(self) -> None:
+        pass
 
     def test_signal_types(self):
         self.assertSetEqual(set(self.sm._CONVERT_TYPE), _SIGNAL_TYPES, 'Signal types did not match reference.')
@@ -240,22 +287,6 @@ class PeekSignalManagerTestCase(unittest.TestCase):
                         self.assertEqual(self.sm.peek(ttl, 'sensitivity'), 'z')
                         self.assertEqual(self.sm.peek(ttl, 'state'), i % 2)
 
-    def test_event(self):
-        test_data = {
-            self.sys.ttl0._state: [0, 1, 'x', 'X', 'z', 'Z', True, False, np.int32(0), np.int64(1)],  # bool
-            # Python hash(0) == hash(0.0), see https://docs.python.org/3/library/functions.html#hash
-            self.sys.ttl1._state: [0.0, 1.0],  # bool, side effect of Python hash()
-            self.sys.ec._count: [0, 1, 'x', 'X', 'z', 'Z', True, False, 99, -34, np.int32(655), np.int64(7)],  # int
-            self.sys.ad9912._freq: [1.7, -8.2, 7.7, np.float(300)],  # float
-            self.sys.core_dma._dma_record: ['foo', 'bar', None, ''],  # str
-            self.sys.core_dma._dma_play: [True],  # object
-        }
-
-        for signal, values in test_data.items():
-            with self.subTest(signal=signal):
-                for v in values:
-                    self.assertIsNone(self.sm.event(signal, v))
-
     def test_event_bad(self):
         test_data = {
             self.sys.ttl0._state: ['foo', '00', np.int32(9), np.int64(-1), 0.4, None, '0', '1'],  # bool
@@ -270,16 +301,6 @@ class PeekSignalManagerTestCase(unittest.TestCase):
                 with self.subTest(signal=signal, value=v):
                     with self.assertRaises(ValueError, msg='Bad event value for signal did not raise'):
                         self.sm.event(signal, v)
-
-    def test_bool_array(self):
-        test_data = {
-            self.sys.ad9910._phase_mode: ['xx', '10', '1z', 'XX', '00', 'ZZ'],  # bool array
-        }
-
-        for signal, values in test_data.items():
-            for v in values:
-                with self.subTest(signal=signal, value=v):
-                    self.assertIsNone(self.sm.event(signal, v))
 
     def test_bool_array_bad(self):
         test_data = {

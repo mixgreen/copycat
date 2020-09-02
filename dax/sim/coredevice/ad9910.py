@@ -6,15 +6,15 @@ import numpy as np
 
 from artiq.language.core import *
 from artiq.language.units import *
+from artiq.coredevice.ad9910 import PHASE_MODE_CONTINUOUS, PHASE_MODE_ABSOLUTE, PHASE_MODE_TRACKING  # type: ignore
+from artiq.coredevice.ad9910 import RAM_DEST_FTW, RAM_DEST_POW, RAM_DEST_ASF, RAM_DEST_POWASF  # noqa: F401
+from artiq.coredevice.ad9910 import RAM_MODE_DIRECTSWITCH, RAM_MODE_RAMPUP, RAM_MODE_BIDIR_RAMP  # noqa: F401
+from artiq.coredevice.ad9910 import RAM_MODE_CONT_BIDIR_RAMP, RAM_MODE_CONT_RAMPUP  # noqa: F401
 
 from dax.sim.device import DaxSimDevice
 from dax.sim.signal import get_signal_manager
 
-# Phase modes
 _PHASE_MODE_DEFAULT = -1
-PHASE_MODE_CONTINUOUS = 0
-PHASE_MODE_ABSOLUTE = 1
-PHASE_MODE_TRACKING = 2
 
 # Phase mode conversion dict
 _PHASE_MODE_DICT = {m: f'{m:02b}' for m in [PHASE_MODE_CONTINUOUS, PHASE_MODE_ABSOLUTE, PHASE_MODE_TRACKING]}

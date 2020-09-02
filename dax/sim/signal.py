@@ -57,7 +57,9 @@ class DaxSignalManager(abc.ABC, typing.Generic[_S_T]):
         Bool type signals can have values `0`, `1`, `'X'`, `'Z'`.
         A vector of a bool type signal has a value of type `str` (e.g. `'1001XZ'`).
 
-        Integer type variables can have any int value or any bool value.
+        Integer type variables can have any int value or any value legal for a bool type signal.
+
+        Float type variables can only be assigned float values.
 
         Event (`object`) type signals represent timestamps and do not have a value.
         We recommend to always use value `True` for event type signals.
