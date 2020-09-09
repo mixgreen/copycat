@@ -118,7 +118,7 @@ class HistogramContext(DaxModule):
     """Data handling functions"""
 
     @portable
-    def in_context(self) -> bool:
+    def in_context(self) -> TBool:
         """True if we are in context."""
         return bool(self._in_context)
 
