@@ -28,13 +28,11 @@ stages:
     - source $CONDA_DIR/bin/activate
     - conda init
     - source ~/.bashrc
-    # Install ARTIQ and activate environment
+    # Install and activate environment
     - conda config --prepend channels https://conda.m-labs.hk/artiq
     - conda config --append channels conda-forge
-    - conda create -y -n artiq artiq
-    - conda activate artiq
-    # Install DAX dependencies
-    - conda install -y numpy scipy pyvcd natsort pygit2 matplotlib python-graphviz h5py
+    - conda create -y -n env artiq numpy scipy pyvcd natsort pygit2 matplotlib python-graphviz h5py
+    - conda activate env
 
 test_nix:
   extends: .nix_env
