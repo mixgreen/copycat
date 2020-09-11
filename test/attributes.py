@@ -16,6 +16,7 @@ class AttributesTestCase(unittest.TestCase):
     def test_version(self):
         self.assertIsInstance(dax.__version__, str, '__version__ has an unexpected type')
         self.assertTrue(len(dax.__version__) > 0, '__version__ is empty')
+        self.assertNotIn('_', dax.__version__, '__version__ contains an underscore')
 
 
 if __name__ == '__main__':
