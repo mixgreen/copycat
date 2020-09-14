@@ -548,8 +548,8 @@ class HistogramAnalyzer:
 
     """Helper functions"""
 
-    @staticmethod
-    def histogram_to_probability(counter: collections.Counter, state_detection_threshold: int) -> float:
+    @classmethod
+    def histogram_to_probability(cls, counter: collections.Counter, state_detection_threshold: int) -> float:
         """Helper function to convert a histogram to a state probability.
 
         Counts *greater than* the state detection threshold are considered to be in state one.
@@ -567,8 +567,8 @@ class HistogramAnalyzer:
         # Return probability
         return one / total
 
-    @staticmethod
-    def histograms_to_probabilities(histograms: typing.Sequence[typing.Sequence[collections.Counter]],
+    @classmethod
+    def histograms_to_probabilities(cls, histograms: typing.Sequence[typing.Sequence[collections.Counter]],
                                     state_detection_threshold: int) -> np.ndarray:
         """Convert histograms to probabilities based on a state detection threshold.
 
@@ -581,12 +581,12 @@ class HistogramAnalyzer:
         """
         assert isinstance(state_detection_threshold, int), 'State detection threshold must be of type int'
 
-        probabilities = [[HistogramAnalyzer.histogram_to_probability(h, state_detection_threshold) for h in channel]
+        probabilities = [[cls.histogram_to_probability(h, state_detection_threshold) for h in channel]
                          for channel in histograms]
         return np.asarray(probabilities)
 
-    @staticmethod
-    def histogram_to_mean_count(counter: collections.Counter) -> float:
+    @classmethod
+    def histogram_to_mean_count(cls, counter: collections.Counter) -> float:
         """Helper function to calculate the average count of a histogram.
 
         :param counter: The counter object representing the histogram
@@ -594,8 +594,8 @@ class HistogramAnalyzer:
         """
         return sum(c * v for c, v in counter.items()) / sum(counter.values())
 
-    @staticmethod
-    def histograms_to_mean_counts(histograms: typing.Sequence[typing.Sequence[collections.Counter]]) -> np.ndarray:
+    @classmethod
+    def histograms_to_mean_counts(cls, histograms: typing.Sequence[typing.Sequence[collections.Counter]]) -> np.ndarray:
         """Convert histograms to average counts.
 
         Histograms are provided as a 2D array of Counter objects.
@@ -604,7 +604,7 @@ class HistogramAnalyzer:
         :param histograms: The input histograms
         :return: Array of counts with the same shape as the input histograms
         """
-        counts = [[HistogramAnalyzer.histogram_to_mean_count(h) for h in channel] for channel in histograms]
+        counts = [[cls.histogram_to_mean_count(h) for h in channel] for channel in histograms]
         return np.asarray(counts)
 
     @staticmethod

@@ -362,6 +362,21 @@ class TimeResolvedContextTestCase(unittest.TestCase):
             with self.subTest(input=i):
                 self.assertEqual(self.t.partition_bins(*i), o, 'Partitioned output did not match reference')
 
+    def test_partition_bins_ceil(self):
+        data = [
+            ((50, 64, 2 * us, 1 * us), [(64, 0 * us)]),
+            ((64, 64, 2 * us, 1 * us), [(64, 0 * us)]),
+            ((100, 64, 2 * us, 1 * us), [(64, 0 * us), (64, 64 * 3 * us)]),
+            ((128, 64, 2 * us, 1 * us), [(64, 0 * us), (64, 64 * 3 * us)]),
+            ((129, 64, 2 * us, 1 * us), [(64, 0 * us), (64, 64 * 3 * us), (64, 128 * 3 * us)]),
+            ((0, 64, 2 * us, 1 * us), []),
+        ]
+
+        for i, o in data:
+            with self.subTest(input=i):
+                self.assertEqual(self.t.partition_bins(*i, ceil=True), o,
+                                 'Partitioned output with ceil did not match reference')
+
     def test_partition_window(self):
         data = [
             ((50 * 3 * us, 64, 2 * us, 1 * us), [(50, 0 * us)]),
@@ -376,6 +391,22 @@ class TimeResolvedContextTestCase(unittest.TestCase):
         for i, o in data:
             with self.subTest(input=i):
                 self.assertEqual(self.t.partition_window(*i), o, 'Partitioned output did not match reference')
+
+    def test_partition_window_ceil(self):
+        data = [
+            ((50 * 3 * us, 64, 2 * us, 1 * us), [(64, 0 * us)]),
+            ((64 * 3 * us, 64, 2 * us, 1 * us), [(64, 0 * us)]),
+            ((100 * 3 * us, 64, 2 * us, 1 * us), [(64, 0 * us), (64, 64 * 3 * us)]),
+            ((128 * 3 * us, 64, 2 * us, 1 * us), [(64, 0 * us), (64, 64 * 3 * us)]),
+            ((129 * 3 * us, 64, 2 * us, 1 * us), [(64, 0 * us), (64, 64 * 3 * us), (64, 128 * 3 * us)]),
+            ((0 * 3 * us, 64, 2 * us, 1 * us), []),
+            ((1 * ns, 64, 2 * us, 1 * us), [(64, 0 * us)]),
+        ]
+
+        for i, o in data:
+            with self.subTest(input=i):
+                self.assertEqual(self.t.partition_window(*i, ceil=True), o,
+                                 'Partitioned output with ceil did not match reference')
 
 
 class TimeResolvedAnalyzerTestCase(unittest.TestCase):

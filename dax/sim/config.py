@@ -68,8 +68,8 @@ class DaxSimConfig:
         """Returns `True` if modules should generate output."""
         return self.__output_enabled
 
-    @staticmethod
-    def close() -> None:
+    # noinspection PyMethodMayBeStatic
+    def close(self) -> None:
         """Close the simulation.
 
         The signal manager will be closed.

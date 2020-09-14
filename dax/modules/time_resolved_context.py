@@ -97,10 +97,11 @@ class TimeResolvedContext(DaxModule):
 
     """Helper functions"""
 
-    @staticmethod
+    @classmethod
     @host_only
-    def partition_bins(num_bins: int, max_partition_size: int,
-                       bin_width: float, bin_spacing: float) -> typing.List[typing.Tuple[np.int32, float]]:
+    def partition_bins(cls, num_bins: int, max_partition_size: int,
+                       bin_width: float, bin_spacing: float,
+                       *, ceil: bool = False) -> typing.List[typing.Tuple[np.int32, float]]:
         """Partition a number of bins.
 
         This function returns a list of tuples that can be used at runtime for partitioning in a loop.
@@ -112,12 +113,14 @@ class TimeResolvedContext(DaxModule):
         :param max_partition_size: The maximum number of bins in one partition
         :param bin_width: The width of each bin
         :param bin_spacing: The spacing between bins
+        :param ceil: Round last window size up to a full window
         :return: A list with tuples that can be used for automatic partitioning at runtime
         """
         assert isinstance(num_bins, (int, np.integer)), 'Number of bins must be an integer'
         assert isinstance(max_partition_size, (int, np.integer)), 'Max partition size must be an integer'
         assert isinstance(bin_width, float), 'Bin width must be of type float'
         assert isinstance(bin_spacing, float), 'Bin spacing must be of type float'
+        assert isinstance(ceil, bool), 'Ceil flag must be of type bool'
 
         # Check input values
         if num_bins < 0:
@@ -138,16 +141,17 @@ class TimeResolvedContext(DaxModule):
 
         mod = num_bins % max_partition_size
         if mod > 0:
-            # Add element with partial partition (less than the maximum number of bins)
-            partitions.append((np.int32(mod), len(partitions) * partition_offset))
+            # Add element with partial partition (less than the maximum number of bins if ceil is disabled)
+            partitions.append((np.int32(max_partition_size if ceil else mod), len(partitions) * partition_offset))
 
         # Return the partitions
         return partitions
 
-    @staticmethod
+    @classmethod
     @host_only
-    def partition_window(window_size: float, max_partition_size: int,
-                         bin_width: float, bin_spacing: float) -> typing.List[typing.Tuple[np.int32, float]]:
+    def partition_window(cls, window_size: float, max_partition_size: int,
+                         bin_width: float, bin_spacing: float,
+                         *, ceil: bool = False) -> typing.List[typing.Tuple[np.int32, float]]:
         """Partition a time window.
 
         This function returns a list of tuples that can be used at runtime for partitioning in a loop.
@@ -159,11 +163,13 @@ class TimeResolvedContext(DaxModule):
         :param max_partition_size: The maximum number of bins in one partition
         :param bin_width: The width of each bin
         :param bin_spacing: The spacing between bins
+        :param ceil: Round last window size up to a full window
         :return: A list with tuples that can be used for automatic partitioning at runtime
         """
         assert isinstance(window_size, float), 'Window size must be of type float'
         assert isinstance(bin_width, float), 'Bin width must be of type float'
         assert isinstance(bin_spacing, float), 'Bin spacing must be of type float'
+        assert isinstance(ceil, bool), 'Ceil flag must be of type bool'
 
         # Check input values
         if window_size < 0.0:
@@ -178,7 +184,7 @@ class TimeResolvedContext(DaxModule):
         # Calculate the number of bins that fit in the window, rounding the value up
         num_bins: int = int(math.ceil(window_size / (bin_width + bin_spacing)))
         # Call partition bins
-        return TimeResolvedContext.partition_bins(num_bins, max_partition_size, bin_width, bin_spacing)
+        return cls.partition_bins(num_bins, max_partition_size, bin_width, bin_spacing, ceil=ceil)
 
     """Data handling functions"""
 

@@ -86,8 +86,8 @@ class DaxSignalManager(abc.ABC, typing.Generic[_S_T]):
         """Close the signal manager."""
         pass
 
-    @staticmethod
-    def _get_timestamp(time: typing.Optional[np.int64] = None,
+    # noinspection PyMethodMayBeStatic
+    def _get_timestamp(self, time: typing.Optional[np.int64] = None,
                        offset: typing.Optional[np.int64] = None) -> np.int64:
         """Return the timestamp of an event."""
         if time is None:
