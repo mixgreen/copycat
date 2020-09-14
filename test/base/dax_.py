@@ -492,6 +492,26 @@ class DaxDataStoreInfluxDbTestCase(unittest.TestCase):
                 # Clear the list for the next sub-test
                 self.ds.points.clear()
 
+    def test_set_array(self):
+        # Data to test against
+        test_data = [
+            ('k', np.zeros((2, 2))),
+            ('k', np.ones((4, 2))),
+            ('k.a', np.full((3, 6), 99.99)),  # Do not use np.empty() as it can result in unpredictable values
+        ]
+
+        for k, v in test_data:
+            with self.subTest(k=k, v=v):
+                # Test using the callback function
+                self.ds.set(k, v)
+                # Test if the number of points
+                self.assertEqual(v.size, len(self.ds.points), 'Number of written points does not match sequence length')
+                # Verify if the registered points are correct
+                self.assertListEqual([(k, item, str(index)) for index, item in np.ndenumerate(v)],
+                                     self.ds.points, 'Submitted data does not match point sequence')
+                # Clear the list for the next sub-test
+                self.ds.points.clear()
+
     def test_set_sequence_bad(self):
         # Callback function
         def callback(*args, **kwargs):

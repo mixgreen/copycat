@@ -1501,11 +1501,18 @@ class DaxDataStoreInfluxDb(DaxDataStore):
             # Write a single point
             self._write_points([self._make_point(key, value)])
         elif isinstance(value, collections.abc.Sequence) and all(isinstance(e, self._FIELD_TYPES) for e in value):
+            # One-dimensional list
             if len(value):
                 # If the list is not empty, write a list of points
                 self._write_points([self._make_point(key, v, i) for i, v in enumerate(value)])
             # Store the length of the sequence for emulated appending later
             self._index_table[key] = len(value)
+        elif isinstance(value, np.ndarray) and value.ndim > 1 and any(np.issubdtype(value.dtype, t)
+                                                                      for t in [np.number, np.bool_, np.character]):
+            # Multi-dimensional array
+            if value.size:
+                # If the array is not empty, write a list of points
+                self._write_points([self._make_point(key, v, i) for i, v in np.ndenumerate(value)])
         else:
             # Unsupported type, do not raise but warn user instead
             self._logger.warning(f'Could not store value for key "{key}", unsupported value type for value "{value}"')
@@ -1525,7 +1532,7 @@ class DaxDataStoreInfluxDb(DaxDataStore):
 
         if isinstance(value, self._FIELD_TYPES):
             if isinstance(index, (int, np.integer)):
-                # Write a single point
+                # One-dimensional index
                 self._write_points([self._make_point(key, value, index)])
             else:
                 # Non-integer index is not supported, do not raise but warn user instead
@@ -1561,11 +1568,12 @@ class DaxDataStoreInfluxDb(DaxDataStore):
             # Unsupported type, do not raise but warn user instead
             self._logger.warning(f'Could not append value for key "{key}", unsupported value type for value "{value}"')
 
-    def _make_point(self, key: str, value: __F_T, index: typing.Union[None, int, np.integer] = None) -> __P_T:
+    def _make_point(self, key: str, value: __F_T,
+                    index: typing.Union[None, int, np.integer, typing.Tuple[int, ...]] = None) -> __P_T:
         """Make a point object from a key-value pair, optionally with an index.
 
         This function does not check the type of the value and the index, which should be checked before.
-        Numpy integers are automatically converted to Python int.
+        Numpy integer values are automatically converted to Python int.
         """
 
         assert isinstance(key, str), 'Key should be of type str'

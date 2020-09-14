@@ -1,18 +1,45 @@
 import typing
 import collections
 
-__all__ = ['int32', 'int64', 'float', 'integer', 'ndarray',
-           'array', 'zeroes', 'ones', 'empty', 'full', 'arange', 'linspace', 'logspace']
+__all__ = ['generic', 'character', 'number', 'integer', 'int32', 'int64', 'floating', 'bool_', 'ndarray',
+           'array', 'zeroes', 'ones', 'empty', 'full', 'arange', 'linspace', 'logspace',
+           'issubdtype', 'ndenumerate']
+
+
+# noinspection PyPep8Naming
+class generic(object):
+    ...
+
+
+# noinspection PyPep8Naming
+class character(generic):
+    ...
+
+
+# noinspection PyPep8Naming
+class number(generic):
+    ...
+
+
+# noinspection PyPep8Naming
+class integer(int, number):
+    ...
+
+
+# noinspection PyPep8Naming
+class inexact(number):
+    ...
+
 
 # int32 and int64 have the same type properties as a Python int
 int32 = int
 int64 = int
 
+# floating has the same type properties as a Python float
+floating = float
 
-# noinspection PyPep8Naming
-class integer(int):
-    ...
-
+# bool as the same type properties as a Python bool
+bool_ = bool
 
 # Type variables used for array creation functions
 __N_T = typing.Union[int, float, int32, int64]
@@ -180,4 +207,12 @@ def column_stack(tup: typing.Sequence[ndarray]) -> ndarray:
 
 
 def concatenate(*arrays: typing.Sequence[typing.Any], axis: int = ..., out: typing.Optional[ndarray] = ...) -> ndarray:
+    ...
+
+
+def issubdtype(arg1: typing.Union[type, str], arg2: typing.Union[type, str]) -> bool:
+    ...
+
+
+def ndenumerate(arr: ndarray[__A_T]) -> typing.Iterator[typing.Tuple[typing.Tuple[int, ...], __A_T]]:
     ...
