@@ -78,7 +78,7 @@ class VcdSignalManagerTestCase(unittest.TestCase):
             for d, s in signals.items():
                 with self.subTest(device_type=type(d)):
                     if s:
-                        self.assertSetEqual({n for n, _ in registered_signals[d]}, s,
+                        self.assertSetEqual({n for n, _, _ in registered_signals[d]}, s,
                                             'Registered signals did not match')
 
             # Manually close signal manager before leaving temp dir

@@ -4,6 +4,7 @@ import numpy as np
 import datetime
 import itertools
 import operator
+import logging
 
 from dax import __version__ as _dax_version
 from dax.base.dax import DaxSystem
@@ -11,6 +12,9 @@ from dax.sim.signal import get_signal_manager, VcdSignalManager
 from dax.util.output import get_file_name
 
 __all__ = ['GTKWSaveGenerator']
+
+_logger: logging.Logger = logging.getLogger(__name__)
+"""Module logger object."""
 
 
 class GTKWSaveGenerator:
@@ -42,15 +46,18 @@ class GTKWSaveGenerator:
         assert isinstance(system, DaxSystem)
 
         # Verify that we are in simulation
+        _logger.debug(f'DAX.sim enabled: {system.dax_sim_enabled}')
         if not system.dax_sim_enabled:
             raise RuntimeError('GTKWave safe file can only be generated when dax.sim is enabled')
 
         # Get the signal manager and verify that the VCD signal manager is used
         signal_manager: VcdSignalManager = typing.cast(VcdSignalManager, get_signal_manager())
+        _logger.debug(f'Signal manager type: {type(signal_manager).__name__}')
         if not isinstance(signal_manager, VcdSignalManager):
             raise RuntimeError('GTKWave safe file can only be generated when using the VCD signal manager')
         # Get the registered signals
         registered_signals = {k.key: v for k, v in signal_manager.get_registered_signals().items()}
+        _logger.debug(f'Found {len(registered_signals)} registered signal(s)')
 
         # Generate file name
         file_name: str = get_file_name(system.get_device('scheduler'), 'waves', 'gtkw')
@@ -69,6 +76,7 @@ class GTKWSaveGenerator:
             for (p, device_parent_iterator) in parents:
                 # Unpack iterator
                 devices: typing.List[str] = [d for d, _ in device_parent_iterator]
+                _logger.debug(f'Found {len(devices)} device(s) for parent "{p.get_system_key()}"')
 
                 if devices:
                     # Create a group for this parent (Parents are not nested)
@@ -79,19 +87,31 @@ class GTKWSaveGenerator:
                             signals = registered_signals.pop(d, None)
 
                             if signals is not None:
-                                # Create a group for the signals of this device
-                                gtkw.comment(f'Signals for device "{d}"')
-                                with gtkw.group(d, closed=False):
-                                    for s, t in signals:
-                                        gtkw.trace(f'{d}.{s}', datafmt=self._CONVERT_TYPE[t])
+                                # Add signals
+                                self._add_signals(gtkw, d, signals)
 
             if registered_signals:
                 # Handle leftover registered signals
                 gtkw.comment('Leftover signals')
+                _logger.debug(f'Adding signals for leftover device(s): {list(registered_signals)}')
 
                 for d, signals in registered_signals.items():
-                    # Create a group for the signals of this device
-                    gtkw.comment(f'Signals for device "{d}"')
-                    with gtkw.group(d, closed=False):
-                        for s, t in signals:
-                            gtkw.trace(f'{d}.{s}', datafmt=self._CONVERT_TYPE[t])
+                    # Add signals
+                    self._add_signals(gtkw, d, signals)
+
+    @classmethod
+    def _add_signals(cls, gtkw: vcd.gtkw.GTKWSave, device: str,
+                     signals: typing.List[typing.Tuple[str, type, typing.Optional[int]]]) -> None:
+        """Add signals for a device.
+
+        :param gtkw: The GTK Wave save file object
+        :param device: The device key
+        :param signals: Tuple with signal information
+        """
+        # Create a group for the signals of this device
+        _logger.debug(f'Signals added for device "{device}": {[s for s, _, _ in signals]}')
+        gtkw.comment(f'Signals for device "{device}"')
+        with gtkw.group(device, closed=False):
+            for s, t, size in signals:
+                vector = '' if size is None or size == 1 else f'[{size - 1}:0]'
+                gtkw.trace(f'{device}.{s}{vector}', datafmt=cls._CONVERT_TYPE[t])
