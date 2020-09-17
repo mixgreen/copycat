@@ -156,17 +156,20 @@ class _MockScanDisableIndexBad(_MockScan1):
 
 
 class _MockScan2ValueCheck(_MockScan2):
+
     def build_scan(self) -> None:
         super(_MockScan2ValueCheck, self).build_scan()
 
         # Iterators to check the values
         scan_values = self.get_scannables()
-        self.scan_foo = itertools.chain(*[itertools.repeat(v, self.BAR) for v in scan_values['foo']])
-        self.scan_bar = itertools.cycle(scan_values['bar'])
+        self.scan_foo: typing.Iterator[typing.Any] = itertools.chain(
+            *[itertools.repeat(v, self.BAR) for v in scan_values['foo']])
+        self.scan_bar: typing.Iterator[typing.Any] = itertools.cycle(scan_values['bar'])
 
         # Iterators to check indices
-        self.index_foo = itertools.chain(*[itertools.repeat(v, self.BAR) for v in range(self.FOO)])
-        self.index_bar = itertools.cycle(range(self.BAR))
+        self.index_foo: typing.Iterator[typing.Any] = itertools.chain(
+            *[itertools.repeat(v, self.BAR) for v in range(self.FOO)])
+        self.index_bar: typing.Iterator[typing.Any] = itertools.cycle(range(self.BAR))
 
     def run_point(self, point, index):  # type: (typing.Any, typing.Any) -> None
         super(_MockScan2ValueCheck, self).run_point(point, index)
@@ -174,17 +177,17 @@ class _MockScan2ValueCheck(_MockScan2):
         # Check values of points
         point_foo = next(self.scan_foo)
         point_bar = next(self.scan_bar)
-        assert point.foo == point_foo, '{} != {}'.format(point.foo, point_foo)
-        assert point.bar == point_bar, '{} != {}'.format(point.bar, point_bar)
+        assert point.foo == point_foo, f'{point.foo} != {point_foo}'
+        assert point.bar == point_bar, f'{point.bar} != {point_bar}'
 
         # Check indices
         index_foo = next(self.index_foo)
         index_bar = next(self.index_bar)
-        assert index.foo == index_foo, '{} != {}'.format(index.foo, index_foo)
-        assert index.bar == index_bar, '{} != {}'.format(index.bar, index_bar)
+        assert index.foo == index_foo, f'{index.foo} != {index_foo}'
+        assert index.bar == index_bar, f'{index.bar} != {index_bar}'
 
 
-class _MockScan2ValueCheckReordered(_MockScan2):
+class _MockScan2ValueCheckReordered(_MockScan2ValueCheck):
     def build_scan(self) -> None:
         super(_MockScan2ValueCheckReordered, self).build_scan()
 
@@ -199,21 +202,6 @@ class _MockScan2ValueCheckReordered(_MockScan2):
         # Iterators to check indices
         self.index_bar = itertools.chain(*[itertools.repeat(v, self.FOO) for v in range(self.BAR)])
         self.index_foo = itertools.cycle(range(self.FOO))
-
-    def run_point(self, point, index):  # type: (typing.Any, typing.Any) -> None
-        super(_MockScan2ValueCheckReordered, self).run_point(point, index)
-
-        # Check values of points
-        point_foo = next(self.scan_foo)
-        point_bar = next(self.scan_bar)
-        assert point.foo == point_foo, '{} != {}'.format(point.foo, point_foo)
-        assert point.bar == point_bar, f'{point.bar} != {point_bar}'
-
-        # Check indices
-        index_foo = next(self.index_foo)
-        index_bar = next(self.index_bar)
-        assert index.foo == index_foo, f'{index.foo} != {index_foo}'
-        assert index.bar == index_bar, f'{index.bar} != {index_bar}'
 
 
 class Scan1TestCase(unittest.TestCase):

@@ -105,7 +105,8 @@ class DaxScan(dax.base.dax.DaxBase, abc.ABC):
     Users can inherit from this class to implement their scanning experiments.
     The first step is to build the scan by overriding the :func:`build_scan` function.
     Use the :func:`add_scan` function to add normal ARTIQ scannables to this scan object.
-    Other ARTIQ functions are available to obtain other arguments.
+    Static scans can be added using the :func:`add_static_scan` function.
+    Regular ARTIQ functions are available to obtain other arguments.
 
     Adding multiple scans results automatically in a multi-dimensional scan by scanning over
     all value combinations in the cartesian product of the scans.
@@ -216,7 +217,7 @@ class DaxScan(dax.base.dax.DaxBase, abc.ABC):
     def build_scan(self) -> None:
         """Users should override this method to build their scan.
 
-        To build the scan, use the :func:`add_scan` function.
+        To build the scan, use the :func:`add_scan` and :func:`add_static_scan` functions.
         Additionally, users can also add normal arguments using the standard ARTIQ functions.
         """
         pass
