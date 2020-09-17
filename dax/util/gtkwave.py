@@ -69,6 +69,7 @@ class GTKWSaveGenerator:
                          f'System version: {system.SYS_VER}',
                          datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
                          f'DAX version: {_dax_version}')
+            gtkw.sst_expanded(False)
 
             # Iterator of registered devices grouped by parent
             parents = itertools.groupby(system.registry.get_device_parents().items(), operator.itemgetter(1))
