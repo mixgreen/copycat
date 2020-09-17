@@ -2,6 +2,7 @@ import unittest
 import collections
 import typing
 import itertools
+import numpy as np
 import h5py  # type: ignore
 
 from artiq.experiment import *
@@ -73,7 +74,22 @@ class _MockScan2(_MockScan1):
 
     def build_scan(self) -> None:
         super(_MockScan2, self).build_scan()
+        self._add_scan()
+
+    def _add_scan(self):
         self.add_scan('bar', 'bar', Scannable(RangeScan(1, self.BAR, self.BAR, randomize=True)))
+
+
+class _MockScan2Static(_MockScan2):
+    BAR_POINTS = list(range(16))
+    BAR = len(BAR_POINTS)
+
+    def build_scan(self) -> None:
+        self.add_static_scan('bar', self.BAR_POINTS)
+        super(_MockScan2Static, self).build_scan()
+
+    def _add_scan(self):
+        pass
 
 
 class _MockScanTerminate(_MockScan1):
@@ -229,6 +245,10 @@ class Scan1TestCase(unittest.TestCase):
         with self.assertRaises(TypeError, msg='Adding scan outside build did not raise'):
             self.scan.add_scan('bar', 'bar', Scannable(NoScan(1)))
 
+    def test_raise_add_static_scan(self):
+        with self.assertRaises(TypeError, msg='Adding scan outside build did not raise'):
+            self.scan.add_static_scan('bar', [])
+
     def test_get_scan_points_too_early(self):
         with self.assertRaises(AttributeError, msg='Scan point request before run did not raise'):
             self.scan.get_scan_points()
@@ -279,19 +299,87 @@ class BuildScanTestCase(unittest.TestCase):
                 self_scan.add_scan('foo', 'foo', Scannable(NoScan(1)))
                 with self.assertRaises(LookupError, msg='Reusing scan key did not raise'):
                     self_scan.add_scan('foo', 'foo', Scannable(NoScan(1)))
+                with self.assertRaises(LookupError, msg='Reusing scan key for static scan did not raise'):
+                    self_scan.add_static_scan('foo', [1])
+
+        MockScan(get_manager_or_parent())
+
+    def test_raise_duplicate_static_scan_key(self):
+        class MockScan(_MockScanCallback):
+            # noinspection PyMethodParameters
+            def callback(self_scan):
+                self_scan.add_static_scan('foo', [])
+                with self.assertRaises(LookupError, msg='Reusing static scan key did not raise'):
+                    self_scan.add_scan('foo', 'foo', Scannable(NoScan(1)))
+                with self.assertRaises(LookupError, msg='Reusing static scan key for static scan did not raise'):
+                    self_scan.add_static_scan('foo', [1])
 
         MockScan(get_manager_or_parent())
 
     def test_raise_bad_scan_type(self):
+        test_data = [
+            NoScan(1),
+            EnumerationValue('abc'),
+            'aa',
+            1,
+        ]
+
         class MockScan(_MockScanCallback):
             # noinspection PyMethodParameters
             def callback(self_scan):
-                with self.assertRaises(TypeError, msg='Bad scan type did not raise'):
-                    # noinspection PyTypeChecker
-                    self_scan.add_scan('foo', 'foo', NoScan(1))
-                with self.assertRaises(TypeError, msg='Bad scan type did not raise'):
-                    # noinspection PyTypeChecker
-                    self_scan.add_scan('foo', 'foo', EnumerationValue('abc'))
+                for scannable in test_data:
+                    with self.subTest(scannable=scannable):
+                        with self.assertRaises(TypeError, msg='Bad scan type did not raise'):
+                            # noinspection PyTypeChecker
+                            self_scan.add_scan('foo', 'foo', scannable)
+
+        MockScan(get_manager_or_parent())
+
+    def test_raise_bad_static_scan_type(self):
+        test_data = [
+            {1, 2},
+            {1: 'a', 2: 'b'},
+            (i ** 2 for i in range(5)),
+            [1, 2, 3, 'a'],
+            [1, 0.1],
+            [1 + 4j],
+            np.empty(4, dtype=np.complex_),
+            np.empty(4, dtype=np.object_),
+            np.empty((4, 2), dtype=np.int32),
+        ]
+
+        class MockScan(_MockScanCallback):
+            # noinspection PyMethodParameters
+            def callback(self_scan):
+                for points in test_data:
+                    with self.subTest(points=points):
+                        with self.assertRaises(TypeError, msg='Bad scan type did not raise'):
+                            self_scan.add_static_scan('foo', points)
+
+        MockScan(get_manager_or_parent())
+
+    def test_good_static_scans(self):
+        test_data = [
+            [1, 2],
+            [0.3],
+            [True, False],
+            ['foo', 'bar'],
+            [],
+            range(4),
+            np.array([], dtype=np.int32),
+            np.empty(4, dtype=np.int32),
+            np.empty(4, dtype=np.int64),
+            np.empty(4, dtype=np.float),
+            np.asarray(['foo', 'bar']),
+        ]
+        counter = itertools.count()
+
+        class MockScan(_MockScanCallback):
+            # noinspection PyMethodParameters
+            def callback(self_scan):
+                for points in test_data:
+                    with self.subTest(points=points):
+                        self_scan.add_static_scan(f'foo{next(counter)}', points)
 
         MockScan(get_manager_or_parent())
 
@@ -304,6 +392,18 @@ class BuildScanTestCase(unittest.TestCase):
                     with self.subTest(key=k):
                         with self.assertRaises(ValueError, msg='Bad scan key did not raise'):
                             self_scan.add_scan(k, 'some name', Scannable(NoScan(1)))
+
+        MockScan(get_manager_or_parent())
+
+    def test_raise_bad_static_scan_key(self):
+        class MockScan(_MockScanCallback):
+            # noinspection PyMethodParameters
+            def callback(self_scan):
+                keys = ['aa.', '9int', 'foo-bar']
+                for k in keys:
+                    with self.subTest(key=k):
+                        with self.assertRaises(ValueError, msg='Bad static scan key did not raise'):
+                            self_scan.add_static_scan(k, [])
 
         MockScan(get_manager_or_parent())
 
@@ -357,6 +457,13 @@ class Scan2TestCase(Scan1TestCase):
         self.assertIn('bar', scannables)
         self.assertEqual(len(scannables['foo']), self.scan.FOO)
         self.assertEqual(len(scannables['bar']), self.scan.BAR)
+
+
+class Scan2StaticTestCase(Scan2TestCase):
+
+    def setUp(self) -> None:
+        self.mop = get_manager_or_parent()
+        self.scan = _MockScan2Static(self.mop)
 
 
 class ScanTerminateTestCase(unittest.TestCase):

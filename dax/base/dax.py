@@ -1433,7 +1433,9 @@ class DaxDataStoreInfluxDb(DaxDataStore):
     __P_T = typing.Dict[str, typing.Union[str, __FD_T]]  # Point type variable
 
     _FIELD_TYPES: typing.Tuple[type, ...] = (bool, float, int, np.integer, str)
-    """Legal field types for Influx DB."""
+    """Legal field types (Python types) for Influx DB."""
+    _NP_FIELD_TYPES: typing.List[type] = [np.integer, np.floating, np.bool_, np.character]
+    """Legal field types (Numpy types) for Influx DB."""
 
     def __init__(self, system: DaxSystem, key: str):
         """Create a new DAX data store that uses an Influx DB backend.
@@ -1508,7 +1510,7 @@ class DaxDataStoreInfluxDb(DaxDataStore):
             # Store the length of the sequence for emulated appending later
             self._index_table[key] = len(value)
         elif isinstance(value, np.ndarray) and value.ndim > 1 and any(np.issubdtype(value.dtype, t)
-                                                                      for t in [np.number, np.bool_, np.character]):
+                                                                      for t in self._NP_FIELD_TYPES):
             # Multi-dimensional array
             if value.size:
                 # If the array is not empty, write a list of points

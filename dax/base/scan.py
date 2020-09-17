@@ -267,10 +267,49 @@ class DaxScan(dax.base.dax.DaxBase, abc.ABC):
         if not _is_valid_key(key):
             raise ValueError(f'Provided key "{key}" is not valid')
         if key in self._dax_scan_scannables:
-            raise LookupError(f'Provided key "{key}" was already in use')
+            raise LookupError(f'Provided key "{key}" is already in use')
 
         # Add argument to the list of scannables
         self._dax_scan_scannables[key] = self.get_argument(name, scannable, group=group, tooltip=tooltip)
+
+    def add_static_scan(self, key: str, points: typing.Sequence[typing.Any]) -> None:
+        """Register a static scan.
+
+        A static scan is handled the same as a regular scan (see :func:`add_scan`).
+        The difference is that a static scan has predefined points and
+        therefore does not appear in the user interface.
+
+        :param key: Unique key of the scan, used to obtain the value later
+        :param points: A sequence with points
+        """
+        assert isinstance(key, str), 'Key must be of type str'
+
+        # Verify this function was called in the build_scan() function
+        if not self.__in_build:
+            raise TypeError('add_scan() can only be called in the build_scan() method')
+
+        # Verify type of the points
+        if not isinstance(points, collections.abc.Sequence):
+            raise TypeError('Points must be a sequence')
+        if isinstance(points, np.ndarray):
+            if not any(np.issubdtype(points.dtype, t) for t in [np.integer, np.floating, np.bool_, np.character]):
+                raise TypeError('The NumPy point type is not supported')
+            if points.ndim != 1:
+                raise TypeError('Only NumPy arrays with one dimension are supported')
+        else:
+            if not all(isinstance(e, type(points[0])) for e in points):
+                raise TypeError('The point types must be homogeneous')
+            if len(points) > 0 and not isinstance(points[0], (int, float, bool, str)):
+                raise TypeError('The point type is not supported')
+
+        # Verify the key is valid and not in use
+        if not _is_valid_key(key):
+            raise ValueError(f'Provided key "{key}" is not valid')
+        if key in self._dax_scan_scannables:
+            raise LookupError(f'Provided key "{key}" is already in use')
+
+        # Add points to the list of scannables
+        self._dax_scan_scannables[key] = points
 
     @host_only
     def set_scan_order(self, *keys: str) -> None:
