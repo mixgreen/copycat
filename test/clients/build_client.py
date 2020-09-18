@@ -63,6 +63,7 @@ class BuildClientTestCase(unittest.TestCase):
         dax.clients.pmt_monitor.PmtMonitor,
         dax.clients.pmt_monitor.MultiPmtMonitor,
         dax.clients.rpc_benchmark.RpcBenchmarkLatency,
+        dax.clients.rpc_benchmark.RpcBenchmarkAsyncThroughput,
         dax.clients.rtio_benchmark.RtioBenchmarkEventThroughput,
         dax.clients.rtio_benchmark.RtioBenchmarkEventBurst,
         dax.clients.rtio_benchmark.RtioBenchmarkDmaThroughput,

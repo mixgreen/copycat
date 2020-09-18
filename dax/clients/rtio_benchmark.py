@@ -35,13 +35,15 @@ class RtioBenchmarkEventThroughput(DaxClient, EnvExperiment):
             raise ValueError(msg)
 
         # Create scan object
-        self.period_scan = np.arange(self.period_min, self.period_max, self.period_step, dtype=np.float)
+        self.period_scan = np.arange(self.period_min, self.period_max, self.period_step, dtype=float)
         self.period_scan *= ns
         self.update_kernel_invariants('period_scan')
 
     def run(self):
-        self.rtio_bench.benchmark_event_throughput(self.period_scan, self.num_samples, self.num_events,
-                                                   self.no_underflow_cutoff)
+        self.rtio_bench.benchmark_event_throughput(period_scan=self.period_scan,
+                                                   num_samples=self.num_samples,
+                                                   num_events=self.num_events,
+                                                   no_underflow_cutoff=self.no_underflow_cutoff)
 
     def analyze(self):
         # Report result
@@ -75,9 +77,13 @@ class RtioBenchmarkEventBurst(DaxClient, EnvExperiment):
         self.period_step *= ns
 
     def run(self):
-        self.rtio_bench.benchmark_event_burst(self.num_events_min, self.num_events_max, self.num_events_step,
-                                              self.num_samples, self.period_step,
-                                              self.no_underflow_cutoff, self.num_step_cutoff)
+        self.rtio_bench.benchmark_event_burst(num_events_min=self.num_events_min,
+                                              num_events_max=self.num_events_max,
+                                              num_events_step=self.num_events_step,
+                                              num_samples=self.num_samples,
+                                              period_step=self.period_step,
+                                              no_underflow_cutoff=self.no_underflow_cutoff,
+                                              num_step_cutoff=self.num_step_cutoff)
 
     def analyze(self):
         # Report result
@@ -111,13 +117,15 @@ class RtioBenchmarkDmaThroughput(DaxClient, EnvExperiment):
             raise ValueError(msg)
 
         # Create scan object
-        self.period_scan = np.arange(self.period_min, self.period_max, self.period_step, dtype=np.float)
+        self.period_scan = np.arange(self.period_min, self.period_max, self.period_step, dtype=float)
         self.period_scan *= ns
         self.update_kernel_invariants('period_scan')
 
     def run(self):
-        self.rtio_bench.benchmark_dma_throughput(self.period_scan, self.num_samples, self.num_events,
-                                                 self.no_underflow_cutoff)
+        self.rtio_bench.benchmark_dma_throughput(period_scan=self.period_scan,
+                                                 num_samples=self.num_samples,
+                                                 num_events=self.num_events,
+                                                 no_underflow_cutoff=self.no_underflow_cutoff)
 
     def analyze(self):
         # Report result
@@ -151,8 +159,11 @@ class RtioBenchmarkLatencyCoreRtio(DaxClient, EnvExperiment):
         self.latency_step *= ns
 
     def run(self):
-        self.rtio_bench.benchmark_latency_core_rtio(self.latency_min, self.latency_max, self.latency_step,
-                                                    self.num_samples, self.no_underflow_cutoff)
+        self.rtio_bench.benchmark_latency_core_rtio(latency_min=self.latency_min,
+                                                    latency_max=self.latency_max,
+                                                    latency_step=self.latency_step,
+                                                    num_samples=self.num_samples,
+                                                    no_underflow_cutoff=self.no_underflow_cutoff)
 
     def analyze(self):
         # Report result
@@ -181,7 +192,8 @@ class RtioBenchmarkInputBufferSize(DaxClient, EnvExperiment):
             raise ValueError(msg)
 
     def run(self):
-        self.rtio_bench.benchmark_input_buffer_size(self.min_events, self.max_events)
+        self.rtio_bench.benchmark_input_buffer_size(min_events=self.min_events,
+                                                    max_events=self.max_events)
 
     def analyze(self):
         # Report result
@@ -202,7 +214,7 @@ class RtioBenchmarkLatencyRtioCore(DaxClient, EnvExperiment):
         self.rtio_bench = self.registry.find_module(RtioLoopBenchmarkModule)
 
     def run(self):
-        self.rtio_bench.benchmark_latency_rtio_core(self.num_samples)
+        self.rtio_bench.benchmark_latency_rtio_core(num_samples=self.num_samples)
 
     def analyze(self):
         # Report result
@@ -236,8 +248,11 @@ class RtioBenchmarkLatencyRtt(DaxClient, EnvExperiment):
         self.latency_step *= ns
 
     def run(self):
-        self.rtio_bench.benchmark_latency_rtt(self.latency_min, self.latency_max, self.latency_step,
-                                              self.num_samples, self.no_underflow_cutoff)
+        self.rtio_bench.benchmark_latency_rtt(latency_min=self.latency_min,
+                                              latency_max=self.latency_max,
+                                              latency_step=self.latency_step,
+                                              num_samples=self.num_samples,
+                                              no_underflow_cutoff=self.no_underflow_cutoff)
 
     def analyze(self):
         # Report result

@@ -44,6 +44,13 @@ class RpcModuleTestCase(dax.sim.test_case.PeekTestCase):
         with self.assertRaises(ValueError, msg='No exception raised for invalid parameter'):
             self.s.rpc.benchmark_latency(0)
 
+    def test_benchmark_async_throughput(self):
+        self.s.rpc.benchmark_async_throughput(10, 10)
+        with self.assertRaises(ValueError, msg='No exception raised for invalid parameter'):
+            self.s.rpc.benchmark_async_throughput(0, 1)
+        with self.assertRaises(ValueError, msg='No exception raised for invalid parameter'):
+            self.s.rpc.benchmark_async_throughput(1, 0)
+
 
 if __name__ == '__main__':
     unittest.main()

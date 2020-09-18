@@ -143,6 +143,7 @@ class RtioBenchmarkModule(DaxModule):
 
     """Benchmark event throughput"""
 
+    @host_only
     def benchmark_event_throughput(self, period_scan: typing.Union[typing.List[float], np.ndarray],
                                    num_samples: int, num_events: int, no_underflow_cutoff: int) -> None:
         # Convert types of arguments
@@ -259,6 +260,7 @@ class RtioBenchmarkModule(DaxModule):
 
     """Benchmark event burst"""
 
+    @host_only
     def benchmark_event_burst(self, num_events_min: int, num_events_max: int, num_events_step: int,
                               num_samples: int, period_step: float,
                               no_underflow_cutoff: int, num_step_cutoff: int) -> None:
@@ -405,6 +407,7 @@ class RtioBenchmarkModule(DaxModule):
 
     """Benchmark DMA throughput"""
 
+    @host_only
     def benchmark_dma_throughput(self, period_scan: typing.Union[typing.List[float], np.ndarray],
                                  num_samples: int, num_events: int, no_underflow_cutoff: int) -> None:
         # Convert types of arguments
@@ -468,6 +471,9 @@ class RtioBenchmarkModule(DaxModule):
         no_underflow_count = np.int32(0)
         # A flag to mark if at least one underflow happened
         underflow_flag = False
+
+        # Reset core (not required for DMA functionality)
+        self.core.reset()
 
         # Record DMA traces
         dma_name_on = 'rtio_benchmark_dma_throughput_on'
@@ -538,6 +544,7 @@ class RtioBenchmarkModule(DaxModule):
 
     """Benchmark latency core-RTIO"""
 
+    @host_only
     def benchmark_latency_core_rtio(self, latency_min: float, latency_max: float, latency_step: float,
                                     num_samples: int, no_underflow_cutoff: int) -> None:
         # Convert types of arguments
@@ -719,7 +726,7 @@ class RtioLoopBenchmarkModule(RtioBenchmarkModule):
     """Module functionality"""
 
     @kernel
-    def test_loop_connection(self, retry: TInt32 = np.int32(1)):
+    def test_loop_connection(self, retry: TInt32 = np.int32(1)) -> TBool:
         """True if a loop connection was detected."""
 
         for _ in range(retry):
@@ -744,6 +751,7 @@ class RtioLoopBenchmarkModule(RtioBenchmarkModule):
 
     """Benchmark input buffer size"""
 
+    @host_only
     def benchmark_input_buffer_size(self, min_events: int, max_events: int) -> None:
         # Convert types of arguments
         min_events = np.int32(min_events)
@@ -830,6 +838,7 @@ class RtioLoopBenchmarkModule(RtioBenchmarkModule):
 
     """Benchmark latency RTIO-core"""
 
+    @host_only
     def benchmark_latency_rtio_core(self, num_samples: int) -> None:
         # Convert types of arguments
         num_samples = np.int32(num_samples)
@@ -908,6 +917,7 @@ class RtioLoopBenchmarkModule(RtioBenchmarkModule):
 
     """Benchmark RTT RTIO-core-RTIO"""
 
+    @host_only
     def benchmark_latency_rtt(self, latency_min: float, latency_max: float, latency_step: float,
                               num_samples: int, no_underflow_cutoff: int) -> None:
         # Convert types of arguments
