@@ -174,6 +174,14 @@ class DaxScan(dax.base.dax.DaxBase, abc.ABC):
         :param args: Positional arguments forwarded to the superclass
         :param kwargs: Keyword arguments forwarded to the superclass
         """
+        # Check for usage of legacy ENABLE_INDEX flag
+        if hasattr(self, 'ENABLE_INDEX'):
+            self.ENABLE_SCAN_INDEX = getattr(self, 'ENABLE_INDEX')
+            self.logger.warning('Legacy warning: ENABLE_INDEX flag will soon be renamed to ENABLE_SCAN_INDEX')
+
+        assert isinstance(self.INFINITE_SCAN_ARGUMENT, bool), 'Infinite scan argument flag must be of type bool'
+        assert isinstance(self.INFINITE_SCAN_DEFAULT, bool), 'Infinite scan default flag must be of type bool'
+        assert isinstance(self.ENABLE_SCAN_INDEX, bool), 'Enable scan index flag must be of type bool'
 
         # Check if host_*() functions are all non-kernel functions
         if any(dax.util.artiq.is_kernel(f) for f in [self.host_enter, self.host_setup,
