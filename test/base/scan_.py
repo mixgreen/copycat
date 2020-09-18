@@ -135,7 +135,7 @@ class _MockScanInfiniteNoArgument(_MockScan1):
 
 
 class _MockScanDisableIndex(_MockScan1):
-    ENABLE_INDEX = False
+    ENABLE_SCAN_INDEX = False
 
 
 class _IndexAttributeError(AttributeError):
@@ -143,7 +143,7 @@ class _IndexAttributeError(AttributeError):
 
 
 class _MockScanDisableIndexBad(_MockScan1):
-    ENABLE_INDEX = False
+    ENABLE_SCAN_INDEX = False
 
     def run_point(self, point, index):  # type: (typing.Any, typing.Any) -> None
         assert point.foo is not None

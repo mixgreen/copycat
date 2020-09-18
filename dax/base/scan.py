@@ -141,7 +141,7 @@ class DaxScan(dax.base.dax.DaxBase, abc.ABC):
 
     The :func:`run_point` function has access to a point and an index argument.
     Users can disable the index argument to reduce the memory footprint of the experiment.
-    The :attr:`ENABLE_INDEX` attribute can be used to configure this behavior (default: `True`).
+    The :attr:`ENABLE_SCAN_INDEX` attribute can be used to configure this behavior (default: `True`).
     When the index is disabled, the passed `index` argument will be empty.
 
     In case scanning is performed in a kernel, users are responsible for setting
@@ -153,7 +153,7 @@ class DaxScan(dax.base.dax.DaxBase, abc.ABC):
     INFINITE_SCAN_DEFAULT: bool = False
     """Default setting of the infinite scan."""
 
-    ENABLE_INDEX: bool = True
+    ENABLE_SCAN_INDEX: bool = True
     """Flag to enable the index argument in the run_point() function."""
 
     SCAN_GROUP: str = 'scan'
@@ -385,7 +385,7 @@ class DaxScan(dax.base.dax.DaxBase, abc.ABC):
         if self._dax_scan_scannables:
             self._dax_scan_elements: typing.List[typing.Any] = list(
                 _ScanProductGenerator(*self._dax_scan_scannables.items(),  # type: ignore[arg-type]
-                                      enable_index=self.ENABLE_INDEX))
+                                      enable_index=self.ENABLE_SCAN_INDEX))
         else:
             self._dax_scan_elements = []
         self.update_kernel_invariants('_dax_scan_elements')
