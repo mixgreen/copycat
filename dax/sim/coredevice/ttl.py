@@ -237,7 +237,7 @@ class TTLClockGen(DaxSimDevice):
 
     @portable
     def frequency_to_ftw(self, frequency):
-        return round(2 ** self._acc_width * frequency * self.core.coarse_ref_period)
+        return round(float(2 ** self._acc_width * frequency * self.core.coarse_ref_period))
 
     @portable
     def ftw_to_frequency(self, ftw):

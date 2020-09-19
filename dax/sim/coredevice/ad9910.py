@@ -43,7 +43,7 @@ class AD9910(DaxSimDevice):
             sysclk = clk
         assert sysclk <= 1e9
         self.ftw_per_hz = (1 << 32) / sysclk
-        self.sysclk_per_mu = int(round(sysclk * self.core.ref_period))
+        self.sysclk_per_mu = int(round(float(sysclk * self.core.ref_period)))
         self.phase_mode = PHASE_MODE_CONTINUOUS
 
         # Register signals
@@ -150,7 +150,7 @@ class AD9910(DaxSimDevice):
 
     @portable(flags={"fast-math"})
     def frequency_to_ftw(self, frequency):
-        return np.int32(round(self.ftw_per_hz * frequency))
+        return np.int32(round(float(self.ftw_per_hz * frequency)))
 
     @portable(flags={"fast-math"})
     def ftw_to_frequency(self, ftw):
@@ -158,7 +158,7 @@ class AD9910(DaxSimDevice):
 
     @portable(flags={"fast-math"})
     def turns_to_pow(self, turns):
-        return np.int32(round(turns * 0x10000))
+        return np.int32(round(float(turns * 0x10000)))
 
     @portable(flags={"fast-math"})
     def pow_to_turns(self, pow_):
@@ -166,7 +166,7 @@ class AD9910(DaxSimDevice):
 
     @portable(flags={"fast-math"})
     def amplitude_to_asf(self, amplitude):
-        return np.int32(round(amplitude * 0x3ffe))
+        return np.int32(round(float(amplitude * 0x3ffe)))
 
     @portable(flags={"fast-math"})
     def asf_to_amplitude(self, asf):

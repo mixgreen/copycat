@@ -71,7 +71,7 @@ class AD9912(DaxSimDevice):
 
     @portable(flags={"fast-math"})
     def frequency_to_ftw(self, frequency):
-        return np.int64(round(self.ftw_per_hz * frequency))
+        return np.int64(round(float(self.ftw_per_hz * frequency)))
 
     @portable(flags={"fast-math"})
     def ftw_to_frequency(self, ftw):
@@ -79,7 +79,7 @@ class AD9912(DaxSimDevice):
 
     @portable(flags={"fast-math"})
     def turns_to_pow(self, phase):
-        return np.int32(round((1 << 14) * phase))
+        return np.int32(round(float((1 << 14) * phase)))
 
     @kernel
     def set(self, frequency, phase=0.0):
