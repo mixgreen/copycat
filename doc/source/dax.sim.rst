@@ -1,6 +1,8 @@
 dax.sim package
 ===============
 
+.. _dax.sim:
+
 dax.sim
 -------
 
@@ -50,8 +52,10 @@ dax.sim.device module
     :show-inheritance:
 
 
-dax.sim.test_case package
-=========================
+.. _dax.sim.test_case:
+
+dax.sim.test\_case package
+==========================
 
 .. automodule:: dax.sim.test_case
     :members:

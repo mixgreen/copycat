@@ -1,6 +1,8 @@
 dax package
 ===========
 
+.. _dax.experiment:
+
 dax.experiment
 --------------
 
@@ -9,6 +11,10 @@ dax.experiment
     :undoc-members:
     :show-inheritance:
 
+The system base components can be found in the :ref:`dax.base.system`.
+
+.. _dax.scan:
+
 dax.scan
 --------
 
@@ -16,6 +22,8 @@ dax.scan
     :members:
     :undoc-members:
     :show-inheritance:
+
+The scan base components can be found in the :ref:`dax.base.scan`.
 
 Subpackages
 -----------
