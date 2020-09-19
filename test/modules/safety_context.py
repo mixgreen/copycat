@@ -4,7 +4,7 @@ import collections
 from dax.experiment import *
 from dax.modules.safety_context import *
 from dax.util.artiq import get_manager_or_parent
-import dax.base.dax
+import dax.base.system
 
 
 class _ReentrantTestSystem(DaxSystem):
@@ -156,7 +156,7 @@ class _GenericSafetyContextTestCase(unittest.TestCase):
         for m in self.s.registry.get_module_list():
             self._test_kernel_invariants(m)
 
-    def _test_kernel_invariants(self, component: dax.base.dax.DaxHasSystem):
+    def _test_kernel_invariants(self, component: dax.base.system.DaxHasSystem):
         # Test kernel invariants of this component
         for k in component.kernel_invariants:
             self.assertTrue(hasattr(component, k), f'Name "{k}" of "{component.get_system_key()}" was marked '

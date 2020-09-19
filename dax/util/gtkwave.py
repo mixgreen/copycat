@@ -6,8 +6,8 @@ import itertools
 import operator
 import logging
 
+import dax.base.system
 from dax import __version__ as _dax_version
-from dax.base.dax import DaxSystem
 from dax.sim.signal import get_signal_manager, VcdSignalManager
 from dax.util.output import get_file_name
 
@@ -38,12 +38,12 @@ class GTKWSaveGenerator:
     }
     """Dict to convert Python types to GTKWave types."""
 
-    def __init__(self, system: DaxSystem):
+    def __init__(self, system: dax.base.system.DaxSystem):
         """Instantiate a new GTKWave save file generator.
 
         :param system: The system of interest
         """
-        assert isinstance(system, DaxSystem)
+        assert isinstance(system, dax.base.system.DaxSystem)
 
         # Verify that we are in simulation
         _logger.debug(f'DAX.sim enabled: {system.dax_sim_enabled}')

@@ -3,7 +3,7 @@ import collections
 import graphviz
 import logging
 
-import dax.base.dax
+import dax.base.system
 from dax.util.output import get_base_path
 
 __all__ = ['GraphvizBase', 'ComponentGraphviz', 'RelationGraphviz']
@@ -65,7 +65,7 @@ class GraphvizBase(graphviz.Digraph):
         super(GraphvizBase, self).__init__(**kwargs)
 
     def _add_modules(self, graph: graphviz.Digraph,
-                     module: dax.base.dax.DaxModuleBase,
+                     module: dax.base.system.DaxModuleBase,
                      to_module_edges: bool) -> None:
         """Recursive function to add a tree of modules to a graph.
 
@@ -73,7 +73,7 @@ class GraphvizBase(graphviz.Digraph):
         :param module: The top module to start the recursion
         """
         assert isinstance(graph, graphviz.Digraph)
-        assert isinstance(module, dax.base.dax.DaxModuleBase)
+        assert isinstance(module, dax.base.system.DaxModuleBase)
         assert isinstance(to_module_edges, bool)
 
         # Add module to the graph
@@ -81,7 +81,7 @@ class GraphvizBase(graphviz.Digraph):
         _logger.debug(f'Added module "{module.get_system_key()}"')
 
         # Inspect children of this module for modules
-        child_modules = {child for child in module.children if isinstance(child, dax.base.dax.DaxModuleBase)}
+        child_modules = {child for child in module.children if isinstance(child, dax.base.system.DaxModuleBase)}
         _logger.debug(f'Found {len(child_modules)} child module(s)')
 
         for child in child_modules:
@@ -90,11 +90,11 @@ class GraphvizBase(graphviz.Digraph):
             if to_module_edges:
                 # Add edge
                 graph.edge(module.get_system_key(), child.get_system_key(),
-                           **(self._system_edge_attr if isinstance(module, dax.base.dax.DaxSystem)
+                           **(self._system_edge_attr if isinstance(module, dax.base.system.DaxSystem)
                               else self._module_edge_attr))
 
         # Inspect attributes of this module for modules
-        attr_modules = {attr for attr in _get_attributes(module) if isinstance(attr, dax.base.dax.DaxModuleBase)}
+        attr_modules = {attr for attr in _get_attributes(module) if isinstance(attr, dax.base.system.DaxModuleBase)}
 
         # Check if there are any unexpected attributes
         unexpected_modules = attr_modules - child_modules
@@ -106,11 +106,11 @@ class GraphvizBase(graphviz.Digraph):
             for m in unexpected_modules:
                 # Add edge
                 graph.edge(module.get_system_key(), m.get_system_key(), style='dashed',
-                           **(self._system_edge_attr if isinstance(module, dax.base.dax.DaxSystem)
+                           **(self._system_edge_attr if isinstance(module, dax.base.system.DaxSystem)
                               else self._module_edge_attr))
 
     def _add_services(self, graph: graphviz.Digraph,
-                      services: typing.Sequence[dax.base.dax.DaxService],
+                      services: typing.Sequence[dax.base.system.DaxService],
                       to_service_edges: bool) -> None:
         """Add services to a sub-graph.
 
@@ -128,7 +128,7 @@ class GraphvizBase(graphviz.Digraph):
 
             if to_service_edges:
                 # Inspect attributes of this service for services
-                attr_services = [attr for attr in _get_attributes(s) if isinstance(attr, dax.base.dax.DaxService)]
+                attr_services = [attr for attr in _get_attributes(s) if isinstance(attr, dax.base.system.DaxService)]
                 _logger.debug(f'Found {len(attr_services)} edge(s) to other services')
 
                 for attr in attr_services:
@@ -136,7 +136,7 @@ class GraphvizBase(graphviz.Digraph):
                     graph.edge(s.get_system_key(), attr.get_system_key(), **self._service_edge_attr)
 
     def _add_service_modules(self, graph: graphviz.Digraph,
-                             services: typing.Sequence[dax.base.dax.DaxService]) -> None:
+                             services: typing.Sequence[dax.base.system.DaxService]) -> None:
         """Add service modules.
 
         :param graph: The graph object
@@ -147,7 +147,7 @@ class GraphvizBase(graphviz.Digraph):
 
         for s in services:
             # Inspect children of this service for modules
-            child_modules = [child for child in s.children if isinstance(child, dax.base.dax.DaxModuleBase)]
+            child_modules = [child for child in s.children if isinstance(child, dax.base.system.DaxModuleBase)]
             _logger.debug(f'Found {len(child_modules)} child module(s) for service "{s.get_system_key()}"')
 
             for child in child_modules:
@@ -157,7 +157,7 @@ class GraphvizBase(graphviz.Digraph):
                 graph.edge(s.get_system_key(), child.get_system_key(), **self._module_edge_attr)
 
     def _add_service_system_edges(self, graph: graphviz.Digraph,
-                                  services: typing.Sequence[dax.base.dax.DaxService]) -> None:
+                                  services: typing.Sequence[dax.base.system.DaxService]) -> None:
         """Add service to system edges.
 
         :param graph: The graph object
@@ -168,9 +168,9 @@ class GraphvizBase(graphviz.Digraph):
 
         for s in services:
             # Inspect children of this service for modules
-            child_modules = {child for child in s.children if isinstance(child, dax.base.dax.DaxModuleBase)}
+            child_modules = {child for child in s.children if isinstance(child, dax.base.system.DaxModuleBase)}
             # Inspect attributes of this service for modules
-            attr_modules = {attr for attr in _get_attributes(s) if isinstance(attr, dax.base.dax.DaxModuleBase)}
+            attr_modules = {attr for attr in _get_attributes(s) if isinstance(attr, dax.base.system.DaxModuleBase)}
 
             # Obtain difference
             modules = attr_modules - child_modules
@@ -181,19 +181,19 @@ class GraphvizBase(graphviz.Digraph):
                 graph.edge(module.get_system_key(), s.get_system_key(), dir='back', **self._cluster_edge_attr)
 
     def _add_system_service_edges(self, graph: graphviz.Digraph,
-                                  module: dax.base.dax.DaxModuleBase) -> None:
+                                  module: dax.base.system.DaxModuleBase) -> None:
         """Recursive function to add system to service edges.
 
         :param graph: The graph object
         :param module: The top module to start the recursion
         """
         assert isinstance(graph, graphviz.Digraph)
-        assert isinstance(module, dax.base.dax.DaxModuleBase)
+        assert isinstance(module, dax.base.system.DaxModuleBase)
 
         # Only add edges to services if this is not the system
-        if not isinstance(module, dax.base.dax.DaxSystem):
+        if not isinstance(module, dax.base.system.DaxSystem):
             # Inspect attributes of this module for services
-            attr_services = [attr for attr in _get_attributes(module) if isinstance(attr, dax.base.dax.DaxService)]
+            attr_services = [attr for attr in _get_attributes(module) if isinstance(attr, dax.base.system.DaxService)]
             _logger.debug(f'Found {len(attr_services)} edge(s) to services for module "{module.get_system_key()}"')
 
             for attr in attr_services:
@@ -201,7 +201,7 @@ class GraphvizBase(graphviz.Digraph):
                 graph.edge(module.get_system_key(), attr.get_system_key(), style='dashed', **self._cluster_edge_attr)
 
         # Inspect children of this module for modules
-        child_modules = [child for child in module.children if isinstance(child, dax.base.dax.DaxModuleBase)]
+        child_modules = [child for child in module.children if isinstance(child, dax.base.system.DaxModuleBase)]
         for child in child_modules:
             # Recursive call
             self._add_system_service_edges(graph, child)
@@ -210,13 +210,13 @@ class GraphvizBase(graphviz.Digraph):
 class ComponentGraphviz(GraphvizBase):
     """Component graph class which visualizes the relations between system modules."""
 
-    def __init__(self, system: dax.base.dax.DaxSystem, **kwargs: typing.Any):
+    def __init__(self, system: dax.base.system.DaxSystem, **kwargs: typing.Any):
         """Create a new component Graphviz object.
 
         :param system: The system to visualize
         :param kwargs: Keyword arguments for :class:`GraphvizBase` and the Graphviz parent class
         """
-        assert isinstance(system, dax.base.dax.DaxSystem), 'System must be a DAX system'
+        assert isinstance(system, dax.base.system.DaxSystem), 'System must be a DAX system'
 
         # Set default arguments
         kwargs.setdefault('engine', 'fdp')
@@ -253,13 +253,13 @@ class ComponentGraphviz(GraphvizBase):
 class RelationGraphviz(GraphvizBase):
     """Relation graph class which visualizes relations between the system modules and the services."""
 
-    def __init__(self, system: dax.base.dax.DaxSystem, **kwargs: typing.Any):
+    def __init__(self, system: dax.base.system.DaxSystem, **kwargs: typing.Any):
         """Create a new relation Graphviz object.
 
         :param system: The system to visualize
         :param kwargs: Keyword arguments for :class:`GraphvizBase` and the Graphviz parent class
         """
-        assert isinstance(system, dax.base.dax.DaxSystem), 'System must be a DAX system'
+        assert isinstance(system, dax.base.system.DaxSystem), 'System must be a DAX system'
 
         # Set default arguments
         kwargs.setdefault('engine', 'dot')

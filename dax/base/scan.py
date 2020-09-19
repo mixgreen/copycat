@@ -10,7 +10,7 @@ import h5py  # type: ignore
 from artiq.experiment import *
 import artiq.coredevice.core  # type: ignore
 
-import dax.base.dax
+import dax.base.system
 import dax.util.artiq
 
 __all__ = ['DaxScan', 'DaxScanReader']
@@ -99,7 +99,7 @@ class _ScanProductGenerator:
         return zip(self._point_generator(), self._index_generator())
 
 
-class DaxScan(dax.base.dax.DaxBase, abc.ABC):
+class DaxScan(dax.base.system.DaxBase, abc.ABC):
     """Scanning class for standardized scanning functionality.
 
     Users can inherit from this class to implement their scanning experiments.

@@ -12,8 +12,8 @@ import artiq.coredevice.edge_counter
 import artiq.coredevice.ttl  # type: ignore
 import artiq.coredevice.core  # type: ignore
 
-from dax.base.dax import *
-import dax.base.dax
+from dax.base.system import *
+import dax.base.system
 import dax.base.exceptions
 import dax.base.interface
 from dax.util.artiq import get_manager_or_parent
@@ -79,7 +79,7 @@ class _TestSystem(DaxSystem):
     SYS_VER = 0
 
     def __init__(self, *args, **kwargs):
-        self._data_store = MagicMock(spec=dax.base.dax.DaxDataStore)
+        self._data_store = MagicMock(spec=dax.base.system.DaxDataStore)
         super(_TestSystem, self).__init__(*args, **kwargs)
 
     @property
@@ -127,22 +127,22 @@ class DaxHelpersTestCase(unittest.TestCase):
     def test_valid_name(self):
         for n in ['foo', '_0foo', '_', '0', '_foo', 'FOO_', '0_foo']:
             # Test valid names
-            self.assertTrue(dax.base.dax._is_valid_name(n))
+            self.assertTrue(dax.base.system._is_valid_name(n))
 
     def test_invalid_name(self):
         for n in ['', 'foo()', 'foo.bar', 'foo/', 'foo*', 'foo,', 'FOO+', 'foo-bar', 'foo/bar']:
             # Test illegal names
-            self.assertFalse(dax.base.dax._is_valid_name(n))
+            self.assertFalse(dax.base.system._is_valid_name(n))
 
     def test_valid_key(self):
         for k in ['foo', '_0foo', '_', '0', 'foo.bar', 'foo.bar.baz', '_.0.A', 'foo0._bar']:
             # Test valid keys
-            self.assertTrue(dax.base.dax._is_valid_key(k))
+            self.assertTrue(dax.base.system._is_valid_key(k))
 
     def test_invalid_key(self):
         for k in ['', 'foo()', 'foo,bar', 'foo/', '.foo', 'bar.', 'foo.bar.baz.']:
             # Test illegal keys
-            self.assertFalse(dax.base.dax._is_valid_key(k))
+            self.assertFalse(dax.base.system._is_valid_key(k))
 
     def test_unique_device_key(self):
         # Test system and device DB
@@ -183,13 +183,13 @@ class DaxHelpersTestCase(unittest.TestCase):
         s = _TestSystem(get_manager_or_parent(_device_db))
         # Test virtual devices
         virtual_devices = {'scheduler', 'ccb'}
-        self.assertSetEqual(virtual_devices, dax.base.dax._ARTIQ_VIRTUAL_DEVICES,
+        self.assertSetEqual(virtual_devices, dax.base.system._ARTIQ_VIRTUAL_DEVICES,
                             'List of virtual devices in test does not match DAX base virtual device list')
         for k in virtual_devices:
             self.assertEqual(s.registry.get_unique_device_key(k), k, 'Virtual device key not returned correctly')
 
     def test_cwd_commit_hash(self):
-        self.assertIsInstance(dax.base.dax._CWD_COMMIT, (str, type(None)), 'Unexpected type for CWD commit hash')
+        self.assertIsInstance(dax.base.system._CWD_COMMIT, (str, type(None)), 'Unexpected type for CWD commit hash')
 
         # Discover repo path
         path = pygit2.discover_repository(os.getcwd())
@@ -199,9 +199,9 @@ class DaxHelpersTestCase(unittest.TestCase):
             self.skipTest('CWD currently not in a git repo')
 
         # Test if CWD commit hash was loaded
-        self.assertIsNotNone(dax.base.dax._CWD_COMMIT, 'CWD commit hash was not loaded')
-        self.assertIsInstance(dax.base.dax._CWD_COMMIT, str, 'Unexpected type for CWD commit hash')
-        self.assertEqual(dax.base.dax._CWD_COMMIT, str(pygit2.Repository(path).head.target.hex),
+        self.assertIsNotNone(dax.base.system._CWD_COMMIT, 'CWD commit hash was not loaded')
+        self.assertIsInstance(dax.base.system._CWD_COMMIT, str, 'Unexpected type for CWD commit hash')
+        self.assertEqual(dax.base.system._CWD_COMMIT, str(pygit2.Repository(path).head.target.hex),
                          'CWD commit hash did not match reference')
 
     def test_ndarray_isinstance_sequence(self):
@@ -328,7 +328,7 @@ class DaxNameRegistryTestCase(unittest.TestCase):
 
 
 class DaxDataStoreInfluxDbTestCase(unittest.TestCase):
-    class MockDataStore(dax.base.dax.DaxDataStoreInfluxDb):
+    class MockDataStore(dax.base.system.DaxDataStoreInfluxDb):
         """Data store connector that does not write but a callback instead."""
 
         def __init__(self, callback, *args, **kwargs):

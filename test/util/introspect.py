@@ -1,13 +1,13 @@
 import unittest
 import graphviz
 
-import dax.base.dax
+import dax.base.system
 import dax.util.introspect
 from dax.util.artiq import get_manager_or_parent
 from dax.util.output import temp_dir
 
 
-class _TestSystem(dax.base.dax.DaxSystem):
+class _TestSystem(dax.base.system.DaxSystem):
     SYS_ID = 'unittest_system'
     SYS_VER = 0
 
@@ -18,7 +18,7 @@ class _TestSystem(dax.base.dax.DaxSystem):
         _TestService(self)
 
 
-class _TestModule(dax.base.dax.DaxModule):
+class _TestModule(dax.base.system.DaxModule):
     """Testing module."""
 
     def init(self):
@@ -32,7 +32,7 @@ class _TestModuleChild(_TestModule):
     pass
 
 
-class _TestService(dax.base.dax.DaxService):
+class _TestService(dax.base.system.DaxService):
     SERVICE_NAME = 'test_service'
 
     def init(self):

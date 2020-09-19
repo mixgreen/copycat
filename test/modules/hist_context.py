@@ -7,7 +7,7 @@ import h5py  # type: ignore
 import artiq.coredevice
 
 from dax.experiment import *
-import dax.base.dax
+import dax.base.system
 import dax.util.matplotlib_backend  # noqa: F401
 from dax.modules.hist_context import *
 from dax.interfaces.detection import DetectionInterface
@@ -328,7 +328,7 @@ class HistogramContextTestCase(unittest.TestCase):
         for m in self.s.registry.get_module_list():
             self._test_kernel_invariants(m)
 
-    def _test_kernel_invariants(self, component: dax.base.dax.DaxHasSystem):
+    def _test_kernel_invariants(self, component: dax.base.system.DaxHasSystem):
         # Test kernel invariants of this component
         for k in component.kernel_invariants:
             self.assertTrue(hasattr(component, k), f'Name "{k}" of "{component.get_system_key()}" was marked '

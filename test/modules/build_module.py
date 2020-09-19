@@ -2,6 +2,7 @@ import typing
 import unittest
 
 from dax.experiment import *
+import dax.base.system
 from dax.sim import enable_dax_sim
 from dax.util.artiq import get_manager_or_parent
 
@@ -55,7 +56,7 @@ class BuildModuleTestCase(unittest.TestCase):
                 for m in system.registry.get_module_list():
                     self._test_kernel_invariants(m)
 
-    def _test_kernel_invariants(self, component: dax.base.dax.DaxHasSystem):
+    def _test_kernel_invariants(self, component: dax.base.system.DaxHasSystem):
         # Test kernel invariants of this component
         for k in component.kernel_invariants:
             self.assertTrue(hasattr(component, k), f'Name "{k}" of "{component.get_system_key()}" was marked '

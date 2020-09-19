@@ -1,7 +1,7 @@
 import unittest
 import typing
 
-from dax.base.dax import DaxSystem
+from dax.base.system import DaxSystem
 from dax.util.artiq import get_manager_or_parent
 from dax.util.output import temp_dir
 from dax.sim import enable_dax_sim
