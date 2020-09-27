@@ -1,0 +1,530 @@
+from __future__ import annotations  # Postponed evaluation of annotations
+
+import typing
+import logging
+import collections
+import time
+import enum
+import networkx as nx  # type: ignore
+# TODO: add dependencies
+
+import artiq.experiment
+
+import dax.base.system
+
+__all__ = ['Job', 'Policy', 'DaxScheduler']
+
+
+def _str_to_time(string: str) -> float:
+    """Convert a string to a time in seconds.
+
+    This function converts simple time strings with a number and a character to a time in seconds.
+    The available units are:
+
+    - `'s'` for seconds
+    - `'m'` for minutes
+    - `'h'` for hours
+    - `'d'` for days
+    - `'w'` for weeks
+
+    Examples of valid strings are `'10 s'`, `'-2m'`, `'8h'`, and `'2.5 w'`.
+    An empty string will return zero.
+
+    :param string: The string
+    :return: Time in seconds as a float
+    :raises ValueError: Raised if the number or the unit is invalid
+    """
+    assert isinstance(string, str), 'Input must be of type str'
+
+    # Dict with available units
+    units: typing.Dict[str, float] = {
+        's': 1.0,
+        'm': 60.0,
+        'h': 3600.0,
+        'd': 86400.0,
+        'w': 604800.0,
+    }
+
+    if string:
+        try:
+            # Get the value and the unit
+            value = float(string[:-1])
+            unit = units[string[-1]]
+            # Return the product
+            return value * unit
+        except KeyError:
+            raise ValueError(f'No valid time unit was found at the end of string "{string}"')
+        except ValueError:
+            raise ValueError(f'No valid number was found at the start of string "{string}"')
+    else:
+        # Return zero in case the string is empty
+        return 0.0
+
+
+class JobAction(enum.Enum):
+    RUN = enum.auto()
+    PASS = enum.auto()
+
+    def submittable(self) -> bool:
+        return self is JobAction.RUN
+
+    def __str__(self) -> str:
+        return self.name
+
+
+class Job(dax.base.system.DaxBase):
+    FILE: str
+    """File containing the experiment, relative from the `repository` directory."""
+    CLASS_NAME: str
+    """Class name of the experiment."""
+    ARGUMENTS: typing.Dict[str, typing.Any] = {}
+    """The experiment arguments."""
+
+    INTERVAL: typing.Optional[str] = None
+    """Interval to run this job, defaults to no interval."""
+
+    LOG_LEVEL: typing.Union[int, str] = logging.WARNING
+    """The log level for the experiment."""
+    PIPELINE: typing.Optional[str] = None
+    """The pipeline to submit this job to, defaults to the pipeline assigned by the scheduler."""
+    PRIORITY: int = 0
+    """Job priority relative to the base job priority of the scheduler."""
+
+    _RID_LIST_KEY: str = 'rid_list'
+    """Key to store every submitted RID."""
+    _LAST_SUBMIT_KEY: str = 'last_submit'
+    """Key to store the last submit timestamp."""
+
+    def __init__(self, managers_or_parent: typing.Any,
+                 *args: typing.Any, **kwargs: typing.Any):
+        # Check file
+        assert hasattr(self, 'FILE'), 'No file was provided to this job description'
+        assert isinstance(self.FILE, str), 'The file attribute must be of type str'
+        # Check class
+        assert hasattr(self, 'CLASS_NAME'), 'No class name was provided to this job description'
+        assert isinstance(self.CLASS_NAME, str), 'The class name attribute must be of type str'
+        # Check arguments
+        assert isinstance(self.ARGUMENTS, dict), 'The arguments must be of type dict'
+        assert all(isinstance(k, str) for k in self.ARGUMENTS), 'All argument keys must be of type str'
+        # Check interval
+        assert self.INTERVAL is None or isinstance(self.INTERVAL, str), 'Interval must be None or of type str'
+        # Check log level
+        assert isinstance(self.LOG_LEVEL, (int, str)), 'Log level must be of type int or str'
+        # Check pipeline
+        assert self.PIPELINE is None or isinstance(self.PIPELINE, str), 'Pipeline must be of type str or None'
+        # Check priority
+        assert isinstance(self.PRIORITY, int), 'Priority must be of type int'
+        assert -99 <= self.PRIORITY <= 99, 'Priority must be in the domain [-99, 99]'
+
+        # TODO: allow meta-jobs (jobs without a task)
+
+        # Check parent
+        if not isinstance(managers_or_parent, DaxScheduler):
+            raise TypeError(f'Parent of job {self.get_name()} is not a DAX scheduler')
+
+        # Create the base key for this job
+        self.__base_key: str = f'{managers_or_parent.NAME}.{self.get_name()}'
+
+        # Call super
+        super(Job, self).__init__(managers_or_parent, *args, **kwargs)
+
+    def build(self) -> None:  # type: ignore
+        # Obtain the scheduler
+        self._scheduler = self.get_device('scheduler')
+
+        # Construct expid for this job
+        self._expid: typing.Dict[str, typing.Any] = {
+            'file': self.FILE,
+            'class_name': self.CLASS_NAME,
+            'arguments': self._process_arguments(),
+            'log_level': self.LOG_LEVEL,
+            'repo_rev': None,  # Requests current revision
+        }
+
+        # Convert interval
+        if self.INTERVAL is None:
+            self._interval: typing.Optional[float] = None
+            self.logger.info('No interval set')
+        else:
+            self._interval = _str_to_time(self.INTERVAL)
+            if self._interval > 0.0:
+                self.logger.info(f'Interval set to {self._interval:.0f} second(s)')
+            else:
+                msg = 'The job interval must be greater than zero'
+                self.logger.error(msg)
+                raise ValueError(msg)
+
+    def init(self, *, reset: bool) -> None:
+        # Initialize internal state
+        self._last_rid: int = -1
+
+        # Initialize RID list
+        self.set_dataset(self.get_key(self._RID_LIST_KEY), [])
+
+        if self._interval is not None:
+            if reset:
+                self._next_submit: float = time.time()
+            else:
+                last_submit = self.get_dataset(self.get_key(self._LAST_SUBMIT_KEY), 0.0, archive=False)
+                assert isinstance(last_submit, float), 'Unexpected type returned from dataset'
+                self._next_submit = last_submit
+                self._next_submit += self._interval
+
+    def visit(self, *, wave: float) -> JobAction:
+        if self._next_submit <= wave:
+            return JobAction.RUN
+        else:
+            return JobAction.PASS
+
+    def submit(self, *, wave: float, pipeline: str, priority: int) -> None:
+        assert isinstance(wave, float), 'Wave must be of type float'
+        assert isinstance(pipeline, str) and pipeline, 'Pipeline name must be of type string and can not be empty'
+        assert isinstance(priority, int), 'Priority must be of type int'
+
+        # Store current wave timestamp
+        self.set_dataset(self.get_key(self._LAST_SUBMIT_KEY), wave, broadcast=True, persist=True)
+
+        if self._interval is not None:
+            if self.visit(wave=wave).submittable():
+                # Update next submit time
+                self._next_submit += self._interval
+            else:
+                # Involuntary submission, reset phase
+                self._next_submit = wave + self._interval
+
+        if self._last_rid not in self._scheduler.get_status():
+            # Submit experiment of this job
+            self._last_rid = self._scheduler.submit(
+                pipeline_name=pipeline if self.PIPELINE is None else self.PIPELINE,
+                expid=self._expid,
+                priority=priority + self.PRIORITY)
+            self.append_to_dataset(self.get_key(self._RID_LIST_KEY), self._last_rid)
+            self.logger.info(f'Submitted job with RID {self._last_rid}')
+        else:
+            self.logger.warning(f'Skipping job, previous job with RID {self._last_rid} is still running')
+
+        if self._interval is not None:
+            # Prevent setting next submit time in the past
+            if self._next_submit <= time.time():
+                self._next_submit = time.time() + self._interval
+                self.logger.warning('Next job was rescheduled because the interval time expired')
+
+    def cancel(self) -> None:
+        if self._last_rid >= 0:
+            self._scheduler.request_termination(self._last_rid)
+
+    def get_key(self, *keys: str) -> str:
+        """Get the full key based on the job base key.
+
+        If no keys are provided, the system key is returned.
+        If one or more keys are provided, the provided keys are appended to the system key.
+
+        :param keys: The keys to append to the system key
+        :return: The system key with provided keys appended
+        :raises ValueError: Raised if the key has an invalid format
+        """
+
+        assert all(isinstance(k, str) for k in keys), 'Keys must be strings'
+
+        # Check if the given keys are valid
+        for k in keys:
+            if not dax.base.system.is_valid_key(k):
+                raise ValueError(f'Invalid key "{k}"')
+
+        # Return the assigned key
+        # TODO: get the separator from somewhere else?
+        return '.'.join([self.__base_key, *keys])
+
+    def _process_arguments(self) -> typing.Dict[str, typing.Any]:
+        def process(argument: typing.Any) -> typing.Any:
+            if isinstance(argument, artiq.experiment.ScanObject):
+                return argument.describe()  # type: ignore[attr-defined]
+            else:
+                return argument
+
+        return {key: process(arg) for key, arg in self.ARGUMENTS.items()}
+
+    def get_name(self) -> str:
+        return self.__class__.__name__
+
+    def get_identifier(self) -> str:
+        return f'({self.get_name()})'
+
+
+class Policy(enum.Enum):
+    if typing.TYPE_CHECKING:
+        # Only add type when type checking is enabled to not conflict with iterations over the Policy enum
+        __P_T = typing.Dict[typing.Tuple[JobAction, JobAction], JobAction]  # Policy enum type
+
+    LAZY: __P_T = {
+        (JobAction.PASS, JobAction.PASS): JobAction.PASS,
+        (JobAction.PASS, JobAction.RUN): JobAction.RUN,
+        (JobAction.RUN, JobAction.PASS): JobAction.PASS,
+        (JobAction.RUN, JobAction.RUN): JobAction.RUN,
+    }
+
+    GREEDY: __P_T = {
+        (JobAction.PASS, JobAction.PASS): JobAction.PASS,
+        (JobAction.PASS, JobAction.RUN): JobAction.RUN,
+        (JobAction.RUN, JobAction.PASS): JobAction.RUN,
+        (JobAction.RUN, JobAction.RUN): JobAction.RUN,
+    }
+
+    def action(self, previous: JobAction, current: JobAction) -> JobAction:
+        assert isinstance(previous, JobAction)
+        assert isinstance(current, JobAction)
+        policy: Policy.__P_T = self.value
+        return policy[previous, current]
+
+    def __str__(self) -> str:
+        return self.name
+
+
+# TODO: move this to testing
+assert all(len(p.value) == len(JobAction) ** 2 for p in Policy), 'Not all policies are fully implemented'
+
+_str_to_policy: typing.Dict[str, Policy] = {str(p): p for p in Policy}
+
+
+class DaxScheduler(dax.base.system.DaxBase):
+    NAME: str
+    """Scheduler name, used as top key."""
+    JOBS: typing.Collection[typing.Type[Job]]
+    """The collection of job classes."""
+
+    SYSTEM: typing.Optional[typing.Type[dax.base.system.DaxSystem]] = None
+    """Optional DAX system type, enables extra features if provided."""
+
+    DEFAULT_PIPELINE: str = 'main'
+    """Default pipeline to submit jobs to."""
+    DEFAULT_JOB_PRIORITY: int = 0
+    """Default baseline priority for submitted jobs."""
+
+    def __init__(self, managers_or_parent: typing.Any,
+                 *args: typing.Any, **kwargs: typing.Any):
+        # Check name
+        assert hasattr(self, 'NAME'), 'No name was provided'
+        assert dax.base.system.is_valid_key(self.NAME), 'Name must be a valid key'
+        # Check jobs
+        assert hasattr(self, 'JOBS'), 'No job list was provided'
+        assert isinstance(self.JOBS, collections.abc.Collection), 'The jobs attribute must be a collection'
+        assert all(issubclass(job, Job) for job in self.JOBS), 'All jobs must be subclasses of Job'
+        # Check system
+        assert self.SYSTEM is None or issubclass(self.SYSTEM, dax.base.system.DaxSystem)
+        # Check pipeline
+        assert isinstance(self.DEFAULT_PIPELINE, str) and self.DEFAULT_PIPELINE, 'Default pipeline must be of type str'
+        # Check default job priority
+        assert isinstance(self.DEFAULT_JOB_PRIORITY, int), 'Default job priority must be of type int'
+        assert -99 <= self.DEFAULT_JOB_PRIORITY <= 99, 'Default job priority must be in the domain [-99, 99]'
+
+        # Call super
+        super(DaxScheduler, self).__init__(managers_or_parent, *args, **kwargs)
+
+    def build(self, *args: typing.Any, **kwargs: typing.Any) -> None:
+        self._policy_arg = self.get_argument('Policy',
+                                             artiq.experiment.EnumerationValue(sorted(_str_to_policy)),
+                                             tooltip='Scheduling policy',
+                                             group='Scheduler')
+        self._wave_interval = self.get_argument('Wave interval',
+                                                artiq.experiment.NumberValue(60, 's', min=1, step=1, ndecimals=0),
+                                                tooltip='Interval to visit jobs',
+                                                group='Scheduler')
+        self._clock_period = self.get_argument('Clock period',
+                                               artiq.experiment.NumberValue(0.5, 's', min=0.1),
+                                               tooltip='Internal scheduler clock period',
+                                               group='Scheduler')
+
+        self._pipeline = self.get_argument('Pipeline',
+                                           artiq.experiment.StringValue(self.DEFAULT_PIPELINE),
+                                           tooltip='Default pipeline to submit jobs to',
+                                           group='Jobs')
+        self._job_priority = self.get_argument('Priority',
+                                               artiq.experiment.NumberValue(self.DEFAULT_JOB_PRIORITY,
+                                                                            min=-99, max=99, step=1, ndecimals=0),
+                                               tooltip='Baseline job priority',
+                                               group='Jobs')
+        self._reset_jobs = self.get_argument('Reset',
+                                             artiq.experiment.BooleanValue(False),
+                                             tooltip='Reset job timestamps at startup, making them all expired',
+                                             group='Jobs')
+        self._terminate_jobs = self.get_argument('Terminate at exit',
+                                                 artiq.experiment.BooleanValue(False),
+                                                 tooltip='Terminate running jobs at exit',
+                                                 group='Jobs')
+
+        # The ARTIQ scheduler
+        self._scheduler = self.get_device('scheduler')
+
+        # TODO: create system object
+
+    def prepare(self) -> None:
+        # Check pipeline
+        if self._scheduler.pipeline_name == self.DEFAULT_PIPELINE:
+            raise ValueError(f'The scheduler can not run in pipeline "{self.DEFAULT_PIPELINE}"')
+
+        # Check arguments
+        if self._wave_interval < 1.0:
+            raise ValueError('The chosen wave interval is too small')
+        if self._clock_period < 0.1:
+            raise ValueError('The chosen clock period is too small')
+        if self._wave_interval < 2 * self._clock_period:
+            raise ValueError('The wave interval is too small compared to the clock period')
+        if -99 > self._job_priority > 99:
+            raise ValueError('Job priority must be in the domain [-99, 99]')
+
+        # Create the job objects
+        jobs: typing.Dict[typing.Type[Job], Job] = {job: job(self) for job in self.JOBS}
+        self.logger.debug(f'Created {len(jobs)} job(s)')
+        if len(jobs) < len(self.JOBS):
+            self.logger.warning('Duplicate jobs were dropped from the job set')
+
+        # Obtain the scheduling policy
+        self._policy: Policy = _str_to_policy[self._policy_arg]
+
+        # Create the job dependency graph
+        self._job_graph = nx.DiGraph()
+        self._job_graph.add_nodes_from(jobs.values())
+        # TODO: add job dependencies here
+
+        # Check graph
+        if not nx.algorithms.is_directed_acyclic_graph(self._job_graph):
+            raise RuntimeError('Dependency graph is not a directed acyclic graph')
+
+        # TODO: plot graph with GraphViz
+
+        # Find root jobs
+        # noinspection PyTypeChecker
+        self._root_jobs = {job for job, degree in self._job_graph.in_degree if degree == 0}
+        self.logger.debug(f'Found {len(self._root_jobs)} root job(s)')
+
+        # Terminate other instances of this scheduler
+        self._terminate_running_instances()
+
+    def run(self) -> None:
+        # Initialize all jobs
+        self.logger.debug(f'Initializing {len(self._job_graph)} job(s)')
+        for job in self._job_graph:
+            job.init(reset=self._reset_jobs)
+
+        # Time for the next wave
+        next_wave: float = time.time()
+
+        try:
+            while True:
+                while next_wave > time.time():
+                    if self._scheduler.check_pause():
+                        # Pause
+                        self.logger.debug('Pausing scheduler')
+                        self._scheduler.pause()
+                    else:
+                        # Sleep for a clock period
+                        time.sleep(self._clock_period)
+
+                # Update next wave time
+                next_wave += self._wave_interval
+                # Start the wave
+                self.wave()
+                # Prevent setting next wave time in the past
+                if next_wave <= time.time():
+                    next_wave = time.time() + self._wave_interval
+                    self.logger.warning('Next wave was rescheduled because the interval time expired')
+
+        except artiq.experiment.TerminationRequested:
+            # Scheduler terminated
+            self.logger.info('Scheduler was terminated')
+
+        finally:
+            if self._terminate_jobs:
+                # Cancel all jobs
+                self.logger.debug(f'Cancelling {len(self._job_graph)} job(s)')
+                for job in self._job_graph:
+                    job.cancel()
+            # TODO: wait for jobs to be cancelled?
+
+    def analyze(self) -> None:
+        pass
+
+    def wave(self) -> None:
+        # Generate the unique wave timestamp
+        wave: float = time.time()
+        self.logger.debug(f'Starting wave {wave:.0f}')
+
+        # TODO: make starting job and starting state somehow parameterizable
+
+        def recurse(job: Job, action: JobAction, submitted: typing.Set[Job]) -> typing.Set[Job]:
+            """Recurse over the dependencies of a job.
+
+            :param job: The current job to process
+            :param action: The action provided by the previous job
+            :param submitted: The set of jobs submitted in this wave
+            :return: The updated set of submitted jobs
+            """
+
+            # Visit the current job
+            current_action = job.visit(wave=wave)
+            # Get the new action based on the policy
+            new_action = self._policy.action(action, current_action)
+            # Recurse over successors
+            for successor in self._job_graph.successors(job):
+                submitted = recurse(successor, new_action, submitted)
+
+            if new_action.submittable() and job not in submitted:
+                # Submit this job
+                submitted.add(job)
+                job.submit(wave=wave,
+                           pipeline=self.DEFAULT_PIPELINE,
+                           priority=self._job_priority)
+                # TODO: split job submit and reschedule?
+
+            # Return set with submitted jobs
+            return submitted
+
+        # Set of submitted jobs in this wave
+        submitted_jobs: typing.Set[Job] = set()
+
+        for root_job in self._root_jobs:
+            # Recurse over all root jobs
+            submitted_jobs = recurse(root_job, JobAction.PASS, submitted_jobs)
+
+        if submitted_jobs:
+            # Log submitted jobs
+            self.logger.debug(f'Submitted jobs: {", ".join(sorted(j.get_name() for j in submitted_jobs))}')
+
+    def _terminate_running_instances(self) -> None:
+        """Terminate running instances of this scheduler."""
+
+        # Obtain the schedule with the expid objects
+        schedule = {rid: status['expid'] for rid, status in self._scheduler.get_status().items()}
+        # Filter schedule to find other instances of this scheduler
+        other_instances = [rid for rid, expid in schedule.items()
+                           if expid['file'] == self._scheduler.expid['file']
+                           and expid['class_name'] == self._scheduler.expid['class_name']
+                           and rid != self._scheduler.rid]
+
+        # Request termination of other instances
+        for rid in other_instances:
+            self.logger.info(f'Terminating other scheduler instance with RID {rid}')
+            self._scheduler.request_termination(rid)
+
+        if other_instances:
+            # Wait until all other instances disappeared from the schedule
+            self.logger.info(f'Waiting for {len(other_instances)} other instance(s) to terminate')
+            # The timeout counter
+            timeout = 20
+
+            while any(rid in self._scheduler.get_status() for rid in other_instances):
+                if timeout <= 0:
+                    # Timeout elapsed
+                    raise RuntimeError('Timeout while waiting for other instances to terminate')
+                else:
+                    # Update timeout counter
+                    timeout -= 1
+
+                # Sleep
+                time.sleep(0.5)
+
+            # Other instances were terminated
+            self.logger.info('All other instances were terminated successfully')
+
+    def get_identifier(self) -> str:
+        return f'[{self.NAME}]({self.__class__.__name__})'
