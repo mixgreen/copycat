@@ -32,7 +32,7 @@ class Dot:
              _attributes: typing.Any = ..., **attrs: str) -> None:
         ...
 
-    def edges(self, tail_head_iter: typing.Sequence[typing.Tuple[str, str]]) -> None:
+    def edges(self, tail_head_iter: typing.Iterable[typing.Tuple[str, str]]) -> None:
         ...
 
     def attr(self, kw: typing.Optional[str] = ..., _attributes: typing.Any = ..., **attrs: str) -> None:
@@ -42,6 +42,11 @@ class Dot:
                  name: typing.Optional[str] = ..., comment: typing.Optional[str] = ...,
                  graph_attr: __ATTR_DICT = ..., node_attr: __ATTR_DICT = ...,
                  edge_attr: __ATTR_DICT = ..., body: typing.Any = ...) -> typing.Optional['SubgraphContext']:
+        ...
+
+    def render(self, filename: typing.Optional[str] = ..., directory: typing.Optional[str] = ...,
+               view: bool = ..., cleanup: bool = ..., format: typing.Optional[str] = ...,
+               renderer: typing.Optional[str] = ..., formatter: typing.Optional[str] = ...) -> typing.Any:
         ...
 
 

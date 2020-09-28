@@ -6,10 +6,12 @@ import collections
 import time
 import enum
 import networkx as nx  # type: ignore
+import graphviz
 
 import artiq.experiment
 
 import dax.base.system
+from dax.util.output import get_base_path
 
 __all__ = ['Job', 'Policy', 'DaxScheduler']
 
@@ -371,6 +373,11 @@ class DaxScheduler(dax.base.system.DaxBase):
                                                  tooltip='Terminate running jobs at exit',
                                                  group='Jobs')
 
+        self._view_graph = self.get_argument('View graph',
+                                             artiq.experiment.BooleanValue(False),
+                                             tooltip='View the job dependency graph at startup',
+                                             group='Others')
+
         # The ARTIQ scheduler
         self._scheduler = self.get_device('scheduler')
 
@@ -405,14 +412,18 @@ class DaxScheduler(dax.base.system.DaxBase):
         self._job_graph.add_nodes_from(jobs.values())
         self._job_graph.add_edges_from(((j, jobs[d]) for j in jobs.values() for d in j.DEPENDENCIES))
 
+        # Plot graph
+        plot = graphviz.Digraph(name=self.NAME, directory=str(get_base_path(self._scheduler)))
+        for job in jobs.values():
+            plot.node(job.get_name())
+        plot.edges(((j.get_name(), jobs[d].get_name()) for j in jobs.values() for d in j.DEPENDENCIES))
+        plot.render(view=self._view_graph)
+
         # Check graph
         if not nx.algorithms.is_directed_acyclic_graph(self._job_graph):
             raise RuntimeError('Dependency graph is not a directed acyclic graph')
-
         if self._policy is Policy.LAZY and any(not j.is_timed() for j in jobs.values()):
             self.logger.warning('Found one or more unreachable jobs (untimed jobs in a lazy scheduling policy')
-
-        # TODO: plot graph with GraphViz
 
         # Find root jobs
         # noinspection PyTypeChecker
