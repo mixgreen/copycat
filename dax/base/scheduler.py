@@ -6,7 +6,6 @@ import collections
 import time
 import enum
 import networkx as nx  # type: ignore
-# TODO: add dependencies
 
 import artiq.experiment
 

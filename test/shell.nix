@@ -16,6 +16,7 @@ in
                 ps.matplotlib
                 ps.graphviz
                 ps.h5py
+                ps.networkx
                 # Packages required for testing
                 ps.mypy
                 ps.pycodestyle

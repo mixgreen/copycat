@@ -31,7 +31,7 @@ stages:
     # Install and activate environment
     - conda config --prepend channels https://conda.m-labs.hk/artiq
     - conda config --append channels conda-forge
-    - conda create -y -n env artiq numpy scipy pyvcd natsort pygit2 matplotlib python-graphviz h5py
+    - conda create -y -n env artiq numpy scipy pyvcd natsort pygit2 matplotlib python-graphviz h5py networkx
     - conda activate env
 
 test_nix:
