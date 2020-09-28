@@ -72,15 +72,17 @@ class JobAction(enum.Enum):
 
 
 class Job(dax.base.system.DaxBase):
-    FILE: str
+    FILE: typing.Optional[str] = None
     """File containing the experiment, relative from the `repository` directory."""
-    CLASS_NAME: str
+    CLASS_NAME: typing.Optional[str] = None
     """Class name of the experiment."""
     ARGUMENTS: typing.Dict[str, typing.Any] = {}
     """The experiment arguments."""
 
     INTERVAL: typing.Optional[str] = None
     """Interval to run this job, defaults to no interval."""
+    DEPENDENCIES: typing.Collection[typing.Type[Job]] = set()
+    """Collection of dependencies of this job."""
 
     LOG_LEVEL: typing.Union[int, str] = logging.WARNING
     """The log level for the experiment."""
@@ -96,26 +98,21 @@ class Job(dax.base.system.DaxBase):
 
     def __init__(self, managers_or_parent: typing.Any,
                  *args: typing.Any, **kwargs: typing.Any):
-        # Check file
-        assert hasattr(self, 'FILE'), 'No file was provided to this job description'
-        assert isinstance(self.FILE, str), 'The file attribute must be of type str'
-        # Check class
-        assert hasattr(self, 'CLASS_NAME'), 'No class name was provided to this job description'
-        assert isinstance(self.CLASS_NAME, str), 'The class name attribute must be of type str'
-        # Check arguments
+        # Check file, class, and arguments
+        assert isinstance(self.FILE, str) or self.FILE is None, 'The file attribute must be of type str or None'
+        assert isinstance(self.CLASS_NAME, str) or self.CLASS_NAME is None, \
+            'The class name attribute must be of type str or None'
         assert isinstance(self.ARGUMENTS, dict), 'The arguments must be of type dict'
         assert all(isinstance(k, str) for k in self.ARGUMENTS), 'All argument keys must be of type str'
-        # Check interval
-        assert self.INTERVAL is None or isinstance(self.INTERVAL, str), 'Interval must be None or of type str'
-        # Check log level
+        # Check interval and dependencies
+        assert isinstance(self.INTERVAL, str) or self.INTERVAL is None, 'Interval must be of type str or None'
+        assert isinstance(self.DEPENDENCIES, collections.abc.Collection), 'The dependencies must be a collection'
+        assert all(issubclass(d, Job) for d in self.DEPENDENCIES), 'All dependencies must be subclasses of Job'
+        # Check log level, pipeline, and priority
         assert isinstance(self.LOG_LEVEL, (int, str)), 'Log level must be of type int or str'
-        # Check pipeline
         assert self.PIPELINE is None or isinstance(self.PIPELINE, str), 'Pipeline must be of type str or None'
-        # Check priority
         assert isinstance(self.PRIORITY, int), 'Priority must be of type int'
         assert -99 <= self.PRIORITY <= 99, 'Priority must be in the domain [-99, 99]'
-
-        # TODO: allow meta-jobs (jobs without a task)
 
         # Check parent
         if not isinstance(managers_or_parent, DaxScheduler):
@@ -132,13 +129,18 @@ class Job(dax.base.system.DaxBase):
         self._scheduler = self.get_device('scheduler')
 
         # Construct expid for this job
-        self._expid: typing.Dict[str, typing.Any] = {
-            'file': self.FILE,
-            'class_name': self.CLASS_NAME,
-            'arguments': self._process_arguments(),
-            'log_level': self.LOG_LEVEL,
-            'repo_rev': None,  # Requests current revision
-        }
+        if not self.is_meta():
+            self._expid: typing.Dict[str, typing.Any] = {
+                'file': self.FILE,
+                'class_name': self.CLASS_NAME,
+                'arguments': self._process_arguments(),
+                'log_level': self.LOG_LEVEL,
+                'repo_rev': None,  # Requests current revision
+            }
+            self.logger.debug(f'expid: {self._expid}')
+        else:
+            self._expid = {}
+            self.logger.debug('This job is a meta-job')
 
         # Convert interval
         if self.INTERVAL is None:
@@ -166,10 +168,13 @@ class Job(dax.base.system.DaxBase):
             else:
                 last_submit = self.get_dataset(self.get_key(self._LAST_SUBMIT_KEY), 0.0, archive=False)
                 assert isinstance(last_submit, float), 'Unexpected type returned from dataset'
-                self._next_submit = last_submit
-                self._next_submit += self._interval
+                self._next_submit = last_submit + self._interval
+        else:
+            self._next_submit = float('inf')
 
     def visit(self, *, wave: float) -> JobAction:
+        assert isinstance(wave, float), 'Wave must be of type float'
+
         if self._next_submit <= wave:
             return JobAction.RUN
         else:
@@ -183,26 +188,32 @@ class Job(dax.base.system.DaxBase):
         # Store current wave timestamp
         self.set_dataset(self.get_key(self._LAST_SUBMIT_KEY), wave, broadcast=True, persist=True)
 
+        if not self.is_meta():
+            if self._last_rid not in self._scheduler.get_status():
+                # Submit experiment of this job
+                self._last_rid = self._scheduler.submit(
+                    pipeline_name=pipeline if self.PIPELINE is None else self.PIPELINE,
+                    expid=self._expid,
+                    priority=priority + self.PRIORITY)
+                self.append_to_dataset(self.get_key(self._RID_LIST_KEY), self._last_rid)
+                self.logger.info(f'Submitted job with RID {self._last_rid}')
+            else:
+                self.logger.warning(f'Skipping job, previous job with RID {self._last_rid} is still running')
+
+        # Reschedule job
+        self.reschedule(wave=wave)
+
+    def reschedule(self, *, wave: float) -> None:
+        assert isinstance(wave, float), 'Wave must be of type float'
+
         if self._interval is not None:
             if self.visit(wave=wave).submittable():
-                # Update next submit time
+                # Update next submit time using the interval
                 self._next_submit += self._interval
             else:
                 # Involuntary submission, reset phase
                 self._next_submit = wave + self._interval
 
-        if self._last_rid not in self._scheduler.get_status():
-            # Submit experiment of this job
-            self._last_rid = self._scheduler.submit(
-                pipeline_name=pipeline if self.PIPELINE is None else self.PIPELINE,
-                expid=self._expid,
-                priority=priority + self.PRIORITY)
-            self.append_to_dataset(self.get_key(self._RID_LIST_KEY), self._last_rid)
-            self.logger.info(f'Submitted job with RID {self._last_rid}')
-        else:
-            self.logger.warning(f'Skipping job, previous job with RID {self._last_rid} is still running')
-
-        if self._interval is not None:
             # Prevent setting next submit time in the past
             if self._next_submit <= time.time():
                 self._next_submit = time.time() + self._interval
@@ -242,6 +253,15 @@ class Job(dax.base.system.DaxBase):
                 return argument
 
         return {key: process(arg) for key, arg in self.ARGUMENTS.items()}
+
+    def is_meta(self) -> bool:
+        if self.FILE is None and self.CLASS_NAME is not None or self.FILE is not None and self.CLASS_NAME is None:
+            raise ValueError('The FILE and CLASS_NAME attributes should both be None or not None')
+
+        return self.FILE is None and self.CLASS_NAME is None
+
+    def is_timed(self) -> bool:
+        return self.INTERVAL is not None
 
     def get_name(self) -> str:
         return self.__class__.__name__
@@ -371,23 +391,26 @@ class DaxScheduler(dax.base.system.DaxBase):
         if -99 > self._job_priority > 99:
             raise ValueError('Job priority must be in the domain [-99, 99]')
 
+        # Obtain the scheduling policy
+        self._policy: Policy = _str_to_policy[self._policy_arg]
+
         # Create the job objects
         jobs: typing.Dict[typing.Type[Job], Job] = {job: job(self) for job in self.JOBS}
         self.logger.debug(f'Created {len(jobs)} job(s)')
         if len(jobs) < len(self.JOBS):
             self.logger.warning('Duplicate jobs were dropped from the job set')
 
-        # Obtain the scheduling policy
-        self._policy: Policy = _str_to_policy[self._policy_arg]
-
         # Create the job dependency graph
         self._job_graph = nx.DiGraph()
         self._job_graph.add_nodes_from(jobs.values())
-        # TODO: add job dependencies here
+        self._job_graph.add_edges_from(((j, jobs[d]) for j in jobs.values() for d in j.DEPENDENCIES))
 
         # Check graph
         if not nx.algorithms.is_directed_acyclic_graph(self._job_graph):
             raise RuntimeError('Dependency graph is not a directed acyclic graph')
+
+        if self._policy is Policy.LAZY and any(not j.is_timed() for j in jobs.values()):
+            self.logger.warning('Found one or more unreachable jobs (untimed jobs in a lazy scheduling policy')
 
         # TODO: plot graph with GraphViz
 
@@ -469,11 +492,10 @@ class DaxScheduler(dax.base.system.DaxBase):
 
             if new_action.submittable() and job not in submitted:
                 # Submit this job
-                submitted.add(job)
                 job.submit(wave=wave,
                            pipeline=self.DEFAULT_PIPELINE,
                            priority=self._job_priority)
-                # TODO: split job submit and reschedule?
+                submitted.add(job)
 
             # Return set with submitted jobs
             return submitted
