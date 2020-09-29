@@ -145,17 +145,17 @@ class Job(dax.base.system.DaxBase):
             self.logger.debug('This job is a meta-job')
 
         # Convert interval
-        if self.INTERVAL is None:
-            self._interval: typing.Optional[float] = None
-            self.logger.info('No interval set')
-        else:
-            self._interval = _str_to_time(self.INTERVAL)
+        if self.is_timed():
+            self._interval: float = _str_to_time(typing.cast(str, self.INTERVAL))
             if self._interval > 0.0:
                 self.logger.info(f'Interval set to {self._interval:.0f} second(s)')
             else:
                 msg = 'The job interval must be greater than zero'
                 self.logger.error(msg)
                 raise ValueError(msg)
+        else:
+            self._interval = 0.0
+            self.logger.info('No interval set')
 
     def init(self, *, reset: bool) -> None:
         # Initialize internal state
@@ -164,7 +164,7 @@ class Job(dax.base.system.DaxBase):
         # Initialize RID list
         self.set_dataset(self.get_key(self._RID_LIST_KEY), [])
 
-        if self._interval is not None:
+        if self.is_timed():
             if reset:
                 self._next_submit: float = time.time()
             else:
@@ -208,7 +208,7 @@ class Job(dax.base.system.DaxBase):
     def reschedule(self, *, wave: float) -> None:
         assert isinstance(wave, float), 'Wave must be of type float'
 
-        if self._interval is not None:
+        if self.is_timed():
             if self.visit(wave=wave).submittable():
                 # Update next submit time using the interval
                 self._next_submit += self._interval
@@ -297,14 +297,12 @@ class Policy(enum.Enum):
         policy: Policy.__P_T = self.value
         return policy[previous, current]
 
+    @staticmethod
+    def from_str(string_: str) -> Policy:
+        return {str(p): p for p in Policy}[string_]
+
     def __str__(self) -> str:
         return self.name
-
-
-# TODO: move this to testing
-assert all(len(p.value) == len(JobAction) ** 2 for p in Policy), 'Not all policies are fully implemented'
-
-_str_to_policy: typing.Dict[str, Policy] = {str(p): p for p in Policy}
 
 
 class DaxScheduler(dax.base.system.DaxBase):
@@ -343,7 +341,7 @@ class DaxScheduler(dax.base.system.DaxBase):
 
     def build(self, *args: typing.Any, **kwargs: typing.Any) -> None:
         self._policy_arg = self.get_argument('Policy',
-                                             artiq.experiment.EnumerationValue(sorted(_str_to_policy)),
+                                             artiq.experiment.EnumerationValue(sorted(str(p) for p in Policy)),
                                              tooltip='Scheduling policy',
                                              group='Scheduler')
         self._wave_interval = self.get_argument('Wave interval',
@@ -399,7 +397,7 @@ class DaxScheduler(dax.base.system.DaxBase):
             raise ValueError('Job priority must be in the domain [-99, 99]')
 
         # Obtain the scheduling policy
-        self._policy: Policy = _str_to_policy[self._policy_arg]
+        self._policy: Policy = Policy.from_str(self._policy_arg)
 
         # Create the job objects
         jobs: typing.Dict[typing.Type[Job], Job] = {job: job(self) for job in self.JOBS}
@@ -414,15 +412,15 @@ class DaxScheduler(dax.base.system.DaxBase):
 
         # Plot graph
         plot = graphviz.Digraph(name=self.NAME, directory=str(get_base_path(self._scheduler)))
-        for job in jobs.values():
+        for job in self._job_graph:
             plot.node(job.get_name())
-        plot.edges(((j.get_name(), jobs[d].get_name()) for j in jobs.values() for d in j.DEPENDENCIES))
+        plot.edges(((j.get_name(), k.get_name()) for j, k in self._job_graph.edges))
         plot.render(view=self._view_graph)
 
         # Check graph
         if not nx.algorithms.is_directed_acyclic_graph(self._job_graph):
             raise RuntimeError('Dependency graph is not a directed acyclic graph')
-        if self._policy is Policy.LAZY and any(not j.is_timed() for j in jobs.values()):
+        if self._policy is Policy.LAZY and any(not j.is_timed() for j in self._job_graph):
             self.logger.warning('Found one or more unreachable jobs (untimed jobs in a lazy scheduling policy')
 
         # Find root jobs
@@ -473,9 +471,6 @@ class DaxScheduler(dax.base.system.DaxBase):
                 for job in self._job_graph:
                     job.cancel()
             # TODO: wait for jobs to be cancelled?
-
-    def analyze(self) -> None:
-        pass
 
     def wave(self) -> None:
         # Generate the unique wave timestamp
