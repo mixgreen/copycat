@@ -71,6 +71,9 @@ class _Scheduler(DaxScheduler):
     NAME = 'test_scheduler'
     JOBS: typing.Set[typing.Type[Job]] = set()
 
+    # Modify graphviz format to prevent usage of visual render engines
+    _GRAPHVIZ_FORMAT = 'gv'
+
 
 class SchedulerMiscTestCase(unittest.TestCase):
     def test_str_to_time(self):
@@ -127,7 +130,8 @@ class LazySchedulerTestCase(unittest.TestCase):
     POLICY = Policy.LAZY
 
     def setUp(self) -> None:
-        self.mop = get_manager_or_parent(Policy=str(self.POLICY), Pipeline='test_pipeline')
+        self.mop = get_manager_or_parent(Policy=str(self.POLICY), Pipeline='test_pipeline',
+                                         **{'View graph': False})  # type: ignore[arg-type]
 
     def test_create_job(self):
         # noinspection PyProtectedMember
@@ -291,7 +295,7 @@ class LazySchedulerTestCase(unittest.TestCase):
     def test_scheduler_pipeline(self):
         with temp_dir():
             with self.assertRaises(ValueError, msg='Pipeline conflict did not raise'):
-                s = _Scheduler(get_manager_or_parent(Policy=str(self.POLICY), Pipeline='main'))
+                s = _Scheduler(get_manager_or_parent(Policy=str(self.POLICY), Pipeline='main', **{'View graph': False}))
                 s.prepare()
 
             s = _Scheduler(self.mop)
@@ -423,7 +427,7 @@ class LazySchedulerTestCase(unittest.TestCase):
 
         with temp_dir():
             s = S(get_manager_or_parent(Policy=str(self.POLICY), Pipeline='test_pipeline',
-                                        **{'Wave interval': 1.0, 'Clock period': 0.1}))
+                                        **{'Wave interval': 1.0, 'Clock period': 0.1, 'View graph': False}))
             s.prepare()
 
         # Run the scheduler
@@ -508,7 +512,7 @@ class GreedySchedulerTestCase(LazySchedulerTestCase):
 
         with temp_dir():
             s = S(get_manager_or_parent(Policy=str(self.POLICY), Pipeline='test_pipeline',
-                                        **{'Wave interval': 1.0, 'Clock period': 0.1}))
+                                        **{'Wave interval': 1.0, 'Clock period': 0.1, 'View graph': False}))
             s.prepare()
 
         # Run the scheduler

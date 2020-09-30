@@ -320,6 +320,9 @@ class DaxScheduler(dax.base.system.DaxBase):
     DEFAULT_JOB_PRIORITY: int = 0
     """Default baseline priority for submitted jobs."""
 
+    _GRAPHVIZ_FORMAT: str = 'pdf'
+    """Format specification for the graphviz renderer."""
+
     def __init__(self, managers_or_parent: typing.Any,
                  *args: typing.Any, **kwargs: typing.Any):
         # Check name
@@ -419,7 +422,7 @@ class DaxScheduler(dax.base.system.DaxBase):
         for job in self._job_graph:
             plot.node(job.get_name())
         plot.edges(((j.get_name(), k.get_name()) for j, k in self._job_graph.edges))
-        plot.render(view=self._view_graph)
+        plot.render(view=self._view_graph, format=self._GRAPHVIZ_FORMAT)
 
         # Check graph
         if not nx.algorithms.is_directed_acyclic_graph(self._job_graph):
