@@ -15,9 +15,11 @@ import dax.util.output
 
 
 @contextlib.contextmanager
-def _temp_dir() -> typing.Generator[None, None, None]:
-    with dax.util.output.temp_dir(), open(os.devnull, 'w') as devnull, contextlib.redirect_stdout(devnull):
-        yield
+def _isolation() -> typing.Generator[None, None, None]:
+    """Move into a temp dir and suppress stdout/stderr."""
+    with dax.util.output.temp_dir(), open(os.devnull, 'w') as devnull:
+        with contextlib.redirect_stdout(devnull), contextlib.redirect_stderr(devnull):
+            yield
 
 
 class _Job(Job):
@@ -301,7 +303,7 @@ class LazySchedulerTestCase(unittest.TestCase):
         self.assertIsInstance(S(self.mop), DaxScheduler)
 
     def test_scheduler_pipeline(self):
-        with _temp_dir():
+        with _isolation():
             with self.assertRaises(ValueError, msg='Pipeline conflict did not raise'):
                 s = _Scheduler(get_manager_or_parent(Policy=str(self.POLICY), Pipeline='main', **{'View graph': False}))
                 s.prepare()
@@ -314,14 +316,14 @@ class LazySchedulerTestCase(unittest.TestCase):
             JOBS = [_Job1, _Job2, _Job3, _Job4, _JobA, _JobB, _JobC, _Job1]
 
         s = S(self.mop)
-        with self.assertLogs(s.logger, logging.WARNING), _temp_dir():
+        with self.assertLogs(s.logger, logging.WARNING), _isolation():
             s.prepare()
 
     def test_scheduler_dependencies(self):
         class S(_Scheduler):
             JOBS = {_JobA}
 
-        with self.assertRaises(KeyError, msg='Dependency not in job set did not raise'), _temp_dir():
+        with self.assertRaises(KeyError, msg='Dependency not in job set did not raise'), _isolation():
             s = S(self.mop)
             try:
                 s.prepare()
@@ -339,7 +341,7 @@ class LazySchedulerTestCase(unittest.TestCase):
         class S(_Scheduler):
             JOBS = {JobA}
 
-        with self.assertRaises(RuntimeError, msg='Non-DAG dependency graph did not raise'), _temp_dir():
+        with self.assertRaises(RuntimeError, msg='Non-DAG dependency graph did not raise'), _isolation():
             s = S(self.mop)
             s.prepare()
 
@@ -358,7 +360,7 @@ class LazySchedulerTestCase(unittest.TestCase):
             ({_JobA, _JobB, _JobC, JobX, JobY, JobZ}, (_JobA, JobX, JobY)),
         ]
 
-        with _temp_dir():
+        with _isolation():
             for jobs, root_jobs in job_sets:
                 class S(_Scheduler):
                     JOBS = jobs
@@ -375,14 +377,14 @@ class LazySchedulerTestCase(unittest.TestCase):
             JOBS = {_JobC}
 
         s = S(self.mop)
-        with self.assertLogs(s.logger, logging.WARNING), _temp_dir():
+        with self.assertLogs(s.logger, logging.WARNING), _isolation():
             s.prepare()
 
     def test_scheduler_wave(self):
         class S(_Scheduler):
             JOBS = {_Job1, _Job2, _Job3, _Job4, _JobA, _JobB, _JobC}
 
-        with _temp_dir():
+        with _isolation():
             s = S(self.mop)
             s.prepare()
 
@@ -433,7 +435,7 @@ class LazySchedulerTestCase(unittest.TestCase):
                 if self.counter >= waves:
                     raise TerminationRequested
 
-        with _temp_dir():
+        with _isolation():
             s = S(get_manager_or_parent(Policy=str(self.POLICY), Pipeline='test_pipeline',
                                         **{'Wave interval': 1.0, 'Clock period': 0.1, 'View graph': False}))
             s.prepare()
@@ -467,7 +469,7 @@ class GreedySchedulerTestCase(LazySchedulerTestCase):
         class S(_Scheduler):
             JOBS = {_Job1, _Job2, _Job3, _Job4, _JobA, _JobB, _JobC}
 
-        with _temp_dir():
+        with _isolation():
             s = S(self.mop)
             s.prepare()
 
@@ -518,7 +520,7 @@ class GreedySchedulerTestCase(LazySchedulerTestCase):
                 if self.counter >= waves:
                     raise TerminationRequested
 
-        with _temp_dir():
+        with _isolation():
             s = S(get_manager_or_parent(Policy=str(self.POLICY), Pipeline='test_pipeline',
                                         **{'Wave interval': 1.0, 'Clock period': 0.1, 'View graph': False}))
             s.prepare()

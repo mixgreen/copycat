@@ -63,17 +63,41 @@ def _str_to_time(string: str) -> float:
 
 
 class JobAction(enum.Enum):
+    """Job action enumeration."""
+
     RUN = enum.auto()
+    """Run this job."""
     PASS = enum.auto()
+    """Pass this job."""
 
     def submittable(self) -> bool:
+        """Check if a job should be submitted or not.
+
+        :return: True if the job is submittable
+        """
         return self is JobAction.RUN
 
     def __str__(self) -> str:
+        """String representation of this job action.
+
+        :return: The name of the action
+        """
         return self.name
 
 
 class Job(dax.base.system.DaxBase):
+    """Job class to inherit from.
+
+    Users only have to override class attributes to create a job definition.
+    The following main attributes can be overridden:
+
+    - :attr:`FILE`: The file name containing the experiment
+    - :attr:`CLASS_NAME`: The class name of the experiment
+    - :attr:`ARGUMENTS`: A dictionary with experiment arguments (scan objects can be used directly as arguments)
+    - :attr:`INTERVAL`: The job submit interval
+    - :attr:`DEPENDENCIES`: A collection of job classes on which this job depends
+    """
+
     FILE: typing.Optional[str] = None
     """File containing the experiment, relative from the `repository` directory."""
     CLASS_NAME: typing.Optional[str] = None
@@ -100,6 +124,13 @@ class Job(dax.base.system.DaxBase):
 
     def __init__(self, managers_or_parent: typing.Any,
                  *args: typing.Any, **kwargs: typing.Any):
+        """Initialize a job object.
+
+        :param managers_or_parent: The manager or parent, must be a :class:`DaxScheduler`
+        :param args: Positional arguments passed to the superclass
+        :param kwargs: Keyword arguments passed to the superclass
+        """
+
         # Check file, class, and arguments
         assert isinstance(self.FILE, str) or self.FILE is None, 'The file attribute must be of type str or None'
         assert isinstance(self.CLASS_NAME, str) or self.CLASS_NAME is None, \
@@ -130,7 +161,7 @@ class Job(dax.base.system.DaxBase):
         # Obtain the scheduler
         self._scheduler = self.get_device('scheduler')
 
-        # Construct expid for this job
+        # Construct an expid for this job
         if not self.is_meta():
             self._expid: typing.Dict[str, typing.Any] = {
                 'file': self.FILE,
@@ -144,9 +175,11 @@ class Job(dax.base.system.DaxBase):
             self._expid = {}
             self.logger.debug('This job is a meta-job')
 
-        # Convert interval
+        # Convert the interval
         if self.is_timed():
+            # Convert the interval string
             self._interval: float = _str_to_time(typing.cast(str, self.INTERVAL))
+            # Check the value
             if self._interval > 0.0:
                 self.logger.info(f'Interval set to {self._interval:.0f} second(s)')
             else:
@@ -154,11 +187,17 @@ class Job(dax.base.system.DaxBase):
                 self.logger.error(msg)
                 raise ValueError(msg)
         else:
+            # No interval was set
             self._interval = 0.0
             self.logger.info('No interval set')
 
     def init(self, *, reset: bool) -> None:
-        # Initialize internal state
+        """Initialize the job, should be called once just before the scheduler starts.
+
+        :param reset: Reset the previous state of this job
+        """
+
+        # Initialize last RID to a non-existing value
         self._last_rid: int = -1
 
         # Initialize RID list
@@ -166,23 +205,43 @@ class Job(dax.base.system.DaxBase):
 
         if self.is_timed():
             if reset:
+                # Reset state and set the current time instead
                 self._next_submit: float = time.time()
+                self.logger.debug('Initialized job by resetting next submit time')
             else:
+                # Try to obtain the last submit time
                 last_submit = self.get_dataset(self._get_key(self._LAST_SUBMIT_KEY), 0.0, archive=False)
                 assert isinstance(last_submit, float), 'Unexpected type returned from dataset'
+                # Add the interval to the last submit time
                 self._next_submit = last_submit + self._interval
+                self.logger.debug('Initialized job by obtaining the last submit time')
         else:
+            # This job is untimed, next submit will never happen
             self._next_submit = float('inf')
+            self.logger.debug('Initialized untimed job')
 
     def visit(self, *, wave: float) -> JobAction:
+        """Visit this job.
+
+        :param wave: Wave identifier
+        :return: The job action for this job
+        """
         assert isinstance(wave, float), 'Wave must be of type float'
 
         if self._next_submit <= wave:
+            # Interval expired, run this job
             return JobAction.RUN
         else:
+            # Interval did not expire, do not run
             return JobAction.PASS
 
     def submit(self, *, wave: float, pipeline: str, priority: int) -> None:
+        """Submit this job.
+
+        :param wave: Wave identifier
+        :param pipeline: The default pipeline to submit to
+        :param priority: The baseline priority of the experiment
+        """
         assert isinstance(wave, float), 'Wave must be of type float'
         assert isinstance(pipeline, str) and pipeline, 'Pipeline name must be of type string and can not be empty'
         assert isinstance(priority, int), 'Priority must be of type int'
@@ -197,15 +256,21 @@ class Job(dax.base.system.DaxBase):
                     pipeline_name=pipeline if self.PIPELINE is None else self.PIPELINE,
                     expid=self._expid,
                     priority=priority + self.PRIORITY)
-                self.append_to_dataset(self._get_key(self._RID_LIST_KEY), self._last_rid)
                 self.logger.info(f'Submitted job with RID {self._last_rid}')
+                # Archive the RID
+                self.append_to_dataset(self._get_key(self._RID_LIST_KEY), self._last_rid)
             else:
+                # Previous job was still running
                 self.logger.warning(f'Skipping job, previous job with RID {self._last_rid} is still running')
 
         # Reschedule job
         self.schedule(wave=wave)
 
     def schedule(self, *, wave: float) -> None:
+        """Schedule this job.
+
+        :param wave: Wave identifier
+        """
         assert isinstance(wave, float), 'Wave must be of type float'
 
         if self.is_timed():
@@ -213,41 +278,43 @@ class Job(dax.base.system.DaxBase):
                 # Update next submit time using the interval
                 self._next_submit += self._interval
             else:
-                # Involuntary submission, reset phase
+                # Involuntary submit, reset phase
                 self._next_submit = wave + self._interval
 
-            # Prevent setting next submit time in the past
             if self._next_submit <= time.time():
+                # Prevent setting next submit time in the past
                 self._next_submit = time.time() + self._interval
                 self.logger.warning('Next job was rescheduled because the interval time expired')
 
     def cancel(self) -> None:
+        """Cancel this job."""
         if self._last_rid >= 0:
+            # Cancel the last RID (returns if the RID is not running)
+            self.logger.debug(f'Cancelling job (RID {self._last_rid})')
             self._scheduler.request_termination(self._last_rid)
 
-    def _get_key(self, *keys: str) -> str:
-        """Get the full key based on the job base key.
+    def _get_key(self, key: str) -> str:
+        """Get the full persistent key derived from the job base key.
 
-        If no keys are provided, the system key is returned.
-        If one or more keys are provided, the provided keys are appended to the system key.
-
-        :param keys: The keys to append to the system key
-        :return: The system key with provided keys appended
+        :param key: The relative key to append to the job base key
+        :return: The full persistent key
         :raises ValueError: Raised if the key has an invalid format
         """
+        assert isinstance(key, str), 'The key must be a string'
 
-        assert all(isinstance(k, str) for k in keys), 'Keys must be strings'
+        # Check if the given key is valid
+        if not dax.base.system.is_valid_key(key):
+            raise ValueError(f'Invalid key "{key}"')
 
-        # Check if the given keys are valid
-        for k in keys:
-            if not dax.base.system.is_valid_key(k):
-                raise ValueError(f'Invalid key "{k}"')
-
-        # Return the assigned key
-        # TODO: get the separator from somewhere else?
-        return '.'.join([self.__base_key, *keys])
+        # Return the full key
+        return f'{self.__base_key}.{key}'
 
     def _process_arguments(self) -> typing.Dict[str, typing.Any]:
+        """Process and return the arguments of this job.
+
+        :return: The processed arguments, ready to be used in the expid
+        """
+
         def process(argument: typing.Any) -> typing.Any:
             if isinstance(argument, artiq.experiment.ScanObject):
                 return argument.describe()  # type: ignore[attr-defined]
@@ -257,23 +324,44 @@ class Job(dax.base.system.DaxBase):
         return {key: process(arg) for key, arg in self.ARGUMENTS.items()}
 
     def is_meta(self) -> bool:
+        """Check if this job is a meta-job (i.e. no experiment is associated with it).
+
+        :return: True if this job is a meta-job
+        """
         if self.FILE is None and self.CLASS_NAME is not None or self.FILE is not None and self.CLASS_NAME is None:
             raise ValueError('The FILE and CLASS_NAME attributes should both be None or not None')
 
         return self.FILE is None and self.CLASS_NAME is None
 
     def is_timed(self) -> bool:
+        """Check if this job is timed.
+
+        :return: True if this job has an interval.
+        """
         return self.INTERVAL is not None
 
     @classmethod
     def get_name(cls) -> str:
+        """Get the name of this job.
+
+        :return: The name of this job as a string.
+        """
         return cls.__name__
 
     def get_identifier(self) -> str:
+        """Get the identifier of this job.
+
+        :return: The identifier of this job as a string.
+        """
         return f'({self.get_name()})'
 
 
 class Policy(enum.Enum):
+    """Policy enumeration for the scheduler.
+
+    The policy enumeration includes definitions for the policies using a mapping table.
+    """
+
     if typing.TYPE_CHECKING:
         # Only add type when type checking is enabled to not conflict with iterations over the Policy enum
         __P_T = typing.Dict[typing.Tuple[JobAction, JobAction], JobAction]  # Policy enum type
@@ -284,6 +372,7 @@ class Policy(enum.Enum):
         (JobAction.RUN, JobAction.PASS): JobAction.PASS,
         (JobAction.RUN, JobAction.RUN): JobAction.RUN,
     }
+    """Lazy scheduling policy, only submit jobs that expired."""
 
     GREEDY: __P_T = {
         (JobAction.PASS, JobAction.PASS): JobAction.PASS,
@@ -291,8 +380,15 @@ class Policy(enum.Enum):
         (JobAction.RUN, JobAction.PASS): JobAction.RUN,
         (JobAction.RUN, JobAction.RUN): JobAction.RUN,
     }
+    """Greedy scheduling policy, submit jobs that expired or depend on an expired job."""
 
     def action(self, previous: JobAction, current: JobAction) -> JobAction:
+        """Apply the policy on two job actions.
+
+        :param previous: The job action of the predecessor (previous node)
+        :param current: The current job action
+        :return: The new job action based on this policy
+        """
         assert isinstance(previous, JobAction)
         assert isinstance(current, JobAction)
         policy: Policy.__P_T = self.value
@@ -300,13 +396,41 @@ class Policy(enum.Enum):
 
     @staticmethod
     def from_str(string_: str) -> Policy:
+        """Convert a string into its corresponding policy enumeration.
+
+        :param string_: The name of the policy as a string
+        :return: The policy enumeration object
+        :raises KeyError: Raised if the policy name does not exist (case sensitive)
+        """
         return {str(p): p for p in Policy}[string_]
 
     def __str__(self) -> str:
+        """Return the name of this policy.
+
+        :return: The name of this policy as a string
+        """
         return self.name
 
 
 class DaxScheduler(dax.base.system.DaxBase):
+    """DAX scheduler class to inherit from.
+
+    Users only have to override class attributes to create a scheduling definition.
+    **The scheduler subclass must also inherit from :class:`Experiment` or :class:`EnvExperiment`
+    to make the scheduler available as an ARTIQ experiment.**
+
+    The following attributes must be overridden:
+
+    - :attr:`NAME`: The name of this scheduler
+    - :attr:`JOBS`: A collection of job classes that form the job set for this scheduler
+
+    Other optional attributes that can be overridden are:
+
+    - :attr:`SYSTEM`: A DAX system type to enable additional logging of data
+    - :attr:`DEFAULT_PIPELINE`: The default pipeline to submit jobs to, the scheduler can not run in the same pipeline
+    - :attr:`DEFAULT_JOB_PRIORITY`: The baseline priority for jobs submitted by this scheduler
+    """
+
     NAME: str
     """Scheduler name, used as top key."""
     JOBS: typing.Collection[typing.Type[Job]]
@@ -318,13 +442,20 @@ class DaxScheduler(dax.base.system.DaxBase):
     DEFAULT_PIPELINE: str = 'main'
     """Default pipeline to submit jobs to."""
     DEFAULT_JOB_PRIORITY: int = 0
-    """Default baseline priority for submitted jobs."""
+    """Default baseline priority to submit jobs."""
 
     _GRAPHVIZ_FORMAT: str = 'pdf'
     """Format specification for the graphviz renderer."""
 
     def __init__(self, managers_or_parent: typing.Any,
                  *args: typing.Any, **kwargs: typing.Any):
+        """Initialize the scheduler object.
+
+        :param managers_or_parent: The manager or parent
+        :param args: Positional arguments passed to the superclass
+        :param kwargs: Keyword arguments passed to the superclass
+        """
+
         # Check name
         assert hasattr(self, 'NAME'), 'No name was provided'
         assert dax.base.system.is_valid_key(self.NAME), 'Name must be a valid key'
@@ -344,6 +475,7 @@ class DaxScheduler(dax.base.system.DaxBase):
         super(DaxScheduler, self).__init__(managers_or_parent, *args, **kwargs)
 
     def build(self, *args: typing.Any, **kwargs: typing.Any) -> None:
+        # Scheduling arguments
         self._policy_arg = self.get_argument('Policy',
                                              artiq.experiment.EnumerationValue(sorted(str(p) for p in Policy)),
                                              tooltip='Scheduling policy',
@@ -357,6 +489,7 @@ class DaxScheduler(dax.base.system.DaxBase):
                                                tooltip='Internal scheduler clock period',
                                                group='Scheduler')
 
+        # Job arguments
         self._pipeline = self.get_argument('Pipeline',
                                            artiq.experiment.StringValue(self.DEFAULT_PIPELINE),
                                            tooltip='Default pipeline to submit jobs to',
@@ -375,6 +508,7 @@ class DaxScheduler(dax.base.system.DaxBase):
                                                  tooltip='Terminate running jobs at exit',
                                                  group='Jobs')
 
+        # Other arguments
         self._view_graph = self.get_argument('View graph',
                                              artiq.experiment.BooleanValue(False),
                                              tooltip='View the job dependency graph at startup',
@@ -439,6 +573,8 @@ class DaxScheduler(dax.base.system.DaxBase):
         self._terminate_running_instances()
 
     def run(self) -> None:
+        """Entry point for the scheduler."""
+
         # Initialize all jobs
         self.logger.debug(f'Initializing {len(self._job_graph)} job(s)')
         for job in self._job_graph:
@@ -480,11 +616,13 @@ class DaxScheduler(dax.base.system.DaxBase):
             # TODO: wait for jobs to be cancelled?
 
     def wave(self) -> None:
+        """Run a wave over the job set."""
+
         # Generate the unique wave timestamp
         wave: float = time.time()
         self.logger.debug(f'Starting wave {wave:.0f}')
 
-        # TODO: make starting job and starting state somehow parameterizable
+        # TODO: make starting jobs and starting state somehow parameterizable for external triggers
 
         def recurse(job: Job, action: JobAction, submitted: typing.Set[Job]) -> typing.Set[Job]:
             """Recurse over the dependencies of a job.
@@ -561,4 +699,8 @@ class DaxScheduler(dax.base.system.DaxBase):
             self.logger.info('All other instances were terminated successfully')
 
     def get_identifier(self) -> str:
+        """Get the identifier of this scheduler.
+
+        :return: The identifier of this scheduler as a string.
+        """
         return f'[{self.NAME}]({self.__class__.__name__})'
