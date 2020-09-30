@@ -2,38 +2,68 @@ import unittest
 import time
 import logging
 import typing
+import collections
 
 from artiq.language.scan import *
+from artiq.experiment import TerminationRequested
 
 from dax.base.scheduler import *
 from dax.util.artiq import get_manager_or_parent
+from dax.util.output import temp_dir
 
 
-class _Job4(Job):
+class _Job(Job):
+    def __init__(self, *args, **kwargs):
+        super(_Job, self).__init__(*args, **kwargs)
+        self.counter = collections.Counter()
+
+    def init(self, *args, **kwargs):
+        self.counter['init'] += 1
+        return super(_Job, self).init(*args, **kwargs)
+
+    def visit(self, *args, **kwargs):
+        self.counter['visit'] += 1
+        return super(_Job, self).visit(*args, **kwargs)
+
+    def submit(self, *args, **kwargs):
+        self.counter['submit'] += 1
+        return super(_Job, self).submit(*args, **kwargs)
+
+    def schedule(self, *args, **kwargs):
+        self.counter['schedule'] += 1
+        return super(_Job, self).schedule(*args, **kwargs)
+
+    def cancel(self):
+        self.counter['cancel'] += 1
+        return super(_Job, self).cancel()
+
+
+class _Job4(_Job):
     pass
 
 
-class _Job2(Job):
+class _Job2(_Job):
     DEPENDENCIES = {_Job4}
 
 
-class _Job3(Job):
+class _Job3(_Job):
     DEPENDENCIES = {_Job4}
 
 
-class _Job1(Job):
+class _Job1(_Job):
     DEPENDENCIES = {_Job2, _Job3}
+    INTERVAL = '1h'
 
 
-class _JobC(Job):
+class _JobC(_Job):
     pass
 
 
-class _JobB(Job):
+class _JobB(_Job):
     DEPENDENCIES = {_JobC}
 
 
-class _JobA(Job):
+class _JobA(_Job):
     DEPENDENCIES = {_JobB}
 
 
@@ -97,7 +127,7 @@ class LazySchedulerTestCase(unittest.TestCase):
     POLICY = Policy.LAZY
 
     def setUp(self) -> None:
-        self.mop = get_manager_or_parent(Policy=str(self.POLICY))
+        self.mop = get_manager_or_parent(Policy=str(self.POLICY), Pipeline='test_pipeline')
 
     def test_create_job(self):
         # noinspection PyProtectedMember
@@ -234,8 +264,265 @@ class LazySchedulerTestCase(unittest.TestCase):
         self.assertDictEqual(j._process_arguments(),
                              {k: v.describe() if isinstance(v, ScanObject) else v for k, v in J0.ARGUMENTS.items()})
 
-    # TODO: add test functions for the scheduler class
+    def test_job_name(self):
+        self.assertEqual(_JobA.get_name(), '_JobA')
+        self.assertEqual(_JobA.__name__, '_JobA')
+
+    def test_create_scheduler(self):
+        with self.assertRaises(AssertionError, msg='Scheduler without name did not raise'):
+            class S(DaxScheduler):
+                JOBS = {}
+
+            S(self.mop)
+
+        with self.assertRaises(AssertionError, msg='Scheduler without jobs did not raise'):
+            class S(DaxScheduler):
+                NAME = 'test_scheduler'
+
+            S(self.mop)
+
+        class S(DaxScheduler):
+            NAME = 'test_scheduler'
+            JOBS = {}
+
+        # Instantiate a well defined scheduler
+        self.assertIsInstance(S(self.mop), DaxScheduler)
+
+    def test_scheduler_pipeline(self):
+        with temp_dir():
+            with self.assertRaises(ValueError, msg='Pipeline conflict did not raise'):
+                s = _Scheduler(get_manager_or_parent(Policy=str(self.POLICY), Pipeline='main'))
+                s.prepare()
+
+            s = _Scheduler(self.mop)
+            s.prepare()
+
+    def test_scheduler_duplicate_jobs(self):
+        class S(_Scheduler):
+            JOBS = [_Job1, _Job2, _Job3, _Job4, _JobA, _JobB, _JobC, _Job1]
+
+        s = S(self.mop)
+        with self.assertLogs(s.logger, logging.WARNING), temp_dir():
+            s.prepare()
+
+    def test_scheduler_dependencies(self):
+        class S(_Scheduler):
+            JOBS = {_JobA}
+
+        with self.assertRaises(KeyError, msg='Dependency not in job set did not raise'), temp_dir():
+            s = S(self.mop)
+            try:
+                s.prepare()
+            except KeyError as e:
+                self.assertIn(f'"{_JobB.get_name()}"', str(e), 'Job name not correctly displayed in error message')
+                raise
+
+    def test_scheduler_dag(self):
+        class JobA(Job):
+            pass
+
+        # Artificially create a self-loop
+        JobA.DEPENDENCIES = {JobA}
+
+        class S(_Scheduler):
+            JOBS = {JobA}
+
+        with self.assertRaises(RuntimeError, msg='Non-DAG dependency graph did not raise'), temp_dir():
+            s = S(self.mop)
+            s.prepare()
+
+    def test_scheduler_root_jobs(self):
+        class JobZ(Job):
+            pass
+
+        class JobY(Job):
+            DEPENDENCIES = [JobZ]
+
+        class JobX(Job):
+            DEPENDENCIES = [JobZ]
+
+        job_sets = [
+            ({_Job1, _Job2, _Job3, _Job4, _JobA, _JobB, _JobC}, (_Job1, _JobA)),
+            ({_JobA, _JobB, _JobC, JobX, JobY, JobZ}, (_JobA, JobX, JobY)),
+        ]
+
+        with temp_dir():
+            for jobs, root_jobs in job_sets:
+                class S(_Scheduler):
+                    JOBS = jobs
+
+                s = S(self.mop)
+                s.prepare()
+
+                self.assertEqual(len(s._root_jobs), len(root_jobs), 'Did not found expected number of root jobs')
+                for j in s._root_jobs:
+                    self.assertIsInstance(j, root_jobs, 'Root jobs have an unexpected type')
+
+    def test_scheduler_unreachable_jobs(self):
+        class S(_Scheduler):
+            JOBS = {_JobC}
+
+        s = S(self.mop)
+        with self.assertLogs(s.logger, logging.WARNING), temp_dir():
+            s.prepare()
+
+    def test_scheduler_wave(self):
+        class S(_Scheduler):
+            JOBS = {_Job1, _Job2, _Job3, _Job4, _JobA, _JobB, _JobC}
+
+        with temp_dir():
+            s = S(self.mop)
+            s.prepare()
+
+        # Manually call init
+        for j in s._job_graph:
+            j.init(reset=True)
+
+        # Wave
+        s.wave()
+        for j in s._job_graph:
+            with self.subTest(job=j.get_name()):
+                if isinstance(j, _Job1):
+                    ref_counter = {'init': 1, 'visit': 2, 'submit': 1, 'schedule': 1}
+                elif isinstance(j, (_Job2, _Job3)):
+                    ref_counter = {'init': 1, 'visit': 1}
+                elif isinstance(j, _Job4):
+                    ref_counter = {'init': 1, 'visit': 2}
+                else:
+                    ref_counter = {'init': 1, 'visit': 1}
+                self.assertDictEqual(j.counter, ref_counter,
+                                     'Job call pattern did not match expected pattern')
+
+        # Wave
+        s.wave()
+        for j in s._job_graph:
+            with self.subTest(job=j.get_name()):
+                if isinstance(j, _Job1):
+                    ref_counter = {'init': 1, 'visit': 3, 'submit': 1, 'schedule': 1}
+                elif isinstance(j, (_Job2, _Job3)):
+                    ref_counter = {'init': 1, 'visit': 2}
+                elif isinstance(j, _Job4):
+                    ref_counter = {'init': 1, 'visit': 4}
+                else:
+                    ref_counter = {'init': 1, 'visit': 2}
+                self.assertDictEqual(j.counter, ref_counter,
+                                     'Job call pattern did not match expected pattern')
+
+    def test_scheduler_run(self):
+        waves = 3
+
+        class S(_Scheduler):
+            JOBS = {_Job1, _Job2, _Job3, _Job4, _JobA, _JobB, _JobC}
+            counter = 0
+
+            def wave(self) -> None:
+                super(S, self).wave()
+                self.counter += 1
+                if self.counter >= waves:
+                    raise TerminationRequested
+
+        with temp_dir():
+            s = S(get_manager_or_parent(Policy=str(self.POLICY), Pipeline='test_pipeline',
+                                        **{'Wave interval': 1.0, 'Clock period': 0.1}))
+            s.prepare()
+
+        # Run the scheduler
+        s.run()
+
+        for j in s._job_graph:
+            with self.subTest(job=j.get_name()):
+                if isinstance(j, _Job1):
+                    ref_counter = {'init': 1, 'visit': waves + 1, 'submit': 1, 'schedule': 1}
+                elif isinstance(j, (_Job2, _Job3)):
+                    ref_counter = {'init': 1, 'visit': waves}
+                elif isinstance(j, _Job4):
+                    ref_counter = {'init': 1, 'visit': waves * 2}
+                else:
+                    ref_counter = {'init': 1, 'visit': waves}
+                self.assertDictEqual(j.counter, ref_counter,
+                                     'Job call pattern did not match expected pattern')
 
 
 class GreedySchedulerTestCase(LazySchedulerTestCase):
     POLICY = Policy.GREEDY
+
+    def test_scheduler_unreachable_jobs(self):
+        with self.assertRaises(self.failureException, msg='Expected test failure did not happen'):
+            # With a greedy policy, all jobs are reachable and the call to super will cause a test failure
+            super(GreedySchedulerTestCase, self).test_scheduler_unreachable_jobs()
+
+    def test_scheduler_wave(self):
+        class S(_Scheduler):
+            JOBS = {_Job1, _Job2, _Job3, _Job4, _JobA, _JobB, _JobC}
+
+        with temp_dir():
+            s = S(self.mop)
+            s.prepare()
+
+            # Manually call init
+            for j in s._job_graph:
+                j.init(reset=True)
+
+        # Wave
+        s.wave()
+        for j in s._job_graph:
+            with self.subTest(job=j.get_name()):
+                if isinstance(j, _Job1):
+                    ref_counter = {'init': 1, 'visit': 2, 'submit': 1, 'schedule': 1}
+                elif isinstance(j, (_Job2, _Job3)):
+                    ref_counter = {'init': 1, 'visit': 1, 'submit': 1, 'schedule': 1}
+                elif isinstance(j, _Job4):
+                    ref_counter = {'init': 1, 'visit': 2, 'submit': 1, 'schedule': 1}
+                else:
+                    ref_counter = {'init': 1, 'visit': 1}
+                self.assertDictEqual(j.counter, ref_counter,
+                                     'Job call pattern did not match expected pattern')
+
+        # Wave
+        s.wave()
+        for j in s._job_graph:
+            with self.subTest(job=j.get_name()):
+                if isinstance(j, _Job1):
+                    ref_counter = {'init': 1, 'visit': 3, 'submit': 1, 'schedule': 1}
+                elif isinstance(j, (_Job2, _Job3)):
+                    ref_counter = {'init': 1, 'visit': 2, 'submit': 1, 'schedule': 1}
+                elif isinstance(j, _Job4):
+                    ref_counter = {'init': 1, 'visit': 4, 'submit': 1, 'schedule': 1}
+                else:
+                    ref_counter = {'init': 1, 'visit': 2}
+                self.assertDictEqual(j.counter, ref_counter,
+                                     'Job call pattern did not match expected pattern')
+
+    def test_scheduler_run(self):
+        waves = 3
+
+        class S(_Scheduler):
+            JOBS = {_Job1, _Job2, _Job3, _Job4, _JobA, _JobB, _JobC}
+            counter = 0
+
+            def wave(self) -> None:
+                super(S, self).wave()
+                self.counter += 1
+                if self.counter >= waves:
+                    raise TerminationRequested
+
+        with temp_dir():
+            s = S(get_manager_or_parent(Policy=str(self.POLICY), Pipeline='test_pipeline',
+                                        **{'Wave interval': 1.0, 'Clock period': 0.1}))
+            s.prepare()
+
+        # Run the scheduler
+        s.run()
+
+        for j in s._job_graph:
+            with self.subTest(job=j.get_name()):
+                if isinstance(j, _Job1):
+                    ref_counter = {'init': 1, 'visit': waves + 1, 'submit': 1, 'schedule': 1}
+                elif isinstance(j, (_Job2, _Job3)):
+                    ref_counter = {'init': 1, 'visit': waves, 'submit': 1, 'schedule': 1}
+                elif isinstance(j, _Job4):
+                    ref_counter = {'init': 1, 'visit': waves * 2, 'submit': 1, 'schedule': 1}
+                else:
+                    ref_counter = {'init': 1, 'visit': waves}
+                self.assertDictEqual(j.counter, ref_counter,
+                                     'Job call pattern did not match expected pattern')

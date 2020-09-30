@@ -162,13 +162,13 @@ class Job(dax.base.system.DaxBase):
         self._last_rid: int = -1
 
         # Initialize RID list
-        self.set_dataset(self.get_key(self._RID_LIST_KEY), [])
+        self.set_dataset(self._get_key(self._RID_LIST_KEY), [])
 
         if self.is_timed():
             if reset:
                 self._next_submit: float = time.time()
             else:
-                last_submit = self.get_dataset(self.get_key(self._LAST_SUBMIT_KEY), 0.0, archive=False)
+                last_submit = self.get_dataset(self._get_key(self._LAST_SUBMIT_KEY), 0.0, archive=False)
                 assert isinstance(last_submit, float), 'Unexpected type returned from dataset'
                 self._next_submit = last_submit + self._interval
         else:
@@ -188,7 +188,7 @@ class Job(dax.base.system.DaxBase):
         assert isinstance(priority, int), 'Priority must be of type int'
 
         # Store current wave timestamp
-        self.set_dataset(self.get_key(self._LAST_SUBMIT_KEY), wave, broadcast=True, persist=True)
+        self.set_dataset(self._get_key(self._LAST_SUBMIT_KEY), wave, broadcast=True, persist=True)
 
         if not self.is_meta():
             if self._last_rid not in self._scheduler.get_status():
@@ -197,15 +197,15 @@ class Job(dax.base.system.DaxBase):
                     pipeline_name=pipeline if self.PIPELINE is None else self.PIPELINE,
                     expid=self._expid,
                     priority=priority + self.PRIORITY)
-                self.append_to_dataset(self.get_key(self._RID_LIST_KEY), self._last_rid)
+                self.append_to_dataset(self._get_key(self._RID_LIST_KEY), self._last_rid)
                 self.logger.info(f'Submitted job with RID {self._last_rid}')
             else:
                 self.logger.warning(f'Skipping job, previous job with RID {self._last_rid} is still running')
 
         # Reschedule job
-        self.reschedule(wave=wave)
+        self.schedule(wave=wave)
 
-    def reschedule(self, *, wave: float) -> None:
+    def schedule(self, *, wave: float) -> None:
         assert isinstance(wave, float), 'Wave must be of type float'
 
         if self.is_timed():
@@ -225,7 +225,7 @@ class Job(dax.base.system.DaxBase):
         if self._last_rid >= 0:
             self._scheduler.request_termination(self._last_rid)
 
-    def get_key(self, *keys: str) -> str:
+    def _get_key(self, *keys: str) -> str:
         """Get the full key based on the job base key.
 
         If no keys are provided, the system key is returned.
@@ -265,8 +265,9 @@ class Job(dax.base.system.DaxBase):
     def is_timed(self) -> bool:
         return self.INTERVAL is not None
 
-    def get_name(self) -> str:
-        return self.__class__.__name__
+    @classmethod
+    def get_name(cls) -> str:
+        return cls.__name__
 
     def get_identifier(self) -> str:
         return f'({self.get_name()})'
@@ -383,8 +384,8 @@ class DaxScheduler(dax.base.system.DaxBase):
 
     def prepare(self) -> None:
         # Check pipeline
-        if self._scheduler.pipeline_name == self.DEFAULT_PIPELINE:
-            raise ValueError(f'The scheduler can not run in pipeline "{self.DEFAULT_PIPELINE}"')
+        if self._scheduler.pipeline_name == self._pipeline:
+            raise ValueError(f'The scheduler can not run in pipeline "{self._pipeline}"')
 
         # Check arguments
         if self._wave_interval < 1.0:
@@ -408,7 +409,10 @@ class DaxScheduler(dax.base.system.DaxBase):
         # Create the job dependency graph
         self._job_graph = nx.DiGraph()
         self._job_graph.add_nodes_from(jobs.values())
-        self._job_graph.add_edges_from(((j, jobs[d]) for j in jobs.values() for d in j.DEPENDENCIES))
+        try:
+            self._job_graph.add_edges_from(((j, jobs[d]) for j in jobs.values() for d in j.DEPENDENCIES))
+        except KeyError as e:
+            raise KeyError(f'Dependency "{e.args[0].get_name()}" is not part of the given job set') from None
 
         # Plot graph
         plot = graphviz.Digraph(name=self.NAME, directory=str(get_base_path(self._scheduler)))
@@ -425,7 +429,7 @@ class DaxScheduler(dax.base.system.DaxBase):
 
         # Find root jobs
         # noinspection PyTypeChecker
-        self._root_jobs = {job for job, degree in self._job_graph.in_degree if degree == 0}
+        self._root_jobs: typing.Set[Job] = {job for job, degree in self._job_graph.in_degree if degree == 0}
         self.logger.debug(f'Found {len(self._root_jobs)} root job(s)')
 
         # Terminate other instances of this scheduler
@@ -499,7 +503,7 @@ class DaxScheduler(dax.base.system.DaxBase):
             if new_action.submittable() and job not in submitted:
                 # Submit this job
                 job.submit(wave=wave,
-                           pipeline=self.DEFAULT_PIPELINE,
+                           pipeline=self._pipeline,
                            priority=self._job_priority)
                 submitted.add(job)
 
