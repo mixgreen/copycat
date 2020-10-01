@@ -25,7 +25,7 @@ flake8
 
 ## Merging
 
-When issuing a merge request into master, we recommend to rebase first or to use the `--no-ff` flag when merging.
+To merge into master, please issue a merge request.
 
 ## Releases
 

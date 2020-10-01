@@ -14,6 +14,7 @@ User entry points
 * :ref:`dax.sim`
 * :ref:`dax.sim.test_case`
 * :ref:`dax.scan`
+* :ref:`dax.scheduler`
 
 
 
