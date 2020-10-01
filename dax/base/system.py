@@ -39,13 +39,13 @@ _NAME_RE: typing.Pattern[str] = re.compile(r'\w+')
 """Regex for matching valid names."""
 
 
-def _is_valid_name(name: str) -> bool:
+def is_valid_name(name: str) -> bool:
     """Return true if the given name is valid."""
     assert isinstance(name, str), 'The given name should be a string'
     return bool(_NAME_RE.fullmatch(name))
 
 
-def _is_valid_key(key: str) -> bool:
+def is_valid_key(key: str) -> bool:
     """Return true if the given key is valid."""
     assert isinstance(key, str), 'The given key should be a string'
     return all(_NAME_RE.fullmatch(n) for n in key.split(_KEY_SEPARATOR))
@@ -163,9 +163,9 @@ class DaxHasSystem(DaxBase, abc.ABC):
         assert isinstance(system_key, str), 'System key must be a string'
 
         # Check name and system key
-        if not _is_valid_name(name):
+        if not is_valid_name(name):
             raise ValueError(f'Invalid name "{name}" for class "{self.__class__.__name__}"')
-        if not _is_valid_key(system_key) or not system_key.endswith(name):
+        if not is_valid_key(system_key) or not system_key.endswith(name):
             raise ValueError(f'Invalid system key "{system_key}" for class "{self.__class__.__name__}"')
 
         # Store constructor arguments as attributes
@@ -261,7 +261,7 @@ class DaxHasSystem(DaxBase, abc.ABC):
 
         # Check if the given keys are valid
         for k in keys:
-            if not _is_valid_key(k):
+            if not is_valid_key(k):
                 raise ValueError(f'Invalid key "{k}"')
 
         # Return the assigned key
@@ -405,7 +405,7 @@ class DaxHasSystem(DaxBase, abc.ABC):
         device = self.get_device(key, type_=type_)  # type: ignore[arg-type]
 
         # Set the device as attribute
-        if not _is_valid_name(key):
+        if not is_valid_name(key):
             raise ValueError(f'Attribute name "{key}" not valid')
         if hasattr(self, key):
             raise AttributeError(f'Attribute name "{key}" was already assigned')
@@ -653,7 +653,7 @@ class DaxModule(DaxModuleBase, abc.ABC):
         """
 
         # Check module name
-        if not _is_valid_name(module_name):
+        if not is_valid_name(module_name):
             raise ValueError(f'Invalid module name "{module_name}"')
         # Check parent type
         if not isinstance(managers_or_parent, DaxHasSystem):
@@ -709,7 +709,7 @@ class DaxSystem(DaxModuleBase):
         # Check if system ID was overridden
         assert hasattr(self, 'SYS_ID'), 'Every DAX system class must override the SYS_ID class attribute'
         assert isinstance(self.SYS_ID, str), 'System ID must be of type str'
-        assert _is_valid_name(self.SYS_ID), f'Invalid system ID "{self.SYS_ID}"'
+        assert is_valid_name(self.SYS_ID), f'Invalid system ID "{self.SYS_ID}"'
 
         # Check if system version was overridden
         assert hasattr(self, 'SYS_VER'), 'Every DAX system class must override the SYS_VER class attribute'
@@ -974,7 +974,7 @@ class DaxNameRegistry:
         assert isinstance(system, DaxSystem), 'System must be of type DAX system'
 
         # Check system services key
-        if not _is_valid_key(system.SYS_SERVICES):
+        if not is_valid_key(system.SYS_SERVICES):
             raise ValueError(f'Invalid system services key "{system.SYS_SERVICES}"')
 
         # Store system services key
@@ -1091,8 +1091,8 @@ class DaxNameRegistry:
         assert issubclass(type_, DaxModuleBase), 'Provided type must be a subclass of DaxModuleBase'
 
         # Search for all modules matching the type
-        results: typing.Dict[str, DaxNameRegistry.__M_T] = {k: m for k, m in self._modules.items() if
-                                                            isinstance(m, type_)}
+        results: typing.Dict[str, DaxNameRegistry.__M_T] = {k: m for k, m in self._modules.items()
+                                                            if isinstance(m, type_)}
 
         # Return the list with results
         return results
@@ -1235,7 +1235,7 @@ class DaxNameRegistry:
 
         # Check the given name
         assert isinstance(service_name, str), 'Service name must be a string'
-        if not _is_valid_name(service_name):
+        if not is_valid_name(service_name):
             # Service name not valid
             raise ValueError(f'Invalid service name "{service_name}"')
 
@@ -1580,7 +1580,7 @@ class DaxDataStoreInfluxDb(DaxDataStore):
 
         assert isinstance(key, str), 'Key should be of type str'
 
-        if not _is_valid_key(key):
+        if not is_valid_key(key):
             # Invalid key
             raise ValueError(f'Influx DB data store received an invalid key "{key}"')
 

@@ -54,8 +54,8 @@ dax.sim.device module
 
 .. _dax.sim.test_case:
 
-dax.sim.test\_case package
-==========================
+dax.sim.test\_case
+==================
 
 .. automodule:: dax.sim.test_case
     :members:

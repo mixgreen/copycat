@@ -25,6 +25,18 @@ dax.scan
 
 The scan base components can be found in the :ref:`dax.base.scan`.
 
+.. _dax.scheduler:
+
+dax.scheduler
+-------------
+
+.. automodule:: dax.scheduler
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+The scan base components can be found in the :ref:`dax.base.scheduler`.
+
 Subpackages
 -----------
 

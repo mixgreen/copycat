@@ -16,6 +16,7 @@ in
                 ps.matplotlib
                 ps.graphviz
                 ps.h5py
+                ps.networkx
                 # Packages required for documentation
                 ps.sphinx
                 ps.sphinx_rtd_theme

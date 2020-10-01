@@ -127,22 +127,22 @@ class DaxHelpersTestCase(unittest.TestCase):
     def test_valid_name(self):
         for n in ['foo', '_0foo', '_', '0', '_foo', 'FOO_', '0_foo']:
             # Test valid names
-            self.assertTrue(dax.base.system._is_valid_name(n))
+            self.assertTrue(dax.base.system.is_valid_name(n))
 
     def test_invalid_name(self):
         for n in ['', 'foo()', 'foo.bar', 'foo/', 'foo*', 'foo,', 'FOO+', 'foo-bar', 'foo/bar']:
             # Test illegal names
-            self.assertFalse(dax.base.system._is_valid_name(n))
+            self.assertFalse(dax.base.system.is_valid_name(n))
 
     def test_valid_key(self):
         for k in ['foo', '_0foo', '_', '0', 'foo.bar', 'foo.bar.baz', '_.0.A', 'foo0._bar']:
             # Test valid keys
-            self.assertTrue(dax.base.system._is_valid_key(k))
+            self.assertTrue(dax.base.system.is_valid_key(k))
 
     def test_invalid_key(self):
         for k in ['', 'foo()', 'foo,bar', 'foo/', '.foo', 'bar.', 'foo.bar.baz.']:
             # Test illegal keys
-            self.assertFalse(dax.base.system._is_valid_key(k))
+            self.assertFalse(dax.base.system.is_valid_key(k))
 
     def test_unique_device_key(self):
         # Test system and device DB

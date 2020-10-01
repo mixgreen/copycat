@@ -29,6 +29,16 @@ dax.base.scan module
     :undoc-members:
     :show-inheritance:
 
+.. _dax.base.scheduler:
+
+dax.base.scheduler module
+-------------------------
+
+.. automodule:: dax.base.scheduler
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 dax.base.interface module
 -------------------------
 
