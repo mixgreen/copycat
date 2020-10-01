@@ -5,7 +5,7 @@ import logging
 import collections
 import time
 import enum
-import networkx as nx  # type: ignore
+import networkx as nx
 import graphviz
 
 import artiq.experiment
@@ -517,8 +517,6 @@ class DaxScheduler(dax.base.system.DaxBase):
         # The ARTIQ scheduler
         self._scheduler = self.get_device('scheduler')
 
-        # TODO: create system object
-
     def prepare(self) -> None:
         # Check pipeline
         if self._scheduler.pipeline_name == self._pipeline:
@@ -544,7 +542,7 @@ class DaxScheduler(dax.base.system.DaxBase):
             self.logger.warning('Duplicate jobs were dropped from the job set')
 
         # Create the job dependency graph
-        self._job_graph = nx.DiGraph()
+        self._job_graph: nx.DiGraph[Job] = nx.DiGraph()
         self._job_graph.add_nodes_from(jobs.values())
         try:
             self._job_graph.add_edges_from(((j, jobs[d]) for j in jobs.values() for d in j.DEPENDENCIES))
@@ -613,7 +611,6 @@ class DaxScheduler(dax.base.system.DaxBase):
                 self.logger.debug(f'Cancelling {len(self._job_graph)} job(s)')
                 for job in self._job_graph:
                     job.cancel()
-            # TODO: wait for jobs to be cancelled?
 
     def wave(self) -> None:
         """Run a wave over the job set."""
@@ -621,8 +618,6 @@ class DaxScheduler(dax.base.system.DaxBase):
         # Generate the unique wave timestamp
         wave: float = time.time()
         self.logger.debug(f'Starting wave {wave:.0f}')
-
-        # TODO: make starting jobs and starting state somehow parameterizable for external triggers
 
         def recurse(job: Job, action: JobAction, submitted: typing.Set[Job]) -> typing.Set[Job]:
             """Recurse over the dependencies of a job.
