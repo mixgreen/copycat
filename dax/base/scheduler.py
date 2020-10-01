@@ -508,11 +508,15 @@ class DaxScheduler(dax.base.system.DaxBase):
                                                  tooltip='Terminate running jobs at exit',
                                                  group='Jobs')
 
-        # Other arguments
-        self._view_graph = self.get_argument('View graph',
+        # Dependency graph arguments
+        self._reduce_graph = self.get_argument('Reduce',
+                                               artiq.experiment.BooleanValue(True),
+                                               tooltip='Use transitive reduction of the job dependency graph',
+                                               group='Dependency graph')
+        self._view_graph = self.get_argument('View',
                                              artiq.experiment.BooleanValue(False),
                                              tooltip='View the job dependency graph at startup',
-                                             group='Others')
+                                             group='Dependency graph')
 
         # The ARTIQ scheduler
         self._scheduler = self.get_device('scheduler')
@@ -549,18 +553,22 @@ class DaxScheduler(dax.base.system.DaxBase):
         except KeyError as e:
             raise KeyError(f'Dependency "{e.args[0].get_name()}" is not part of the given job set') from None
 
+        # Check graph
+        if not nx.algorithms.is_directed_acyclic_graph(self._job_graph):
+            raise RuntimeError('Dependency graph is not a directed acyclic graph')
+        if self._policy is Policy.LAZY and any(not j.is_timed() for j in self._job_graph):
+            self.logger.warning('Found one or more unreachable jobs (untimed jobs in a lazy scheduling policy')
+
+        if self._reduce_graph:
+            # Get the transitive reduction of the job dependency graph
+            self._job_graph = nx.algorithms.transitive_reduction(self._job_graph)
+
         # Plot graph
         plot = graphviz.Digraph(name=self.NAME, directory=str(get_base_path(self._scheduler)))
         for job in self._job_graph:
             plot.node(job.get_name())
         plot.edges(((j.get_name(), k.get_name()) for j, k in self._job_graph.edges))
         plot.render(view=self._view_graph, format=self._GRAPHVIZ_FORMAT)
-
-        # Check graph
-        if not nx.algorithms.is_directed_acyclic_graph(self._job_graph):
-            raise RuntimeError('Dependency graph is not a directed acyclic graph')
-        if self._policy is Policy.LAZY and any(not j.is_timed() for j in self._job_graph):
-            self.logger.warning('Found one or more unreachable jobs (untimed jobs in a lazy scheduling policy')
 
         # Find root jobs
         # noinspection PyTypeChecker
