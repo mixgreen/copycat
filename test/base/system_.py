@@ -339,7 +339,7 @@ class DaxDataStoreInfluxDbTestCase(unittest.TestCase):
             # List of points that reached the callback
             self.points = []
 
-        def _get_driver(self, system: DaxSystem, key: str) -> None:
+        def _get_driver(self, environment: artiq.experiment.HasEnvironment, key: str) -> None:
             pass  # Do not obtain the driver
 
         def _get_key(self, point):
@@ -371,7 +371,7 @@ class DaxDataStoreInfluxDbTestCase(unittest.TestCase):
         # Test system
         self.s = _TestSystem(get_manager_or_parent(_device_db))
         # Special data store that skips actual writing
-        self.ds = self.MockDataStore(callback, self.s, 'dax_influx_db')
+        self.ds = self.MockDataStore(callback, self.s, type(self.s))
 
     def test_make_point(self):
         # Data to test against

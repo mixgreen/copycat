@@ -11,7 +11,7 @@ import graphviz
 import artiq.experiment
 
 import dax.base.system
-from dax.util.output import get_base_path
+import dax.util.output
 
 __all__ = ['Job', 'Policy', 'DaxScheduler']
 
@@ -475,6 +475,9 @@ class DaxScheduler(dax.base.system.DaxBase):
         super(DaxScheduler, self).__init__(managers_or_parent, *args, **kwargs)
 
     def build(self, *args: typing.Any, **kwargs: typing.Any) -> None:
+        # Set default scheduling options for the scheduler itself
+        self.set_default_scheduling(pipeline_name=self.NAME)
+
         # Scheduling arguments
         self._policy_arg = self.get_argument('Policy',
                                              artiq.experiment.EnumerationValue(sorted(str(p) for p in Policy)),
@@ -521,6 +524,10 @@ class DaxScheduler(dax.base.system.DaxBase):
         # The ARTIQ scheduler
         self._scheduler = self.get_device('scheduler')
 
+        # Call super and forward arguments, for compatibility with other libraries
+        # noinspection PyArgumentList
+        super(DaxScheduler, self).build(*args, **kwargs)
+
     def prepare(self) -> None:
         # Check pipeline
         if self._scheduler.pipeline_name == self._pipeline:
@@ -564,7 +571,7 @@ class DaxScheduler(dax.base.system.DaxBase):
             self._job_graph = nx.algorithms.transitive_reduction(self._job_graph)
 
         # Plot graph
-        plot = graphviz.Digraph(name=self.NAME, directory=str(get_base_path(self._scheduler)))
+        plot = graphviz.Digraph(name=self.NAME, directory=str(dax.util.output.get_base_path(self._scheduler)))
         for job in self._job_graph:
             plot.node(job.get_name())
         plot.edges(((j.get_name(), k.get_name()) for j, k in self._job_graph.edges))

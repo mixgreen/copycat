@@ -820,7 +820,7 @@ class DaxSystem(DaxModuleBase):
         if self.DAX_INFLUX_DB_KEY is not None:
             try:
                 # Create an Influx DB data store
-                self.__data_store = DaxDataStoreInfluxDb(self, self.DAX_INFLUX_DB_KEY)
+                self.__data_store = DaxDataStoreInfluxDb(self, type(self))
             except KeyError:
                 # Influx DB controller was not found in the device DB
                 self.logger.warning(f'Influx DB controller "{self.DAX_INFLUX_DB_KEY}" not found in device DB')
@@ -1437,35 +1437,39 @@ class DaxDataStoreInfluxDb(DaxDataStore):
     _NP_FIELD_TYPES: typing.List[type] = [np.integer, np.floating, np.bool_, np.character]
     """Legal field types (Numpy types) for Influx DB."""
 
-    def __init__(self, system: DaxSystem, key: str):
+    def __init__(self, environment: artiq.experiment.HasEnvironment,
+                 system_class: typing.Type[DaxSystem]):
         """Create a new DAX data store that uses an Influx DB backend.
 
-        :param system: The system this data store is managed by
-        :param key: The key of the DAX Influx DB controller
+        :param environment: An object which inherits from ARTIQ HasEnvironment
+        :param system_class: The DAX system class this data store identifies itself with
         """
 
-        assert isinstance(system, DaxSystem), 'System parameter must be of type DaxSystem'
-        assert isinstance(key, str), 'The Influx DB controller key must be of type str'
+        assert isinstance(environment, artiq.experiment.HasEnvironment), \
+            'The environment parameter must be of type HasEnvironment'
+        assert issubclass(system_class, DaxSystem), 'The system class must be a subclass of DaxSystem'
+        assert system_class is not DaxSystem, 'The system class must be a strict subclass of DaxSystem'
+        assert isinstance(system_class.DAX_INFLUX_DB_KEY, str), 'The DAX InfluxDB key must be of type str'
 
         # Call super
         super(DaxDataStoreInfluxDb, self).__init__()
 
-        # Get the Influx DB driver, this call can raise various exceptions
-        self._get_driver(system, key)
-
         # Get the scheduler, which is a virtual device
-        scheduler = system.get_device('scheduler')
+        scheduler = environment.get_device('scheduler')
         if isinstance(scheduler, artiq.master.worker_db.DummyDevice):
             return  # ARTIQ is only discovering experiment classes, do not continue initialization
 
+        # Get the Influx DB driver, this call can raise various exceptions
+        self._get_driver(environment, system_class.DAX_INFLUX_DB_KEY)
+
         # Store values that will be used for data points later
-        self._sys_id: str = system.SYS_ID
+        self._sys_id: str = system_class.SYS_ID
         # Initialize index table for the append function, required to emulate appending behavior
         self._index_table: typing.Dict[str, int] = {}
 
         # Prepare base tags
         self._base_tags: DaxDataStoreInfluxDb.__FD_T = {
-            'system_version': str(system.SYS_VER),  # Convert int version to str since tags are strings
+            'system_version': str(system_class.SYS_VER),  # Convert int version to str since tags are strings
         }
 
         # Prepare base fields
@@ -1475,16 +1479,19 @@ class DaxDataStoreInfluxDb(DaxDataStore):
             'priority': int(scheduler.priority),
             'artiq_version': str(_artiq_version),
             'dax_version': str(_dax_version),
-            'dax_sim_enabled': bool(system.dax_sim_enabled)
         }
+
+        if isinstance(environment, DaxSystem):
+            # Add DAX sim enabled flag to fields
+            self._base_fields['dax_sim_enabled'] = bool(environment.dax_sim_enabled)
+
+        if _CWD_COMMIT is not None:
+            # Add commit hash to fields
+            self._base_fields['cwd_commit'] = _CWD_COMMIT
 
         # Add expid items to fields if keys do not exist yet and the types are appropriate
         self._base_fields.update((k, v) for k, v in scheduler.expid.items()
                                  if k not in self._base_fields and isinstance(v, self._FIELD_TYPES))
-
-        # Add commit hashes to fields
-        if _CWD_COMMIT is not None:
-            self._base_fields['cwd_commit'] = _CWD_COMMIT
 
         # Debug message
         self._logger.debug(f'Initialized base fields: {self._base_fields}')
@@ -1614,12 +1621,12 @@ class DaxDataStoreInfluxDb(DaxDataStore):
         # Return point
         return point
 
-    def _get_driver(self, system: DaxSystem, key: str) -> None:
+    def _get_driver(self, environment: artiq.experiment.HasEnvironment, key: str) -> None:
         """Get the required driver.
 
         This method was separated to allow testing without writing points.
         """
-        self._influx = system.get_device(key)  # Get the Influx DB driver, this call can raise various exceptions
+        self._influx = environment.get_device(key)  # Get the Influx DB driver, this call can raise various exceptions
 
     def _write_points(self, points: typing.Sequence[__P_T]) -> None:
         """Submit points to the Influx DB driver.
