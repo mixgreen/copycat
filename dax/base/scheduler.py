@@ -116,6 +116,8 @@ class Job(dax.base.system.DaxBase):
     """The pipeline to submit this job to, defaults to the pipeline assigned by the scheduler."""
     PRIORITY: int = 0
     """Job priority relative to the base job priority of the scheduler."""
+    FLUSH: bool = False
+    """The flush flag when submitting a job."""
 
     _RID_LIST_KEY: str = 'rid_list'
     """Key to store every submitted RID."""
@@ -141,11 +143,12 @@ class Job(dax.base.system.DaxBase):
         assert isinstance(self.INTERVAL, str) or self.INTERVAL is None, 'Interval must be of type str or None'
         assert isinstance(self.DEPENDENCIES, collections.abc.Collection), 'The dependencies must be a collection'
         assert all(issubclass(d, Job) for d in self.DEPENDENCIES), 'All dependencies must be subclasses of Job'
-        # Check log level, pipeline, and priority
+        # Check log level, pipeline, priority, and flush
         assert isinstance(self.LOG_LEVEL, (int, str)), 'Log level must be of type int or str'
         assert self.PIPELINE is None or isinstance(self.PIPELINE, str), 'Pipeline must be of type str or None'
         assert isinstance(self.PRIORITY, int), 'Priority must be of type int'
         assert -99 <= self.PRIORITY <= 99, 'Priority must be in the domain [-99, 99]'
+        assert isinstance(self.FLUSH, bool), 'Flush must be of type bool'
 
         # Check parent
         if not isinstance(managers_or_parent, DaxScheduler):
@@ -255,7 +258,9 @@ class Job(dax.base.system.DaxBase):
                 self._last_rid = self._scheduler.submit(
                     pipeline_name=pipeline if self.PIPELINE is None else self.PIPELINE,
                     expid=self._expid,
-                    priority=priority + self.PRIORITY)
+                    priority=priority + self.PRIORITY,
+                    flush=self.FLUSH
+                )
                 self.logger.info(f'Submitted job with RID {self._last_rid}')
                 # Archive the RID
                 self.append_to_dataset(self._get_key(self._RID_LIST_KEY), self._last_rid)
