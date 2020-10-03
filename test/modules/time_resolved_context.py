@@ -5,7 +5,7 @@ import h5py  # type: ignore
 from dax.experiment import *
 import dax.util.matplotlib_backend  # noqa: F401
 from dax.modules.time_resolved_context import *
-from dax.util.artiq import get_manager_or_parent
+from dax.util.artiq import get_managers
 from dax.util.output import temp_dir
 
 
@@ -21,7 +21,7 @@ class _TestSystem(DaxSystem):
 class TimeResolvedContextTestCase(unittest.TestCase):
 
     def setUp(self) -> None:
-        self.s = _TestSystem(get_manager_or_parent())
+        self.s = _TestSystem(get_managers())
         self.s.dax_init()
         self.t = self.s.time_resolved_context
 
@@ -412,7 +412,7 @@ class TimeResolvedContextTestCase(unittest.TestCase):
 class TimeResolvedAnalyzerTestCase(unittest.TestCase):
 
     def setUp(self) -> None:
-        self.mop = get_manager_or_parent()
+        self.mop = get_managers()
         self.s = _TestSystem(self.mop)
         self.s.dax_init()
         self.t = self.s.time_resolved_context

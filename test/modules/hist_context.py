@@ -11,7 +11,7 @@ import dax.base.system
 import dax.util.matplotlib_backend  # noqa: F401
 from dax.modules.hist_context import *
 from dax.interfaces.detection import DetectionInterface
-from dax.util.artiq import get_manager_or_parent
+from dax.util.artiq import get_managers
 from dax.util.output import temp_dir
 
 
@@ -49,7 +49,7 @@ class _TestSystem(DaxSystem):
 class HistogramContextTestCase(unittest.TestCase):
 
     def setUp(self) -> None:
-        self.s = _TestSystem(get_manager_or_parent())
+        self.s = _TestSystem(get_managers())
         self.s.dax_init()
         self.h = self.s.hist_context
 
@@ -338,7 +338,7 @@ class HistogramContextTestCase(unittest.TestCase):
 class HistogramAnalyzerTestCase(unittest.TestCase):
 
     def setUp(self) -> None:
-        self.mop = get_manager_or_parent()
+        self.mop = get_managers()
         self.s = _TestSystem(self.mop)
         self.s.dax_init()
         self.h = self.s.hist_context

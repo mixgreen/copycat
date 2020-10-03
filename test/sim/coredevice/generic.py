@@ -2,7 +2,7 @@ import unittest
 
 import dax.sim.coredevice.generic
 from dax.sim import enable_dax_sim
-from dax.util.artiq import get_manager_or_parent
+from dax.util.artiq import get_managers
 
 
 class GenericTestCase(unittest.TestCase):
@@ -21,7 +21,7 @@ class GenericTestCase(unittest.TestCase):
     }, enable=True, output='null', moninj_service=False)
 
     def setUp(self) -> None:
-        device_manager, _, _, _ = get_manager_or_parent(device_db=self._DEVICE_DB)
+        device_manager, _, _, _ = get_managers(device_db=self._DEVICE_DB)
         self.generic = dax.sim.coredevice.generic.Generic(device_manager, _key='generic')
 
     def test_direct_call(self):

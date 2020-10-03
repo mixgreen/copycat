@@ -39,13 +39,13 @@ _NAME_RE: typing.Pattern[str] = re.compile(r'\w+')
 """Regex for matching valid names."""
 
 
-def is_valid_name(name: str) -> bool:
+def _is_valid_name(name: str) -> bool:
     """Return true if the given name is valid."""
     assert isinstance(name, str), 'The given name should be a string'
     return bool(_NAME_RE.fullmatch(name))
 
 
-def is_valid_key(key: str) -> bool:
+def _is_valid_key(key: str) -> bool:
     """Return true if the given key is valid."""
     assert isinstance(key, str), 'The given key should be a string'
     return all(_NAME_RE.fullmatch(n) for n in key.split(_KEY_SEPARATOR))
@@ -138,19 +138,15 @@ class DaxBase(artiq.experiment.HasEnvironment, abc.ABC):
         return self.get_identifier()
 
 
-class DaxHasSystem(DaxBase, abc.ABC):
-    """Intermediate base class for DAX classes that are dependent on a DAX system."""
+class DaxHasKey(DaxBase, abc.ABC):
+    """Intermediate base class for DAX classes that have a key."""
 
-    __D_T = typing.TypeVar('__D_T')  # Device type verification
-
-    __CORE_DEVICES: typing.Tuple[str, ...] = ('core', 'core_dma', 'core_cache')
-    """Attribute names of core devices."""
-    __CORE_ATTRIBUTES: typing.Tuple[str, ...] = __CORE_DEVICES + ('registry', 'data_store')
-    """Attribute names of core objects created in build() or inherited from parents."""
+    __KEY_ATTRIBUTES: typing.Tuple[str, ...] = ('data_store',)
+    """Attribute names of key objects created in build() or inherited from parents."""
 
     def __init__(self, managers_or_parent: typing.Any, *args: typing.Any,
                  name: str, system_key: str, **kwargs: typing.Any):
-        """Constructor of a DAX base class.
+        """Constructor of a DAX base class which has a system key.
 
         :param managers_or_parent: The manager or parent object
         :param args: Positional arguments forwarded to the :func:`build` function
@@ -163,9 +159,9 @@ class DaxHasSystem(DaxBase, abc.ABC):
         assert isinstance(system_key, str), 'System key must be a string'
 
         # Check name and system key
-        if not is_valid_name(name):
+        if not _is_valid_name(name):
             raise ValueError(f'Invalid name "{name}" for class "{self.__class__.__name__}"')
-        if not is_valid_key(system_key) or not system_key.endswith(name):
+        if not _is_valid_key(system_key) or not system_key.endswith(name):
             raise ValueError(f'Invalid system key "{system_key}" for class "{self.__class__.__name__}"')
 
         # Store constructor arguments as attributes
@@ -173,48 +169,16 @@ class DaxHasSystem(DaxBase, abc.ABC):
         self.__system_key: str = system_key
 
         # Call super, which will result in a call to build()
-        super(DaxHasSystem, self).__init__(managers_or_parent, *args, **kwargs)
+        super(DaxHasKey, self).__init__(managers_or_parent, *args, **kwargs)
 
-        # Verify that all core attributes are available
-        if not all(hasattr(self, n) for n in self.__CORE_ATTRIBUTES):  # hasattr() checks properties too
-            msg: str = 'Missing core attributes (super.build() was probably not called)'
+        # Verify that all key attributes are available
+        if not all(hasattr(self, n) for n in self.__KEY_ATTRIBUTES):  # hasattr() checks properties too
+            msg: str = 'Missing key attributes (super.build() was probably not called)'
             self.logger.error(msg)
             raise AttributeError(msg)
 
-        # Make core devices kernel invariants
-        self.update_kernel_invariants(*self.__CORE_DEVICES)
-
-    @property
-    def core(self) -> artiq.coredevice.core.Core:
-        """Get the core device driver.
-
-        :return: The core object
-        """
-        return self.__core
-
-    @property
-    def core_dma(self) -> artiq.coredevice.dma.CoreDMA:
-        """Get the core DMA device driver.
-
-        :return: The core DMA object
-        """
-        return self.__core_dma
-
-    @property
-    def core_cache(self) -> artiq.coredevice.cache.CoreCache:
-        """Get the core cache device driver.
-
-        :return: The core cache object
-        """
-        return self.__core_cache
-
-    @property
-    def registry(self) -> DaxNameRegistry:
-        """Get the DAX registry.
-
-        :return: The logger object
-        """
-        return self.__registry
+        # Make key attributes kernel invariants
+        self.update_kernel_invariants(*self.__KEY_ATTRIBUTES)
 
     @property
     def data_store(self) -> DaxDataStore:
@@ -224,20 +188,16 @@ class DaxHasSystem(DaxBase, abc.ABC):
         """
         return self.__data_store
 
-    def _take_parent_core_attributes(self, parent: DaxHasSystem) -> None:
-        """Take core attributes from parent.
+    def _take_parent_key_attributes(self, parent: DaxHasKey) -> None:
+        """Take key attributes from parent.
 
-        If this object does not construct its own core attributes, it should take them from their parent.
+        If this object does not construct its own attributes, it should take them from their parent.
         """
         try:
-            # Take core attributes from parent
-            self.__core: artiq.coredevice.core.Core = parent.core
-            self.__core_dma: artiq.coredevice.dma.CoreDMA = parent.core_dma
-            self.__core_cache: artiq.coredevice.cache.CoreCache = parent.core_cache
-            self.__registry: DaxNameRegistry = parent.registry
+            # Take attributes from parent
             self.__data_store: DaxDataStore = parent.data_store
         except AttributeError:
-            parent.logger.exception('Missing core attributes (super.build() was probably not called)')
+            parent.logger.exception('Missing key attributes (super.build() was probably not called)')
             raise
 
     @artiq.experiment.host_only
@@ -261,158 +221,11 @@ class DaxHasSystem(DaxBase, abc.ABC):
 
         # Check if the given keys are valid
         for k in keys:
-            if not is_valid_key(k):
+            if not _is_valid_key(k):
                 raise ValueError(f'Invalid key "{k}"')
 
         # Return the assigned key
         return _KEY_SEPARATOR.join([self.__system_key, *keys])
-
-    @artiq.experiment.host_only
-    def _init_system(self) -> None:
-        """Initialize the DAX system, for dataset access, device initialization, and recording DMA traces."""
-
-        # Initialize all children
-        self.call_child_method('_init_system')
-
-        # Initialize this object
-        self.logger.debug('Initializing...')
-        try:
-            self.init()
-        except artiq.coredevice.core.CompileError:
-            # Log a fixed message, the exception message is empty
-            self.logger.exception('Compilation error occurred during initialization')
-            raise
-        except Exception as e:
-            # Log the exception to provide more context
-            self.logger.exception(e)
-            raise
-        else:
-            self.logger.debug('Initialization finished')
-
-    @artiq.experiment.host_only
-    def _post_init_system(self) -> None:
-        """DAX system post-initialization (e.g. obtaining DMA handles)."""
-
-        # Post-initialize all children
-        self.call_child_method('_post_init_system')
-
-        # Post-initialize this object
-        self.logger.debug('Post-initializing...')
-        try:
-            self.post_init()
-        except artiq.coredevice.core.CompileError:
-            # Log a fixed message, the exception message is empty
-            self.logger.exception('Compilation error occurred during post-initialization')
-            raise
-        except Exception as e:
-            # Log the exception to provide more context
-            self.logger.exception(e)
-            raise
-        else:
-            self.logger.debug('Post-initialization finished')
-
-    @abc.abstractmethod
-    def init(self) -> None:
-        """Override this method to access the dataset (r/w), initialize devices, and record DMA traces.
-
-        The :func:`init` function will be called when the user calls :func:`dax_init`
-        in the experiment :func:`run` function.
-        """
-        pass
-
-    @abc.abstractmethod
-    def post_init(self) -> None:
-        """Override this method for post-initialization procedures (e.g. obtaining DMA handles).
-
-        The :func:`post_init` function will be called when the user calls :func:`dax_init`
-        in the experiment :func:`run` function.
-        The :func:`post_init` function is called after all :func:`init` functions have been called.
-        This function is used to perform initialization tasks that are dependent on the initialization
-        of other components, for example to obtain a DMA handle.
-        """
-        pass
-
-    @typing.overload
-    def get_device(self, key: str) -> typing.Any:
-        ...
-
-    @typing.overload
-    def get_device(self, key: str, type_: typing.Type[__D_T]) -> __D_T:
-        ...
-
-    @artiq.experiment.host_only
-    def get_device(self, key: str, type_: typing.Optional[typing.Type[__D_T]] = None) -> typing.Any:
-        """Get a device driver.
-
-        Users can optionally specify an expected device type.
-        If the device does not match the expected type, an exception is raised.
-        Note that drivers of controllers are SiPyCo RPC objects and type checks are therefore not useful.
-
-        Devices that are retrieved using :func:`get_device` can not be added to the kernel invariants.
-        The user is responsible for adding the attribute to the list of kernel invariants.
-
-        :param key: The key of the device to obtain
-        :param type_: The expected type of the device
-        :return: The requested device driver
-        :raises KeyError: Raised when the device could not be obtained from the device DB
-        :raises TypeError: Raised when the device does not match the expected type
-        """
-
-        assert isinstance(key, str) and key, 'Key must be of type str and not empty'
-
-        # Debug message
-        self.logger.debug(f'Requesting device "{key}"')
-
-        try:
-            # Get the unique key, which will also check the keys and aliases
-            unique: str = self.registry.get_unique_device_key(key)
-        except (LookupError, TypeError) as e:
-            # Device was not found in the device DB
-            raise KeyError(f'Device "{key}" could not be found in the device DB') from e
-
-        # Get the device using the unique key
-        device: typing.Any = super(DaxHasSystem, self).get_device(unique)
-
-        if type_ is not None and not isinstance(device, (type_, artiq.master.worker_db.DummyDevice,
-                                                         dax.sim.device.DaxSimDevice)):
-            # Device has an unexpected type
-            raise TypeError(f'Device "{key}" does not match the expected type')
-
-        # Register the requested device with the unique key
-        self.registry.add_device(unique, device, self)
-
-        # Return the device
-        return device
-
-    @artiq.experiment.host_only
-    def setattr_device(self, key: str, type_: typing.Optional[typing.Type[__D_T]] = None) -> None:
-        """Sets a device driver as attribute.
-
-        Users can optionally specify an expected device type.
-        If the device does not match the expected type, an exception is raised.
-
-        The attribute used to set the device driver is automatically added to the kernel invariants.
-
-        :param key: The key of the device
-        :param type_: The expected type of the device
-        :raises KeyError: Raised when the device could not be obtained from the device DB
-        :raises TypeError: Raised when the device does not match the expected type
-        :raises ValueError: Raised if the attribute name is not valid
-        :raises AttributeError: Raised if the attribute name was already assigned
-        """
-
-        # Get the device
-        device = self.get_device(key, type_=type_)  # type: ignore[arg-type]
-
-        # Set the device as attribute
-        if not is_valid_name(key):
-            raise ValueError(f'Attribute name "{key}" not valid')
-        if hasattr(self, key):
-            raise AttributeError(f'Attribute name "{key}" was already assigned')
-        setattr(self, key, device)
-
-        # Add attribute to kernel invariants
-        self.update_kernel_invariants(key)
 
     @artiq.experiment.rpc(flags={'async'})
     def set_dataset_sys(self, key, value, data_store=True):  # type: (str, typing.Any, bool) -> None
@@ -617,6 +430,235 @@ class DaxHasSystem(DaxBase, abc.ABC):
         return f'[{self.get_system_key()}]({self.__class__.__name__})'
 
 
+class DaxHasSystem(DaxHasKey, abc.ABC):
+    """Intermediate base class for DAX classes that are dependent on a DAX system."""
+
+    __D_T = typing.TypeVar('__D_T')  # Device type verification
+
+    __CORE_DEVICES: typing.Tuple[str, ...] = ('core', 'core_dma', 'core_cache')
+    """Attribute names of core devices."""
+    __CORE_ATTRIBUTES: typing.Tuple[str, ...] = __CORE_DEVICES + ('registry',)
+    """Attribute names of core objects created in build() or inherited from parents."""
+
+    def __init__(self, managers_or_parent: typing.Any, *args: typing.Any,
+                 name: str, system_key: str, **kwargs: typing.Any):
+        """Constructor of a DAX base class which has a system.
+
+        :param managers_or_parent: The manager or parent object
+        :param args: Positional arguments forwarded to the :func:`build` function
+        :param name: The name of this object
+        :param system_key: The unique system key, used for object identification
+        :param kwargs: Keyword arguments forwarded to the :func:`build` function
+        """
+
+        # Call super, which will result in a call to build()
+        super(DaxHasSystem, self).__init__(managers_or_parent, *args,
+                                           name=name, system_key=system_key, **kwargs)
+
+        # Verify that all core attributes are available
+        if not all(hasattr(self, n) for n in self.__CORE_ATTRIBUTES):  # hasattr() checks properties too
+            msg: str = 'Missing core attributes (super.build() was probably not called)'
+            self.logger.error(msg)
+            raise AttributeError(msg)
+
+        # Make core devices kernel invariants
+        self.update_kernel_invariants(*self.__CORE_DEVICES)
+
+    @property
+    def core(self) -> artiq.coredevice.core.Core:
+        """Get the core device driver.
+
+        :return: The core object
+        """
+        return self.__core
+
+    @property
+    def core_dma(self) -> artiq.coredevice.dma.CoreDMA:
+        """Get the core DMA device driver.
+
+        :return: The core DMA object
+        """
+        return self.__core_dma
+
+    @property
+    def core_cache(self) -> artiq.coredevice.cache.CoreCache:
+        """Get the core cache device driver.
+
+        :return: The core cache object
+        """
+        return self.__core_cache
+
+    @property
+    def registry(self) -> DaxNameRegistry:
+        """Get the DAX registry.
+
+        :return: The logger object
+        """
+        return self.__registry
+
+    def _take_parent_core_attributes(self, parent: DaxHasSystem) -> None:
+        """Take core attributes from parent.
+
+        If this object does not construct its own core attributes, it should take them from their parent.
+        """
+        try:
+            # Take core attributes from parent
+            self.__core: artiq.coredevice.core.Core = parent.core
+            self.__core_dma: artiq.coredevice.dma.CoreDMA = parent.core_dma
+            self.__core_cache: artiq.coredevice.cache.CoreCache = parent.core_cache
+            self.__registry: DaxNameRegistry = parent.registry
+        except AttributeError:
+            parent.logger.exception('Missing core attributes (super.build() was probably not called)')
+            raise
+
+    @artiq.experiment.host_only
+    def _init_system(self) -> None:
+        """Initialize the DAX system, for dataset access, device initialization, and recording DMA traces."""
+
+        # Initialize all children
+        self.call_child_method('_init_system')
+
+        # Initialize this object
+        self.logger.debug('Initializing...')
+        try:
+            self.init()
+        except artiq.coredevice.core.CompileError:
+            # Log a fixed message, the exception message is empty
+            self.logger.exception('Compilation error occurred during initialization')
+            raise
+        except Exception as e:
+            # Log the exception to provide more context
+            self.logger.exception(e)
+            raise
+        else:
+            self.logger.debug('Initialization finished')
+
+    @artiq.experiment.host_only
+    def _post_init_system(self) -> None:
+        """DAX system post-initialization (e.g. obtaining DMA handles)."""
+
+        # Post-initialize all children
+        self.call_child_method('_post_init_system')
+
+        # Post-initialize this object
+        self.logger.debug('Post-initializing...')
+        try:
+            self.post_init()
+        except artiq.coredevice.core.CompileError:
+            # Log a fixed message, the exception message is empty
+            self.logger.exception('Compilation error occurred during post-initialization')
+            raise
+        except Exception as e:
+            # Log the exception to provide more context
+            self.logger.exception(e)
+            raise
+        else:
+            self.logger.debug('Post-initialization finished')
+
+    @abc.abstractmethod
+    def init(self) -> None:
+        """Override this method to access the dataset (r/w), initialize devices, and record DMA traces.
+
+        The :func:`init` function will be called when the user calls :func:`dax_init`
+        in the experiment :func:`run` function.
+        """
+        pass
+
+    @abc.abstractmethod
+    def post_init(self) -> None:
+        """Override this method for post-initialization procedures (e.g. obtaining DMA handles).
+
+        The :func:`post_init` function will be called when the user calls :func:`dax_init`
+        in the experiment :func:`run` function.
+        The :func:`post_init` function is called after all :func:`init` functions have been called.
+        This function is used to perform initialization tasks that are dependent on the initialization
+        of other components, for example to obtain a DMA handle.
+        """
+        pass
+
+    @typing.overload
+    def get_device(self, key: str) -> typing.Any:
+        ...
+
+    @typing.overload
+    def get_device(self, key: str, type_: typing.Type[__D_T]) -> __D_T:
+        ...
+
+    @artiq.experiment.host_only
+    def get_device(self, key: str, type_: typing.Optional[typing.Type[__D_T]] = None) -> typing.Any:
+        """Get a device driver.
+
+        Users can optionally specify an expected device type.
+        If the device does not match the expected type, an exception is raised.
+        Note that drivers of controllers are SiPyCo RPC objects and type checks are therefore not useful.
+
+        Devices that are retrieved using :func:`get_device` can not be added to the kernel invariants.
+        The user is responsible for adding the attribute to the list of kernel invariants.
+
+        :param key: The key of the device to obtain
+        :param type_: The expected type of the device
+        :return: The requested device driver
+        :raises KeyError: Raised when the device could not be obtained from the device DB
+        :raises TypeError: Raised when the device does not match the expected type
+        """
+
+        assert isinstance(key, str) and key, 'Key must be of type str and not empty'
+
+        # Debug message
+        self.logger.debug(f'Requesting device "{key}"')
+
+        try:
+            # Get the unique key, which will also check the keys and aliases
+            unique: str = self.registry.get_unique_device_key(key)
+        except (LookupError, TypeError) as e:
+            # Device was not found in the device DB
+            raise KeyError(f'Device "{key}" could not be found in the device DB') from e
+
+        # Get the device using the unique key
+        device: typing.Any = super(DaxHasSystem, self).get_device(unique)
+
+        if type_ is not None and not isinstance(device, (type_, artiq.master.worker_db.DummyDevice,
+                                                         dax.sim.device.DaxSimDevice)):
+            # Device has an unexpected type
+            raise TypeError(f'Device "{key}" does not match the expected type')
+
+        # Register the requested device with the unique key
+        self.registry.add_device(unique, device, self)
+
+        # Return the device
+        return device
+
+    @artiq.experiment.host_only
+    def setattr_device(self, key: str, type_: typing.Optional[typing.Type[__D_T]] = None) -> None:
+        """Sets a device driver as attribute.
+
+        Users can optionally specify an expected device type.
+        If the device does not match the expected type, an exception is raised.
+
+        The attribute used to set the device driver is automatically added to the kernel invariants.
+
+        :param key: The key of the device
+        :param type_: The expected type of the device
+        :raises KeyError: Raised when the device could not be obtained from the device DB
+        :raises TypeError: Raised when the device does not match the expected type
+        :raises ValueError: Raised if the attribute name is not valid
+        :raises AttributeError: Raised if the attribute name was already assigned
+        """
+
+        # Get the device
+        device = self.get_device(key, type_=type_)  # type: ignore[arg-type]
+
+        # Set the device as attribute
+        if not _is_valid_name(key):
+            raise ValueError(f'Attribute name "{key}" not valid')
+        if hasattr(self, key):
+            raise AttributeError(f'Attribute name "{key}" was already assigned')
+        setattr(self, key, device)
+
+        # Add attribute to kernel invariants
+        self.update_kernel_invariants(key)
+
+
 class DaxModuleBase(DaxHasSystem, abc.ABC):
     """Base class for all DAX modules and systems."""
 
@@ -653,21 +695,20 @@ class DaxModule(DaxModuleBase, abc.ABC):
         """
 
         # Check module name
-        if not is_valid_name(module_name):
+        if not _is_valid_name(module_name):
             raise ValueError(f'Invalid module name "{module_name}"')
         # Check parent type
         if not isinstance(managers_or_parent, DaxHasSystem):
             raise TypeError(f'Parent of module "{module_name}" is not of type DaxHasSystem')
 
-        # Take core attributes from parent
+        # Take key and core attributes from parent
+        self._take_parent_key_attributes(managers_or_parent)
         self._take_parent_core_attributes(managers_or_parent)
-
-        # Crate system key based on parent key
-        module_key: str = managers_or_parent.get_system_key(module_name)
 
         # Call super
         super(DaxModule, self).__init__(managers_or_parent, *args,
-                                        module_name=module_name, module_key=module_key, **kwargs)
+                                        module_name=module_name,
+                                        module_key=managers_or_parent.get_system_key(module_name), **kwargs)
 
 
 class DaxSystem(DaxModuleBase):
@@ -706,15 +747,8 @@ class DaxSystem(DaxModuleBase):
         :param kwargs: Keyword arguments forwarded to the :func:`build` function
         """
 
-        # Check if system ID was overridden
-        assert hasattr(self, 'SYS_ID'), 'Every DAX system class must override the SYS_ID class attribute'
-        assert isinstance(self.SYS_ID, str), 'System ID must be of type str'
-        assert is_valid_name(self.SYS_ID), f'Invalid system ID "{self.SYS_ID}"'
-
-        # Check if system version was overridden
-        assert hasattr(self, 'SYS_VER'), 'Every DAX system class must override the SYS_VER class attribute'
-        assert isinstance(self.SYS_VER, int), 'System version must be of type int'
-        assert self.SYS_VER >= 0, 'Invalid system version, set version number larger or equal to zero'
+        # Validate this system class
+        _is_valid_system_class(type(self))
 
         # Call super, add names, add a new registry
         super(DaxSystem, self).__init__(managers_or_parent, *args,
@@ -818,20 +852,11 @@ class DaxSystem(DaxModuleBase):
 
         # Instantiate the data store
         if self.DAX_INFLUX_DB_KEY is not None:
-            try:
-                # Create an Influx DB data store
-                self.__data_store = DaxDataStoreInfluxDb(self, type(self))
-            except KeyError:
-                # Influx DB controller was not found in the device DB
-                self.logger.warning(f'Influx DB controller "{self.DAX_INFLUX_DB_KEY}" not found in device DB')
-                self.__data_store = DaxDataStore()
-            except artiq.master.worker_db.DeviceError:
-                # Failed to create Influx DB driver
-                self.logger.warning(f'Failed to create Influx DB driver "{self.DAX_INFLUX_DB_KEY}"', exc_info=True)
-                self.__data_store = DaxDataStore()
+            # Create an Influx DB data store
+            self.__data_store: DaxDataStore = DaxDataStoreInfluxDb.get_instance(self, type(self))
         else:
             # No data store configured
-            self.__data_store: DaxDataStore = DaxDataStore()
+            self.__data_store = DaxDataStore()
 
     @artiq.experiment.host_only
     def dax_init(self) -> None:
@@ -863,13 +888,31 @@ class DaxSystem(DaxModuleBase):
         pass
 
 
+def _is_valid_system_class(system_class: typing.Type[DaxSystem]) -> None:
+    """Validate if this system class is correctly implemented."""
+
+    # Check if system ID was overridden
+    assert hasattr(system_class, 'SYS_ID'), 'Every DAX system class must override the SYS_ID class attribute'
+    assert isinstance(system_class.SYS_ID, str), 'System ID must be of type str'
+    assert _is_valid_name(system_class.SYS_ID), f'Invalid system ID "{system_class.SYS_ID}"'
+
+    # Check if system version was overridden
+    assert hasattr(system_class, 'SYS_VER'), 'Every DAX system class must override the SYS_VER class attribute'
+    assert isinstance(system_class.SYS_VER, int), 'System version must be of type int'
+    assert system_class.SYS_VER >= 0, 'Invalid system version, set version number larger or equal to zero'
+
+    # Check names and keys
+    assert _is_valid_name(system_class.SYS_NAME), 'System name is not a valid'
+    assert _is_valid_key(system_class.SYS_SERVICES), 'System services key is not valid'
+
+
 class DaxService(DaxHasSystem, abc.ABC):
     """Base class for system services."""
 
     SERVICE_NAME: str
     """The unique name of this service."""
 
-    def __init__(self, managers_or_parent: DaxHasSystem,
+    def __init__(self, managers_or_parent: typing.Union[DaxSystem, DaxService],
                  *args: typing.Any, **kwargs: typing.Any):
         """Initialize the DAX service base class.
 
@@ -886,7 +929,8 @@ class DaxService(DaxHasSystem, abc.ABC):
         if not isinstance(managers_or_parent, (DaxSystem, DaxService)):
             raise TypeError(f'Parent of service "{self.SERVICE_NAME}" is not a DAX system or service')
 
-        # Take core attributes from parent
+        # Take key and core attributes from parent
+        self._take_parent_key_attributes(managers_or_parent)
         self._take_parent_core_attributes(managers_or_parent)
 
         # Use name registry of parent to obtain a system key
@@ -894,7 +938,8 @@ class DaxService(DaxHasSystem, abc.ABC):
 
         # Call super
         super(DaxService, self).__init__(managers_or_parent, *args,
-                                         name=self.SERVICE_NAME, system_key=system_key, **kwargs)
+                                         name=self.SERVICE_NAME,
+                                         system_key=system_key, **kwargs)
 
         # Register this service
         self.registry.add_service(self)
@@ -925,7 +970,7 @@ class DaxClient(DaxHasSystem, abc.ABC):
     DAX_INIT: bool = True
     """Flag if dax_init() should run for this client."""
 
-    def __init__(self, managers_or_parent: typing.Any,
+    def __init__(self, managers_or_parent: DaxSystem,
                  *args: typing.Any, **kwargs: typing.Any):
         """Construct the DAX client object.
 
@@ -939,7 +984,8 @@ class DaxClient(DaxHasSystem, abc.ABC):
         if not isinstance(managers_or_parent, DaxSystem):
             raise TypeError(f'DAX client class {self.__class__.__name__} must be decorated with @dax_client_factory')
 
-        # Take attributes from the parent system
+        # Take key and core attributes from parent
+        self._take_parent_key_attributes(managers_or_parent)
         self._take_parent_core_attributes(managers_or_parent)
 
         # Call super and identify with system name and system key
@@ -974,7 +1020,7 @@ class DaxNameRegistry:
         assert isinstance(system, DaxSystem), 'System must be of type DAX system'
 
         # Check system services key
-        if not is_valid_key(system.SYS_SERVICES):
+        if not _is_valid_key(system.SYS_SERVICES):
             raise ValueError(f'Invalid system services key "{system.SYS_SERVICES}"')
 
         # Store system services key
@@ -1235,7 +1281,7 @@ class DaxNameRegistry:
 
         # Check the given name
         assert isinstance(service_name, str), 'Service name must be a string'
-        if not is_valid_name(service_name):
+        if not _is_valid_name(service_name):
             # Service name not valid
             raise ValueError(f'Invalid service name "{service_name}"')
 
@@ -1395,7 +1441,8 @@ class DaxDataStore:
         # Create a logger object
         self._logger: logging.Logger = logging.getLogger(f'{self.__module__}.{self.__class__.__name__}')
 
-    def set(self, key: str, value: typing.Any) -> None:
+    @artiq.experiment.rpc(flags={'async'})
+    def set(self, key, value):  # type: (str, typing.Any) -> None
         """Write a key-value into the data store.
 
         :param key: The key of the value
@@ -1403,7 +1450,8 @@ class DaxDataStore:
         """
         self._logger.debug(f'Set key "{key}" to value: "{value}"')
 
-    def mutate(self, key: str, index: typing.Any, value: typing.Any) -> None:
+    @artiq.experiment.rpc(flags={'async'})
+    def mutate(self, key, index, value):  # type: (str, typing.Any, typing.Any) -> None
         """Mutate a specific index of a key-value in the data store.
 
         :param key: The key of the value
@@ -1412,7 +1460,8 @@ class DaxDataStore:
         """
         self._logger.debug(f'Mutate key "{key}"[{index}] to value "{value}"')
 
-    def append(self, key: str, value: typing.Any) -> None:
+    @artiq.experiment.rpc(flags={'async'})
+    def append(self, key, value):  # type: (str, typing.Any) -> None
         """Append a value to a key-value in the data store.
 
         :param key: The key of the value
@@ -1448,8 +1497,8 @@ class DaxDataStoreInfluxDb(DaxDataStore):
         assert isinstance(environment, artiq.experiment.HasEnvironment), \
             'The environment parameter must be of type HasEnvironment'
         assert issubclass(system_class, DaxSystem), 'The system class must be a subclass of DaxSystem'
-        assert system_class is not DaxSystem, 'The system class must be a strict subclass of DaxSystem'
-        assert isinstance(system_class.DAX_INFLUX_DB_KEY, str), 'The DAX InfluxDB key must be of type str'
+        assert isinstance(system_class.DAX_INFLUX_DB_KEY, str), 'The DAX Influx DB key must be of type str'
+        _is_valid_system_class(system_class)
 
         # Call super
         super(DaxDataStoreInfluxDb, self).__init__()
@@ -1496,7 +1545,8 @@ class DaxDataStoreInfluxDb(DaxDataStore):
         # Debug message
         self._logger.debug(f'Initialized base fields: {self._base_fields}')
 
-    def set(self, key: str, value: typing.Any) -> None:
+    @artiq.experiment.rpc(flags={'async'})
+    def set(self, key, value):  # type: (str, typing.Any) -> None
         """Write a key-value into the Influx DB data store.
 
         Lists will be flattened to separate elements with an index since
@@ -1526,7 +1576,8 @@ class DaxDataStoreInfluxDb(DaxDataStore):
             # Unsupported type, do not raise but warn user instead
             self._logger.warning(f'Could not store value for key "{key}", unsupported value type for value "{value}"')
 
-    def mutate(self, key: str, index: typing.Any, value: typing.Any) -> None:
+    @artiq.experiment.rpc(flags={'async'})
+    def mutate(self, key, index, value):  # type: (str, typing.Any, typing.Any) -> None
         """Mutate a specified index of a key-value in the Influx DB data store.
 
         List structures are not supported by Influx DB and are emulated by using indices.
@@ -1550,7 +1601,8 @@ class DaxDataStoreInfluxDb(DaxDataStore):
             # Unsupported type, do not raise but warn user instead
             self._logger.warning(f'Could not mutate value for key "{key}", unsupported value type for value "{value}"')
 
-    def append(self, key: str, value: typing.Any) -> None:
+    @artiq.experiment.rpc(flags={'async'})
+    def append(self, key, value):  # type: (str, typing.Any) -> None
         """Append a value to a key-value in the Influx DB data store.
 
         List structures are not supported by Influx DB and are emulated by using indices.
@@ -1587,7 +1639,7 @@ class DaxDataStoreInfluxDb(DaxDataStore):
 
         assert isinstance(key, str), 'Key should be of type str'
 
-        if not is_valid_key(key):
+        if not _is_valid_key(key):
             # Invalid key
             raise ValueError(f'Influx DB data store received an invalid key "{key}"')
 
@@ -1637,6 +1689,35 @@ class DaxDataStoreInfluxDb(DaxDataStore):
         """
         self._influx.write_points(points)
 
+    @classmethod
+    def get_instance(cls, environment: DaxBase, system_class: typing.Type[DaxSystem]) -> DaxDataStore:
+        """Get an instance of the Influx DB data store.
+
+        In case of errors, this function will return a base :class:`DaxDataStore` object.
+
+        :param environment: A :class:`DaxBase` object
+        :param system_class: The DAX system class the Influx DB data store identifies itself with
+        :return: A data store object
+        """
+
+        assert isinstance(environment, DaxBase), 'The given environment is not of type DaxBase'
+        assert issubclass(system_class, DaxSystem), 'The given system class is not a subclass of DaxSystem'
+        assert system_class.DAX_INFLUX_DB_KEY is not None, 'The given system class does not have a DAX Influx DB key'
+
+        try:
+            # Create an Influx DB data store
+            return cls(environment, system_class)
+        except KeyError:
+            # Influx DB controller was not found in the device DB
+            environment.logger.warning(f'Influx DB controller "{system_class.DAX_INFLUX_DB_KEY}" '
+                                       f'not found in device DB')
+            return DaxDataStore()
+        except artiq.master.worker_db.DeviceError:
+            # Failed to create Influx DB driver
+            environment.logger.warning(f'Failed to create Influx DB driver "{system_class.DAX_INFLUX_DB_KEY}"',
+                                       exc_info=True)
+            return DaxDataStore()
+
 
 # Note: These names should not alias with other type variable names!
 __DCF_C_T = typing.TypeVar('__DCF_C_T', bound=DaxClient)  # Type variable for dax_client_factory() c (client) argument
@@ -1653,8 +1734,7 @@ def dax_client_factory(c: typing.Type[__DCF_C_T]) -> typing.Callable[[typing.Typ
     assert isinstance(c, type), 'The decorated object must be a class'
     assert issubclass(c, DaxClient), 'The decorated class must be a subclass of DaxClient'
 
-    # Use the wraps decorator, but do not inherit the docstring
-    @functools.wraps(c, assigned=[e for e in functools.WRAPPER_ASSIGNMENTS if e != '__doc__'])
+    @functools.wraps(c, assigned=('__module__', '__name__', '__qualname__'))
     def wrapper(system_type: typing.Type[__DCF_S_T],
                 *system_args: typing.Any, **system_kwargs: typing.Any) -> typing.Type[__DCF_C_T]:
         """Create a new DAX client class.

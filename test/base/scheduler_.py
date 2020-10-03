@@ -5,12 +5,14 @@ import typing
 import collections
 import contextlib
 import os
+from unittest.mock import MagicMock, call
 
 from artiq.language.scan import *
 from artiq.experiment import TerminationRequested
 
 from dax.base.scheduler import *
-from dax.util.artiq import get_manager_or_parent
+from dax.util.artiq import get_managers
+import dax.base.system
 import dax.util.output
 
 
@@ -49,7 +51,8 @@ class _Job(Job):
 
 
 class _Job4(_Job):
-    pass
+    FILE = 'foo.py'
+    CLASS_NAME = 'Bar'
 
 
 class _Job2(_Job):
@@ -63,6 +66,8 @@ class _Job3(_Job):
 class _Job1(_Job):
     DEPENDENCIES = {_Job2, _Job3}
     INTERVAL = '1h'
+    FILE = 'foo.py'
+    CLASS_NAME = 'Bar'
 
 
 class _JobC(_Job):
@@ -83,6 +88,14 @@ class _Scheduler(DaxScheduler):
 
     # Modify graphviz format to prevent usage of visual render engines
     _GRAPHVIZ_FORMAT = 'gv'
+
+    def __init__(self, *args, **kwargs):
+        self._data_store = MagicMock(spec=dax.base.system.DaxDataStore)
+        super(_Scheduler, self).__init__(*args, **kwargs)
+
+    @property
+    def data_store(self):
+        return self._data_store
 
 
 class SchedulerMiscTestCase(unittest.TestCase):
@@ -140,8 +153,8 @@ class LazySchedulerTestCase(unittest.TestCase):
     POLICY = Policy.LAZY
 
     def setUp(self) -> None:
-        self.mop = get_manager_or_parent(Policy=str(self.POLICY), Pipeline='test_pipeline',
-                                         **{'View graph': False})  # type: ignore[arg-type]
+        self.mop = get_managers(Policy=str(self.POLICY), Pipeline='test_pipeline',
+                                **{'View graph': False})  # type: ignore[arg-type]
 
     def test_create_job(self):
         # noinspection PyProtectedMember
@@ -305,7 +318,7 @@ class LazySchedulerTestCase(unittest.TestCase):
     def test_scheduler_pipeline(self):
         with _isolation():
             with self.assertRaises(ValueError, msg='Pipeline conflict did not raise'):
-                s = _Scheduler(get_manager_or_parent(Policy=str(self.POLICY), Pipeline='main', **{'View graph': False}))
+                s = _Scheduler(get_managers(Policy=str(self.POLICY), Pipeline='main', **{'View graph': False}))
                 s.prepare()
 
             s = _Scheduler(self.mop)
@@ -317,6 +330,22 @@ class LazySchedulerTestCase(unittest.TestCase):
 
         s = S(self.mop)
         with self.assertLogs(s.logger, logging.WARNING), _isolation():
+            s.prepare()
+
+    def test_scheduler_job_name_conflict(self):
+        class S(_Scheduler):
+            # noinspection PyGlobalUndefined
+            global _JobA
+            JOBS = [_JobA]
+
+        # noinspection PyShadowingNames
+        class _JobA(Job):
+            pass
+
+        S.JOBS.append(_JobA)
+
+        s = S(self.mop)
+        with self.assertRaises(ValueError, msg='Job class name conflict did not raise'), _isolation():
             s.prepare()
 
     def test_scheduler_dependencies(self):
@@ -392,6 +421,9 @@ class LazySchedulerTestCase(unittest.TestCase):
         for j in s._job_graph:
             j.init(reset=True)
 
+        # Check data store calls
+        self.assertEqual(len(s.data_store.method_calls), 0, 'Unexpected data store calls')
+
         # Wave
         s.wave()
         for j in s._job_graph:
@@ -422,6 +454,10 @@ class LazySchedulerTestCase(unittest.TestCase):
                 self.assertDictEqual(j.counter, ref_counter,
                                      'Job call pattern did not match expected pattern')
 
+        # Check data store calls
+        self.assertListEqual(s.data_store.method_calls,
+                             [call.append(s.get_system_key(_Job1.get_name(), _Job1._RID_LIST_KEY), 1)])
+
     def test_scheduler_run(self):
         waves = 3
 
@@ -436,8 +472,8 @@ class LazySchedulerTestCase(unittest.TestCase):
                     raise TerminationRequested
 
         with _isolation():
-            s = S(get_manager_or_parent(Policy=str(self.POLICY), Pipeline='test_pipeline',
-                                        **{'Wave interval': 1.0, 'Clock period': 0.1, 'View graph': False}))
+            s = S(get_managers(Policy=str(self.POLICY), Pipeline='test_pipeline',
+                               **{'Wave interval': 1.0, 'Clock period': 0.1, 'View graph': False}))
             s.prepare()
 
         # Run the scheduler
@@ -507,6 +543,9 @@ class GreedySchedulerTestCase(LazySchedulerTestCase):
                 self.assertDictEqual(j.counter, ref_counter,
                                      'Job call pattern did not match expected pattern')
 
+        # Check data store calls (only jobs that are not meta-jobs perform a call)
+        self.assertEqual(len(s.data_store.method_calls), 2, 'Data store was called an unexpected number of times')
+
     def test_scheduler_run(self):
         waves = 3
 
@@ -521,8 +560,8 @@ class GreedySchedulerTestCase(LazySchedulerTestCase):
                     raise TerminationRequested
 
         with _isolation():
-            s = S(get_manager_or_parent(Policy=str(self.POLICY), Pipeline='test_pipeline',
-                                        **{'Wave interval': 1.0, 'Clock period': 0.1, 'View graph': False}))
+            s = S(get_managers(Policy=str(self.POLICY), Pipeline='test_pipeline',
+                               **{'Wave interval': 1.0, 'Clock period': 0.1, 'View graph': False}))
             s.prepare()
 
         # Run the scheduler

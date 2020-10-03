@@ -3,7 +3,7 @@ import numpy as np
 
 import dax.sim.coredevice.cache
 from dax.sim import enable_dax_sim
-from dax.util.artiq import get_manager_or_parent
+from dax.util.artiq import get_managers
 
 
 class CoreCacheTestCase(unittest.TestCase):
@@ -24,7 +24,7 @@ class CoreCacheTestCase(unittest.TestCase):
     }, enable=True, output='null', moninj_service=False)
 
     def setUp(self) -> None:
-        device_manager, _, _, _ = get_manager_or_parent(device_db=self._DEVICE_DB)
+        device_manager, _, _, _ = get_managers(device_db=self._DEVICE_DB)
         self.cache = dax.sim.coredevice.cache.CoreCache(device_manager, cache=self._CACHE, _key='core_cache')
 
     def test_cache(self):

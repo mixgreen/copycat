@@ -2,7 +2,7 @@ import unittest
 import typing
 
 from dax.base.system import DaxSystem
-from dax.util.artiq import get_manager_or_parent
+from dax.util.artiq import get_managers
 from dax.util.output import temp_dir
 from dax.sim import enable_dax_sim
 from dax.sim.signal import get_signal_manager, VcdSignalManager
@@ -43,7 +43,7 @@ class GTKWaveTestCase(unittest.TestCase):
         with temp_dir():
             ddb = enable_dax_sim(ddb=_DEVICE_DB.copy(), enable=True, output='vcd', moninj_service=False)
 
-            system = _TestSystem(get_manager_or_parent(ddb))
+            system = _TestSystem(get_managers(ddb))
             self.assertTrue(system.dax_sim_enabled)
 
             # Create GTKWave save generator object, which immediately writes the waves file
@@ -56,7 +56,7 @@ class GTKWaveTestCase(unittest.TestCase):
         with temp_dir():
             ddb = enable_dax_sim(ddb=_DEVICE_DB.copy(), enable=True, output='null', moninj_service=False)
 
-            system = _TestSystem(get_manager_or_parent(ddb))
+            system = _TestSystem(get_managers(ddb))
             self.assertTrue(system.dax_sim_enabled)
 
             with self.assertRaises(RuntimeError, msg='Not using VCD signal manager did not raise'):

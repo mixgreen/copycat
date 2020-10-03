@@ -6,18 +6,11 @@ dax.base package
 dax.base.system module
 ----------------------
 
-.. autoclass:: dax.base.system.DaxHasSystem
-    :members:
-    :undoc-members:
-    :show-inheritance:
-    :inherited-members:
-
 .. automodule:: dax.base.system
     :members:
     :undoc-members:
     :show-inheritance:
     :ignore-module-all:
-    :exclude-members: DaxHasSystem
 
 .. _dax.base.scan:
 

@@ -11,7 +11,7 @@ import artiq.master.databases
 import artiq.frontend.artiq_run  # type: ignore
 
 __all__ = ['is_kernel', 'is_portable', 'is_host_only',
-           'get_manager_or_parent']
+           'get_managers']
 
 
 def is_kernel(func: typing.Any) -> bool:
@@ -44,11 +44,11 @@ def is_host_only(func: typing.Any) -> bool:
     return False if meta is None else bool(meta.forbidden)
 
 
-def get_manager_or_parent(device_db: typing.Union[typing.Dict[str, typing.Any], str, None] = None, *,
-                          dataset_db: typing.Optional[str] = None,
-                          expid: typing.Optional[typing.Dict[str, typing.Any]] = None,
-                          **arguments: typing.Any) -> typing.Any:
-    """Returns an object that can function as a `manager_or_parent` for ARTIQ HasEnvironment.
+def get_managers(device_db: typing.Union[typing.Dict[str, typing.Any], str, None] = None, *,
+                 dataset_db: typing.Optional[str] = None,
+                 expid: typing.Optional[typing.Dict[str, typing.Any]] = None,
+                 **arguments: typing.Any) -> typing.Any:
+    """Returns an object that can function as a `managers_or_parent` for ARTIQ HasEnvironment.
 
     This function is primarily used for testing purposes.
 
@@ -108,7 +108,7 @@ def get_manager_or_parent(device_db: typing.Union[typing.Dict[str, typing.Any], 
     # Argument manager
     argument_mgr = artiq.language.environment.ProcessArgumentManager(arguments)
 
-    # Return a tuple that is accepted as manager_or_parent
+    # Return a tuple that is accepted as managers_or_parent
     # DeviceManager, DatasetManager, ProcessArgumentManager, dict
     return device_mgr, dataset_mgr, argument_mgr, {}
 

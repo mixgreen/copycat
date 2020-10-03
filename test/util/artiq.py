@@ -11,12 +11,12 @@ __all__ = ['ArtiqTestCase']
 
 class ArtiqTestCase(unittest.TestCase):
 
-    def test_get_manager_or_parent(self):
-        # Create an experiment object using the helper get_manager_or_parent() function
-        self.assertIsInstance(artiq.experiment.EnvExperiment(dax.util.artiq.get_manager_or_parent()),
+    def test_get_managers(self):
+        # Create an experiment object using the helper get_managers() function
+        self.assertIsInstance(artiq.experiment.EnvExperiment(dax.util.artiq.get_managers()),
                               artiq.experiment.HasEnvironment)
 
-    def test_get_manager_or_parent_dataset_db(self):
+    def test_get_managers_dataset_db(self):
         with dax.util.output.temp_dir():
             dataset_db = 'dataset_db.pyon'
             key = 'foo'
@@ -27,7 +27,7 @@ class ArtiqTestCase(unittest.TestCase):
                 f.write(f'{{\n    "{key}": {value}\n}}')
 
             # Create environment
-            env = artiq.experiment.EnvExperiment(dax.util.artiq.get_manager_or_parent(dataset_db=dataset_db))
+            env = artiq.experiment.EnvExperiment(dax.util.artiq.get_managers(dataset_db=dataset_db))
             self.assertEqual(env.get_dataset(key), value, 'Retrieved dataset did not match earlier set value')
 
     def test_is_kernel(self):

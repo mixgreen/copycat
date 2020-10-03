@@ -3,7 +3,7 @@ import graphviz
 
 import dax.base.system
 import dax.util.introspect
-from dax.util.artiq import get_manager_or_parent
+from dax.util.artiq import get_managers
 from dax.util.output import temp_dir
 
 
@@ -45,7 +45,7 @@ class _TestService(dax.base.system.DaxService):
 class IntrospectTestCase(unittest.TestCase):
 
     def setUp(self) -> None:
-        self.sys = _TestSystem(get_manager_or_parent())
+        self.sys = _TestSystem(get_managers())
 
     def test_component_graphviz(self):
         with temp_dir():

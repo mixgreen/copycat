@@ -3,7 +3,7 @@ import collections
 
 from dax.experiment import *
 from dax.modules.safety_context import *
-from dax.util.artiq import get_manager_or_parent
+from dax.util.artiq import get_managers
 import dax.base.system
 
 
@@ -42,7 +42,7 @@ class _GenericSafetyContextTestCase(unittest.TestCase):
     SYSTEM_TYPE = _ReentrantTestSystem
 
     def setUp(self) -> None:
-        self.s = self.SYSTEM_TYPE(get_manager_or_parent())
+        self.s = self.SYSTEM_TYPE(get_managers())
         self.s.dax_init()
         self.counter = self.s.counter
         self.context = self.s.context
