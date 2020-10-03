@@ -127,22 +127,22 @@ class DaxHelpersTestCase(unittest.TestCase):
     def test_valid_name(self):
         for n in ['foo', '_0foo', '_', '0', '_foo', 'FOO_', '0_foo']:
             # Test valid names
-            self.assertTrue(dax.base.system.is_valid_name(n))
+            self.assertTrue(dax.base.system._is_valid_name(n))
 
     def test_invalid_name(self):
         for n in ['', 'foo()', 'foo.bar', 'foo/', 'foo*', 'foo,', 'FOO+', 'foo-bar', 'foo/bar']:
             # Test illegal names
-            self.assertFalse(dax.base.system.is_valid_name(n))
+            self.assertFalse(dax.base.system._is_valid_name(n))
 
     def test_valid_key(self):
         for k in ['foo', '_0foo', '_', '0', 'foo.bar', 'foo.bar.baz', '_.0.A', 'foo0._bar']:
             # Test valid keys
-            self.assertTrue(dax.base.system.is_valid_key(k))
+            self.assertTrue(dax.base.system._is_valid_key(k))
 
     def test_invalid_key(self):
         for k in ['', 'foo()', 'foo,bar', 'foo/', '.foo', 'bar.', 'foo.bar.baz.']:
             # Test illegal keys
-            self.assertFalse(dax.base.system.is_valid_key(k))
+            self.assertFalse(dax.base.system._is_valid_key(k))
 
     def test_unique_device_key(self):
         # Test system and device DB
@@ -741,10 +741,159 @@ class DaxDataStoreInfluxDbTestCase(unittest.TestCase):
                 self.assertEqual(0, self.ds._index_table[k], 'Cached length does not match actual list length')
 
 
-class DaxModuleBaseTestCase(unittest.TestCase):
-    """Tests _DaxHasSystemBase, DaxModuleBase, DaxModule, and DaxSystem.
+class DaxBaseTestCase(unittest.TestCase):
 
-    The four mentioned modules are highly related and overlap mostly.
+    def test_abstract_class(self):
+        with self.assertRaises(TypeError, msg='Abstract class instantiation did not raise'):
+            dax.base.system.DaxBase(None)
+
+    def test_kernel_invariants(self):
+        class Base(dax.base.system.DaxBase):
+            def get_identifier(self) -> str:
+                return 'identifier'
+
+        b = Base(get_manager_or_parent())
+        self.assertFalse(hasattr(b, 'kernel_invariants'), 'kernel_invariants attribute found when not expected')
+
+        keys = {'foo', 'bar', 'foobar'}
+        b.update_kernel_invariants(*keys)
+        self.assertTrue(hasattr(b, 'kernel_invariants'))
+        self.assertSetEqual(b.kernel_invariants, keys)
+
+
+class DaxHasKeyTestCase(unittest.TestCase):
+
+    def test_constructor(self):
+        with self.assertRaises(ValueError, msg='key not ending in name did not raise'):
+            dax.base.system.DaxHasKey(get_manager_or_parent(), name='name', system_key='valid_key')
+
+        with self.assertRaises(ValueError, msg='invalid name did not raise'):
+            dax.base.system.DaxHasKey(get_manager_or_parent(), name='valid.key', system_key='valid.key')
+
+    def test_key_attributes(self):
+        with self.assertRaises(AttributeError, msg='Missing key attributes did not raise'):
+            dax.base.system.DaxHasKey(get_manager_or_parent(), name='name', system_key='name')
+
+        class HasKeyParent(dax.base.system.DaxHasKey):
+            _data_store: dax.base.system.DaxDataStore = dax.base.system.DaxDataStore()
+
+            @property
+            def data_store(self) -> dax.base.system.DaxDataStore:
+                return self._data_store
+
+        class HasKey(dax.base.system.DaxHasKey):
+            def build(self, *, parent):
+                self._take_parent_key_attributes(parent)
+
+        name = 'name'
+        key = 'key.name'
+        parent_ = HasKeyParent(get_manager_or_parent(), name=name, system_key=key)
+        child = HasKey(parent_, name=name, system_key=key, parent=parent_)
+
+        for hk in [parent_, child]:
+            with self.subTest(has_key_object=hk):
+                self.assertIn('data_store', hk.kernel_invariants)
+                self.assertEqual(hk.get_name(), name)
+                self.assertEqual(hk.get_system_key(), key)
+                self.assertTrue(hk.get_system_key('foo').endswith('.foo'))
+
+    def test_has_attribute(self):
+        class HasKeyParent(dax.base.system.DaxHasKey):
+            _data_store: dax.base.system.DaxDataStore = dax.base.system.DaxDataStore()
+
+            @property
+            def data_store(self) -> dax.base.system.DaxDataStore:
+                return self._data_store
+
+        name = 'name'
+        key = 'key.name'
+        hk = HasKeyParent(get_manager_or_parent(), name=name, system_key=key)
+
+        self.assertTrue(hk.hasattr('kernel_invariants'))
+        self.assertFalse(hk.hasattr('foo'))
+        self.assertFalse(hk.hasattr('kernel_invariants', 'foo'))
+
+        key = 'bar'
+        hk.setattr_dataset(key, 0)
+        self.assertTrue(hk.hasattr(key))
+
+        key = 'foobar'
+        hk.setattr_dataset_sys(key)
+        self.assertFalse(hk.hasattr(key))
+
+
+class DaxHasSystemTestCase(unittest.TestCase):
+
+    def test_core_attributes(self):
+        class HasSystemBase(dax.base.system.DaxHasSystem):
+
+            def init(self) -> None:
+                pass
+
+            def post_init(self) -> None:
+                pass
+
+        with self.assertRaises(AttributeError, msg='Missing core attributes did not raise'):
+            HasSystemBase(get_manager_or_parent(), name='name', system_key='name')
+
+        class HasSystemParent(HasSystemBase):
+            _data_store: dax.base.system.DaxDataStore = dax.base.system.DaxDataStore()
+            _registry: dax.base.system.DaxNameRegistry = dax.base.system.DaxNameRegistry(
+                _TestSystem(get_manager_or_parent()))
+
+            def init(self) -> None:
+                pass
+
+            def post_init(self) -> None:
+                pass
+
+            @property
+            def data_store(self) -> dax.base.system.DaxDataStore:
+                return self._data_store
+
+            @property
+            def registry(self) -> dax.base.system.DaxNameRegistry:
+                return self._registry
+
+            @property
+            def core(self):
+                return None
+
+            @property
+            def core_cache(self):
+                return None
+
+            @property
+            def core_dma(self):
+                return None
+
+        class HasSystem(HasSystemBase):
+            def init(self) -> None:
+                pass
+
+            def post_init(self) -> None:
+                pass
+
+            def build(self, *, parent):
+                self._take_parent_key_attributes(parent)
+                self._take_parent_core_attributes(parent)
+
+        name = 'name'
+        key = 'key.name'
+        parent_ = HasSystemParent(get_manager_or_parent(), name=name, system_key=key)
+        child = HasSystem(parent_, name=name, system_key=key, parent=parent_)
+
+        for hk in [parent_, child]:
+            with self.subTest(has_key_object=hk):
+                for key in ['data_store', 'core', 'core_cache', 'core_dma']:
+                    self.assertIn(key, hk.kernel_invariants)
+                self.assertNotIn('registry', hk.kernel_invariants)
+
+
+class DaxModuleBaseTestCase(unittest.TestCase):
+    """Tests DaxHasKey, DaxHasSystem, DaxModuleBase, DaxModule, and DaxSystem.
+
+    The mentioned modules are highly related and overlap mostly.
     Therefore they are all tested mutually.
     """
 
@@ -1346,6 +1495,7 @@ class DaxClientTestCase(unittest.TestCase):
             def run(self) -> None:
                 pass
 
+        # noinspection PyTypeChecker
         class ImplementableClient(Client(_TestSystem)):
             pass
 
@@ -1367,6 +1517,7 @@ class DaxClientTestCase(unittest.TestCase):
             def run(self) -> None:
                 pass
 
+        # noinspection PyTypeChecker
         class ImplementableClient(Client(_TestSystem)):
             pass
 

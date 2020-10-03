@@ -48,7 +48,7 @@ def get_manager_or_parent(device_db: typing.Union[typing.Dict[str, typing.Any], 
                           dataset_db: typing.Optional[str] = None,
                           expid: typing.Optional[typing.Dict[str, typing.Any]] = None,
                           **arguments: typing.Any) -> typing.Any:
-    """Returns an object that can function as a `manager_or_parent` for ARTIQ HasEnvironment.
+    """Returns an object that can function as a `managers_or_parent` for ARTIQ HasEnvironment.
 
     This function is primarily used for testing purposes.
 

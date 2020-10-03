@@ -13,7 +13,7 @@ import artiq.experiment
 import dax.base.system
 import dax.util.output
 
-__all__ = ['Job', 'Policy', 'DaxScheduler']
+__all__ = ['JobAction', 'Job', 'Policy', 'DaxScheduler']
 
 
 def _str_to_time(string: str) -> float:
@@ -85,8 +85,8 @@ class JobAction(enum.Enum):
         return self.name
 
 
-class Job(dax.base.system.DaxBase):
-    """Job class to inherit from.
+class Job(dax.base.system.DaxHasKey):
+    """Job class to define a job for the scheduler.
 
     Users only have to override class attributes to create a job definition.
     The following main attributes can be overridden:
@@ -124,7 +124,7 @@ class Job(dax.base.system.DaxBase):
     _LAST_SUBMIT_KEY: str = 'last_submit'
     """Key to store the last submit timestamp."""
 
-    def __init__(self, managers_or_parent: typing.Any,
+    def __init__(self, managers_or_parent: DaxScheduler,
                  *args: typing.Any, **kwargs: typing.Any):
         """Initialize a job object.
 
@@ -154,11 +154,13 @@ class Job(dax.base.system.DaxBase):
         if not isinstance(managers_or_parent, DaxScheduler):
             raise TypeError(f'Parent of job {self.get_name()} is not a DAX scheduler')
 
-        # Create the base key for this job
-        self.__base_key: str = f'{managers_or_parent.NAME}.{self.get_name()}'
+        # Take key attributes from parent
+        self._take_parent_key_attributes(managers_or_parent)
 
         # Call super
-        super(Job, self).__init__(managers_or_parent, *args, **kwargs)
+        super(Job, self).__init__(managers_or_parent, *args,
+                                  name=self.get_name(), system_key=managers_or_parent.get_system_key(self.get_name()),
+                                  **kwargs)
 
     def build(self) -> None:  # type: ignore
         # Obtain the scheduler
@@ -186,7 +188,7 @@ class Job(dax.base.system.DaxBase):
             if self._interval > 0.0:
                 self.logger.info(f'Interval set to {self._interval:.0f} second(s)')
             else:
-                msg = 'The job interval must be greater than zero'
+                msg: str = 'The job interval must be greater than zero'
                 self.logger.error(msg)
                 raise ValueError(msg)
         else:
@@ -204,7 +206,8 @@ class Job(dax.base.system.DaxBase):
         self._last_rid: int = -1
 
         # Initialize RID list
-        self.set_dataset(self._get_key(self._RID_LIST_KEY), [])
+        self._rid_list_key: str = self.get_system_key(self._RID_LIST_KEY)
+        self.set_dataset(self._rid_list_key, [])  # Archive only
 
         if self.is_timed():
             if reset:
@@ -213,7 +216,7 @@ class Job(dax.base.system.DaxBase):
                 self.logger.debug('Initialized job by resetting next submit time')
             else:
                 # Try to obtain the last submit time
-                last_submit = self.get_dataset(self._get_key(self._LAST_SUBMIT_KEY), 0.0, archive=False)
+                last_submit = self.get_dataset_sys(self._LAST_SUBMIT_KEY, 0.0, data_store=False)
                 assert isinstance(last_submit, float), 'Unexpected type returned from dataset'
                 # Add the interval to the last submit time
                 self._next_submit = last_submit + self._interval
@@ -250,7 +253,7 @@ class Job(dax.base.system.DaxBase):
         assert isinstance(priority, int), 'Priority must be of type int'
 
         # Store current wave timestamp
-        self.set_dataset(self._get_key(self._LAST_SUBMIT_KEY), wave, broadcast=True, persist=True)
+        self.set_dataset_sys(self._LAST_SUBMIT_KEY, wave, data_store=False)
 
         if not self.is_meta():
             if self._last_rid not in self._scheduler.get_status():
@@ -262,8 +265,10 @@ class Job(dax.base.system.DaxBase):
                     flush=self.FLUSH
                 )
                 self.logger.info(f'Submitted job with RID {self._last_rid}')
+
                 # Archive the RID
-                self.append_to_dataset(self._get_key(self._RID_LIST_KEY), self._last_rid)
+                self.append_to_dataset(self._rid_list_key, self._last_rid)
+                self.data_store.append(self._rid_list_key, self._last_rid)
             else:
                 # Previous job was still running
                 self.logger.warning(f'Skipping job, previous job with RID {self._last_rid} is still running')
@@ -298,22 +303,6 @@ class Job(dax.base.system.DaxBase):
             self.logger.debug(f'Cancelling job (RID {self._last_rid})')
             self._scheduler.request_termination(self._last_rid)
 
-    def _get_key(self, key: str) -> str:
-        """Get the full persistent key derived from the job base key.
-
-        :param key: The relative key to append to the job base key
-        :return: The full persistent key
-        :raises ValueError: Raised if the key has an invalid format
-        """
-        assert isinstance(key, str), 'The key must be a string'
-
-        # Check if the given key is valid
-        if not dax.base.system.is_valid_key(key):
-            raise ValueError(f'Invalid key "{key}"')
-
-        # Return the full key
-        return f'{self.__base_key}.{key}'
-
     def _process_arguments(self) -> typing.Dict[str, typing.Any]:
         """Process and return the arguments of this job.
 
@@ -341,7 +330,7 @@ class Job(dax.base.system.DaxBase):
     def is_timed(self) -> bool:
         """Check if this job is timed.
 
-        :return: True if this job has an interval.
+        :return: True if this job has an interval
         """
         return self.INTERVAL is not None
 
@@ -349,16 +338,9 @@ class Job(dax.base.system.DaxBase):
     def get_name(cls) -> str:
         """Get the name of this job.
 
-        :return: The name of this job as a string.
+        :return: The name of this job as a string
         """
         return cls.__name__
-
-    def get_identifier(self) -> str:
-        """Get the identifier of this job.
-
-        :return: The identifier of this job as a string.
-        """
-        return f'({self.get_name()})'
 
 
 class Policy(enum.Enum):
@@ -417,7 +399,7 @@ class Policy(enum.Enum):
         return self.name
 
 
-class DaxScheduler(dax.base.system.DaxBase):
+class DaxScheduler(dax.base.system.DaxHasKey):
     """DAX scheduler class to inherit from.
 
     Users only have to override class attributes to create a scheduling definition.
@@ -463,7 +445,6 @@ class DaxScheduler(dax.base.system.DaxBase):
 
         # Check name
         assert hasattr(self, 'NAME'), 'No name was provided'
-        assert dax.base.system.is_valid_key(self.NAME), 'Name must be a valid key'
         # Check jobs
         assert hasattr(self, 'JOBS'), 'No job list was provided'
         assert isinstance(self.JOBS, collections.abc.Collection), 'The jobs attribute must be a collection'
@@ -477,7 +458,8 @@ class DaxScheduler(dax.base.system.DaxBase):
         assert -99 <= self.DEFAULT_JOB_PRIORITY <= 99, 'Default job priority must be in the domain [-99, 99]'
 
         # Call super
-        super(DaxScheduler, self).__init__(managers_or_parent, *args, **kwargs)
+        super(DaxScheduler, self).__init__(managers_or_parent, *args,
+                                           name=self.NAME, system_key=self.NAME, **kwargs)
 
     def build(self, *args: typing.Any, **kwargs: typing.Any) -> None:
         # Set default scheduling options for the scheduler itself
@@ -529,9 +511,25 @@ class DaxScheduler(dax.base.system.DaxBase):
         # The ARTIQ scheduler
         self._scheduler = self.get_device('scheduler')
 
+        # Instantiate the data store
+        if self.SYSTEM is not None and self.SYSTEM.DAX_INFLUX_DB_KEY is not None:
+            # Create an Influx DB data store
+            self.__data_store = dax.base.system.DaxDataStoreInfluxDb.get_instance(self, self.SYSTEM)
+        else:
+            # No data store configured
+            self.__data_store: dax.base.system.DaxDataStore = dax.base.system.DaxDataStore()
+
         # Call super and forward arguments, for compatibility with other libraries
         # noinspection PyArgumentList
         super(DaxScheduler, self).build(*args, **kwargs)
+
+    @property
+    def data_store(self) -> dax.base.system.DaxDataStore:
+        """Get the data store.
+
+        :return: The data store object
+        """
+        return self.__data_store
 
     def prepare(self) -> None:
         # Check pipeline
@@ -556,12 +554,16 @@ class DaxScheduler(dax.base.system.DaxBase):
         self.logger.debug(f'Created {len(jobs)} job(s)')
         if len(jobs) < len(self.JOBS):
             self.logger.warning('Duplicate jobs were dropped from the job set')
+        if len({job.get_name() for job in jobs}) < len(jobs):
+            msg = 'Job name conflict, two jobs are not allowed to have the same class name'
+            self.logger.error(msg)
+            raise ValueError(msg)
 
         # Create the job dependency graph
         self._job_graph: nx.DiGraph[Job] = nx.DiGraph()
         self._job_graph.add_nodes_from(jobs.values())
         try:
-            self._job_graph.add_edges_from(((j, jobs[d]) for j in jobs.values() for d in j.DEPENDENCIES))
+            self._job_graph.add_edges_from(((job, jobs[d]) for job in jobs.values() for d in job.DEPENDENCIES))
         except KeyError as e:
             raise KeyError(f'Dependency "{e.args[0].get_name()}" is not part of the given job set') from None
 
@@ -712,10 +714,3 @@ class DaxScheduler(dax.base.system.DaxBase):
 
             # Other instances were terminated
             self.logger.info('All other instances were terminated successfully')
-
-    def get_identifier(self) -> str:
-        """Get the identifier of this scheduler.
-
-        :return: The identifier of this scheduler as a string.
-        """
-        return f'[{self.NAME}]({self.__class__.__name__})'
