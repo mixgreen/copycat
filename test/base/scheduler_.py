@@ -11,7 +11,7 @@ from artiq.language.scan import *
 from artiq.experiment import TerminationRequested
 
 from dax.base.scheduler import *
-from dax.util.artiq import get_manager_or_parent
+from dax.util.artiq import get_managers
 import dax.base.system
 import dax.util.output
 
@@ -153,8 +153,8 @@ class LazySchedulerTestCase(unittest.TestCase):
     POLICY = Policy.LAZY
 
     def setUp(self) -> None:
-        self.mop = get_manager_or_parent(Policy=str(self.POLICY), Pipeline='test_pipeline',
-                                         **{'View graph': False})  # type: ignore[arg-type]
+        self.mop = get_managers(Policy=str(self.POLICY), Pipeline='test_pipeline',
+                                **{'View graph': False})  # type: ignore[arg-type]
 
     def test_create_job(self):
         # noinspection PyProtectedMember
@@ -318,7 +318,7 @@ class LazySchedulerTestCase(unittest.TestCase):
     def test_scheduler_pipeline(self):
         with _isolation():
             with self.assertRaises(ValueError, msg='Pipeline conflict did not raise'):
-                s = _Scheduler(get_manager_or_parent(Policy=str(self.POLICY), Pipeline='main', **{'View graph': False}))
+                s = _Scheduler(get_managers(Policy=str(self.POLICY), Pipeline='main', **{'View graph': False}))
                 s.prepare()
 
             s = _Scheduler(self.mop)
@@ -472,8 +472,8 @@ class LazySchedulerTestCase(unittest.TestCase):
                     raise TerminationRequested
 
         with _isolation():
-            s = S(get_manager_or_parent(Policy=str(self.POLICY), Pipeline='test_pipeline',
-                                        **{'Wave interval': 1.0, 'Clock period': 0.1, 'View graph': False}))
+            s = S(get_managers(Policy=str(self.POLICY), Pipeline='test_pipeline',
+                               **{'Wave interval': 1.0, 'Clock period': 0.1, 'View graph': False}))
             s.prepare()
 
         # Run the scheduler
@@ -560,8 +560,8 @@ class GreedySchedulerTestCase(LazySchedulerTestCase):
                     raise TerminationRequested
 
         with _isolation():
-            s = S(get_manager_or_parent(Policy=str(self.POLICY), Pipeline='test_pipeline',
-                                        **{'Wave interval': 1.0, 'Clock period': 0.1, 'View graph': False}))
+            s = S(get_managers(Policy=str(self.POLICY), Pipeline='test_pipeline',
+                               **{'Wave interval': 1.0, 'Clock period': 0.1, 'View graph': False}))
             s.prepare()
 
         # Run the scheduler

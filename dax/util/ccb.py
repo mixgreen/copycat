@@ -265,13 +265,13 @@ class CcbTool:
         self.create_applet(name, command, group=group)
 
 
-def get_ccb_tool(manager_or_parent: HasEnvironment) -> CcbTool:
+def get_ccb_tool(environment: HasEnvironment) -> CcbTool:
     """Obtain a CCB tool.
 
     The CCB tool is a wrapper around the ARTIQ CCB object that allows users to conveniently
     create standard applets using straight-forward functions.
 
-    :param manager_or_parent: Manager or parent object, required to get the ARTIQ CCB object
+    :param environment: An object which inherits from ARTIQ HasEnvironment, required to get the ARTIQ CCB object
     :return: The CCB tool object
     """
-    return CcbTool(manager_or_parent.get_device('ccb'))
+    return CcbTool(environment.get_device('ccb'))

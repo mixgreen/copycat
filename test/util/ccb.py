@@ -1,7 +1,7 @@
 import unittest
 
 from dax.experiment import DaxSystem
-from dax.util.artiq import get_manager_or_parent
+from dax.util.artiq import get_managers
 
 
 class _TestSystem(DaxSystem):
@@ -48,7 +48,7 @@ class CcbTestCase(unittest.TestCase):
 
     def test_ccb_tool(self):
         from dax.util.ccb import get_ccb_tool
-        ccb = get_ccb_tool(_TestSystem(get_manager_or_parent()))
+        ccb = get_ccb_tool(_TestSystem(get_managers()))
 
         # Just call methods to see if no errors occur
         self.assertIsNone(ccb.big_number('name', 'key'))

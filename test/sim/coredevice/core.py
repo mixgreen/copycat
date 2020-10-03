@@ -4,7 +4,7 @@ import logging
 import dax.sim.coredevice.core
 from dax.sim.signal import set_signal_manager, NullSignalManager
 from dax.sim.ddb import enable_dax_sim
-from dax.util.artiq import get_manager_or_parent
+from dax.util.artiq import get_managers
 
 
 class CoreTestCase(unittest.TestCase):
@@ -21,7 +21,7 @@ class CoreTestCase(unittest.TestCase):
         set_signal_manager(NullSignalManager())
 
     def test_constructor_signature(self):
-        dmgr, _, _, _ = get_manager_or_parent(
+        dmgr, _, _, _ = get_managers(
             enable_dax_sim(self._DEVICE_DB, enable=True, logging_level=logging.WARNING,
                            moninj_service=False, output='null'))
 

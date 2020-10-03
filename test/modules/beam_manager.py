@@ -2,7 +2,7 @@ import unittest
 
 from dax.experiment import *
 from dax.modules.beam_manager import BeamManager, BeamAssignmentError
-from dax.util.artiq import get_manager_or_parent
+from dax.util.artiq import get_managers
 
 
 class _TestSystem(DaxSystem):
@@ -22,7 +22,7 @@ class GetBeam2TestCase(unittest.TestCase):
 
     def setUp(self) -> None:
         assert self.N > 0, 'Number of beams N should be > 0'
-        self.s = _TestSystem(get_manager_or_parent(), num_beams=self.N)
+        self.s = _TestSystem(get_managers(), num_beams=self.N)
         self.bm: BeamManager = self.s.m
 
     def test_num_beams_bounds(self):

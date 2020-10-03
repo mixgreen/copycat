@@ -5,7 +5,7 @@ import artiq.coredevice.edge_counter
 
 from dax.experiment import *
 from dax.sim import enable_dax_sim
-from dax.util.artiq import get_manager_or_parent
+from dax.util.artiq import get_managers
 
 import dax.modules.rtio_benchmark
 import dax.modules.rpc_benchmark
@@ -88,7 +88,7 @@ class BuildClientTestCase(unittest.TestCase):
                     pass
 
                 # Create client
-                manager = get_manager_or_parent(
+                manager = get_managers(
                     enable_dax_sim(ddb=_device_db, enable=True, logging_level=30, output='null', moninj_service=False))
                 client = _InstantiatedClient(manager)
                 self.assertIsInstance(client, DaxClient)
@@ -110,7 +110,7 @@ class BuildClientTestCase(unittest.TestCase):
                     pass
 
                 # Create client
-                manager = get_manager_or_parent(
+                manager = get_managers(
                     enable_dax_sim(ddb=_device_db, enable=True, logging_level=30, output='null', moninj_service=False))
                 _InstantiatedClient(manager)
 

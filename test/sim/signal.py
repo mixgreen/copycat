@@ -13,7 +13,7 @@ from dax.experiment import DaxSystem
 from dax.sim import enable_dax_sim
 from dax.sim.signal import get_signal_manager, SignalNotSet
 from dax.sim.signal import DaxSignalManager, NullSignalManager, VcdSignalManager, PeekSignalManager
-from dax.util.artiq import get_manager_or_parent
+from dax.util.artiq import get_managers
 from dax.util.output import temp_dir
 
 _SIGNAL_TYPES = {bool, int, np.int32, np.int64, float, str, object}
@@ -25,7 +25,7 @@ class NullSignalManagerTestCase(unittest.TestCase):
     def test_signal_manager(self) -> None:
         # Create the system
         ddb = enable_dax_sim(_DEVICE_DB.copy(), enable=True, output='null', moninj_service=False)
-        _TestSystem(get_manager_or_parent(ddb))
+        _TestSystem(get_managers(ddb))
 
         # Verify the signal manager type
         sm = typing.cast(NullSignalManager, get_signal_manager())
@@ -41,7 +41,7 @@ class VcdSignalManagerTestCase(unittest.TestCase):
         with temp_dir():
             # Create the system
             ddb = enable_dax_sim(_DEVICE_DB.copy(), enable=True, output='vcd', moninj_service=False)
-            _TestSystem(get_manager_or_parent(ddb))
+            _TestSystem(get_managers(ddb))
 
             # Verify the signal manager type
             sm = typing.cast(VcdSignalManager, get_signal_manager())
@@ -55,7 +55,7 @@ class VcdSignalManagerTestCase(unittest.TestCase):
         with temp_dir():
             # Create the system
             ddb = enable_dax_sim(_DEVICE_DB.copy(), enable=True, output='vcd', moninj_service=False)
-            sys = _TestSystem(get_manager_or_parent(ddb))
+            sys = _TestSystem(get_managers(ddb))
 
             # Verify the signal manager type
             sm = typing.cast(VcdSignalManager, get_signal_manager())
@@ -93,7 +93,7 @@ class VcdSignalManagerEventTestCase(unittest.TestCase):
 
         # Create the system
         ddb = enable_dax_sim(_DEVICE_DB.copy(), enable=True, output='vcd', moninj_service=False)
-        self.sys = _TestSystem(get_manager_or_parent(ddb))
+        self.sys = _TestSystem(get_managers(ddb))
 
         # Get the signal manager
         self.sm: DaxSignalManager = typing.cast(VcdSignalManager, get_signal_manager())
@@ -134,7 +134,7 @@ class PeekSignalManagerTestCase(VcdSignalManagerEventTestCase):
     def setUp(self) -> None:
         # Create the system
         ddb = enable_dax_sim(_DEVICE_DB.copy(), enable=True, output='peek', moninj_service=False)
-        self.sys = _TestSystem(get_manager_or_parent(ddb))
+        self.sys = _TestSystem(get_managers(ddb))
 
         # Get the peek signal manager
         self.sm = typing.cast(PeekSignalManager, get_signal_manager())

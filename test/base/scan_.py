@@ -9,7 +9,7 @@ from artiq.experiment import *
 
 from dax.base.scan import *
 from dax.base.system import DaxSystem
-from dax.util.artiq import get_manager_or_parent
+from dax.util.artiq import get_managers
 from dax.util.output import temp_dir
 
 
@@ -207,7 +207,7 @@ class _MockScan2ValueCheckReordered(_MockScan2ValueCheck):
 class Scan1TestCase(unittest.TestCase):
 
     def setUp(self) -> None:
-        self.mop = get_manager_or_parent()
+        self.mop = get_managers()
         self.scan = _MockScan1(self.mop)
 
     def test_is_infinite(self):
@@ -290,7 +290,7 @@ class BuildScanTestCase(unittest.TestCase):
                 with self.assertRaises(LookupError, msg='Reusing scan key for static scan did not raise'):
                     self_scan.add_static_scan('foo', [1])
 
-        MockScan(get_manager_or_parent())
+        MockScan(get_managers())
 
     def test_raise_duplicate_static_scan_key(self):
         class MockScan(_MockScanCallback):
@@ -302,7 +302,7 @@ class BuildScanTestCase(unittest.TestCase):
                 with self.assertRaises(LookupError, msg='Reusing static scan key for static scan did not raise'):
                     self_scan.add_static_scan('foo', [1])
 
-        MockScan(get_manager_or_parent())
+        MockScan(get_managers())
 
     def test_raise_bad_scan_type(self):
         test_data = [
@@ -321,7 +321,7 @@ class BuildScanTestCase(unittest.TestCase):
                             # noinspection PyTypeChecker
                             self_scan.add_scan('foo', 'foo', scannable)
 
-        MockScan(get_manager_or_parent())
+        MockScan(get_managers())
 
     def test_raise_bad_static_scan_type(self):
         test_data = [
@@ -344,7 +344,7 @@ class BuildScanTestCase(unittest.TestCase):
                         with self.assertRaises(TypeError, msg='Bad scan type did not raise'):
                             self_scan.add_static_scan('foo', points)
 
-        MockScan(get_manager_or_parent())
+        MockScan(get_managers())
 
     def test_good_static_scans(self):
         test_data = [
@@ -369,7 +369,7 @@ class BuildScanTestCase(unittest.TestCase):
                     with self.subTest(points=points):
                         self_scan.add_static_scan(f'foo{next(counter)}', points)
 
-        MockScan(get_manager_or_parent())
+        MockScan(get_managers())
 
     def test_raise_bad_scan_key(self):
         class MockScan(_MockScanCallback):
@@ -381,7 +381,7 @@ class BuildScanTestCase(unittest.TestCase):
                         with self.assertRaises(ValueError, msg='Bad scan key did not raise'):
                             self_scan.add_scan(k, 'some name', Scannable(NoScan(1)))
 
-        MockScan(get_manager_or_parent())
+        MockScan(get_managers())
 
     def test_raise_bad_static_scan_key(self):
         class MockScan(_MockScanCallback):
@@ -393,13 +393,13 @@ class BuildScanTestCase(unittest.TestCase):
                         with self.assertRaises(ValueError, msg='Bad static scan key did not raise'):
                             self_scan.add_static_scan(k, [])
 
-        MockScan(get_manager_or_parent())
+        MockScan(get_managers())
 
 
 class EmptyScanTestCase(unittest.TestCase):
 
     def setUp(self) -> None:
-        self.scan = _MockScanEmpty(get_manager_or_parent())
+        self.scan = _MockScanEmpty(get_managers())
 
         # Verify counters (object is an empty dict)
         self.assertDictEqual(self.scan.counter, {}, 'Function counters did not match expected values')
@@ -412,7 +412,7 @@ class EmptyScanTestCase(unittest.TestCase):
 class Scan2TestCase(Scan1TestCase):
 
     def setUp(self) -> None:
-        self.mop = get_manager_or_parent()
+        self.mop = get_managers()
         self.scan = _MockScan2(self.mop)
 
     def test_call_counters(self):
@@ -450,14 +450,14 @@ class Scan2TestCase(Scan1TestCase):
 class Scan2StaticTestCase(Scan2TestCase):
 
     def setUp(self) -> None:
-        self.mop = get_manager_or_parent()
+        self.mop = get_managers()
         self.scan = _MockScan2Static(self.mop)
 
 
 class ScanTerminateTestCase(unittest.TestCase):
 
     def setUp(self) -> None:
-        self.scan = _MockScanTerminate(get_manager_or_parent())
+        self.scan = _MockScanTerminate(get_managers())
 
     def test_call_counters(self):
         # Run the scan
@@ -479,7 +479,7 @@ class ScanTerminateTestCase(unittest.TestCase):
 class ScanStopTestCase(unittest.TestCase):
 
     def setUp(self) -> None:
-        self.scan = _MockScanStop(get_manager_or_parent())
+        self.scan = _MockScanStop(get_managers())
 
     def test_call_counters(self):
         # Run the scan
@@ -501,7 +501,7 @@ class ScanStopTestCase(unittest.TestCase):
 class InfiniteScanTestCase(unittest.TestCase):
 
     def setUp(self) -> None:
-        self.scan: _MockScan1 = _MockScanInfinite(get_manager_or_parent())
+        self.scan: _MockScan1 = _MockScanInfinite(get_managers())
 
     def test_is_infinite(self):
         self.assertTrue(self.scan.is_infinite_scan, 'Scan reported incorrectly it was not infinite')
@@ -526,15 +526,15 @@ class InfiniteScanTestCase(unittest.TestCase):
 class InfiniteScanNoArgumentTestCase(InfiniteScanTestCase):
 
     def setUp(self) -> None:
-        self.scan = _MockScanInfiniteNoArgument(get_manager_or_parent())
+        self.scan = _MockScanInfiniteNoArgument(get_managers())
 
 
 class DisableIndexScanTestCase(unittest.TestCase):
 
     def test_scan_length(self):
         # Create scan objects
-        scan_w_index = _MockScan1(get_manager_or_parent())
-        scan_wo_index = _MockScanDisableIndex(get_manager_or_parent())
+        scan_w_index = _MockScan1(get_managers())
+        scan_wo_index = _MockScanDisableIndex(get_managers())
 
         # Run both scans
         scan_w_index.run()
@@ -559,7 +559,7 @@ class DisableIndexScanTestCase(unittest.TestCase):
 
     def test_index_disabled(self):
         # Create scan object
-        bad_scan = _MockScanDisableIndexBad(get_manager_or_parent())
+        bad_scan = _MockScanDisableIndexBad(get_managers())
 
         # Run the scan, expecting a specific exception
         with self.assertRaises(_IndexAttributeError, msg='Accessing an index attribute did not raise'):
@@ -570,7 +570,7 @@ class ScanValueTestCase(Scan2TestCase):
 
     def setUp(self) -> None:
         # Exceptions are raised if values don't match
-        self.mop = get_manager_or_parent()
+        self.mop = get_managers()
         self.scan = _MockScan2ValueCheck(self.mop)
 
 
@@ -578,7 +578,7 @@ class ScanValueReorderedTestCase(Scan2TestCase):
 
     def setUp(self) -> None:
         # Exceptions are raised if values don't match
-        self.mop = get_manager_or_parent()
+        self.mop = get_managers()
         self.scan = _MockScan2ValueCheckReordered(self.mop)
 
     def test_raise_scan_order(self):
