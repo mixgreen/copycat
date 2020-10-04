@@ -97,6 +97,23 @@ class _Scheduler(DaxScheduler):
     def data_store(self):
         return self._data_store
 
+    def wave(self, *,
+             wave=None,
+             root_jobs=None,
+             root_action=None,
+             policy=None) -> None:
+        # Use defaults for simplicity
+        if wave is None:
+            wave = time.time()
+        if root_jobs is None:
+            root_jobs = self._root_jobs
+        if root_action is None:
+            root_action = JobAction.PASS
+        if policy is None:
+            policy = self._policy
+
+        super(_Scheduler, self).wave(wave=wave, root_jobs=root_jobs, root_action=root_action, policy=policy)
+
 
 class SchedulerMiscTestCase(unittest.TestCase):
     def test_str_to_time(self):
@@ -440,7 +457,7 @@ class LazySchedulerTestCase(unittest.TestCase):
                                      'Job call pattern did not match expected pattern')
 
         # Wave
-        s.wave()
+        s.wave(wave=time.time(), root_jobs=s._root_jobs, root_action=JobAction.PASS, policy=s._policy)
         for j in s._job_graph:
             with self.subTest(job=j.get_name()):
                 if isinstance(j, _Job1):
@@ -465,8 +482,8 @@ class LazySchedulerTestCase(unittest.TestCase):
             JOBS = {_Job1, _Job2, _Job3, _Job4, _JobA, _JobB, _JobC}
             counter = 0
 
-            def wave(self) -> None:
-                super(S, self).wave()
+            def wave(self, **kwargs) -> None:
+                super(S, self).wave(**kwargs)
                 self.counter += 1
                 if self.counter >= waves:
                     raise TerminationRequested
@@ -553,8 +570,8 @@ class GreedySchedulerTestCase(LazySchedulerTestCase):
             JOBS = {_Job1, _Job2, _Job3, _Job4, _JobA, _JobB, _JobC}
             counter = 0
 
-            def wave(self) -> None:
-                super(S, self).wave()
+            def wave(self, **kwargs) -> None:
+                super(S, self).wave(**kwargs)
                 self.counter += 1
                 if self.counter >= waves:
                     raise TerminationRequested

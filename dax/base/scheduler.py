@@ -7,8 +7,10 @@ import time
 import enum
 import networkx as nx
 import graphviz
+import asyncio
 
 import artiq.experiment
+import sipyco.pc_rpc  # type: ignore
 
 import dax.base.system
 import dax.util.output
@@ -399,6 +401,21 @@ class Policy(enum.Enum):
         return self.name
 
 
+if typing.TYPE_CHECKING:
+    __QE_T = typing.Tuple[typing.Collection[Job], JobAction, Policy]  # Type variable for queue elements
+    __Q_T = asyncio.Queue[__QE_T]  # Type variable for the async queue
+
+
+class _Controller:
+    def __init__(self, jobs: typing.Iterable[Job], queue: __Q_T):
+        # Create a map from job names to job objects
+        self._job_name_map: typing.Dict[str, Job] = {j.get_name(): j for j in jobs}
+        # Store a reference to the queue
+        self._queue: __Q_T = queue
+
+    # TODO: add functions externally callable (e.g. `schedule()`)
+
+
 class DaxScheduler(dax.base.system.DaxHasKey):
     """DAX scheduler class to inherit from.
 
@@ -424,7 +441,9 @@ class DaxScheduler(dax.base.system.DaxHasKey):
     """The collection of job classes."""
 
     SYSTEM: typing.Optional[typing.Type[dax.base.system.DaxSystem]] = None
-    """Optional DAX system type, enables extra features if provided."""
+    """Optional DAX system type, enables Influx DB logging if provided."""
+    PORT: typing.Optional[int] = None
+    """Port to run the scheduler controller on if provided."""
 
     DEFAULT_PIPELINE: str = 'main'
     """Default pipeline to submit jobs to."""
@@ -449,8 +468,9 @@ class DaxScheduler(dax.base.system.DaxHasKey):
         assert hasattr(self, 'JOBS'), 'No job list was provided'
         assert isinstance(self.JOBS, collections.abc.Collection), 'The jobs attribute must be a collection'
         assert all(issubclass(job, Job) for job in self.JOBS), 'All jobs must be subclasses of Job'
-        # Check system
+        # Check system and port
         assert self.SYSTEM is None or issubclass(self.SYSTEM, dax.base.system.DaxSystem)
+        assert self.PORT is None or isinstance(self.PORT, int)
         # Check pipeline
         assert isinstance(self.DEFAULT_PIPELINE, str) and self.DEFAULT_PIPELINE, 'Default pipeline must be of type str'
         # Check default job priority
@@ -466,47 +486,54 @@ class DaxScheduler(dax.base.system.DaxHasKey):
         self.set_default_scheduling(pipeline_name=self.NAME)
 
         # Scheduling arguments
-        self._policy_arg = self.get_argument('Policy',
-                                             artiq.experiment.EnumerationValue(sorted(str(p) for p in Policy)),
-                                             tooltip='Scheduling policy',
-                                             group='Scheduler')
-        self._wave_interval = self.get_argument('Wave interval',
-                                                artiq.experiment.NumberValue(60, 's', min=1, step=1, ndecimals=0),
-                                                tooltip='Interval to visit jobs',
-                                                group='Scheduler')
-        self._clock_period = self.get_argument('Clock period',
-                                               artiq.experiment.NumberValue(0.5, 's', min=0.1),
-                                               tooltip='Internal scheduler clock period',
-                                               group='Scheduler')
+        self._policy_arg: str = self.get_argument('Policy',
+                                                  artiq.experiment.EnumerationValue(sorted(str(p) for p in Policy)),
+                                                  tooltip='Scheduling policy',
+                                                  group='Scheduler')
+        self._wave_interval: int = self.get_argument('Wave interval',
+                                                     artiq.experiment.NumberValue(60, 's', min=1, step=1, ndecimals=0),
+                                                     tooltip='Interval to visit jobs',
+                                                     group='Scheduler')
+        self._clock_period: float = self.get_argument('Clock period',
+                                                      artiq.experiment.NumberValue(0.5, 's', min=0.1),
+                                                      tooltip='Internal scheduler clock period',
+                                                      group='Scheduler')
+        if self.PORT is None:
+            self._enable_controller: bool = False
+        else:
+            self._enable_controller = self.get_argument('Enable controller',
+                                                        artiq.experiment.BooleanValue(True),
+                                                        tooltip='Enable the scheduler controller',
+                                                        group='Scheduler')
 
         # Job arguments
-        self._pipeline = self.get_argument('Pipeline',
-                                           artiq.experiment.StringValue(self.DEFAULT_PIPELINE),
-                                           tooltip='Default pipeline to submit jobs to',
-                                           group='Jobs')
-        self._job_priority = self.get_argument('Priority',
-                                               artiq.experiment.NumberValue(self.DEFAULT_JOB_PRIORITY,
-                                                                            min=-99, max=99, step=1, ndecimals=0),
-                                               tooltip='Baseline job priority',
-                                               group='Jobs')
-        self._reset_jobs = self.get_argument('Reset',
-                                             artiq.experiment.BooleanValue(False),
-                                             tooltip='Reset job timestamps at startup, making them all expired',
-                                             group='Jobs')
-        self._terminate_jobs = self.get_argument('Terminate at exit',
-                                                 artiq.experiment.BooleanValue(False),
-                                                 tooltip='Terminate running jobs at exit',
-                                                 group='Jobs')
+        self._pipeline: str = self.get_argument('Pipeline',
+                                                artiq.experiment.StringValue(self.DEFAULT_PIPELINE),
+                                                tooltip='Default pipeline to submit jobs to',
+                                                group='Jobs')
+        self._job_priority: int = self.get_argument('Priority',
+                                                    artiq.experiment.NumberValue(self.DEFAULT_JOB_PRIORITY,
+                                                                                 min=-99, max=99, step=1, ndecimals=0),
+                                                    tooltip='Baseline job priority',
+                                                    group='Jobs')
+        self._reset_jobs: bool = self.get_argument('Reset',
+                                                   artiq.experiment.BooleanValue(False),
+                                                   tooltip='Reset job timestamps at startup, making them all expired',
+                                                   group='Jobs')
+        self._terminate_jobs: bool = self.get_argument('Terminate at exit',
+                                                       artiq.experiment.BooleanValue(False),
+                                                       tooltip='Terminate running jobs at exit',
+                                                       group='Jobs')
 
         # Dependency graph arguments
-        self._reduce_graph = self.get_argument('Reduce',
-                                               artiq.experiment.BooleanValue(True),
-                                               tooltip='Use transitive reduction of the job dependency graph',
-                                               group='Dependency graph')
-        self._view_graph = self.get_argument('View',
-                                             artiq.experiment.BooleanValue(False),
-                                             tooltip='View the job dependency graph at startup',
-                                             group='Dependency graph')
+        self._reduce_graph: bool = self.get_argument('Reduce',
+                                                     artiq.experiment.BooleanValue(True),
+                                                     tooltip='Use transitive reduction of the job dependency graph',
+                                                     group='Dependency graph')
+        self._view_graph: bool = self.get_argument('View',
+                                                   artiq.experiment.BooleanValue(False),
+                                                   tooltip='View the job dependency graph at startup',
+                                                   group='Dependency graph')
 
         # The ARTIQ scheduler
         self._scheduler = self.get_device('scheduler')
@@ -594,6 +621,23 @@ class DaxScheduler(dax.base.system.DaxHasKey):
 
     def run(self) -> None:
         """Entry point for the scheduler."""
+        asyncio.run(self._async_run())
+
+    async def _async_run(self) -> None:
+        """Async entry point for the scheduler."""
+
+        # Create a request queue
+        queue: __Q_T = asyncio.Queue()
+
+        if self._enable_controller:
+            # Run the scheduler and the controller
+            await self._run_scheduler_and_controller(queue)
+        else:
+            # Only run the scheduler
+            await self._run_scheduler(queue)
+
+    async def _run_scheduler(self, queue: __Q_T) -> None:
+        """Coroutine for running the scheduler"""
 
         # Initialize all jobs
         self.logger.debug(f'Initializing {len(self._job_graph)} job(s)')
@@ -610,14 +654,28 @@ class DaxScheduler(dax.base.system.DaxHasKey):
                         # Pause
                         self.logger.debug('Pausing scheduler')
                         self._scheduler.pause()
+                    elif not queue.empty():
+                        # Handle requests
+                        root_jobs, root_action, policy = queue.get_nowait()
+                        self.logger.debug('Handling external request')
+                        self.wave(wave=0.0,
+                                  root_jobs=root_jobs,
+                                  root_action=root_action,
+                                  policy=policy)
                     else:
                         # Sleep for a clock period
-                        time.sleep(self._clock_period)
+                        await asyncio.sleep(self._clock_period)
 
+                # Generate the unique wave timestamp
+                wave: float = time.time()
+                # Start the wave
+                self.logger.debug(f'Starting wave {wave:.0f}')
+                self.wave(wave=wave,
+                          root_jobs=self._root_jobs,
+                          root_action=JobAction.PASS,
+                          policy=self._policy)
                 # Update next wave time
                 next_wave += self._wave_interval
-                # Start the wave
-                self.wave()
                 # Prevent setting next wave time in the past
                 if next_wave <= time.time():
                     next_wave = time.time() + self._wave_interval
@@ -634,12 +692,46 @@ class DaxScheduler(dax.base.system.DaxHasKey):
                 for job in self._job_graph:
                     job.cancel()
 
-    def wave(self) -> None:
-        """Run a wave over the job set."""
+    async def _run_scheduler_and_controller(self, queue: __Q_T) -> None:
+        """Coroutine for running the scheduler and the controller."""
 
-        # Generate the unique wave timestamp
-        wave: float = time.time()
-        self.logger.debug(f'Starting wave {wave:.0f}')
+        # Create the controller and the server objects
+        controller = _Controller(self._job_graph, queue)
+        server = sipyco.pc_rpc.Server({'DaxSchedulerController': controller},
+                                      description=f'DaxScheduler controller: {self.get_identifier()}')
+
+        # Start the server task
+        self.logger.debug(f'Starting the scheduler controller on port {self.PORT}')
+        task = asyncio.create_task(server.start('::1', self.PORT))
+        # Run the scheduler
+        await self._run_scheduler(queue)
+
+        # Stop the server
+        self.logger.debug('Stopping the scheduler controller')
+        task.cancel()
+        await task
+        await server.stop()
+
+        if not queue.empty():
+            # Warn if not all schedule requests were handled
+            self.logger.warning(f'The scheduler controller cancelled {queue.qsize()} request(s)')
+
+    def wave(self, *, wave: float,
+             root_jobs: typing.Collection[Job],
+             root_action: JobAction,
+             policy: Policy) -> None:
+        """Run a wave over the job set.
+
+        :param wave: The wave identifier
+        :param root_jobs: A collection of root jobs
+        :param root_action: The root job action
+        :param policy: The policy for this wave
+        """
+        assert isinstance(wave, float), 'Wave must be of type float'
+        assert isinstance(root_jobs, collections.abc.Collection), 'Root jobs must be a collection'
+        assert all(isinstance(j, Job) for j in root_jobs), 'All root jobs must be of type Job'
+        assert isinstance(root_action, JobAction), 'Root action must be of type JobAction'
+        assert isinstance(policy, Policy), 'Policy must be of type Policy'
 
         def recurse(job: Job, action: JobAction, submitted: typing.Set[Job]) -> typing.Set[Job]:
             """Recurse over the dependencies of a job.
@@ -653,7 +745,7 @@ class DaxScheduler(dax.base.system.DaxHasKey):
             # Visit the current job
             current_action = job.visit(wave=wave)
             # Get the new action based on the policy
-            new_action = self._policy.action(action, current_action)
+            new_action = policy.action(action, current_action)
             # Recurse over successors
             for successor in self._job_graph.successors(job):
                 submitted = recurse(successor, new_action, submitted)
@@ -671,9 +763,9 @@ class DaxScheduler(dax.base.system.DaxHasKey):
         # Set of submitted jobs in this wave
         submitted_jobs: typing.Set[Job] = set()
 
-        for root_job in self._root_jobs:
-            # Recurse over all root jobs
-            submitted_jobs = recurse(root_job, JobAction.PASS, submitted_jobs)
+        for root_job in root_jobs:
+            # Recurse over all root jobs using the root action
+            submitted_jobs = recurse(root_job, root_action, submitted_jobs)
 
         if submitted_jobs:
             # Log submitted jobs
