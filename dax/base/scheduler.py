@@ -79,6 +79,16 @@ class JobAction(enum.Enum):
         """
         return self is JobAction.RUN
 
+    @classmethod
+    def from_str(cls, string_: str) -> JobAction:
+        """Convert a string into its corresponding job action enumeration.
+
+        :param string_: The name of the job action as a string (case insensitive)
+        :return: The job action enumeration object
+        :raises KeyError: Raised if the job action name does not exist
+        """
+        return {str(p).lower(): p for p in cls}[string_.lower()]
+
     def __str__(self) -> str:
         """String representation of this job action.
 
@@ -383,15 +393,15 @@ class Policy(enum.Enum):
         policy: Policy.__P_T = self.value
         return policy[previous, current]
 
-    @staticmethod
-    def from_str(string_: str) -> Policy:
+    @classmethod
+    def from_str(cls, string_: str) -> Policy:
         """Convert a string into its corresponding policy enumeration.
 
-        :param string_: The name of the policy as a string
+        :param string_: The name of the policy as a string (case insensitive)
         :return: The policy enumeration object
-        :raises KeyError: Raised if the policy name does not exist (case sensitive)
+        :raises KeyError: Raised if the policy name does not exist
         """
-        return {str(p): p for p in Policy}[string_]
+        return {str(p).lower(): p for p in cls}[string_.lower()]
 
     def __str__(self) -> str:
         """Return the name of this policy.
@@ -402,7 +412,7 @@ class Policy(enum.Enum):
 
 
 if typing.TYPE_CHECKING:
-    __QE_T = typing.Tuple[typing.Collection[Job], JobAction, Policy]  # Type variable for queue elements
+    __QE_T = typing.Tuple[typing.Collection[Job], JobAction, typing.Optional[Policy]]  # Type for queue elements
     __Q_T = asyncio.Queue[__QE_T]  # Type variable for the async queue
 
 
@@ -413,7 +423,33 @@ class _Controller:
         # Store a reference to the queue
         self._queue: __Q_T = queue
 
-    # TODO: add functions externally callable (e.g. `schedule()`)
+    def submit(self, jobs: typing.Union[str, typing.Collection[str]],
+               *, action: str = str(JobAction.PASS), policy: typing.Optional[str] = None) -> None:
+        """Submit a request to the scheduler.
+
+        :param jobs: One or more job names as strings
+        :param action: The root job action as a string
+        :param policy: The scheduling policy as a string
+        """
+        if isinstance(jobs, str):
+            # Convert to a list to handle single jobs
+            jobs = [jobs]
+
+        if not isinstance(jobs, collections.abc.Collection):
+            # TODO
+            pass
+        if not isinstance(action, str):
+            pass
+        if policy is not None or not isinstance(policy, str):
+            pass
+
+        # Put this request in the queue
+        self._queue.put_nowait((
+            {self._job_name_map[j] for j in jobs},
+            JobAction.from_str(action),
+            None if policy is None else Policy.from_str(policy)))
+
+    # TODO: add a function update_arguments()
 
 
 class DaxScheduler(dax.base.system.DaxHasKey):
@@ -661,7 +697,7 @@ class DaxScheduler(dax.base.system.DaxHasKey):
                         self.wave(wave=0.0,
                                   root_jobs=root_jobs,
                                   root_action=root_action,
-                                  policy=policy)
+                                  policy=self._policy if policy is None else policy)
                     else:
                         # Sleep for a clock period
                         await asyncio.sleep(self._clock_period)
