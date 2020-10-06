@@ -418,6 +418,64 @@ class LazySchedulerTestCase(unittest.TestCase):
                 for j in s._root_jobs:
                     self.assertIsInstance(j, root_jobs, 'Root jobs have an unexpected type')
 
+    def test_scheduler_custom_root_jobs(self):
+        class JobZ(Job):
+            pass
+
+        class JobY(Job):
+            DEPENDENCIES = [JobZ]
+
+        class JobX(Job):
+            DEPENDENCIES = [JobZ]
+
+        job_sets = [
+            ({_Job1, _Job2, _Job3, _Job4, _JobA, _JobB, _JobC}, (_Job2, _JobB)),
+            ({_JobA, _JobB, _JobC, JobX, JobY, JobZ}, (_JobB, JobY)),
+        ]
+
+        with _isolation():
+            for jobs, root_jobs in job_sets:
+                class S(_Scheduler):
+                    JOBS = jobs
+                    ROOT_JOBS = root_jobs
+
+                s = S(self.mop)
+                s.prepare()
+
+                self.assertEqual(len(s._root_jobs), len(root_jobs), 'Did not found expected number of root jobs')
+                for j in s._root_jobs:
+                    self.assertIsInstance(j, root_jobs, 'Root jobs have an unexpected type')
+
+    def test_scheduler_custom_root_jobs_bad(self):
+        class JobZ(Job):
+            pass
+
+        class JobY(Job):
+            DEPENDENCIES = [JobZ]
+
+        class JobX(Job):
+            DEPENDENCIES = [JobZ]
+
+        job_sets = [
+            ({_Job1, _Job2, _Job3, _Job4, _JobA, _JobB, _JobC}, JobZ),
+            ({_JobA, _JobB, _JobC, JobX, JobY, JobZ}, _Job4),
+        ]
+
+        with _isolation():
+            for jobs, root_job in job_sets:
+                class S(_Scheduler):
+                    JOBS = jobs
+                    ROOT_JOBS = {root_job}
+
+                s = S(self.mop)
+                with self.assertRaises(KeyError, msg='Root job outside job set did not raise'):
+                    try:
+                        s.prepare()
+                    except KeyError as e:
+                        self.assertIn(f'"{root_job.get_name()}"', str(e),
+                                      'Job name not correctly displayed in error message')
+                        raise
+
     def test_scheduler_unreachable_jobs(self):
         class S(_Scheduler):
             JOBS = {_JobC}

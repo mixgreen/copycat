@@ -119,7 +119,7 @@ class Job(dax.base.system.DaxHasKey):
 
     INTERVAL: typing.Optional[str] = None
     """Interval to run this job, defaults to no interval."""
-    DEPENDENCIES: typing.Collection[typing.Type[Job]] = set()
+    DEPENDENCIES: typing.Collection[typing.Type[Job]] = []
     """Collection of dependencies of this job."""
 
     LOG_LEVEL: typing.Union[int, str] = logging.WARNING
@@ -466,6 +466,7 @@ class DaxScheduler(dax.base.system.DaxHasKey):
 
     Other optional attributes that can be overridden are:
 
+    - :attr:`ROOT_JOBS`: A collection of job classes that are the root jobs, defaults to all entry nodes
     - :attr:`SYSTEM`: A DAX system type to enable additional logging of data
     - :attr:`DEFAULT_PIPELINE`: The default pipeline to submit jobs to, the scheduler can not run in the same pipeline
     - :attr:`DEFAULT_JOB_PRIORITY`: The baseline priority for jobs submitted by this scheduler
@@ -476,6 +477,8 @@ class DaxScheduler(dax.base.system.DaxHasKey):
     JOBS: typing.Collection[typing.Type[Job]]
     """The collection of job classes."""
 
+    ROOT_JOBS: typing.Collection[typing.Type[Job]] = []
+    """The collection of root jobs, all entry nodes if not provided."""
     SYSTEM: typing.Optional[typing.Type[dax.base.system.DaxSystem]] = None
     """Optional DAX system type, enables Influx DB logging if provided."""
     PORT: typing.Optional[int] = None
@@ -504,14 +507,17 @@ class DaxScheduler(dax.base.system.DaxHasKey):
         assert hasattr(self, 'JOBS'), 'No job list was provided'
         assert isinstance(self.JOBS, collections.abc.Collection), 'The jobs attribute must be a collection'
         assert all(issubclass(job, Job) for job in self.JOBS), 'All jobs must be subclasses of Job'
-        # Check system and port
+        # Check root jobs, system, and port
+        assert isinstance(self.ROOT_JOBS, collections.abc.Collection), 'The root jobs attribute must be a collection'
+        assert all(issubclass(job, Job) for job in self.ROOT_JOBS), 'All root jobs must be subclasses of Job'
         assert self.SYSTEM is None or issubclass(self.SYSTEM, dax.base.system.DaxSystem)
         assert self.PORT is None or isinstance(self.PORT, int)
-        # Check pipeline
+        # Check default pipeline and job priority
         assert isinstance(self.DEFAULT_PIPELINE, str) and self.DEFAULT_PIPELINE, 'Default pipeline must be of type str'
-        # Check default job priority
         assert isinstance(self.DEFAULT_JOB_PRIORITY, int), 'Default job priority must be of type int'
         assert -99 <= self.DEFAULT_JOB_PRIORITY <= 99, 'Default job priority must be in the domain [-99, 99]'
+        # Check graphviz format
+        assert isinstance(self._GRAPHVIZ_FORMAT, str)
 
         # Call super
         super(DaxScheduler, self).__init__(managers_or_parent, *args,
@@ -606,8 +612,6 @@ class DaxScheduler(dax.base.system.DaxHasKey):
             raise ValueError('The chosen clock period is too small')
         if self._wave_interval < 2 * self._clock_period:
             raise ValueError('The wave interval is too small compared to the clock period')
-        if -99 > self._job_priority > 99:
-            raise ValueError('Job priority must be in the domain [-99, 99]')
 
         # Obtain the scheduling policy
         self._policy: Policy = Policy.from_str(self._policy_arg)
@@ -628,7 +632,7 @@ class DaxScheduler(dax.base.system.DaxHasKey):
         try:
             self._job_graph.add_edges_from(((job, jobs[d]) for job in jobs.values() for d in job.DEPENDENCIES))
         except KeyError as e:
-            raise KeyError(f'Dependency "{e.args[0].get_name()}" is not part of the given job set') from None
+            raise KeyError(f'Dependency "{e.args[0].get_name()}" is not in the job set') from None
 
         # Check graph
         if not nx.algorithms.is_directed_acyclic_graph(self._job_graph):
@@ -640,18 +644,21 @@ class DaxScheduler(dax.base.system.DaxHasKey):
             # Get the transitive reduction of the job dependency graph
             self._job_graph = nx.algorithms.transitive_reduction(self._job_graph)
 
-        # Plot graph
-        plot = graphviz.Digraph(name=self.NAME, directory=str(dax.util.output.get_base_path(self._scheduler)))
-        for job in self._job_graph:
-            plot.node(job.get_name())
-        plot.edges(((j.get_name(), k.get_name()) for j, k in self._job_graph.edges))
-        plot.render(view=self._view_graph, format=self._GRAPHVIZ_FORMAT)
+        if self.ROOT_JOBS:
+            try:
+                # Get the root jobs
+                self._root_jobs: typing.Set[Job] = {jobs[job] for job in self.ROOT_JOBS}
+            except KeyError as e:
+                raise KeyError(f'Root job "{e.args[0].get_name()}" is not in the job set') from None
+        else:
+            # Find root jobs
+            # noinspection PyTypeChecker
+            self._root_jobs = {job for job, degree in self._job_graph.in_degree if degree == 0}
+        # Log the root jobs
+        self.logger.debug(f'Root jobs: {", ".join(sorted(j.get_name() for j in self._root_jobs))}')
 
-        # Find root jobs
-        # noinspection PyTypeChecker
-        self._root_jobs: typing.Set[Job] = {job for job, degree in self._job_graph.in_degree if degree == 0}
-        self.logger.debug(f'Found {len(self._root_jobs)} root job(s)')
-
+        # Plot dependency graph
+        self._plot_dependency_graph()
         # Terminate other instances of this scheduler
         self._terminate_running_instances()
 
@@ -739,18 +746,20 @@ class DaxScheduler(dax.base.system.DaxHasKey):
         # Start the server task
         self.logger.debug(f'Starting the scheduler controller on port {self.PORT}')
         task = asyncio.create_task(server.start('::1', self.PORT))
-        # Run the scheduler
-        await self._run_scheduler(queue)
 
-        # Stop the server
-        self.logger.debug('Stopping the scheduler controller')
-        task.cancel()
-        await task
-        await server.stop()
+        try:
+            # Run the scheduler
+            await self._run_scheduler(queue)
+        finally:
+            # Stop the server
+            self.logger.debug('Stopping the scheduler controller')
+            task.cancel()
+            await task
+            await server.stop()
 
-        if not queue.empty():
-            # Warn if not all schedule requests were handled
-            self.logger.warning(f'The scheduler controller cancelled {queue.qsize()} request(s)')
+            if not queue.empty():
+                # Warn if not all schedule requests were handled
+                self.logger.warning(f'The scheduler controller cancelled {queue.qsize()} request(s)')
 
     def wave(self, *, wave: float,
              root_jobs: typing.Collection[Job],
@@ -806,6 +815,17 @@ class DaxScheduler(dax.base.system.DaxHasKey):
         if submitted_jobs:
             # Log submitted jobs
             self.logger.debug(f'Submitted jobs: {", ".join(sorted(j.get_name() for j in submitted_jobs))}')
+
+    def _plot_dependency_graph(self) -> None:
+        """Plot the job dependency graph."""
+
+        # Create a directed graph object
+        plot = graphviz.Digraph(name=self.NAME, directory=str(dax.util.output.get_base_path(self._scheduler)))
+        for job in self._job_graph:
+            plot.node(job.get_name())
+        plot.edges(((j.get_name(), k.get_name()) for j, k in self._job_graph.edges))
+        # Render the graph
+        plot.render(view=self._view_graph, format=self._GRAPHVIZ_FORMAT)
 
     def _terminate_running_instances(self) -> None:
         """Terminate running instances of this scheduler."""
