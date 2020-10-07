@@ -114,6 +114,10 @@ class _Scheduler(DaxScheduler):
 
         super(_Scheduler, self).wave(wave=wave, root_jobs=root_jobs, root_action=root_action, policy=policy)
 
+    async def _run_scheduler(self, queue) -> None:
+        self.queue = queue
+        await super(_Scheduler, self)._run_scheduler(queue)
+
 
 class SchedulerMiscTestCase(unittest.TestCase):
     def test_str_to_time(self):

@@ -412,14 +412,12 @@ class Policy(enum.Enum):
 
 
 if typing.TYPE_CHECKING:
-    __QE_T = typing.Tuple[typing.Collection[Job], JobAction, typing.Optional[Policy]]  # Type for queue elements
+    __QE_T = typing.Tuple[typing.Collection[str], str, typing.Optional[str]]  # Type variable for queue elements
     __Q_T = asyncio.Queue[__QE_T]  # Type variable for the async queue
 
 
 class _Controller:
-    def __init__(self, jobs: typing.Iterable[Job], queue: __Q_T):
-        # Create a map from job names to job objects
-        self._job_name_map: typing.Dict[str, Job] = {j.get_name(): j for j in jobs}
+    def __init__(self, queue: __Q_T):
         # Store a reference to the queue
         self._queue: __Q_T = queue
 
@@ -427,27 +425,16 @@ class _Controller:
                *, action: str = str(JobAction.PASS), policy: typing.Optional[str] = None) -> None:
         """Submit a request to the scheduler.
 
-        :param jobs: One or more job names as strings
-        :param action: The root job action as a string
-        :param policy: The scheduling policy as a string
+        :param jobs: One or a collection of job names as strings (case sensitive)
+        :param action: The root job action as a string (case insensitive)
+        :param policy: The scheduling policy as a string (case insensitive)
         """
         if isinstance(jobs, str):
-            # Convert to a list to handle single jobs
+            # Convert a single job name to a collection
             jobs = [jobs]
 
-        if not isinstance(jobs, collections.abc.Collection):
-            # TODO
-            pass
-        if not isinstance(action, str):
-            pass
-        if policy is not None or not isinstance(policy, str):
-            pass
-
-        # Put this request in the queue
-        self._queue.put_nowait((
-            {self._job_name_map[j] for j in jobs},
-            JobAction.from_str(action),
-            None if policy is None else Policy.from_str(policy)))
+        # Put this request in the queue without checking any of the inputs
+        self._queue.put_nowait((jobs, action, policy))
 
     # TODO: add a function update_arguments()
 
@@ -612,50 +599,13 @@ class DaxScheduler(dax.base.system.DaxHasKey):
             raise ValueError('The chosen clock period is too small')
         if self._wave_interval < 2 * self._clock_period:
             raise ValueError('The wave interval is too small compared to the clock period')
+        if -99 > self._job_priority > 99:
+            raise ValueError('Job priority must be in the domain [-99, 99]')
 
         # Obtain the scheduling policy
         self._policy: Policy = Policy.from_str(self._policy_arg)
-
-        # Create the job objects
-        jobs: typing.Dict[typing.Type[Job], Job] = {job: job(self) for job in self.JOBS}
-        self.logger.debug(f'Created {len(jobs)} job(s)')
-        if len(jobs) < len(self.JOBS):
-            self.logger.warning('Duplicate jobs were dropped from the job set')
-        if len({job.get_name() for job in jobs}) < len(jobs):
-            msg = 'Job name conflict, two jobs are not allowed to have the same class name'
-            self.logger.error(msg)
-            raise ValueError(msg)
-
-        # Create the job dependency graph
-        self._job_graph: nx.DiGraph[Job] = nx.DiGraph()
-        self._job_graph.add_nodes_from(jobs.values())
-        try:
-            self._job_graph.add_edges_from(((job, jobs[d]) for job in jobs.values() for d in job.DEPENDENCIES))
-        except KeyError as e:
-            raise KeyError(f'Dependency "{e.args[0].get_name()}" is not in the job set') from None
-
-        # Check graph
-        if not nx.algorithms.is_directed_acyclic_graph(self._job_graph):
-            raise RuntimeError('Dependency graph is not a directed acyclic graph')
-        if self._policy is Policy.LAZY and any(not j.is_timed() for j in self._job_graph):
-            self.logger.warning('Found one or more unreachable jobs (untimed jobs in a lazy scheduling policy')
-
-        if self._reduce_graph:
-            # Get the transitive reduction of the job dependency graph
-            self._job_graph = nx.algorithms.transitive_reduction(self._job_graph)
-
-        if self.ROOT_JOBS:
-            try:
-                # Get the root jobs
-                self._root_jobs: typing.Set[Job] = {jobs[job] for job in self.ROOT_JOBS}
-            except KeyError as e:
-                raise KeyError(f'Root job "{e.args[0].get_name()}" is not in the job set') from None
-        else:
-            # Find root jobs
-            # noinspection PyTypeChecker
-            self._root_jobs = {job for job, degree in self._job_graph.in_degree if degree == 0}
-        # Log the root jobs
-        self.logger.debug(f'Root jobs: {", ".join(sorted(j.get_name() for j in self._root_jobs))}')
+        # Process the job set
+        self._process_job_set()
 
         # Plot dependency graph
         self._plot_dependency_graph()
@@ -699,12 +649,8 @@ class DaxScheduler(dax.base.system.DaxHasKey):
                         self._scheduler.pause()
                     elif not queue.empty():
                         # Handle requests
-                        root_jobs, root_action, policy = queue.get_nowait()
                         self.logger.debug('Handling external request')
-                        self.wave(wave=0.0,
-                                  root_jobs=root_jobs,
-                                  root_action=root_action,
-                                  policy=self._policy if policy is None else policy)
+                        self._handle_external_request(queue)
                     else:
                         # Sleep for a clock period
                         await asyncio.sleep(self._clock_period)
@@ -739,7 +685,7 @@ class DaxScheduler(dax.base.system.DaxHasKey):
         """Coroutine for running the scheduler and the controller."""
 
         # Create the controller and the server objects
-        controller = _Controller(self._job_graph, queue)
+        controller = _Controller(queue)
         server = sipyco.pc_rpc.Server({'DaxSchedulerController': controller},
                                       description=f'DaxScheduler controller: {self.get_identifier()}')
 
@@ -815,6 +761,80 @@ class DaxScheduler(dax.base.system.DaxHasKey):
         if submitted_jobs:
             # Log submitted jobs
             self.logger.debug(f'Submitted jobs: {", ".join(sorted(j.get_name() for j in submitted_jobs))}')
+
+    def _handle_external_request(self, queue: __Q_T) -> None:
+        """Handle a single external request from the queue."""
+
+        # Get one element from the queue (there must be an element)
+        root_job_names, root_action_name, policy_name = queue.get_nowait()
+
+        if not isinstance(root_job_names, collections.abc.Collection):
+            self.logger.error('Dropping invalid request, jobs parameter is not a collection')
+            return
+
+        try:
+            # Convert the input parameters
+            root_jobs: typing.Collection[Job] = {self._job_name_map[job] for job in root_job_names}
+            root_action: JobAction = JobAction.from_str(root_action_name)
+            policy: Policy = self._policy if policy_name is None else Policy.from_str(policy_name)
+        except KeyError:
+            # Log the error
+            self.logger.exception('Dropping invalid request')
+        else:
+            # Submit a wave for the external request
+            self.wave(wave=0.0,
+                      root_jobs=root_jobs,
+                      root_action=root_action,
+                      policy=policy)
+
+    def _process_job_set(self) -> None:
+        # Create the job objects
+        jobs: typing.Dict[typing.Type[Job], Job] = {job: job(self) for job in self.JOBS}
+        self.logger.debug(f'Created {len(jobs)} job(s)')
+        if len(jobs) < len(self.JOBS):
+            self.logger.warning('Duplicate jobs were dropped from the job set')
+        if len({job.get_name() for job in jobs}) < len(jobs):
+            msg = 'Job name conflict, two jobs are not allowed to have the same class name'
+            self.logger.error(msg)
+            raise ValueError(msg)
+
+        # Log the job set
+        self.logger.debug(f'Job set: {", ".join(sorted(j.get_name() for j in jobs))}')
+
+        # Create the job dependency graph
+        self._job_graph: nx.DiGraph[Job] = nx.DiGraph()
+        self._job_graph.add_nodes_from(jobs.values())
+        try:
+            self._job_graph.add_edges_from(((job, jobs[d]) for job in jobs.values() for d in job.DEPENDENCIES))
+        except KeyError as e:
+            raise KeyError(f'Dependency "{e.args[0].get_name()}" is not in the job set') from None
+
+        # Check graph
+        if not nx.algorithms.is_directed_acyclic_graph(self._job_graph):
+            raise RuntimeError('Dependency graph is not a directed acyclic graph')
+        if self._policy is Policy.LAZY and any(not j.is_timed() for j in self._job_graph):
+            self.logger.warning('Found one or more unreachable jobs (untimed jobs in a lazy scheduling policy')
+
+        if self._reduce_graph:
+            # Get the transitive reduction of the job dependency graph
+            self._job_graph = nx.algorithms.transitive_reduction(self._job_graph)
+
+        if self.ROOT_JOBS:
+            try:
+                # Get the root jobs
+                self._root_jobs: typing.Set[Job] = {jobs[job] for job in self.ROOT_JOBS}
+            except KeyError as e:
+                raise KeyError(f'Root job "{e.args[0].get_name()}" is not in the job set') from None
+        else:
+            # Find entry nodes to use as root jobs
+            # noinspection PyTypeChecker
+            self._root_jobs = {job for job, degree in self._job_graph.in_degree if degree == 0}
+
+        # Store a map from job names to jobs
+        self._job_name_map: typing.Dict[str, Job] = {job.get_name(): job for job in self._job_graph}
+
+        # Log the root jobs
+        self.logger.debug(f'Root jobs: {", ".join(sorted(j.get_name() for j in self._root_jobs))}')
 
     def _plot_dependency_graph(self) -> None:
         """Plot the job dependency graph."""
