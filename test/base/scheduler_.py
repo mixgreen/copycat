@@ -24,8 +24,6 @@ def _find_free_port() -> int:
         return int(s.getsockname()[1])
 
 
-_CONTROLLER_PORT = _find_free_port()
-
 _DEVICE_DB: typing.Dict[str, typing.Any] = {
     'core': {
         'type': 'local',
@@ -46,8 +44,8 @@ _DEVICE_DB: typing.Dict[str, typing.Any] = {
     # Reference to the scheduler controller
     'dax_scheduler': {
         'type': 'controller',
-        'host': '::1',
-        'port': _CONTROLLER_PORT,
+        'host': '127.0.0.1',  # IPv4 for CI
+        'port': _find_free_port(),
     },
 }
 
@@ -639,7 +637,8 @@ class LazySchedulerTestCase(unittest.TestCase):
 
         class S(_Scheduler):
             JOBS = {_Job1, _Job2, _Job3, _Job4, _JobA, _JobB, _JobC}
-            PORT = _CONTROLLER_PORT
+            CONTROLLER = 'dax_scheduler'
+
             counter = 0
 
             def wave(self, **kwargs) -> None:

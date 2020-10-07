@@ -469,6 +469,7 @@ class DaxScheduler(dax.base.system.DaxHasKey):
 
     - :attr:`ROOT_JOBS`: A collection of job classes that are the root jobs, defaults to all entry nodes
     - :attr:`SYSTEM`: A DAX system type to enable additional logging of data
+    - :attr:`CONTROLLER`: The scheduler controller name as defined in the device DB
     - :attr:`DEFAULT_POLICY`: The default scheduling policy
     - :attr:`DEFAULT_PIPELINE`: The default pipeline to submit jobs to, the scheduler can not run in the same pipeline
     - :attr:`DEFAULT_JOB_PRIORITY`: The baseline priority for jobs submitted by this scheduler
@@ -483,8 +484,8 @@ class DaxScheduler(dax.base.system.DaxHasKey):
     """The collection of root jobs, all entry nodes if not provided."""
     SYSTEM: typing.Optional[typing.Type[dax.base.system.DaxSystem]] = None
     """Optional DAX system type, enables Influx DB logging if provided."""
-    PORT: typing.Optional[int] = None
-    """Port to run the scheduler controller on if provided."""
+    CONTROLLER: typing.Optional[str] = None
+    """Optional scheduler controller name, as defined in the device DB."""
 
     DEFAULT_POLICY: Policy = Policy.LAZY
     """Default scheduling policy."""
@@ -511,11 +512,11 @@ class DaxScheduler(dax.base.system.DaxHasKey):
         assert hasattr(self, 'JOBS'), 'No job list was provided'
         assert isinstance(self.JOBS, collections.abc.Collection), 'The jobs attribute must be a collection'
         assert all(issubclass(job, Job) for job in self.JOBS), 'All jobs must be subclasses of Job'
-        # Check root jobs, system, and port
+        # Check root jobs, system, and controller
         assert isinstance(self.ROOT_JOBS, collections.abc.Collection), 'The root jobs attribute must be a collection'
         assert all(issubclass(job, Job) for job in self.ROOT_JOBS), 'All root jobs must be subclasses of Job'
         assert self.SYSTEM is None or issubclass(self.SYSTEM, dax.base.system.DaxSystem)
-        assert self.PORT is None or isinstance(self.PORT, int), 'Port must be of type int or None'
+        assert self.CONTROLLER is None or isinstance(self.CONTROLLER, str), 'Controller must be of type str or None'
         # Check default policy, pipeline, and job priority
         assert isinstance(self.DEFAULT_POLICY, Policy), 'Default policy must be of type Policy'
         assert isinstance(self.DEFAULT_PIPELINE, str) and self.DEFAULT_PIPELINE, 'Default pipeline must be of type str'
@@ -546,7 +547,7 @@ class DaxScheduler(dax.base.system.DaxHasKey):
                                                       artiq.experiment.NumberValue(0.5, 's', min=0.1),
                                                       tooltip='Internal scheduler clock period',
                                                       group='Scheduler')
-        if self.PORT is None:
+        if self.CONTROLLER is None:
             self._enable_controller: bool = False
         else:
             self._enable_controller = self.get_argument('Enable controller',
@@ -709,8 +710,9 @@ class DaxScheduler(dax.base.system.DaxHasKey):
                                       description=f'DaxScheduler controller: {self.get_identifier()}')
 
         # Start the server task
-        self.logger.debug(f'Starting the scheduler controller on port {self.PORT}')
-        task = asyncio.create_task(server.start('::1', self.PORT))
+        host, port = self._get_controller_details()
+        self.logger.debug(f'Starting the scheduler controller: bind address {host}, port {port}')
+        task = asyncio.create_task(server.start(host, port))
         await asyncio.sleep(0)  # Allow the server to start
 
         try:
@@ -902,3 +904,30 @@ class DaxScheduler(dax.base.system.DaxHasKey):
 
             # Other instances were terminated
             self.logger.info('All other instances were terminated successfully')
+
+    def _get_controller_details(self) -> typing.Tuple[str, int]:
+        """Get the scheduler controller details from the device DB."""
+        assert isinstance(self.CONTROLLER, str), 'Controller attribute must be of types str'
+
+        # Obtain the device DB
+        device_db = self.get_device_db()
+
+        try:
+            # Try to get the controller entry
+            controller = device_db[self.CONTROLLER]
+        except KeyError:
+            raise KeyError(f'Could not find controller "{self.CONTROLLER}" in the device DB') from None
+        try:
+            # Try to get the host and the port
+            host: str = controller['host']
+            port: int = controller['port']
+        except KeyError as e:
+            raise KeyError(f'Could not obtain host and port information for controller "{self.CONTROLLER}"') from e
+
+        # Check obtained values
+        if not isinstance(host, str):
+            raise TypeError(f'Host information for controller "{self.CONTROLLER}" must be of type str')
+        if not isinstance(port, int):
+            raise TypeError(f'Port information for controller "{self.CONTROLLER}" must be of type str')
+
+        return host, port
