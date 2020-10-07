@@ -67,17 +67,19 @@ def _str_to_time(string: str) -> float:
 class JobAction(enum.Enum):
     """Job action enumeration."""
 
-    RUN = enum.auto()
-    """Run this job."""
     PASS = enum.auto()
     """Pass this job."""
+    RUN = enum.auto()
+    """Run this job."""
+    FORCE = enum.auto()
+    """Force this job."""
 
     def submittable(self) -> bool:
         """Check if a job should be submitted or not.
 
         :return: True if the job is submittable
         """
-        return self is JobAction.RUN
+        return self in {JobAction.RUN, JobAction.FORCE}
 
     @classmethod
     def from_str(cls, string_: str) -> JobAction:
@@ -368,16 +370,26 @@ class Policy(enum.Enum):
     LAZY: __P_T = {
         (JobAction.PASS, JobAction.PASS): JobAction.PASS,
         (JobAction.PASS, JobAction.RUN): JobAction.RUN,
+        (JobAction.PASS, JobAction.FORCE): JobAction.RUN,
         (JobAction.RUN, JobAction.PASS): JobAction.PASS,
         (JobAction.RUN, JobAction.RUN): JobAction.RUN,
+        (JobAction.RUN, JobAction.FORCE): JobAction.RUN,
+        (JobAction.FORCE, JobAction.PASS): JobAction.RUN,
+        (JobAction.FORCE, JobAction.RUN): JobAction.RUN,
+        (JobAction.FORCE, JobAction.FORCE): JobAction.RUN,
     }
     """Lazy scheduling policy, only submit jobs that expired."""
 
     GREEDY: __P_T = {
         (JobAction.PASS, JobAction.PASS): JobAction.PASS,
         (JobAction.PASS, JobAction.RUN): JobAction.RUN,
+        (JobAction.PASS, JobAction.FORCE): JobAction.RUN,
         (JobAction.RUN, JobAction.PASS): JobAction.RUN,
         (JobAction.RUN, JobAction.RUN): JobAction.RUN,
+        (JobAction.RUN, JobAction.FORCE): JobAction.RUN,
+        (JobAction.FORCE, JobAction.PASS): JobAction.RUN,
+        (JobAction.FORCE, JobAction.RUN): JobAction.RUN,
+        (JobAction.FORCE, JobAction.FORCE): JobAction.RUN,
     }
     """Greedy scheduling policy, submit jobs that expired or depend on an expired job."""
 
@@ -421,11 +433,13 @@ class _Controller:
         # Store a reference to the queue
         self._queue: __Q_T = queue
 
-    def submit(self, jobs: typing.Union[str, typing.Collection[str]],
-               *, action: str = str(JobAction.PASS), policy: typing.Optional[str] = None) -> None:
+    def submit(self, jobs: typing.Union[str, typing.Collection[str]], *,
+               action: str = str(JobAction.FORCE), policy: typing.Optional[str] = None) -> None:
         """Submit a request to the scheduler.
 
-        :param jobs: One or a collection of job names as strings (case sensitive)
+        Action defaults to :attr:`JobAction.FORCE` and policy defaults to the schedulers policy.
+
+        :param jobs: One or a collection of job names as strings *(case sensitive)*
         :param action: The root job action as a string (case insensitive)
         :param policy: The scheduling policy as a string (case insensitive)
         """
@@ -455,6 +469,7 @@ class DaxScheduler(dax.base.system.DaxHasKey):
 
     - :attr:`ROOT_JOBS`: A collection of job classes that are the root jobs, defaults to all entry nodes
     - :attr:`SYSTEM`: A DAX system type to enable additional logging of data
+    - :attr:`DEFAULT_POLICY`: The default scheduling policy
     - :attr:`DEFAULT_PIPELINE`: The default pipeline to submit jobs to, the scheduler can not run in the same pipeline
     - :attr:`DEFAULT_JOB_PRIORITY`: The baseline priority for jobs submitted by this scheduler
     """
@@ -471,6 +486,8 @@ class DaxScheduler(dax.base.system.DaxHasKey):
     PORT: typing.Optional[int] = None
     """Port to run the scheduler controller on if provided."""
 
+    DEFAULT_POLICY: Policy = Policy.LAZY
+    """Default scheduling policy."""
     DEFAULT_PIPELINE: str = 'main'
     """Default pipeline to submit jobs to."""
     DEFAULT_JOB_PRIORITY: int = 0
@@ -498,8 +515,9 @@ class DaxScheduler(dax.base.system.DaxHasKey):
         assert isinstance(self.ROOT_JOBS, collections.abc.Collection), 'The root jobs attribute must be a collection'
         assert all(issubclass(job, Job) for job in self.ROOT_JOBS), 'All root jobs must be subclasses of Job'
         assert self.SYSTEM is None or issubclass(self.SYSTEM, dax.base.system.DaxSystem)
-        assert self.PORT is None or isinstance(self.PORT, int)
-        # Check default pipeline and job priority
+        assert self.PORT is None or isinstance(self.PORT, int), 'Port must be of type int or None'
+        # Check default policy, pipeline, and job priority
+        assert isinstance(self.DEFAULT_POLICY, Policy), 'Default policy must be of type Policy'
         assert isinstance(self.DEFAULT_PIPELINE, str) and self.DEFAULT_PIPELINE, 'Default pipeline must be of type str'
         assert isinstance(self.DEFAULT_JOB_PRIORITY, int), 'Default job priority must be of type int'
         assert -99 <= self.DEFAULT_JOB_PRIORITY <= 99, 'Default job priority must be in the domain [-99, 99]'
@@ -516,7 +534,8 @@ class DaxScheduler(dax.base.system.DaxHasKey):
 
         # Scheduling arguments
         self._policy_arg: str = self.get_argument('Policy',
-                                                  artiq.experiment.EnumerationValue(sorted(str(p) for p in Policy)),
+                                                  artiq.experiment.EnumerationValue(sorted(str(p) for p in Policy),
+                                                                                    default=str(self.DEFAULT_POLICY)),
                                                   tooltip='Scheduling policy',
                                                   group='Scheduler')
         self._wave_interval: int = self.get_argument('Wave interval',
@@ -692,6 +711,7 @@ class DaxScheduler(dax.base.system.DaxHasKey):
         # Start the server task
         self.logger.debug(f'Starting the scheduler controller on port {self.PORT}')
         task = asyncio.create_task(server.start('::1', self.PORT))
+        await asyncio.sleep(0)  # Allow the server to start
 
         try:
             # Run the scheduler
@@ -779,7 +799,7 @@ class DaxScheduler(dax.base.system.DaxHasKey):
             policy: Policy = self._policy if policy_name is None else Policy.from_str(policy_name)
         except KeyError:
             # Log the error
-            self.logger.exception('Dropping invalid request')
+            self.logger.exception(f'Dropping invalid request: ({root_job_names}, {root_action_name}, {policy_name})')
         else:
             # Submit a wave for the external request
             self.wave(wave=0.0,
@@ -813,7 +833,7 @@ class DaxScheduler(dax.base.system.DaxHasKey):
         if not nx.algorithms.is_directed_acyclic_graph(self._job_graph):
             raise RuntimeError('Dependency graph is not a directed acyclic graph')
         if self._policy is Policy.LAZY and any(not j.is_timed() for j in self._job_graph):
-            self.logger.warning('Found one or more unreachable jobs (untimed jobs in a lazy scheduling policy')
+            self.logger.warning('Found one or more unreachable jobs (untimed jobs in a lazy scheduling policy)')
 
         if self._reduce_graph:
             # Get the transitive reduction of the job dependency graph

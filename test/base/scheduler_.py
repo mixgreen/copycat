@@ -5,6 +5,7 @@ import typing
 import collections
 import contextlib
 import os
+import socket
 from unittest.mock import MagicMock, call
 
 from artiq.language.scan import *
@@ -14,6 +15,41 @@ from dax.base.scheduler import *
 from dax.util.artiq import get_managers
 import dax.base.system
 import dax.util.output
+
+
+def _find_free_port() -> int:
+    with contextlib.closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as s:
+        s.bind(('', 0))
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        return int(s.getsockname()[1])
+
+
+_CONTROLLER_PORT = _find_free_port()
+
+_DEVICE_DB: typing.Dict[str, typing.Any] = {
+    'core': {
+        'type': 'local',
+        'module': 'artiq.coredevice.core',
+        'class': 'Core',
+        'arguments': {'host': '0.0.0.0', 'ref_period': 1e-9}
+    },
+    'core_cache': {
+        'type': 'local',
+        'module': 'artiq.coredevice.cache',
+        'class': 'CoreCache'
+    },
+    'core_dma': {
+        'type': 'local',
+        'module': 'artiq.coredevice.dma',
+        'class': 'CoreDMA'
+    },
+    # Reference to the scheduler controller
+    'dax_scheduler': {
+        'type': 'controller',
+        'host': '::1',
+        'port': _CONTROLLER_PORT,
+    },
+}
 
 
 @contextlib.contextmanager
@@ -71,7 +107,8 @@ class _Job1(_Job):
 
 
 class _JobC(_Job):
-    pass
+    FILE = 'foo.py'
+    CLASS_NAME = 'Bar'
 
 
 class _JobB(_Job):
@@ -80,6 +117,8 @@ class _JobB(_Job):
 
 class _JobA(_Job):
     DEPENDENCIES = {_JobB}
+    FILE = 'foo.py'
+    CLASS_NAME = 'Bar'
 
 
 class _Scheduler(DaxScheduler):
@@ -91,6 +130,7 @@ class _Scheduler(DaxScheduler):
 
     def __init__(self, *args, **kwargs):
         self._data_store = MagicMock(spec=dax.base.system.DaxDataStore)
+        self.external_requests = 0
         super(_Scheduler, self).__init__(*args, **kwargs)
 
     @property
@@ -116,7 +156,15 @@ class _Scheduler(DaxScheduler):
 
     async def _run_scheduler(self, queue) -> None:
         self.queue = queue
+        self.controller_callback()
         await super(_Scheduler, self)._run_scheduler(queue)
+
+    def controller_callback(self) -> None:
+        pass
+
+    def _handle_external_request(self, queue) -> None:
+        self.external_requests += 1
+        super(_Scheduler, self)._handle_external_request(queue)
 
 
 class SchedulerMiscTestCase(unittest.TestCase):
@@ -145,29 +193,35 @@ class SchedulerMiscTestCase(unittest.TestCase):
                 self.assertEqual(str_to_time(s), v, 'Converted time string does not equal expected float value')
 
     def test_job_action_str(self):
-        # noinspection PyProtectedMember
-        from dax.base.scheduler import JobAction
         for a in JobAction:
             with self.subTest(job_action=a):
                 self.assertEqual(str(a), a.name)
 
     def test_job_action_submittable(self):
-        # noinspection PyProtectedMember
-        from dax.base.scheduler import JobAction
-
-        submittable = {JobAction.RUN}
+        submittable = {JobAction.RUN, JobAction.FORCE}
 
         for a in JobAction:
             with self.subTest(job_action=a):
                 self.assertEqual(a in submittable, a.submittable())
 
     def test_policy_complete(self):
-        # noinspection PyProtectedMember
-        from dax.base.scheduler import JobAction
-
         for p in Policy:
             with self.subTest(policy=str(p)):
                 self.assertEqual(len(p.value), len(JobAction) ** 2, 'Policy not fully implemented')
+
+    def test_policy_differences(self):
+        for a0 in JobAction:
+            for a1 in JobAction:
+                lazy = Policy.LAZY.action(a0, a1)
+                greedy = Policy.GREEDY.action(a0, a1)
+
+                if a0 is JobAction.RUN and a1 is JobAction.PASS:
+                    # Only for this one scenario the policies are different
+                    self.assertEqual(lazy, JobAction.PASS, 'Policy lazy returned an unexpected action')
+                    self.assertEqual(greedy, JobAction.RUN, 'Policy greedy returned an unexpected action')
+                else:
+                    # All other cases the policies return the same actions
+                    self.assertEqual(lazy, greedy, 'Policies unexpectedly returned different actions')
 
 
 class LazySchedulerTestCase(unittest.TestCase):
@@ -178,9 +232,6 @@ class LazySchedulerTestCase(unittest.TestCase):
                                 **{'View graph': False})  # type: ignore[arg-type]
 
     def test_create_job(self):
-        # noinspection PyProtectedMember
-        from dax.base.scheduler import JobAction
-
         s = _Scheduler(self.mop)
 
         class J0(Job):
@@ -505,7 +556,18 @@ class LazySchedulerTestCase(unittest.TestCase):
 
         # Wave
         s.wave()
-        for j in s._job_graph:
+        self._check_scheduler_wave_0(s)
+
+        # Wave
+        s.wave(wave=time.time(), root_jobs=s._root_jobs, root_action=JobAction.PASS, policy=s._policy)
+        self._check_scheduler_wave_1(s)
+
+        # Check data store calls
+        # noinspection PyTypeChecker
+        self._check_scheduler_datastore_calls(s)
+
+    def _check_scheduler_wave_0(self, scheduler):
+        for j in scheduler._job_graph:
             with self.subTest(job=j.get_name()):
                 if isinstance(j, _Job1):
                     ref_counter = {'init': 1, 'visit': 2, 'submit': 1, 'schedule': 1}
@@ -518,9 +580,8 @@ class LazySchedulerTestCase(unittest.TestCase):
                 self.assertDictEqual(j.counter, ref_counter,
                                      'Job call pattern did not match expected pattern')
 
-        # Wave
-        s.wave(wave=time.time(), root_jobs=s._root_jobs, root_action=JobAction.PASS, policy=s._policy)
-        for j in s._job_graph:
+    def _check_scheduler_wave_1(self, scheduler):
+        for j in scheduler._job_graph:
             with self.subTest(job=j.get_name()):
                 if isinstance(j, _Job1):
                     ref_counter = {'init': 1, 'visit': 3, 'submit': 1, 'schedule': 1}
@@ -533,9 +594,9 @@ class LazySchedulerTestCase(unittest.TestCase):
                 self.assertDictEqual(j.counter, ref_counter,
                                      'Job call pattern did not match expected pattern')
 
-        # Check data store calls
-        self.assertListEqual(s.data_store.method_calls,
-                             [call.append(s.get_system_key(_Job1.get_name(), _Job1._RID_LIST_KEY), 1)])
+    def _check_scheduler_datastore_calls(self, scheduler):
+        self.assertListEqual(scheduler.data_store.method_calls,
+                             [call.append(scheduler.get_system_key(_Job1.get_name(), _Job1._RID_LIST_KEY), 1)])
 
     def test_scheduler_run(self):
         waves = 3
@@ -557,8 +618,10 @@ class LazySchedulerTestCase(unittest.TestCase):
 
         # Run the scheduler
         s.run()
+        self._check_scheduler_run(s, waves)
 
-        for j in s._job_graph:
+    def _check_scheduler_run(self, scheduler, waves):
+        for j in scheduler._job_graph:
             with self.subTest(job=j.get_name()):
                 if isinstance(j, _Job1):
                     ref_counter = {'init': 1, 'visit': waves + 1, 'submit': 1, 'schedule': 1}
@@ -571,6 +634,60 @@ class LazySchedulerTestCase(unittest.TestCase):
                 self.assertDictEqual(j.counter, ref_counter,
                                      'Job call pattern did not match expected pattern')
 
+    def test_scheduler_controller(self):
+        waves = 3
+
+        class S(_Scheduler):
+            JOBS = {_Job1, _Job2, _Job3, _Job4, _JobA, _JobB, _JobC}
+            PORT = _CONTROLLER_PORT
+            counter = 0
+
+            def wave(self, **kwargs) -> None:
+                super(S, self).wave(**kwargs)
+
+                if kwargs['wave'] > 0.0:
+                    self.counter += 1
+                    if self.counter >= waves:
+                        raise TerminationRequested
+
+            def controller_callback(self) -> None:
+                # noinspection PyProtectedMember
+                from dax.base.scheduler import _Controller
+                # Construct a separate controller with the same queue
+                # This is required because we can not use get_device() to obtain the controller
+                # Because the server and the client are running on the same thread then, the situation deadlocks
+                controller = _Controller(self.queue)
+                controller.submit(_Job4.get_name())
+                controller.submit(_JobA.get_name())
+                controller.submit(_JobC.get_name(), action=str(JobAction.PASS))
+
+        with _isolation():
+            s = S(get_managers(_DEVICE_DB, Policy=str(self.POLICY), Pipeline='test_pipeline',
+                               **{'Wave interval': 1.0, 'Clock period': 0.1, 'View graph': False}))
+            s.prepare()
+
+        # Run the scheduler
+        s.run()
+        self._check_scheduler_controller(s, waves)
+
+    def _check_scheduler_controller(self, scheduler, waves):
+        for j in scheduler._job_graph:
+            with self.subTest(job=j.get_name()):
+                if isinstance(j, _Job1):
+                    ref_counter = {'init': 1, 'visit': waves + 1, 'submit': 1, 'schedule': 1}
+                elif isinstance(j, (_Job2, _Job3)):
+                    ref_counter = {'init': 1, 'visit': waves}
+                elif isinstance(j, _Job4):
+                    ref_counter = {'init': 1, 'visit': waves * 2 + 1, 'submit': 1, 'schedule': 1}
+                elif isinstance(j, _JobA):
+                    ref_counter = {'init': 1, 'visit': waves + 1, 'submit': 1, 'schedule': 1}
+                elif isinstance(j, _JobC):
+                    ref_counter = {'init': 1, 'visit': waves + 1 + 1}
+                else:
+                    ref_counter = {'init': 1, 'visit': waves + 1}
+                self.assertDictEqual(j.counter, ref_counter,
+                                     'Job call pattern did not match expected pattern')
+
 
 class GreedySchedulerTestCase(LazySchedulerTestCase):
     POLICY = Policy.GREEDY
@@ -580,21 +697,8 @@ class GreedySchedulerTestCase(LazySchedulerTestCase):
             # With a greedy policy, all jobs are reachable and the call to super will cause a test failure
             super(GreedySchedulerTestCase, self).test_scheduler_unreachable_jobs()
 
-    def test_scheduler_wave(self):
-        class S(_Scheduler):
-            JOBS = {_Job1, _Job2, _Job3, _Job4, _JobA, _JobB, _JobC}
-
-        with _isolation():
-            s = S(self.mop)
-            s.prepare()
-
-            # Manually call init
-            for j in s._job_graph:
-                j.init(reset=True)
-
-        # Wave
-        s.wave()
-        for j in s._job_graph:
+    def _check_scheduler_wave_0(self, scheduler):
+        for j in scheduler._job_graph:
             with self.subTest(job=j.get_name()):
                 if isinstance(j, _Job1):
                     ref_counter = {'init': 1, 'visit': 2, 'submit': 1, 'schedule': 1}
@@ -607,9 +711,8 @@ class GreedySchedulerTestCase(LazySchedulerTestCase):
                 self.assertDictEqual(j.counter, ref_counter,
                                      'Job call pattern did not match expected pattern')
 
-        # Wave
-        s.wave()
-        for j in s._job_graph:
+    def _check_scheduler_wave_1(self, scheduler):
+        for j in scheduler._job_graph:
             with self.subTest(job=j.get_name()):
                 if isinstance(j, _Job1):
                     ref_counter = {'init': 1, 'visit': 3, 'submit': 1, 'schedule': 1}
@@ -622,31 +725,13 @@ class GreedySchedulerTestCase(LazySchedulerTestCase):
                 self.assertDictEqual(j.counter, ref_counter,
                                      'Job call pattern did not match expected pattern')
 
+    def _check_scheduler_datastore_calls(self, scheduler):
         # Check data store calls (only jobs that are not meta-jobs perform a call)
-        self.assertEqual(len(s.data_store.method_calls), 2, 'Data store was called an unexpected number of times')
+        self.assertEqual(len(scheduler.data_store.method_calls), 2,
+                         'Data store was called an unexpected number of times')
 
-    def test_scheduler_run(self):
-        waves = 3
-
-        class S(_Scheduler):
-            JOBS = {_Job1, _Job2, _Job3, _Job4, _JobA, _JobB, _JobC}
-            counter = 0
-
-            def wave(self, **kwargs) -> None:
-                super(S, self).wave(**kwargs)
-                self.counter += 1
-                if self.counter >= waves:
-                    raise TerminationRequested
-
-        with _isolation():
-            s = S(get_managers(Policy=str(self.POLICY), Pipeline='test_pipeline',
-                               **{'Wave interval': 1.0, 'Clock period': 0.1, 'View graph': False}))
-            s.prepare()
-
-        # Run the scheduler
-        s.run()
-
-        for j in s._job_graph:
+    def _check_scheduler_run(self, scheduler, waves):
+        for j in scheduler._job_graph:
             with self.subTest(job=j.get_name()):
                 if isinstance(j, _Job1):
                     ref_counter = {'init': 1, 'visit': waves + 1, 'submit': 1, 'schedule': 1}
@@ -656,5 +741,21 @@ class GreedySchedulerTestCase(LazySchedulerTestCase):
                     ref_counter = {'init': 1, 'visit': waves * 2, 'submit': 1, 'schedule': 1}
                 else:
                     ref_counter = {'init': 1, 'visit': waves}
+                self.assertDictEqual(j.counter, ref_counter,
+                                     'Job call pattern did not match expected pattern')
+
+    def _check_scheduler_controller(self, scheduler, waves):
+        for j in scheduler._job_graph:
+            with self.subTest(job=j.get_name()):
+                if isinstance(j, _Job1):
+                    ref_counter = {'init': 1, 'visit': waves + 1, 'submit': 1, 'schedule': 1}
+                elif isinstance(j, (_Job2, _Job3)):
+                    ref_counter = {'init': 1, 'visit': waves, 'submit': 1, 'schedule': 1}
+                elif isinstance(j, _Job4):
+                    ref_counter = {'init': 1, 'visit': waves * 2 + 1, 'submit': 1 + 1, 'schedule': 1 + 1}
+                elif isinstance(j, _JobC):
+                    ref_counter = {'init': 1, 'visit': waves + 1 + 1, 'submit': 1, 'schedule': 1}
+                else:
+                    ref_counter = {'init': 1, 'visit': waves + 1, 'submit': 1, 'schedule': 1}
                 self.assertDictEqual(j.counter, ref_counter,
                                      'Job call pattern did not match expected pattern')
