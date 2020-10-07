@@ -10,6 +10,7 @@ import graphviz
 import asyncio
 
 import artiq.experiment
+import artiq.master.worker_db
 import sipyco.pc_rpc  # type: ignore
 
 import dax.base.system
@@ -906,7 +907,7 @@ class DaxScheduler(dax.base.system.DaxHasKey):
             self.logger.info('All other instances were terminated successfully')
 
     def _get_controller_details(self) -> typing.Tuple[str, int]:
-        """Get the scheduler controller details from the device DB."""
+        """Get the scheduler controller details from the device DB and verify the details."""
         assert isinstance(self.CONTROLLER, str), 'Controller attribute must be of types str'
 
         # Obtain the device DB
@@ -930,4 +931,17 @@ class DaxScheduler(dax.base.system.DaxHasKey):
         if not isinstance(port, int):
             raise TypeError(f'Port information for controller "{self.CONTROLLER}" must be of type str')
 
+        # Check that best effort is disabled
+        if controller.get('best_effort'):
+            raise ValueError(f'Controller "{self.CONTROLLER}" should have best effort disabled')
+
+        # Verify if no controller is already running
+        try:
+            self.get_device(self.CONTROLLER)
+        except artiq.master.worker_db.DeviceError:
+            pass  # No server is running
+        else:
+            raise RuntimeError(f'Controller "{self.CONTROLLER}" is already running')
+
+        # Return the controller details of interest
         return host, port
