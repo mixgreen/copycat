@@ -47,7 +47,8 @@ def is_host_only(func: typing.Any) -> bool:
 def get_managers(device_db: typing.Union[typing.Dict[str, typing.Any], str, None] = None, *,
                  dataset_db: typing.Optional[str] = None,
                  expid: typing.Optional[typing.Dict[str, typing.Any]] = None,
-                 **arguments: typing.Any) -> typing.Any:
+                 arguments: typing.Optional[typing.Dict[str, typing.Any]] = None,
+                 **kwargs: typing.Any) -> typing.Any:
     """Returns an object that can function as a `managers_or_parent` for ARTIQ HasEnvironment.
 
     This function is primarily used for testing purposes.
@@ -59,11 +60,17 @@ def get_managers(device_db: typing.Union[typing.Dict[str, typing.Any], str, None
     :param dataset_db: A dataset DB as a file name
     :param expid: Dict for the scheduler expid attribute
     :param arguments: Arguments for the ProcessArgumentManager object
+    :param kwargs: Arguments for the ProcessArgumentManager object (updates `arguments`)
     :return: A dummy ARTIQ manager object: (`DeviceManager`, `DatasetManager`, `ProcessArgumentManager`, `dict`)
     """
+
+    # Set default values
+    if arguments is None:
+        arguments = {}
+
     assert isinstance(dataset_db, str) or dataset_db is None, 'Dataset DB must be a str or None'
-    assert isinstance(expid, dict) or expid is None, 'expid must be a dict or None'
-    assert isinstance(arguments, dict)
+    assert isinstance(expid, dict) or expid is None, 'Expid must be a dict or None'
+    assert isinstance(arguments, dict), 'Arguments must be of type dict'
 
     # Scheduler
     scheduler = artiq.frontend.artiq_run.DummyScheduler()
@@ -71,8 +78,9 @@ def get_managers(device_db: typing.Union[typing.Dict[str, typing.Any], str, None
     scheduler.expid = {} if expid is None else expid
     for k, v in _EXPID_DEFAULTS.items():
         scheduler.expid.setdefault(k, v)
-    # Set arguments (overwrites any arguments in the expid)
-    scheduler.expid['arguments'] = arguments
+    # Merge and set arguments (updates any arguments in the expid)
+    arguments.update(kwargs)
+    scheduler.expid.setdefault('arguments', {}).update(arguments)
 
     # Create a unique temp dir
     tempdir = _TemporaryDirectory()

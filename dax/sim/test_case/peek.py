@@ -38,7 +38,8 @@ class PeekTestCase(unittest.TestCase):
                       logging_level: typing.Union[int, str] = logging.NOTSET,
                       build_args: typing.Optional[typing.Sequence[typing.Any]] = None,
                       build_kwargs: typing.Optional[typing.Dict[str, typing.Any]] = None,
-                      **env_kwargs: typing.Any) -> __E_T:
+                      env_kwargs: typing.Optional[typing.Dict[str, typing.Any]] = None,
+                      **kwargs: typing.Any) -> __E_T:
         """Construct an ARTIQ environment based on the given class.
 
         The constructed environment can be used as a Device Under Testing (DUT).
@@ -49,6 +50,7 @@ class PeekTestCase(unittest.TestCase):
         :param build_args: Positional arguments passed to the build function of the environment
         :param build_kwargs: Keyword arguments passed to the build function of the environment
         :param env_kwargs: Keyword arguments passed to the argument parser of the environment
+        :param kwargs: Keyword arguments passed to the argument parser of the environment (updates `env_kwargs`)
         :return: The constructed ARTIQ environment object
         """
 
@@ -57,6 +59,8 @@ class PeekTestCase(unittest.TestCase):
             build_args = ()
         if build_kwargs is None:
             build_kwargs = {}
+        if env_kwargs is None:
+            env_kwargs = {}
 
         assert issubclass(env_class, HasEnvironment), 'The environment class must be a subclass of HasEnvironment'
         assert isinstance(device_db, (str, dict)) or device_db is None, 'Device DB must be of type str, dict, or None'
@@ -87,7 +91,8 @@ class PeekTestCase(unittest.TestCase):
 
         # Construct environment, which will also construct a new signal manager
         _logger.debug('Constructing environment')
-        env = env_class(get_managers(device_db, expid=expid, **env_kwargs), *build_args, **build_kwargs)
+        env = env_class(get_managers(device_db, expid=expid, arguments=env_kwargs, **kwargs),
+                        *build_args, **build_kwargs)
 
         # Store the new signal manager
         _logger.debug('Retrieving peek signal manager')
