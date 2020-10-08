@@ -876,8 +876,8 @@ class DaxScheduler(dax.base.system.DaxHasKey):
         # Check graph
         if not nx.algorithms.is_directed_acyclic_graph(self._job_graph):
             raise RuntimeError('Dependency graph is not a directed acyclic graph')
-        if self._policy is Policy.LAZY and any(not j.is_timed() for j in self._job_graph):
-            self.logger.warning('Found one or more unreachable jobs (untimed jobs in a lazy scheduling policy)')
+        if self._policy is Policy.LAZY and self.CONTROLLER is None and any(not j.is_timed() for j in self._job_graph):
+            self.logger.warning('Found unreachable jobs (untimed jobs in a lazy scheduling policy)')
 
         if self._reduce_graph:
             # Get the transitive reduction of the job dependency graph
@@ -984,3 +984,5 @@ class DaxScheduler(dax.base.system.DaxHasKey):
 
         # Return the controller details of interest
         return host, port
+
+# TODO: decorator that generates a scheduler submit experiment
