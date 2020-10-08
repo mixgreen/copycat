@@ -9,7 +9,7 @@ import socket
 from unittest.mock import MagicMock, call
 
 from artiq.language.scan import *
-from artiq.experiment import TerminationRequested
+from artiq.experiment import TerminationRequested, NumberValue
 
 from dax.base.scheduler import *
 from dax.util.artiq import get_managers
@@ -356,9 +356,40 @@ class LazySchedulerTestCase(unittest.TestCase):
                          }
 
         j = J0(s)
-        for v in j._process_arguments().values():
+        arguments = j._process_arguments()
+        self.assertEqual(len(arguments), len(J0.ARGUMENTS))
+        for v in arguments.values():
             self.assertNotIsInstance(v, ScanObject)
-        self.assertDictEqual(j._process_arguments(),
+        self.assertDictEqual(arguments,
+                             {k: v.describe() if isinstance(v, ScanObject) else v for k, v in J0.ARGUMENTS.items()})
+
+    def test_job_configurable_arguments(self):
+        s = _Scheduler(self.mop)
+
+        class J0(Job):
+            ARGUMENTS = {'foo': 1,
+                         'range': RangeScan(1, 10, 9),
+                         'center': CenterScan(1, 10, 9),
+                         'explicit': ExplicitScan([1, 10, 9]),
+                         'no': NoScan(10),
+                         }
+
+            def build_job(self) -> None:
+                self.ARGUMENTS['bar'] = self.get_argument('bar', NumberValue(20))
+                self.ARGUMENTS['baz'] = self.get_argument('baz', Scannable(CenterScan(100, 50, 2)))
+                self.ARGUMENTS['foobar'] = self.get_argument('foobar', Scannable(RangeScan(100, 300, 40)))
+
+        configurable_arguments = ['bar', 'baz', 'foobar']
+        j = J0(s)
+        arguments = j._process_arguments()
+        self.assertEqual(len(arguments), len(J0.ARGUMENTS) + len(configurable_arguments))
+        for v in arguments.values():
+            self.assertNotIsInstance(v, ScanObject)
+
+        # Pop three configurable arguments before comparing
+        for k in configurable_arguments:
+            arguments.pop(k)
+        self.assertDictEqual(arguments,
                              {k: v.describe() if isinstance(v, ScanObject) else v for k, v in J0.ARGUMENTS.items()})
 
     def test_job_name(self):

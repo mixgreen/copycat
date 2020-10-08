@@ -7,6 +7,6 @@ It will import the components required to use the DAX.scheduler infrastructure.
 from dax.base.scheduler import *  # noqa: F401
 
 # Import ARTIQ components
-from artiq.language.environment import EnvExperiment, Experiment  # noqa: F401
-from artiq.language.scan import NoScan, RangeScan, CenterScan, ExplicitScan  # noqa: F401
+from artiq.language.environment import *  # noqa: F401
+from artiq.language.scan import *  # noqa: F401
 from artiq.language.units import *  # noqa: F401

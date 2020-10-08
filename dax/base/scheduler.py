@@ -111,6 +111,8 @@ class Job(dax.base.system.DaxHasKey):
     - :attr:`ARGUMENTS`: A dictionary with experiment arguments (scan objects can be used directly as arguments)
     - :attr:`INTERVAL`: The job submit interval
     - :attr:`DEPENDENCIES`: A collection of job classes on which this job depends
+
+    Optionally, users can override the :func:`build_job` method to add configurable arguments.
     """
 
     FILE: typing.Optional[str] = None
@@ -178,8 +180,17 @@ class Job(dax.base.system.DaxHasKey):
                                   **kwargs)
 
     def build(self) -> None:  # type: ignore
+        """Build the job object.
+
+        To add configurable arguments to this job, override the :func:`build_job` method.
+        """
+
         # Obtain the scheduler
         self._scheduler = self.get_device('scheduler')
+        # Copy the class arguments attribute (prevents class attribute from being mutated)
+        self.ARGUMENTS = self.ARGUMENTS.copy()
+        # Build this job
+        self.build_job()
 
         # Construct an expid for this job
         if not self.is_meta():
@@ -210,6 +221,21 @@ class Job(dax.base.system.DaxHasKey):
             # No interval was set
             self._interval = 0.0
             self.logger.info('No interval set')
+
+    def build_job(self) -> None:
+        """Build this job.
+
+        Override this function to add configurable arguments to this job.
+        Please note that **argument keys must be unique over all jobs in the job set and the scheduler**.
+        It is up to the programmer to ensure that there are no duplicate argument keys.
+
+        Configurable arguments should be added directly to the :attr:`ARGUMENTS` attribute.
+        For example::
+
+            self.ARGUMENTS['foo'] = self.get_argument('foo', BooleanValue())
+            self.ARGUMENTS['bar'] = self.get_argument('bar', Scannable(RangeScan(10 * us, 200 * us, 10)))
+        """
+        pass
 
     def init(self, *, reset: bool) -> None:
         """Initialize the job, should be called once just before the scheduler starts.
@@ -430,6 +456,8 @@ if typing.TYPE_CHECKING:
 
 
 class _Controller:
+    """Scheduler controller class, which exposes an external interface to the DAX scheduler."""
+
     def __init__(self, queue: __Q_T):
         # Store a reference to the queue
         self._queue: __Q_T = queue
@@ -531,8 +559,30 @@ class DaxScheduler(dax.base.system.DaxHasKey):
                                            name=self.NAME, system_key=self.NAME, **kwargs)
 
     def build(self, *args: typing.Any, **kwargs: typing.Any) -> None:
+        """Build the scheduler.
+
+        :param args: Positional arguments forwarded to the super class
+        :param kwargs: Keyword arguments forwarded to the super class
+        """
+
         # Set default scheduling options for the scheduler itself
         self.set_default_scheduling(pipeline_name=self.NAME)
+
+        # The ARTIQ scheduler
+        self._scheduler = self.get_device('scheduler')
+
+        # Instantiate the data store
+        if self.SYSTEM is not None and self.SYSTEM.DAX_INFLUX_DB_KEY is not None:
+            # Create an Influx DB data store
+            self.__data_store = dax.base.system.DaxDataStoreInfluxDb.get_instance(self, self.SYSTEM)
+        else:
+            # No data store configured
+            self.__data_store: dax.base.system.DaxDataStore = dax.base.system.DaxDataStore()
+
+        # Create the job objects
+        self._jobs: typing.Dict[typing.Type[Job], Job] = {job: job(self) for job in self.JOBS}
+        # Store a map from job names to jobs
+        self._job_name_map: typing.Dict[str, Job] = {job.get_name(): job for job in self._jobs.values()}
 
         # Scheduling arguments
         self._policy_arg: str = self.get_argument('Policy',
@@ -568,7 +618,7 @@ class DaxScheduler(dax.base.system.DaxHasKey):
                                                     group='Jobs')
         self._reset_jobs: bool = self.get_argument('Reset',
                                                    artiq.experiment.BooleanValue(False),
-                                                   tooltip='Reset job timestamps at startup, making them all expired',
+                                                   tooltip='Reset job timestamps at startup, marking them all expired',
                                                    group='Jobs')
         self._terminate_jobs: bool = self.get_argument('Terminate at exit',
                                                        artiq.experiment.BooleanValue(False),
@@ -584,17 +634,6 @@ class DaxScheduler(dax.base.system.DaxHasKey):
                                                    artiq.experiment.BooleanValue(False),
                                                    tooltip='View the job dependency graph at startup',
                                                    group='Dependency graph')
-
-        # The ARTIQ scheduler
-        self._scheduler = self.get_device('scheduler')
-
-        # Instantiate the data store
-        if self.SYSTEM is not None and self.SYSTEM.DAX_INFLUX_DB_KEY is not None:
-            # Create an Influx DB data store
-            self.__data_store = dax.base.system.DaxDataStoreInfluxDb.get_instance(self, self.SYSTEM)
-        else:
-            # No data store configured
-            self.__data_store: dax.base.system.DaxDataStore = dax.base.system.DaxDataStore()
 
         # Call super and forward arguments, for compatibility with other libraries
         # noinspection PyArgumentList
@@ -628,7 +667,7 @@ class DaxScheduler(dax.base.system.DaxHasKey):
         # Process the job set
         self._process_job_set()
 
-        # Plot dependency graph
+        # Plot the job dependency graph
         self._plot_dependency_graph()
         # Terminate other instances of this scheduler
         self._terminate_running_instances()
@@ -811,24 +850,26 @@ class DaxScheduler(dax.base.system.DaxHasKey):
                       policy=policy)
 
     def _process_job_set(self) -> None:
-        # Create the job objects
-        jobs: typing.Dict[typing.Type[Job], Job] = {job: job(self) for job in self.JOBS}
-        self.logger.debug(f'Created {len(jobs)} job(s)')
-        if len(jobs) < len(self.JOBS):
+        """Process the job set of this scheduler."""
+
+        # Check job set integrity
+        self.logger.debug(f'Created {len(self._jobs)} job(s)')
+        if len(self._jobs) < len(self.JOBS):
             self.logger.warning('Duplicate jobs were dropped from the job set')
-        if len({job.get_name() for job in jobs}) < len(jobs):
+        if len(self._job_name_map) < len(self._jobs):
             msg = 'Job name conflict, two jobs are not allowed to have the same class name'
             self.logger.error(msg)
             raise ValueError(msg)
 
         # Log the job set
-        self.logger.debug(f'Job set: {", ".join(sorted(j.get_name() for j in jobs))}')
+        self.logger.debug(f'Job set: {", ".join(sorted(self._job_name_map))}')
 
         # Create the job dependency graph
         self._job_graph: nx.DiGraph[Job] = nx.DiGraph()
-        self._job_graph.add_nodes_from(jobs.values())
+        self._job_graph.add_nodes_from(self._jobs.values())
         try:
-            self._job_graph.add_edges_from(((job, jobs[d]) for job in jobs.values() for d in job.DEPENDENCIES))
+            self._job_graph.add_edges_from(((job, self._jobs[d])
+                                            for job in self._jobs.values() for d in job.DEPENDENCIES))
         except KeyError as e:
             raise KeyError(f'Dependency "{e.args[0].get_name()}" is not in the job set') from None
 
@@ -845,16 +886,13 @@ class DaxScheduler(dax.base.system.DaxHasKey):
         if self.ROOT_JOBS:
             try:
                 # Get the root jobs
-                self._root_jobs: typing.Set[Job] = {jobs[job] for job in self.ROOT_JOBS}
+                self._root_jobs: typing.Set[Job] = {self._jobs[job] for job in self.ROOT_JOBS}
             except KeyError as e:
                 raise KeyError(f'Root job "{e.args[0].get_name()}" is not in the job set') from None
         else:
             # Find entry nodes to use as root jobs
             # noinspection PyTypeChecker
             self._root_jobs = {job for job, degree in self._job_graph.in_degree if degree == 0}
-
-        # Store a map from job names to jobs
-        self._job_name_map: typing.Dict[str, Job] = {job.get_name(): job for job in self._job_graph}
 
         # Log the root jobs
         self.logger.debug(f'Root jobs: {", ".join(sorted(j.get_name() for j in self._root_jobs))}')
@@ -908,6 +946,7 @@ class DaxScheduler(dax.base.system.DaxHasKey):
 
     def _get_controller_details(self) -> typing.Tuple[str, int]:
         """Get the scheduler controller details from the device DB and verify the details."""
+
         assert isinstance(self.CONTROLLER, str), 'Controller attribute must be of types str'
 
         # Obtain the device DB

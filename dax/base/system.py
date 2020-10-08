@@ -803,7 +803,11 @@ class DaxSystem(DaxModuleBase):
         return self.__sim_enabled
 
     def build(self, *args: typing.Any, **kwargs: typing.Any) -> None:
-        """Override this method to build your DAX system. (Do not forget to call `super.build()` first!)"""
+        """Override this method to build your DAX system. (Do not forget to call `super.build()` first!)
+
+        :param args: Positional arguments forwarded to the super class
+        :param kwargs: Keyword arguments forwarded to the super class
+        """
 
         # Call super and forward arguments, for compatibility with other libraries
         # noinspection PyArgumentList
