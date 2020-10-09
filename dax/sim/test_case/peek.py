@@ -36,7 +36,7 @@ class PeekTestCase(unittest.TestCase):
     def construct_env(self, env_class: typing.Type[__E_T], *,
                       device_db: typing.Union[str, typing.Dict[str, typing.Any], None] = None,
                       logging_level: typing.Union[int, str] = logging.NOTSET,
-                      build_args: typing.Optional[typing.Sequence[typing.Any]] = None,
+                      build_args: typing.Sequence[typing.Any] = (),
                       build_kwargs: typing.Optional[typing.Dict[str, typing.Any]] = None,
                       env_kwargs: typing.Optional[typing.Dict[str, typing.Any]] = None,
                       **kwargs: typing.Any) -> __E_T:
@@ -55,8 +55,6 @@ class PeekTestCase(unittest.TestCase):
         """
 
         # Set default values
-        if build_args is None:
-            build_args = ()
         if build_kwargs is None:
             build_kwargs = {}
         if env_kwargs is None:
@@ -91,8 +89,8 @@ class PeekTestCase(unittest.TestCase):
 
         # Construct environment, which will also construct a new signal manager
         _logger.debug('Constructing environment')
-        env = env_class(get_managers(device_db, expid=expid, arguments=env_kwargs, **kwargs),
-                        *build_args, **build_kwargs)
+        env_kwargs.update(kwargs)  # Merge arguments
+        env = env_class(get_managers(device_db, expid=expid, arguments=env_kwargs), *build_args, **build_kwargs)
 
         # Store the new signal manager
         _logger.debug('Retrieving peek signal manager')
