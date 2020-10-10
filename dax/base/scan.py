@@ -246,7 +246,7 @@ class DaxScan(dax.base.system.DaxBase, abc.ABC):
         Additionally, users can also add normal arguments using the standard ARTIQ functions.
 
         It is possible to pass arguments from the constructor to this function using the
-        `scan_args` and `scan_kwargs` keyword arguments.
+        keyword arguments defined in :attr:`SCAN_ARGS_KEY` and :attr:`SCAN_KWARGS_KEY` (see :class:`DaxScan`).
         """
         pass
 
