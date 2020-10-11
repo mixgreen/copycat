@@ -392,6 +392,106 @@ class LazySchedulerTestCase(unittest.TestCase):
         self.assertDictEqual(arguments,
                              {k: v.describe() if isinstance(v, ScanObject) else v for k, v in J0.ARGUMENTS.items()})
 
+    def test_job_reset(self):
+        class J0(_Job):
+            FILE = 'foo.py'
+            CLASS_NAME = 'Bar'
+            ARGUMENTS = {'foo': 1}
+            INTERVAL = '1h'
+
+        class S(_Scheduler):
+            JOBS = [J0]
+
+        def start_scheduler(*, reset):
+            # Prepare scheduler
+            scheduler = S(self.mop)
+            scheduler.prepare()
+            # Extract job object
+            job = scheduler._jobs[J0]
+            # Initialize job
+            job.init(reset=reset)
+            # Return scheduler and job
+            return scheduler, job
+
+        with _isolation():
+            # Start scheduler
+            s, j = start_scheduler(reset=False)
+            # First run, job will run because it has never before
+            s.wave()
+            self.assertDictEqual(j.counter, {'init': 1, 'visit': 2, 'submit': 1, 'schedule': 1})
+            # Second run, job will not run because interval did not expire
+            s.wave()
+            self.assertDictEqual(j.counter, {'init': 1, 'visit': 3, 'submit': 1, 'schedule': 1})
+
+            # Restart scheduler
+            s, j = start_scheduler(reset=False)
+            # First run, job will not run because interval did not expire
+            s.wave()
+            self.assertDictEqual(j.counter, {'init': 1, 'visit': 1})
+
+            # Restart scheduler
+            s, j = start_scheduler(reset=True)
+            # First run, job will run because of reset
+            s.wave()
+            self.assertDictEqual(j.counter, {'init': 1, 'visit': 2, 'submit': 1, 'schedule': 1})
+
+            # Restart scheduler
+            s, j = start_scheduler(reset=False)
+            # First run, job will not run because interval did not expire
+            s.wave()
+            self.assertDictEqual(j.counter, {'init': 1, 'visit': 1})
+
+    def test_job_changed_arguments(self):
+        class J0(_Job):
+            FILE = 'foo.py'
+            CLASS_NAME = 'Bar'
+            ARGUMENTS = {'foo': 1}
+            INTERVAL = '1h'
+
+        class S(_Scheduler):
+            JOBS = [J0]
+
+        def start_scheduler(*, reset):
+            # Prepare scheduler
+            scheduler = S(self.mop)
+            scheduler.prepare()
+            # Extract job object
+            job = scheduler._jobs[J0]
+            # Initialize job
+            job.init(reset=reset)
+            # Return scheduler and job
+            return scheduler, job
+
+        with _isolation():
+            # Start scheduler
+            s, j = start_scheduler(reset=False)
+            # First run, job will run because it has never before
+            s.wave()
+            self.assertDictEqual(j.counter, {'init': 1, 'visit': 2, 'submit': 1, 'schedule': 1})
+            # Second run, job will not run because interval did not expire
+            s.wave()
+            self.assertDictEqual(j.counter, {'init': 1, 'visit': 3, 'submit': 1, 'schedule': 1})
+
+            # Restart scheduler
+            s, j = start_scheduler(reset=False)
+            # First run, job will not run because interval did not expire
+            s.wave()
+            self.assertDictEqual(j.counter, {'init': 1, 'visit': 1})
+
+            # Change arguments
+            J0.ARGUMENTS['bar'] = 2
+            # Restart scheduler
+            s, j = start_scheduler(reset=False)
+            # First run, job will run because of changed arguments
+            s.wave()
+            self.assertDictEqual(j.counter, {'init': 1, 'visit': 2, 'submit': 1, 'schedule': 1})
+
+            # Restart scheduler
+            s, j = start_scheduler(reset=False)
+            # First run, job will not run because interval did not expire and arguments did not change
+            s.wave()
+            self.assertDictEqual(j.counter, {'init': 1, 'visit': 1})
+
     def test_job_name(self):
         self.assertEqual(_JobA.get_name(), '_JobA')
         self.assertEqual(_JobA.__name__, '_JobA')

@@ -8,6 +8,8 @@ import enum
 import networkx as nx
 import graphviz
 import asyncio
+import json
+import hashlib
 
 import artiq.experiment
 import artiq.master.worker_db
@@ -63,6 +65,25 @@ def _str_to_time(string: str) -> float:
     else:
         # Return zero in case the string is empty
         return 0.0
+
+
+def _hash_dict(d: typing.Dict[str, typing.Any]) -> str:
+    """Return a stable hash of a dictionary.
+
+    :param d: The dictionary to hash
+    :return: Hash of the dictionary
+    :raises TypeError: Raised if a key or value type can not be hashed
+    """
+
+    assert isinstance(d, dict), 'Input must be a dict'
+    assert all(isinstance(k, str) for k in d), 'All keys must be of type str'
+
+    # Convert the dict to a sorted json string, which should be unique
+    json_ = json.dumps(d, sort_keys=True)
+    # Take a hash of the unique string
+    arguments_hash = hashlib.md5(json_.encode())
+    # Return the digest
+    return arguments_hash.hexdigest()
 
 
 class JobAction(enum.Enum):
@@ -140,6 +161,8 @@ class Job(dax.base.system.DaxHasKey):
     """Key to store every submitted RID."""
     _LAST_SUBMIT_KEY: str = 'last_submit'
     """Key to store the last submit timestamp."""
+    _ARGUMENTS_HASH_KEY: str = 'arguments_hash'
+    """Key to store the last arguments hash."""
 
     def __init__(self, managers_or_parent: DaxScheduler,
                  *args: typing.Any, **kwargs: typing.Any):
@@ -169,7 +192,7 @@ class Job(dax.base.system.DaxHasKey):
 
         # Check parent
         if not isinstance(managers_or_parent, DaxScheduler):
-            raise TypeError(f'Parent of job {self.get_name()} is not a DAX scheduler')
+            raise TypeError(f'Parent of job "{self.get_name()}" is not a DAX scheduler')
 
         # Take key attributes from parent
         self._take_parent_key_attributes(managers_or_parent)
@@ -191,13 +214,15 @@ class Job(dax.base.system.DaxHasKey):
         self.ARGUMENTS = self.ARGUMENTS.copy()
         # Build this job
         self.build_job()
+        # Process the arguments
+        self._arguments = self._process_arguments()
 
         # Construct an expid for this job
         if not self.is_meta():
             self._expid: typing.Dict[str, typing.Any] = {
                 'file': self.FILE,
                 'class_name': self.CLASS_NAME,
-                'arguments': self._process_arguments(),
+                'arguments': self._arguments,
                 'log_level': self.LOG_LEVEL,
                 'repo_rev': None,  # Requests current revision
             }
@@ -214,9 +239,7 @@ class Job(dax.base.system.DaxHasKey):
             if self._interval > 0.0:
                 self.logger.info(f'Interval set to {self._interval:.0f} second(s)')
             else:
-                msg: str = 'The job interval must be greater than zero'
-                self.logger.error(msg)
-                raise ValueError(msg)
+                raise ValueError(f'The interval of job "{self.get_name()}" must be greater than zero')
         else:
             # No interval was set
             self._interval = 0.0
@@ -250,20 +273,39 @@ class Job(dax.base.system.DaxHasKey):
         self._rid_list_key: str = self.get_system_key(self._RID_LIST_KEY)
         self.set_dataset(self._rid_list_key, [])  # Archive only
 
+        # Calculate the argument hash
+        arguments_hash: str = _hash_dict(self._arguments)
+        try:
+            # Check if the argument hash changed
+            arguments_changed: bool = arguments_hash != self.get_dataset_sys(self._ARGUMENTS_HASH_KEY)
+        except KeyError:
+            # No previous arguments hash was available, so we can consider it changed
+            arguments_changed = True
+
+        if arguments_changed:
+            # Store the new arguments hash
+            self.logger.debug(f'Job arguments changed: {arguments_hash}')
+            self.set_dataset_sys(self._ARGUMENTS_HASH_KEY, arguments_hash, data_store=False)
+
         if self.is_timed():
+            self.logger.debug('Initializing timed job')
             if reset:
-                # Reset state and set the current time instead
+                # Reset the job by resetting the next submit time
                 self._next_submit: float = time.time()
-                self.logger.debug('Initialized job by resetting next submit time')
+                self.logger.debug('Job reset requested')
+            elif arguments_changed:
+                # Arguments changed, reset the next submit time
+                self._next_submit = time.time()
+                self.logger.debug('Job was reset due to changed arguments')
             else:
                 # Try to obtain the last submit time
                 last_submit = self.get_dataset_sys(self._LAST_SUBMIT_KEY, 0.0, data_store=False)
                 assert isinstance(last_submit, float), 'Unexpected type returned from dataset'
                 # Add the interval to the last submit time
                 self._next_submit = last_submit + self._interval
-                self.logger.debug('Initialized job by obtaining the last submit time')
+                self.logger.debug('Initialized job by loading the last submit time')
         else:
-            # This job is untimed, next submit will never happen
+            # This job is untimed, next submit will not happen
             self._next_submit = float('inf')
             self.logger.debug('Initialized untimed job')
 
@@ -363,10 +405,13 @@ class Job(dax.base.system.DaxHasKey):
 
         :return: True if this job is a meta-job
         """
-        if self.FILE is None and self.CLASS_NAME is not None or self.FILE is not None and self.CLASS_NAME is None:
-            raise ValueError('The FILE and CLASS_NAME attributes should both be None or not None')
-
-        return self.FILE is None and self.CLASS_NAME is None
+        attributes = (self.FILE, self.CLASS_NAME)
+        meta = all(a is None for a in attributes)
+        if meta or all(a is not None for a in attributes):
+            return meta
+        else:
+            raise ValueError(f'The FILE and CLASS_NAME attributes of job "{self.get_name()}" '
+                             f'should both be None or not None')
 
     def is_timed(self) -> bool:
         """Check if this job is timed.
