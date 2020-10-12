@@ -395,6 +395,18 @@ class BuildScanTestCase(unittest.TestCase):
 
         MockScan(get_managers())
 
+    def test_scan_build_arguments(self):
+        test_args = (1, 2, 'd', 6.9)
+        test_kwargs = {'foo': 4, 'foo bar': 6.6, 'bar': RangeScan(2, 5, 10)}
+
+        class MockScan(_MockScan1):
+            # noinspection PyMethodParameters
+            def build_scan(self_scan, *args, **kwargs) -> None:
+                self.assertTupleEqual(args, test_args, 'Positional arguments did not match')
+                self.assertDictEqual(kwargs, test_kwargs, 'Keyword arguments did not match')
+
+        MockScan(get_managers(), scan_args=test_args, scan_kwargs=test_kwargs)
+
 
 class EmptyScanTestCase(unittest.TestCase):
 

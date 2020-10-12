@@ -10,6 +10,7 @@ import typing
 import pygit2  # type: ignore
 import os
 import collections
+import types
 import numpy as np
 
 from artiq import __version__ as _artiq_version
@@ -1040,7 +1041,7 @@ class DaxNameRegistry:
         self._services: typing.Dict[str, DaxService] = {}
 
     @property
-    def device_db(self) -> typing.Dict[str, typing.Any]:
+    def device_db(self) -> typing.Mapping[str, typing.Any]:
         """Return the current device DB.
 
         Requesting the device DB using `HasEnvironment.get_device_db()` is slow as it
@@ -1048,9 +1049,9 @@ class DaxNameRegistry:
         The registry caches the device DB and by using this property the number
         of calls to the ARTIQ master can be minimized.
 
-        :return: The current device DB
+        :return: A mapping proxy to the current device DB
         """
-        return self._device_db.copy()
+        return types.MappingProxyType(self._device_db)
 
     def add_module(self, module: __M_T) -> None:
         """Register a module.

@@ -146,6 +146,12 @@ class DaxScan(dax.base.system.DaxBase, abc.ABC):
 
     In case scanning is performed in a kernel, users are responsible for setting
     up the right devices to actually run a kernel.
+
+    Arguments passed to the :func:`build` function are passed to the super class for
+    compatibility with other libraries and abstraction layers.
+    It is still possible to pass arguments to the :func:`build_scan` function by using special
+    keyword arguments of the :func:`build` function of which the keywords are defined
+    in the :attr:`SCAN_ARGS_KEY` and :attr:`SCAN_KWARGS_KEY` attributes.
     """
 
     INFINITE_SCAN_ARGUMENT: bool = True
@@ -165,23 +171,33 @@ class DaxScan(dax.base.system.DaxBase, abc.ABC):
     SCAN_PRODUCT_KEY_FORMAT: str = f'{SCAN_GROUP}/{SCAN_PRODUCT_GROUP}/{{key}}'
     """Dataset key format for archiving scan products."""
 
+    SCAN_ARGS_KEY: str = 'scan_args'
+    """:func:`build` keyword argument for positional arguments passed to :func:`build_scan`."""
+    SCAN_KWARGS_KEY: str = 'scan_kwargs'
+    """:func:`build` keyword argument for keyword arguments passed to :func:`build_scan`."""
+
     def build(self, *args: typing.Any, **kwargs: typing.Any) -> None:
         """Build the scan object using the :func:`build_scan` function.
 
         Normally users would build their scan object by overriding the :func:`build_scan` function.
-        In specific cases where this function might be overridden, do not forget to call super.build().
+        In specific cases where this function might be overridden, do not forget to call `super.build()`.
 
         :param args: Positional arguments forwarded to the superclass
-        :param kwargs: Keyword arguments forwarded to the superclass
+        :param kwargs: Keyword arguments forwarded to the superclass (includes args and kwargs for :func:`build_scan`)
         """
-        # Check for usage of legacy ENABLE_INDEX flag
-        if hasattr(self, 'ENABLE_INDEX'):
-            self.ENABLE_SCAN_INDEX = getattr(self, 'ENABLE_INDEX')
-            self.logger.warning('Legacy warning: ENABLE_INDEX flag will soon be renamed to ENABLE_SCAN_INDEX')
 
         assert isinstance(self.INFINITE_SCAN_ARGUMENT, bool), 'Infinite scan argument flag must be of type bool'
         assert isinstance(self.INFINITE_SCAN_DEFAULT, bool), 'Infinite scan default flag must be of type bool'
         assert isinstance(self.ENABLE_SCAN_INDEX, bool), 'Enable scan index flag must be of type bool'
+        assert isinstance(self.SCAN_ARGS_KEY, str), 'Scan args keyword must be of type str'
+        assert isinstance(self.SCAN_KWARGS_KEY, str), 'Scan kwargs keyword must be of type str'
+
+        # Obtain the scan args and kwargs
+        scan_args: typing.Sequence[typing.Any] = kwargs.pop(self.SCAN_ARGS_KEY, ())
+        scan_kwargs: typing.Dict[str, typing.Any] = kwargs.pop(self.SCAN_KWARGS_KEY, {})
+        assert isinstance(scan_args, collections.abc.Sequence), 'Scan args must be a sequence'
+        assert isinstance(scan_kwargs, dict), 'Scan kwargs must be a dict'
+        assert all(isinstance(k, str) for k in scan_kwargs), 'All scan kwarg keys must be of type str'
 
         # Check if host_*() functions are all non-kernel functions
         if any(dax.util.artiq.is_kernel(f) for f in [self.host_enter, self.host_setup,
@@ -201,7 +217,8 @@ class DaxScan(dax.base.system.DaxBase, abc.ABC):
         # Build this scan (no args or kwargs available)
         self.logger.debug('Building scan')
         self.__in_build: bool = True
-        self.build_scan()
+        # noinspection PyArgumentList
+        self.build_scan(*scan_args, **scan_kwargs)  # type: ignore[call-arg]
         self.__in_build = False
 
         # Confirm we have a core attribute
@@ -227,6 +244,9 @@ class DaxScan(dax.base.system.DaxBase, abc.ABC):
 
         To build the scan, use the :func:`add_scan` and :func:`add_static_scan` functions.
         Additionally, users can also add normal arguments using the standard ARTIQ functions.
+
+        It is possible to pass arguments from the constructor to this function using the
+        keyword arguments defined in :attr:`SCAN_ARGS_KEY` and :attr:`SCAN_KWARGS_KEY` (see :class:`DaxScan`).
         """
         pass
 
