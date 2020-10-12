@@ -145,7 +145,8 @@ class _Scheduler(DaxScheduler):
              wave=None,
              root_jobs=None,
              root_action=None,
-             policy=None) -> None:
+             policy=None,
+             reverse=None) -> None:
         # Use defaults for simplicity
         if wave is None:
             wave = time.time()
@@ -155,8 +156,11 @@ class _Scheduler(DaxScheduler):
             root_action = JobAction.PASS
         if policy is None:
             policy = self._policy
+        if reverse is None:
+            reverse = self._reverse
 
-        super(_Scheduler, self).wave(wave=wave, root_jobs=root_jobs, root_action=root_action, policy=policy)
+        super(_Scheduler, self).wave(wave=wave, root_jobs=root_jobs, root_action=root_action,
+                                     policy=policy, reverse=reverse)
 
     async def _run_scheduler(self, queue) -> None:
         self.queue = queue
@@ -233,8 +237,10 @@ class LazySchedulerTestCase(unittest.TestCase):
     REVERSE_GRAPH = False
 
     def setUp(self) -> None:
-        self.mop = get_managers(Policy=str(self.POLICY), Pipeline='test_pipeline', Reverse=self.REVERSE_GRAPH,
-                                **{'View graph': False})  # type: ignore[arg-type]
+        self.mop = get_managers(arguments={'Scheduling policy': str(self.POLICY),
+                                           'Reverse dependencies': self.REVERSE_GRAPH,
+                                           'Job pipeline': 'test_pipeline',
+                                           'View graph': False})
 
     def test_create_job(self):
         s = _Scheduler(self.mop)
@@ -526,7 +532,8 @@ class LazySchedulerTestCase(unittest.TestCase):
     def test_scheduler_pipeline(self):
         with _isolation():
             with self.assertRaises(ValueError, msg='Pipeline conflict did not raise'):
-                s = _Scheduler(get_managers(Policy=str(self.POLICY), Pipeline='main', **{'View graph': False}))
+                s = _Scheduler(get_managers(arguments={'Scheduling policy': str(self.POLICY), 'Job pipeline': 'main',
+                                                       'View graph': False}))
                 s.prepare()
 
             s = _Scheduler(self.mop)
@@ -749,8 +756,8 @@ class LazySchedulerTestCase(unittest.TestCase):
                     raise TerminationRequested
 
         with _isolation():
-            s = S(get_managers(Policy=str(self.POLICY), Pipeline='test_pipeline',
-                               **{'Wave interval': 1.0, 'Clock period': 0.1, 'View graph': False}))
+            s = S(get_managers(arguments={'Scheduling policy': str(self.POLICY), 'Job pipeline': 'test_pipeline',
+                                          'Wave interval': 1.0, 'Clock period': 0.1, 'View graph': False}))
             s.prepare()
 
         # Run the scheduler
@@ -777,8 +784,7 @@ class LazySchedulerTestCase(unittest.TestCase):
             CONTROLLER = 'dax_scheduler'
 
             REQUESTS = [
-                ((_Job4.get_name(),), {}),
-                ((_JobA.get_name(),), {}),
+                ((_Job4.get_name(), _JobA.get_name()), {}),
                 ((_JobC.get_name(),), {'action': str(JobAction.PASS)}),
             ]
 
@@ -802,8 +808,9 @@ class LazySchedulerTestCase(unittest.TestCase):
                     controller.submit(*args, **kwargs)
 
         with _isolation():
-            s = S(get_managers(_DEVICE_DB, Policy=str(self.POLICY), Pipeline='test_pipeline',
-                               **{'Wave interval': 1.0, 'Clock period': 0.1, 'View graph': False}))
+            s = S(get_managers(_DEVICE_DB,
+                               arguments={'Scheduling policy': str(self.POLICY), 'Job pipeline': 'test_pipeline',
+                                          'Wave interval': 1.0, 'Clock period': 0.1, 'View graph': False}))
             s.prepare()
 
         # Run the scheduler

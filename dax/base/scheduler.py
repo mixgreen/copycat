@@ -502,6 +502,7 @@ class _Request:
     jobs: typing.Collection[str]
     action: str
     policy: typing.Optional[str]
+    reverse: typing.Optional[bool]
 
 
 if typing.TYPE_CHECKING:
@@ -515,22 +516,20 @@ class _SchedulerController:
         # Store a reference to the queue
         self._queue: __Q_T = queue
 
-    def submit(self, jobs: typing.Union[str, typing.Collection[str]], *,
-               action: str = str(JobAction.FORCE), policy: typing.Optional[str] = None) -> None:
+    def submit(self, *jobs: str,
+               action: str = str(JobAction.FORCE),
+               policy: typing.Optional[str] = None,
+               reverse: typing.Optional[bool] = None) -> None:
         """Submit a request to the scheduler.
 
-        Action defaults to :attr:`JobAction.FORCE` and policy defaults to the schedulers policy.
-
-        :param jobs: One or a collection of job names as strings *(case sensitive)*
-        :param action: The root job action as a string (case insensitive)
-        :param policy: The scheduling policy as a string (case insensitive)
+        :param jobs: A sequence of job names as strings (case sensitive)
+        :param action: The root job action as a string (defaults to :attr:`JobAction.FORCE`)
+        :param policy: The scheduling policy as a string (defaults to the schedulers policy)
+        :param reverse: Reverse the job dependencies (defaults to the schedulers reverse flag)
         """
-        if isinstance(jobs, str):
-            # Convert a single job name to a collection
-            jobs = [jobs]
 
         # Put this request in the queue without checking any of the inputs
-        self._queue.put_nowait(_Request(jobs, action, policy))
+        self._queue.put_nowait(_Request(jobs, action, policy, reverse))
 
 
 class DaxScheduler(dax.base.system.DaxHasKey):
@@ -550,9 +549,11 @@ class DaxScheduler(dax.base.system.DaxHasKey):
     - :attr:`ROOT_JOBS`: A collection of job classes that are the root jobs, defaults to all entry nodes
     - :attr:`SYSTEM`: A DAX system type to enable additional logging of data
     - :attr:`CONTROLLER`: The scheduler controller name as defined in the device DB
-    - :attr:`DEFAULT_POLICY`: The default scheduling policy
-    - :attr:`DEFAULT_PIPELINE`: The default pipeline to submit jobs to, the scheduler can not run in the same pipeline
+    - :attr:`DEFAULT_SCHEDULING_POLICY`: The default scheduling policy
+    - :attr:`DEFAULT_REVERSE_DEPENDENCIES`: The default value for the reverse job dependencies flag
+    - :attr:`DEFAULT_JOB_PIPELINE`: The default pipeline to submit jobs to
     - :attr:`DEFAULT_JOB_PRIORITY`: The baseline priority for jobs submitted by this scheduler
+    - :attr:`DEFAULT_RESET_JOBS`: The default value for the reset jobs flag
     """
 
     NAME: str
@@ -567,14 +568,16 @@ class DaxScheduler(dax.base.system.DaxHasKey):
     CONTROLLER: typing.Optional[str] = None
     """Optional scheduler controller name, as defined in the device DB."""
 
-    DEFAULT_POLICY: Policy = Policy.LAZY
+    DEFAULT_SCHEDULING_POLICY: Policy = Policy.LAZY
     """Default scheduling policy."""
-    DEFAULT_PIPELINE: str = 'main'
+    DEFAULT_REVERSE_DEPENDENCIES: bool = False
+    """Default value for the reverse job dependencies flag."""
+    DEFAULT_JOB_PIPELINE: str = 'main'
     """Default pipeline to submit jobs to."""
     DEFAULT_JOB_PRIORITY: int = 0
     """Default baseline priority to submit jobs."""
-    DEFAULT_REVERSE_GRAPH: bool = False
-    """Default value for reverse graph flag."""
+    DEFAULT_RESET_JOBS: bool = False
+    """Default value for the reset jobs flag."""
 
     _GRAPHVIZ_FORMAT: str = 'pdf'
     """Format specification for the graphviz renderer."""
@@ -599,12 +602,15 @@ class DaxScheduler(dax.base.system.DaxHasKey):
         assert all(issubclass(job, Job) for job in self.ROOT_JOBS), 'All root jobs must be subclasses of Job'
         assert self.SYSTEM is None or issubclass(self.SYSTEM, dax.base.system.DaxSystem)
         assert self.CONTROLLER is None or isinstance(self.CONTROLLER, str), 'Controller must be of type str or None'
-        # Check default policy, pipeline, job priority, and reverse graph flag
-        assert isinstance(self.DEFAULT_POLICY, Policy), 'Default policy must be of type Policy'
-        assert isinstance(self.DEFAULT_PIPELINE, str) and self.DEFAULT_PIPELINE, 'Default pipeline must be of type str'
+        # Check default policy, reverse, pipeline, job priority, and reset jobs flag
+        assert isinstance(self.DEFAULT_SCHEDULING_POLICY, Policy), 'Default policy must be of type Policy'
+        assert isinstance(self.DEFAULT_REVERSE_DEPENDENCIES, bool), \
+            'Default reverse dependencies flag must be of type bool'
+        assert isinstance(self.DEFAULT_JOB_PIPELINE, str) and self.DEFAULT_JOB_PIPELINE, \
+            'Default job pipeline must be of type str'
         assert isinstance(self.DEFAULT_JOB_PRIORITY, int), 'Default job priority must be of type int'
         assert -99 <= self.DEFAULT_JOB_PRIORITY <= 99, 'Default job priority must be in the domain [-99, 99]'
-        assert isinstance(self.DEFAULT_REVERSE_GRAPH, bool), 'Default reverse graph flag must be of type bool'
+        assert isinstance(self.DEFAULT_RESET_JOBS, bool), 'Default reset jobs flag must be of type bool'
         # Check graphviz format
         assert isinstance(self._GRAPHVIZ_FORMAT, str)
 
@@ -639,11 +645,16 @@ class DaxScheduler(dax.base.system.DaxHasKey):
         self._job_name_map: typing.Dict[str, Job] = {job.get_name(): job for job in self._jobs.values()}
 
         # Scheduling arguments
-        self._policy_arg: str = self.get_argument('Policy',
+        default_scheduling_policy: str = str(self.DEFAULT_SCHEDULING_POLICY)
+        self._policy_arg: str = self.get_argument('Scheduling policy',
                                                   artiq.experiment.EnumerationValue(sorted(str(p) for p in Policy),
-                                                                                    default=str(self.DEFAULT_POLICY)),
+                                                                                    default=default_scheduling_policy),
                                                   tooltip='Scheduling policy',
                                                   group='Scheduler')
+        self._reverse: bool = self.get_argument('Reverse dependencies',
+                                                artiq.experiment.BooleanValue(self.DEFAULT_REVERSE_DEPENDENCIES),
+                                                tooltip='Reverse the job dependencies when visiting jobs',
+                                                group='Scheduler')
         self._wave_interval: int = self.get_argument('Wave interval',
                                                      artiq.experiment.NumberValue(60, 's', min=1, step=1, ndecimals=0),
                                                      tooltip='Interval to visit jobs',
@@ -661,34 +672,30 @@ class DaxScheduler(dax.base.system.DaxHasKey):
                                                         group='Scheduler')
 
         # Job arguments
-        self._pipeline: str = self.get_argument('Pipeline',
-                                                artiq.experiment.StringValue(self.DEFAULT_PIPELINE),
-                                                tooltip='Default pipeline to submit jobs to',
-                                                group='Jobs')
-        self._job_priority: int = self.get_argument('Priority',
+        self._job_pipeline: str = self.get_argument('Job pipeline',
+                                                    artiq.experiment.StringValue(self.DEFAULT_JOB_PIPELINE),
+                                                    tooltip='Default pipeline to submit jobs to',
+                                                    group='Jobs')
+        self._job_priority: int = self.get_argument('Job priority',
                                                     artiq.experiment.NumberValue(self.DEFAULT_JOB_PRIORITY,
                                                                                  min=-99, max=99, step=1, ndecimals=0),
                                                     tooltip='Baseline job priority',
                                                     group='Jobs')
-        self._reset_jobs: bool = self.get_argument('Reset',
-                                                   artiq.experiment.BooleanValue(False),
+        self._reset_jobs: bool = self.get_argument('Reset jobs',
+                                                   artiq.experiment.BooleanValue(self.DEFAULT_RESET_JOBS),
                                                    tooltip='Reset job timestamps at startup, marking them all expired',
                                                    group='Jobs')
-        self._terminate_jobs: bool = self.get_argument('Terminate at exit',
+        self._terminate_jobs: bool = self.get_argument('Terminate jobs at exit',
                                                        artiq.experiment.BooleanValue(False),
                                                        tooltip='Terminate running jobs at exit',
                                                        group='Jobs')
 
-        # Dependency graph arguments
-        self._reduce_graph: bool = self.get_argument('Reduce',
+        # Graph arguments
+        self._reduce_graph: bool = self.get_argument('Reduce graph',
                                                      artiq.experiment.BooleanValue(True),
                                                      tooltip='Use transitive reduction of the job dependency graph',
                                                      group='Dependency graph')
-        self._reverse_graph: bool = self.get_argument('Reverse',
-                                                      artiq.experiment.BooleanValue(self.DEFAULT_REVERSE_GRAPH),
-                                                      tooltip='Reverse the job dependency graph',
-                                                      group='Dependency graph')
-        self._view_graph: bool = self.get_argument('View',
+        self._view_graph: bool = self.get_argument('View graph',
                                                    artiq.experiment.BooleanValue(False),
                                                    tooltip='View the job dependency graph at startup',
                                                    group='Dependency graph')
@@ -707,8 +714,8 @@ class DaxScheduler(dax.base.system.DaxHasKey):
 
     def prepare(self) -> None:
         # Check pipeline
-        if self._scheduler.pipeline_name == self._pipeline:
-            raise ValueError(f'The scheduler can not run in pipeline "{self._pipeline}"')
+        if self._scheduler.pipeline_name == self._job_pipeline:
+            raise ValueError(f'The scheduler can not run in pipeline "{self._job_pipeline}"')
 
         # Check arguments
         if self._wave_interval < 1.0:
@@ -780,7 +787,8 @@ class DaxScheduler(dax.base.system.DaxHasKey):
                 self.wave(wave=wave,
                           root_jobs=self._root_jobs,
                           root_action=JobAction.PASS,
-                          policy=self._policy)
+                          policy=self._policy,
+                          reverse=self._reverse)
                 # Update next wave time
                 next_wave += self._wave_interval
                 # Prevent setting next wave time in the past
@@ -828,27 +836,33 @@ class DaxScheduler(dax.base.system.DaxHasKey):
     def wave(self, *, wave: float,
              root_jobs: typing.Collection[Job],
              root_action: JobAction,
-             policy: Policy) -> None:
+             policy: Policy,
+             reverse: bool) -> None:
         """Run a wave over the job set.
 
         :param wave: The wave identifier
         :param root_jobs: A collection of root jobs
         :param root_action: The root job action
         :param policy: The policy for this wave
+        :param reverse: Reverse the job dependencies
         """
         assert isinstance(wave, float), 'Wave must be of type float'
         assert isinstance(root_jobs, collections.abc.Collection), 'Root jobs must be a collection'
         assert all(isinstance(j, Job) for j in root_jobs), 'All root jobs must be of type Job'
         assert isinstance(root_action, JobAction), 'Root action must be of type JobAction'
         assert isinstance(policy, Policy), 'Policy must be of type Policy'
+        assert isinstance(reverse, bool), 'Reverse flag must be of type bool'
 
-        def recurse(job: Job, action: JobAction, submitted: typing.Set[Job]) -> typing.Set[Job]:
+        # Select the correct graph for this wave
+        graph: nx.DiGraph[Job] = self._job_graph_reversed if reverse else self._job_graph
+        # Set of submitted jobs in this wave
+        submitted: typing.Set[Job] = set()
+
+        def recurse(job: Job, action: JobAction) -> None:
             """Recurse over the dependencies of a job.
 
             :param job: The current job to process
             :param action: The action provided by the previous job
-            :param submitted: The set of jobs submitted in this wave
-            :return: The updated set of submitted jobs
             """
 
             # Visit the current job
@@ -856,29 +870,23 @@ class DaxScheduler(dax.base.system.DaxHasKey):
             # Get the new action based on the policy
             new_action = policy.action(action, current_action)
             # Recurse over successors
-            for successor in self._job_graph.successors(job):
-                submitted = recurse(successor, new_action, submitted)
+            for successor in graph.successors(job):
+                recurse(successor, new_action)
 
             if new_action.submittable() and job not in submitted:
                 # Submit this job
                 job.submit(wave=wave,
-                           pipeline=self._pipeline,
+                           pipeline=self._job_pipeline,
                            priority=self._job_priority)
                 submitted.add(job)
 
-            # Return set with submitted jobs
-            return submitted
-
-        # Set of submitted jobs in this wave
-        submitted_jobs: typing.Set[Job] = set()
-
         for root_job in root_jobs:
             # Recurse over all root jobs using the root action
-            submitted_jobs = recurse(root_job, root_action, submitted_jobs)
+            recurse(root_job, root_action)
 
-        if submitted_jobs:
+        if submitted:
             # Log submitted jobs
-            self.logger.debug(f'Submitted jobs: {", ".join(sorted(j.get_name() for j in submitted_jobs))}')
+            self.logger.debug(f'Submitted jobs: {", ".join(sorted(j.get_name() for j in submitted))}')
 
     def _handle_external_request(self, queue: __Q_T) -> None:
         """Handle a single external request from the queue."""
@@ -895,6 +903,7 @@ class DaxScheduler(dax.base.system.DaxHasKey):
             root_jobs: typing.Collection[Job] = {self._job_name_map[job] for job in request.jobs}
             root_action: JobAction = JobAction.from_str(request.action)
             policy: Policy = self._policy if request.policy is None else Policy.from_str(request.policy)
+            reverse: bool = self._reverse if request.reverse is None else request.reverse
         except KeyError:
             # Log the error
             self.logger.exception(f'Dropping invalid request: {request}')
@@ -906,7 +915,8 @@ class DaxScheduler(dax.base.system.DaxHasKey):
             self.wave(wave=wave,
                       root_jobs=root_jobs,
                       root_action=root_action,
-                      policy=policy)
+                      policy=policy,
+                      reverse=reverse)
 
     def _process_job_set(self) -> None:
         """Process the job set of this scheduler."""
@@ -941,9 +951,9 @@ class DaxScheduler(dax.base.system.DaxHasKey):
         if self._reduce_graph:
             # Get the transitive reduction of the job dependency graph
             self._job_graph = nx.algorithms.transitive_reduction(self._job_graph)
-        if self._reverse_graph:
-            # Reverse the dependency graph
-            self._job_graph = self._job_graph.reverse(copy=True)
+
+        # Store reversed graph
+        self._job_graph_reversed: nx.DiGraph[Job] = self._job_graph.reverse(copy=False)
 
         if self.ROOT_JOBS:
             try:
@@ -953,8 +963,9 @@ class DaxScheduler(dax.base.system.DaxHasKey):
                 raise KeyError(f'Root job "{e.args[0].get_name()}" is not in the job set') from None
         else:
             # Find entry nodes to use as root jobs
+            graph: nx.DiGraph[Job] = self._job_graph_reversed if self._reverse else self._job_graph
             # noinspection PyTypeChecker
-            self._root_jobs = {job for job, degree in self._job_graph.in_degree if degree == 0}
+            self._root_jobs = {job for job, degree in graph.in_degree if degree == 0}
 
         # Log the root jobs
         self.logger.debug(f'Root jobs: {", ".join(sorted(j.get_name() for j in self._root_jobs))}')
@@ -1064,6 +1075,9 @@ class _DaxSchedulerClient(dax.base.system.DaxBase, artiq.experiment.Experiment):
     """The policy option to use the schedulers policy."""
     _POLICY_NAMES: typing.List[str] = [_SCHEDULER_POLICY] + sorted(str(p) for p in Policy)
     """A list with policy names."""
+    _REVERSE_DICT: typing.Dict[str, typing.Optional[bool]] = {'<Scheduler reverse>': None,
+                                                              'False': False, 'True': True}
+    """A dict with reverse job dependencies names and values."""
 
     def build(self) -> None:  # type: ignore
         # Set default scheduling options for the client
@@ -1081,9 +1095,12 @@ class _DaxSchedulerClient(dax.base.system.DaxBase, artiq.experiment.Experiment):
                                               artiq.experiment.EnumerationValue(self._POLICY_NAMES,
                                                                                 self._SCHEDULER_POLICY),
                                               tooltip='Scheduling policy')
+        self._reverse: str = self.get_argument('Reverse',
+                                               artiq.experiment.EnumerationValue(sorted(self._REVERSE_DICT)),
+                                               tooltip='Reverse the job dependencies when visiting jobs')
 
         # Get the DAX scheduler controller
-        self._dax_scheduler = self.get_device(self.CONTROLLER_KEY)
+        self._dax_scheduler: _SchedulerController = self.get_device(self.CONTROLLER_KEY)
         # Get the ARTIQ scheduler
         self._scheduler = self.get_device('scheduler')
 
@@ -1094,10 +1111,12 @@ class _DaxSchedulerClient(dax.base.system.DaxBase, artiq.experiment.Experiment):
 
     def run(self) -> None:
         # Submit the request
-        self.logger.info(f'Submitting request: job={self._job}, action={self._action}, policy={self._policy}')
+        self.logger.info(f'Submitting request: job={self._job}, action={self._action}, '
+                         f'policy={self._policy}, reverse={self._reverse}')
         self._dax_scheduler.submit(self._job,
                                    action=self._action,
-                                   policy=None if self._policy == self._SCHEDULER_POLICY else self._policy)
+                                   policy=None if self._policy == self._SCHEDULER_POLICY else self._policy,
+                                   reverse=self._REVERSE_DICT[self._reverse])
 
     def get_identifier(self) -> str:
         """Return the identifier of this scheduler client."""
