@@ -16,6 +16,11 @@ from dax.util.artiq import get_managers
 import dax.base.system
 import dax.util.output
 
+if os.getenv('GITLAB_CI'):
+    _NUM_WAVES = 5
+else:
+    _NUM_WAVES = 1
+
 
 def _find_free_port() -> int:
     with contextlib.closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as s:
@@ -732,7 +737,6 @@ class LazySchedulerTestCase(unittest.TestCase):
                              [call.append(scheduler.get_system_key(_Job1.get_name(), _Job1._RID_LIST_KEY), 1)])
 
     def test_scheduler_run(self):
-        waves = 2
 
         class S(_Scheduler):
             JOBS = {_Job1, _Job2, _Job3, _Job4, _JobA, _JobB, _JobC}
@@ -741,7 +745,7 @@ class LazySchedulerTestCase(unittest.TestCase):
             def wave(self, **kwargs) -> None:
                 super(S, self).wave(**kwargs)
                 self.counter += 1
-                if self.counter >= waves:
+                if self.counter >= _NUM_WAVES:
                     raise TerminationRequested
 
         with _isolation():
@@ -751,38 +755,41 @@ class LazySchedulerTestCase(unittest.TestCase):
 
         # Run the scheduler
         s.run()
-        self._check_scheduler_run(s, waves)
+        self._check_scheduler_run(s)
 
-    def _check_scheduler_run(self, scheduler, waves):
+    def _check_scheduler_run(self, scheduler):
         for j in scheduler._job_graph:
             with self.subTest(job=j.get_name()):
                 if isinstance(j, (_Job1, _JobB)):
-                    ref_counter = {'init': 1, 'visit': waves + 1, 'submit': 1, 'schedule': 1}
+                    ref_counter = {'init': 1, 'visit': _NUM_WAVES + 1, 'submit': 1, 'schedule': 1}
                 elif isinstance(j, (_Job2, _Job3)):
-                    ref_counter = {'init': 1, 'visit': waves}
+                    ref_counter = {'init': 1, 'visit': _NUM_WAVES}
                 elif isinstance(j, _Job4):
-                    ref_counter = {'init': 1, 'visit': waves * 2}
+                    ref_counter = {'init': 1, 'visit': _NUM_WAVES * 2}
                 else:
-                    ref_counter = {'init': 1, 'visit': waves}
+                    ref_counter = {'init': 1, 'visit': _NUM_WAVES}
                 self.assertDictEqual(j.counter, ref_counter,
                                      'Job call pattern did not match expected pattern')
 
     def test_scheduler_controller(self):
-        waves = 2
-
         class S(_Scheduler):
             JOBS = {_Job1, _Job2, _Job3, _Job4, _JobA, _JobB, _JobC}
             CONTROLLER = 'dax_scheduler'
+
+            REQUESTS = [
+                ((_Job4.get_name(),), {}),
+                ((_JobA.get_name(),), {}),
+                ((_JobC.get_name(),), {'action': str(JobAction.PASS)}),
+            ]
 
             counter = 0
 
             def wave(self, **kwargs) -> None:
                 super(S, self).wave(**kwargs)
 
-                if kwargs['wave'] > 0.0:
-                    self.counter += 1
-                    if self.counter >= waves:
-                        raise TerminationRequested
+                self.counter += 1
+                if self.counter >= _NUM_WAVES + len(self.REQUESTS):
+                    raise TerminationRequested
 
             def controller_callback(self) -> None:
                 # noinspection PyProtectedMember
@@ -791,9 +798,8 @@ class LazySchedulerTestCase(unittest.TestCase):
                 # This is required because we can not use get_device() to obtain the controller
                 # Because the server and the client are running on the same thread then, the situation deadlocks
                 controller = _SchedulerController(self.queue)
-                controller.submit(_Job4.get_name())
-                controller.submit(_JobA.get_name())
-                controller.submit(_JobC.get_name(), action=str(JobAction.PASS))
+                for args, kwargs in self.REQUESTS:
+                    controller.submit(*args, **kwargs)
 
         with _isolation():
             s = S(get_managers(_DEVICE_DB, Policy=str(self.POLICY), Pipeline='test_pipeline',
@@ -802,23 +808,24 @@ class LazySchedulerTestCase(unittest.TestCase):
 
         # Run the scheduler
         s.run()
-        self._check_scheduler_controller(s, waves)
+        self.assertTrue(s.queue.empty(), 'Request queue is not empty')
+        self._check_scheduler_controller(s)
 
-    def _check_scheduler_controller(self, scheduler, waves):
+    def _check_scheduler_controller(self, scheduler):
         for j in scheduler._job_graph:
             with self.subTest(job=j.get_name()):
                 if isinstance(j, _Job1):
-                    ref_counter = {'init': 1, 'visit': waves + 1, 'submit': 1, 'schedule': 1}
+                    ref_counter = {'init': 1, 'visit': _NUM_WAVES + 1, 'submit': 1, 'schedule': 1}
                 elif isinstance(j, (_Job2, _Job3)):
-                    ref_counter = {'init': 1, 'visit': waves}
+                    ref_counter = {'init': 1, 'visit': _NUM_WAVES}
                 elif isinstance(j, _Job4):
-                    ref_counter = {'init': 1, 'visit': waves * 2 + 1, 'submit': 1, 'schedule': 1}
+                    ref_counter = {'init': 1, 'visit': _NUM_WAVES * 2 + 1, 'submit': 1, 'schedule': 1}
                 elif isinstance(j, _JobA):
-                    ref_counter = {'init': 1, 'visit': waves + 1, 'submit': 1, 'schedule': 1}
+                    ref_counter = {'init': 1, 'visit': _NUM_WAVES + 1, 'submit': 1, 'schedule': 1}
                 elif isinstance(j, _JobB):
-                    ref_counter = {'init': 1, 'visit': waves + 1 + 1, 'submit': 1, 'schedule': 1}
+                    ref_counter = {'init': 1, 'visit': _NUM_WAVES + 1 + 1, 'submit': 1, 'schedule': 1}
                 elif isinstance(j, _JobC):
-                    ref_counter = {'init': 1, 'visit': waves + 1 + 1}
+                    ref_counter = {'init': 1, 'visit': _NUM_WAVES + 1 + 1}
                 else:
                     self.fail('Statement should not be reachable')
                 self.assertDictEqual(j.counter, ref_counter,
@@ -904,35 +911,35 @@ class GreedySchedulerTestCase(LazySchedulerTestCase):
         self.assertEqual(len(scheduler.data_store.method_calls), 3,
                          'Data store was called an unexpected number of times')
 
-    def _check_scheduler_run(self, scheduler, waves):
+    def _check_scheduler_run(self, scheduler):
         for j in scheduler._job_graph:
             with self.subTest(job=j.get_name()):
                 if isinstance(j, (_Job1, _JobB)):
-                    ref_counter = {'init': 1, 'visit': waves + 1, 'submit': 1, 'schedule': 1}
+                    ref_counter = {'init': 1, 'visit': _NUM_WAVES + 1, 'submit': 1, 'schedule': 1}
                 elif isinstance(j, (_Job2, _Job3, _JobC)):
-                    ref_counter = {'init': 1, 'visit': waves, 'submit': 1, 'schedule': 1}
+                    ref_counter = {'init': 1, 'visit': _NUM_WAVES, 'submit': 1, 'schedule': 1}
                 elif isinstance(j, _Job4):
-                    ref_counter = {'init': 1, 'visit': waves * 2, 'submit': 1, 'schedule': 1}
+                    ref_counter = {'init': 1, 'visit': _NUM_WAVES * 2, 'submit': 1, 'schedule': 1}
                 else:
-                    ref_counter = {'init': 1, 'visit': waves}
+                    ref_counter = {'init': 1, 'visit': _NUM_WAVES}
                 self.assertDictEqual(j.counter, ref_counter,
                                      'Job call pattern did not match expected pattern')
 
-    def _check_scheduler_controller(self, scheduler, waves):
+    def _check_scheduler_controller(self, scheduler):
         for j in scheduler._job_graph:
             with self.subTest(job=j.get_name()):
                 if isinstance(j, _Job1):
-                    ref_counter = {'init': 1, 'visit': waves + 1, 'submit': 1, 'schedule': 1}
+                    ref_counter = {'init': 1, 'visit': _NUM_WAVES + 1, 'submit': 1, 'schedule': 1}
                 elif isinstance(j, (_Job2, _Job3)):
-                    ref_counter = {'init': 1, 'visit': waves, 'submit': 1, 'schedule': 1}
+                    ref_counter = {'init': 1, 'visit': _NUM_WAVES, 'submit': 1, 'schedule': 1}
                 elif isinstance(j, _Job4):
-                    ref_counter = {'init': 1, 'visit': waves * 2 + 1, 'submit': 1 + 1, 'schedule': 1 + 1}
+                    ref_counter = {'init': 1, 'visit': _NUM_WAVES * 2 + 1, 'submit': 1 + 1, 'schedule': 1 + 1}
                 elif isinstance(j, _JobC):
-                    ref_counter = {'init': 1, 'visit': waves + 1 + 1, 'submit': 1 + 1, 'schedule': 1 + 1}
+                    ref_counter = {'init': 1, 'visit': _NUM_WAVES + 1 + 1, 'submit': 1 + 1, 'schedule': 1 + 1}
                 elif isinstance(j, _JobB):
-                    ref_counter = {'init': 1, 'visit': waves + 1 + 1 + 1, 'submit': 1 + 1, 'schedule': 1 + 1}
+                    ref_counter = {'init': 1, 'visit': _NUM_WAVES + 1 + 1 + 1, 'submit': 1 + 1, 'schedule': 1 + 1}
                 else:
-                    ref_counter = {'init': 1, 'visit': waves + 1, 'submit': 1, 'schedule': 1}
+                    ref_counter = {'init': 1, 'visit': _NUM_WAVES + 1, 'submit': 1, 'schedule': 1}
                 self.assertDictEqual(j.counter, ref_counter,
                                      'Job call pattern did not match expected pattern')
 

@@ -19,7 +19,7 @@ import sipyco.pc_rpc  # type: ignore
 import dax.base.system
 import dax.util.output
 
-__all__ = ['JobAction', 'Job', 'Policy', 'DaxScheduler']
+__all__ = ['JobAction', 'Job', 'Policy', 'DaxScheduler', 'dax_scheduler_client']
 
 
 def _str_to_time(string: str) -> float:
@@ -620,7 +620,7 @@ class DaxScheduler(dax.base.system.DaxHasKey):
         """
 
         # Set default scheduling options for the scheduler itself
-        self.set_default_scheduling(pipeline_name=self.NAME)
+        self.set_default_scheduling(pipeline_name=self.NAME, priority=99)
 
         # The ARTIQ scheduler
         self._scheduler = self.get_device('scheduler')
@@ -811,7 +811,7 @@ class DaxScheduler(dax.base.system.DaxHasKey):
         host, port = self._get_controller_details()
         self.logger.debug(f'Starting the scheduler controller: bind address {host}, port {port}')
         task = asyncio.create_task(server.start(host, port))
-        await asyncio.sleep(0)  # Allow the server to start
+        await task  # Allow the server to start
 
         try:
             # Run the scheduler
@@ -819,8 +819,6 @@ class DaxScheduler(dax.base.system.DaxHasKey):
         finally:
             # Stop the server
             self.logger.debug('Stopping the scheduler controller')
-            task.cancel()
-            await task
             await server.stop()
 
             if not queue.empty():
@@ -901,8 +899,11 @@ class DaxScheduler(dax.base.system.DaxHasKey):
             # Log the error
             self.logger.exception(f'Dropping invalid request: {request}')
         else:
+            # Generate the unique wave timestamp
+            wave: float = time.time()
             # Submit a wave for the external request
-            self.wave(wave=0.0,
+            self.logger.debug(f'Starting externally triggered wave {wave:.0f}')
+            self.wave(wave=wave,
                       root_jobs=root_jobs,
                       root_action=root_action,
                       policy=policy)
@@ -1046,4 +1047,84 @@ class DaxScheduler(dax.base.system.DaxHasKey):
         # Return the controller details of interest
         return host, port
 
-# TODO: decorator that generates a scheduler submit experiment
+
+class _DaxSchedulerClient(dax.base.system.DaxBase, artiq.experiment.Experiment):
+    """A client experiment class for a scheduler."""
+
+    SCHEDULER_NAME: str
+    """The name of the scheduler."""
+    JOB_NAMES: typing.List[str]
+    """A List with the names of the jobs."""
+    CONTROLLER_KEY: str
+    """Key of the scheduler controller."""
+
+    _JOB_ACTION_NAMES: typing.List[str] = sorted(str(a) for a in JobAction)
+    """A list with job action names."""
+    _SCHEDULER_POLICY: str = '<Scheduler policy>'
+    """The policy option to use the schedulers policy."""
+    _POLICY_NAMES: typing.List[str] = [_SCHEDULER_POLICY] + sorted(str(p) for p in Policy)
+    """A list with policy names."""
+
+    def build(self) -> None:  # type: ignore
+        # Set default scheduling options for the client
+        self.set_default_scheduling(pipeline_name=f'_{self.SCHEDULER_NAME}')
+
+        # Arguments
+        self._job: str = self.get_argument('Job name',
+                                           artiq.experiment.EnumerationValue(self.JOB_NAMES),
+                                           tooltip='Job to submit')
+        self._action: str = self.get_argument('Action',
+                                              artiq.experiment.EnumerationValue(self._JOB_ACTION_NAMES,
+                                                                                str(JobAction.FORCE)),
+                                              tooltip='Initial job action')
+        self._policy: str = self.get_argument('Policy',
+                                              artiq.experiment.EnumerationValue(self._POLICY_NAMES,
+                                                                                self._SCHEDULER_POLICY),
+                                              tooltip='Scheduling policy')
+
+        # Get the DAX scheduler controller
+        self._dax_scheduler = self.get_device(self.CONTROLLER_KEY)
+        # Get the ARTIQ scheduler
+        self._scheduler = self.get_device('scheduler')
+
+    def prepare(self) -> None:
+        # Check pipeline (loosely checked)
+        if self._scheduler.pipeline_name == self.SCHEDULER_NAME:
+            self.logger.warning('The scheduler client should not be submitted to the same pipeline as the scheduler')
+
+    def run(self) -> None:
+        # Submit the request
+        self.logger.info(f'Submitting request: job={self._job}, action={self._action}, policy={self._policy}')
+        self._dax_scheduler.submit(self._job,
+                                   action=self._action,
+                                   policy=None if self._policy == self._SCHEDULER_POLICY else self._policy)
+
+    def get_identifier(self) -> str:
+        """Return the identifier of this scheduler client."""
+        return f'[{self.SCHEDULER_NAME}]({self.__class__.__name__})'
+
+
+def dax_scheduler_client(scheduler_class: typing.Type[DaxScheduler]) -> typing.Type[_DaxSchedulerClient]:
+    """Decorator to generate a client experiment class from a :class:`DaxScheduler` class.
+
+    The client experiment can be used to manually trigger jobs.
+
+    :param scheduler_class: The scheduler class
+    :return: An instantiated client experiment class
+    """
+
+    assert issubclass(scheduler_class, DaxScheduler), 'The scheduler class must be a subclass of DaxScheduler'
+    assert isinstance(scheduler_class.CONTROLLER, str), 'The scheduler class must have a controller key'
+
+    class WrapperClass(_DaxSchedulerClient):
+        """A wrapped/instantiated client experiment class for a scheduler."""
+
+        SCHEDULER_NAME = scheduler_class.NAME
+        JOB_NAMES = sorted(j.get_name() for j in scheduler_class.JOBS)
+        if isinstance(scheduler_class.CONTROLLER, str):
+            CONTROLLER_KEY = scheduler_class.CONTROLLER
+        else:
+            raise TypeError('The scheduler class must have a valid controller key to generate a client')
+
+    # Return the wrapped client class
+    return WrapperClass
