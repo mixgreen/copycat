@@ -782,11 +782,11 @@ class LazySchedulerTestCase(unittest.TestCase):
 
             def controller_callback(self) -> None:
                 # noinspection PyProtectedMember
-                from dax.base.scheduler import _Controller
+                from dax.base.scheduler import _SchedulerController
                 # Construct a separate controller with the same queue
                 # This is required because we can not use get_device() to obtain the controller
                 # Because the server and the client are running on the same thread then, the situation deadlocks
-                controller = _Controller(self.queue)
+                controller = _SchedulerController(self.queue)
                 controller.submit(_Job4.get_name())
                 controller.submit(_JobA.get_name())
                 controller.submit(_JobC.get_name(), action=str(JobAction.PASS))

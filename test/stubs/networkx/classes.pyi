@@ -126,3 +126,6 @@ class DiGraph(Graph, typing.Generic[_N_T]):
     @property
     def out_degree(self) -> typing.Iterator[typing.Tuple[_N_T, int]]:
         ...
+
+    def reverse(self, copy: bool = ...) -> DiGraph:
+        ...

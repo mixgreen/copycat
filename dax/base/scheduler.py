@@ -10,6 +10,7 @@ import graphviz
 import asyncio
 import json
 import hashlib
+import dataclasses
 
 import artiq.experiment
 import artiq.master.worker_db
@@ -495,12 +496,19 @@ class Policy(enum.Enum):
         return self.name
 
 
+@dataclasses.dataclass(frozen=True)
+class _Request:
+    """Data class for scheduler controller requests."""
+    jobs: typing.Collection[str]
+    action: str
+    policy: typing.Optional[str]
+
+
 if typing.TYPE_CHECKING:
-    __QE_T = typing.Tuple[typing.Collection[str], str, typing.Optional[str]]  # Type variable for queue elements
-    __Q_T = asyncio.Queue[__QE_T]  # Type variable for the async queue
+    __Q_T = asyncio.Queue[_Request]  # Type variable for the async request queue
 
 
-class _Controller:
+class _SchedulerController:
     """Scheduler controller class, which exposes an external interface to the DAX scheduler."""
 
     def __init__(self, queue: __Q_T):
@@ -522,9 +530,7 @@ class _Controller:
             jobs = [jobs]
 
         # Put this request in the queue without checking any of the inputs
-        self._queue.put_nowait((jobs, action, policy))
-
-    # TODO: add a function update_arguments()
+        self._queue.put_nowait(_Request(jobs, action, policy))
 
 
 class DaxScheduler(dax.base.system.DaxHasKey):
@@ -567,6 +573,8 @@ class DaxScheduler(dax.base.system.DaxHasKey):
     """Default pipeline to submit jobs to."""
     DEFAULT_JOB_PRIORITY: int = 0
     """Default baseline priority to submit jobs."""
+    DEFAULT_REVERSE_GRAPH: bool = False
+    """Default value for reverse graph flag."""
 
     _GRAPHVIZ_FORMAT: str = 'pdf'
     """Format specification for the graphviz renderer."""
@@ -591,11 +599,12 @@ class DaxScheduler(dax.base.system.DaxHasKey):
         assert all(issubclass(job, Job) for job in self.ROOT_JOBS), 'All root jobs must be subclasses of Job'
         assert self.SYSTEM is None or issubclass(self.SYSTEM, dax.base.system.DaxSystem)
         assert self.CONTROLLER is None or isinstance(self.CONTROLLER, str), 'Controller must be of type str or None'
-        # Check default policy, pipeline, and job priority
+        # Check default policy, pipeline, job priority, and reverse graph flag
         assert isinstance(self.DEFAULT_POLICY, Policy), 'Default policy must be of type Policy'
         assert isinstance(self.DEFAULT_PIPELINE, str) and self.DEFAULT_PIPELINE, 'Default pipeline must be of type str'
         assert isinstance(self.DEFAULT_JOB_PRIORITY, int), 'Default job priority must be of type int'
         assert -99 <= self.DEFAULT_JOB_PRIORITY <= 99, 'Default job priority must be in the domain [-99, 99]'
+        assert isinstance(self.DEFAULT_REVERSE_GRAPH, bool), 'Default reverse graph flag must be of type bool'
         # Check graphviz format
         assert isinstance(self._GRAPHVIZ_FORMAT, str)
 
@@ -675,6 +684,10 @@ class DaxScheduler(dax.base.system.DaxHasKey):
                                                      artiq.experiment.BooleanValue(True),
                                                      tooltip='Use transitive reduction of the job dependency graph',
                                                      group='Dependency graph')
+        self._reverse_graph: bool = self.get_argument('Reverse',
+                                                      artiq.experiment.BooleanValue(self.DEFAULT_REVERSE_GRAPH),
+                                                      tooltip='Reverse the job dependency graph',
+                                                      group='Dependency graph')
         self._view_graph: bool = self.get_argument('View',
                                                    artiq.experiment.BooleanValue(False),
                                                    tooltip='View the job dependency graph at startup',
@@ -790,7 +803,7 @@ class DaxScheduler(dax.base.system.DaxHasKey):
         """Coroutine for running the scheduler and the controller."""
 
         # Create the controller and the server objects
-        controller = _Controller(queue)
+        controller = _SchedulerController(queue)
         server = sipyco.pc_rpc.Server({'DaxSchedulerController': controller},
                                       description=f'DaxScheduler controller: {self.get_identifier()}')
 
@@ -873,20 +886,20 @@ class DaxScheduler(dax.base.system.DaxHasKey):
         """Handle a single external request from the queue."""
 
         # Get one element from the queue (there must be an element)
-        root_job_names, root_action_name, policy_name = queue.get_nowait()
+        request: _Request = queue.get_nowait()
 
-        if not isinstance(root_job_names, collections.abc.Collection):
+        if not isinstance(request.jobs, collections.abc.Collection):
             self.logger.error('Dropping invalid request, jobs parameter is not a collection')
             return
 
         try:
             # Convert the input parameters
-            root_jobs: typing.Collection[Job] = {self._job_name_map[job] for job in root_job_names}
-            root_action: JobAction = JobAction.from_str(root_action_name)
-            policy: Policy = self._policy if policy_name is None else Policy.from_str(policy_name)
+            root_jobs: typing.Collection[Job] = {self._job_name_map[job] for job in request.jobs}
+            root_action: JobAction = JobAction.from_str(request.action)
+            policy: Policy = self._policy if request.policy is None else Policy.from_str(request.policy)
         except KeyError:
             # Log the error
-            self.logger.exception(f'Dropping invalid request: ({root_job_names}, {root_action_name}, {policy_name})')
+            self.logger.exception(f'Dropping invalid request: {request}')
         else:
             # Submit a wave for the external request
             self.wave(wave=0.0,
@@ -927,6 +940,9 @@ class DaxScheduler(dax.base.system.DaxHasKey):
         if self._reduce_graph:
             # Get the transitive reduction of the job dependency graph
             self._job_graph = nx.algorithms.transitive_reduction(self._job_graph)
+        if self._reverse_graph:
+            # Reverse the dependency graph
+            self._job_graph = self._job_graph.reverse(copy=True)
 
         if self.ROOT_JOBS:
             try:
