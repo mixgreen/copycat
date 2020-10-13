@@ -163,17 +163,16 @@ class _Scheduler(DaxScheduler):
         super(_Scheduler, self).wave(wave=wave, root_jobs=root_jobs, root_action=root_action,
                                      policy=policy, reverse=reverse)
 
-    async def _run_scheduler(self, queue) -> None:
-        self.queue = queue
+    async def _run_scheduler(self) -> None:
         self.controller_callback()
-        await super(_Scheduler, self)._run_scheduler(queue)
+        await super(_Scheduler, self)._run_scheduler()
 
     def controller_callback(self) -> None:
         pass
 
-    def _handle_external_request(self, queue) -> None:
+    def _handle_external_request(self) -> None:
         self.external_requests += 1
-        super(_Scheduler, self)._handle_external_request(queue)
+        super(_Scheduler, self)._handle_external_request()
 
 
 class SchedulerMiscTestCase(unittest.TestCase):
@@ -843,7 +842,7 @@ class LazySchedulerTestCase(unittest.TestCase):
                 # Construct a separate controller with the same queue
                 # This is required because we can not use get_device() to obtain the controller
                 # Because the server and the client are running on the same thread then, the situation deadlocks
-                controller = _SchedulerController(self.queue)
+                controller = _SchedulerController(self.request_queue)
                 for args, kwargs in requests:
                     controller.submit(*args, **kwargs)
 
@@ -864,7 +863,7 @@ class LazySchedulerTestCase(unittest.TestCase):
             ((_JobC.get_name(),), {'action': str(JobAction.PASS)}),
         ]
         s = self._test_scheduler_controller(requests)
-        self.assertTrue(s.queue.empty(), 'Request queue is not empty')
+        self.assertTrue(s.request_queue.empty(), 'Request queue is not empty')
         self._check_scheduler_controller0(s)
 
     def _check_scheduler_controller0(self, scheduler):
@@ -892,7 +891,7 @@ class LazySchedulerTestCase(unittest.TestCase):
             ((_Job4.get_name(), _JobB.get_name()), {'reverse': True}),
         ]
         s = self._test_scheduler_controller(requests)
-        self.assertTrue(s.queue.empty(), 'Request queue is not empty')
+        self.assertTrue(s.request_queue.empty(), 'Request queue is not empty')
         self._check_scheduler_controller1(s)
 
     def _check_scheduler_controller1(self, scheduler):
@@ -919,7 +918,7 @@ class LazySchedulerTestCase(unittest.TestCase):
             ((_JobB.get_name(),), {'reverse': True}),
         ]
         s = self._test_scheduler_controller(requests)
-        self.assertTrue(s.queue.empty(), 'Request queue is not empty')
+        self.assertTrue(s.request_queue.empty(), 'Request queue is not empty')
         self._check_scheduler_controller1(s)
 
 

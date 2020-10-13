@@ -11,6 +11,7 @@ import asyncio
 import json
 import hashlib
 import dataclasses
+import queue
 
 import artiq.experiment
 import artiq.master.worker_db
@@ -506,15 +507,17 @@ class _Request:
 
 
 if typing.TYPE_CHECKING:
-    __Q_T = asyncio.Queue[_Request]  # Type variable for the async request queue
+    __RQ_T = queue.SimpleQueue[_Request]  # Type variable for the request queue
+else:
+    __RQ_T = queue.SimpleQueue
 
 
 class _SchedulerController:
     """Scheduler controller class, which exposes an external interface to the DAX scheduler."""
 
-    def __init__(self, queue: __Q_T):
-        # Store a reference to the queue
-        self._queue: __Q_T = queue
+    def __init__(self, request_queue: __RQ_T):
+        # Store a reference to the request queue
+        self._request_queue: __RQ_T = request_queue
 
     def submit(self, *jobs: str,
                action: str = str(JobAction.FORCE),
@@ -529,7 +532,7 @@ class _SchedulerController:
         """
 
         # Put this request in the queue without checking any of the inputs
-        self._queue.put_nowait(_Request(jobs, action, policy, reverse))
+        self._request_queue.put_nowait(_Request(jobs, action, policy, reverse))
 
 
 class DaxScheduler(dax.base.system.DaxHasKey):
@@ -593,6 +596,8 @@ class DaxScheduler(dax.base.system.DaxHasKey):
 
         # Check attributes
         self.check_attributes()
+        # Create a request queue
+        self.__request_queue: __RQ_T = queue.SimpleQueue()
         # Call super
         super(DaxScheduler, self).__init__(managers_or_parent, *args,
                                            name=self.NAME, system_key=self.NAME, **kwargs)
@@ -691,6 +696,14 @@ class DaxScheduler(dax.base.system.DaxHasKey):
         """
         return self.__data_store
 
+    @property
+    def request_queue(self) -> __RQ_T:
+        """Get the request queue.
+
+        :return: The request queue object
+        """
+        return self.__request_queue
+
     def prepare(self) -> None:
         # Check pipeline
         if self._scheduler.pipeline_name == self._job_pipeline:
@@ -723,17 +736,14 @@ class DaxScheduler(dax.base.system.DaxHasKey):
     async def _async_run(self) -> None:
         """Async entry point for the scheduler."""
 
-        # Create a request queue
-        queue: __Q_T = asyncio.Queue()
-
         if self._enable_controller:
             # Run the scheduler and the controller
-            await self._run_scheduler_and_controller(queue)
+            await self._run_scheduler_and_controller()
         else:
             # Only run the scheduler
-            await self._run_scheduler(queue)
+            await self._run_scheduler()
 
-    async def _run_scheduler(self, queue: __Q_T) -> None:
+    async def _run_scheduler(self) -> None:
         """Coroutine for running the scheduler"""
 
         # Initialize all jobs
@@ -751,10 +761,10 @@ class DaxScheduler(dax.base.system.DaxHasKey):
                         # Pause
                         self.logger.debug('Pausing scheduler')
                         self._scheduler.pause()
-                    elif not queue.empty():
-                        # Handle requests
+                    elif not self.request_queue.empty():
+                        # Handle external request
                         self.logger.debug('Handling external request')
-                        self._handle_external_request(queue)
+                        self._handle_external_request()
                     else:
                         # Sleep for a clock period
                         await asyncio.sleep(self._clock_period)
@@ -786,31 +796,30 @@ class DaxScheduler(dax.base.system.DaxHasKey):
                 for job in self._job_graph:
                     job.cancel()
 
-    async def _run_scheduler_and_controller(self, queue: __Q_T) -> None:
+    async def _run_scheduler_and_controller(self) -> None:
         """Coroutine for running the scheduler and the controller."""
 
         # Create the controller and the server objects
-        controller = _SchedulerController(queue)
+        controller = _SchedulerController(self.request_queue)
         server = sipyco.pc_rpc.Server({'DaxSchedulerController': controller},
                                       description=f'DaxScheduler controller: {self.get_identifier()}')
 
         # Start the server task
         host, port = self._get_controller_details()
         self.logger.debug(f'Starting the scheduler controller: bind address {host}, port {port}')
-        task = asyncio.create_task(server.start(host, port))
-        await task  # Allow the server to start
+        await asyncio.create_task(server.start(host, port))
 
         try:
             # Run the scheduler
-            await self._run_scheduler(queue)
+            await self._run_scheduler()
         finally:
             # Stop the server
             self.logger.debug('Stopping the scheduler controller')
             await server.stop()
 
-            if not queue.empty():
+            if not self.request_queue.empty():
                 # Warn if not all schedule requests were handled
-                self.logger.warning(f'The scheduler controller cancelled {queue.qsize()} request(s)')
+                self.logger.warning(f'The scheduler controller cancelled {self.request_queue.qsize()} request(s)')
 
     def wave(self, *, wave: float,
              root_jobs: typing.Collection[Job],
@@ -867,11 +876,11 @@ class DaxScheduler(dax.base.system.DaxHasKey):
             # Log submitted jobs
             self.logger.debug(f'Submitted jobs: {", ".join(sorted(j.get_name() for j in submitted))}')
 
-    def _handle_external_request(self, queue: __Q_T) -> None:
+    def _handle_external_request(self) -> None:
         """Handle a single external request from the queue."""
 
         # Get one element from the queue (there must be an element)
-        request: _Request = queue.get_nowait()
+        request: _Request = self.request_queue.get_nowait()
 
         if not isinstance(request.jobs, collections.abc.Collection):
             self.logger.error('Dropping invalid request, jobs parameter is not a collection')
