@@ -9,7 +9,7 @@ import natsort
 import typing
 import pygit2  # type: ignore
 import os
-import collections
+import collections.abc
 import types
 import numpy as np
 

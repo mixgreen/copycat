@@ -1,5 +1,6 @@
 import typing
 import collections
+import collections.abc
 import math
 import numpy as np
 import h5py  # type: ignore
@@ -14,6 +15,12 @@ from dax.util.output import get_file_name_generator, dummy_file_name_generator
 from dax.util.units import UnitsFormatter
 
 __all__ = ['TimeResolvedContext', 'TimeResolvedAnalyzer', 'TimeResolvedContextError']
+
+if typing.TYPE_CHECKING:
+    _TD_T = typing.Dict[str, typing.Union[typing.Sequence[float],
+                                          typing.Sequence[typing.Sequence[float]]]]  # Type for a trace dict
+else:
+    _TD_T = dict
 
 
 class TimeResolvedContext(DaxModule):
@@ -75,7 +82,7 @@ class TimeResolvedContext(DaxModule):
         self._buffer_meta: typing.List[typing.Tuple[float, float, float]] = []
 
         # Cache for processed data
-        self._cache: typing.Dict[str, typing.List[typing.Dict[str, typing.Sequence[float]]]] = {}
+        self._cache: typing.Dict[str, typing.List[_TD_T]] = {}
 
         # Target dataset key
         self._dataset_key: str = self._default_dataset_key
@@ -379,14 +386,14 @@ class TimeResolvedContext(DaxModule):
             # Transform metadata and raw data
             buffer = [[(meta, d) for meta, d in zip(self._buffer_meta, data)]
                       for data in zip(*(b for b, _ in self._buffer_data))]
-            result = [np.concatenate([d for _, d in channel]) for channel in buffer]
+            result: typing.List[np.ndarray[float]] = [np.concatenate([d for _, d in channel]) for channel in buffer]
             # Width and time are only calculated once since we assume all data is homogeneous
             width = np.concatenate([np.full(len(d), w, dtype=float) for (w, _, _), d in buffer[0]])
             time = np.concatenate([np.arange(len(d), dtype=float) * (w + s) + (o + o_correction)
                                    for ((w, s, o), d), (_, o_correction) in zip(buffer[0], self._buffer_data)])
 
-            # Format results in a dict for easier access
-            result_dict = {'result': result, 'time': time, 'width': width}
+            # Format results in a trace dict for easier access
+            result_dict: _TD_T = {'result': result, 'time': time, 'width': width}
 
             # Store results in the cache
             self._cache.setdefault(self._dataset_key, []).append(result_dict)
@@ -458,8 +465,7 @@ class TimeResolvedContext(DaxModule):
         return list(self._cache)
 
     @host_only
-    def get_traces(self, dataset_key: typing.Optional[str] = None) \
-            -> typing.List[typing.Dict[str, typing.Sequence[float]]]:
+    def get_traces(self, dataset_key: typing.Optional[str] = None) -> typing.List[_TD_T]:
         """Obtain all trace objects recorded by this time-resolved context for a specific key.
 
         The data is formatted as a list of dictionaries with the self-explaining keys
@@ -510,8 +516,7 @@ class TimeResolvedAnalyzer:
         if isinstance(source, TimeResolvedContext):
             # Get data from module
             self.keys: typing.List[str] = source.get_keys()
-            self.traces: typing.Dict[str, typing.List[typing.Dict[str, typing.Sequence[float]]]] = \
-                {k: source.get_traces(k) for k in self.keys}
+            self.traces: typing.Dict[str, typing.List[_TD_T]] = {k: source.get_traces(k) for k in self.keys}
 
             # Obtain the file name generator
             self._file_name_generator = get_file_name_generator(source.get_device('scheduler'))

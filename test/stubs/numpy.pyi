@@ -1,5 +1,5 @@
 import typing
-import collections
+import collections.abc
 
 __all__ = ['generic', 'character', 'number', 'integer', 'int32', 'int64', 'floating', 'bool_', 'ndarray',
            'array', 'zeroes', 'ones', 'empty', 'full', 'arange', 'linspace', 'logspace',

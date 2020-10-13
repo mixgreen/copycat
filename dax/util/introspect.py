@@ -1,5 +1,5 @@
 import typing
-import collections
+import collections.abc
 import graphviz
 import logging
 

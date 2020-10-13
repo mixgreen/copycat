@@ -7,6 +7,7 @@ import collections
 import itertools
 import enum
 import numpy as np
+import typing
 
 from artiq.language.core import *
 from artiq.language.units import *
@@ -77,8 +78,8 @@ class TTLInOut(TTLOut):
         self._rng = random.Random(seed)
 
         # Buffers to store simulated events
-        self._edge_buffer = collections.deque()
-        self._sample_buffer = collections.deque()
+        self._edge_buffer: typing.Deque[np.int64] = collections.deque()
+        self._sample_buffer: typing.Deque[np.int32] = collections.deque()
 
         # Register signals
         self._direction = self._signal_manager.register(self, 'direction', bool, size=1)
