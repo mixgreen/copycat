@@ -2,7 +2,7 @@ from __future__ import annotations  # Postponed evaluation of annotations
 
 import typing
 import logging
-import collections
+import collections.abc
 import time
 import enum
 import networkx as nx

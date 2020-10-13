@@ -1,7 +1,7 @@
 import unittest
 import logging
 import typing
-import collections
+import collections.abc
 import warnings
 
 from artiq.experiment import HasEnvironment, now_mu

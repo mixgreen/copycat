@@ -4,6 +4,7 @@ import itertools
 import re
 import numpy as np
 import collections
+import collections.abc
 import os
 import h5py  # type: ignore
 

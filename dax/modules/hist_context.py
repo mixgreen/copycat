@@ -1,5 +1,6 @@
 import typing
 import collections
+import collections.abc
 import numpy as np
 import h5py  # type: ignore
 import natsort

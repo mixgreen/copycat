@@ -3,7 +3,7 @@ import numpy as np
 import logging
 import os
 import pygit2  # type: ignore
-import collections
+import collections.abc
 import typing
 from unittest.mock import MagicMock, call
 
