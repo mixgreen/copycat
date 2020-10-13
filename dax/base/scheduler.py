@@ -591,29 +591,8 @@ class DaxScheduler(dax.base.system.DaxHasKey):
         :param kwargs: Keyword arguments passed to the superclass
         """
 
-        # Check name
-        assert hasattr(self, 'NAME'), 'No name was provided'
-        # Check jobs
-        assert hasattr(self, 'JOBS'), 'No job list was provided'
-        assert isinstance(self.JOBS, collections.abc.Collection), 'The jobs attribute must be a collection'
-        assert all(issubclass(job, Job) for job in self.JOBS), 'All jobs must be subclasses of Job'
-        # Check root jobs, system, and controller
-        assert isinstance(self.ROOT_JOBS, collections.abc.Collection), 'The root jobs attribute must be a collection'
-        assert all(issubclass(job, Job) for job in self.ROOT_JOBS), 'All root jobs must be subclasses of Job'
-        assert self.SYSTEM is None or issubclass(self.SYSTEM, dax.base.system.DaxSystem)
-        assert self.CONTROLLER is None or isinstance(self.CONTROLLER, str), 'Controller must be of type str or None'
-        # Check default policy, reverse, pipeline, job priority, and reset jobs flag
-        assert isinstance(self.DEFAULT_SCHEDULING_POLICY, Policy), 'Default policy must be of type Policy'
-        assert isinstance(self.DEFAULT_REVERSE_DEPENDENCIES, bool), \
-            'Default reverse dependencies flag must be of type bool'
-        assert isinstance(self.DEFAULT_JOB_PIPELINE, str) and self.DEFAULT_JOB_PIPELINE, \
-            'Default job pipeline must be of type str'
-        assert isinstance(self.DEFAULT_JOB_PRIORITY, int), 'Default job priority must be of type int'
-        assert -99 <= self.DEFAULT_JOB_PRIORITY <= 99, 'Default job priority must be in the domain [-99, 99]'
-        assert isinstance(self.DEFAULT_RESET_JOBS, bool), 'Default reset jobs flag must be of type bool'
-        # Check graphviz format
-        assert isinstance(self._GRAPHVIZ_FORMAT, str)
-
+        # Check attributes
+        self.check_attributes()
         # Call super
         super(DaxScheduler, self).__init__(managers_or_parent, *args,
                                            name=self.NAME, system_key=self.NAME, **kwargs)
@@ -1058,6 +1037,38 @@ class DaxScheduler(dax.base.system.DaxHasKey):
         # Return the controller details of interest
         return host, port
 
+    @classmethod
+    def check_attributes(cls) -> None:
+        """Check if all attributes of this class are correctly overridden.
+
+        :raises AssertionError: Raised if attributes are not correctly overridden
+        """
+
+        # Check name
+        assert hasattr(cls, 'NAME'), 'No name was provided'
+        # Check jobs
+        assert hasattr(cls, 'JOBS'), 'No job list was provided'
+        assert isinstance(cls.JOBS, collections.abc.Collection), 'The jobs attribute must be a collection'
+        assert all(issubclass(job, Job) for job in cls.JOBS), 'All jobs must be subclasses of Job'
+        # Check root jobs, system, and controller
+        assert isinstance(cls.ROOT_JOBS, collections.abc.Collection), 'The root jobs attribute must be a collection'
+        assert all(issubclass(job, Job) for job in cls.ROOT_JOBS), 'All root jobs must be subclasses of Job'
+        assert cls.SYSTEM is None or issubclass(cls.SYSTEM, dax.base.system.DaxSystem), \
+            'The provided system must be a subclass of DaxSystem or None'
+        assert cls.CONTROLLER is None or isinstance(cls.CONTROLLER, str), 'Controller must be of type str or None'
+        assert cls.CONTROLLER != 'scheduler', 'Controller can not be "scheduler" (aliases with the ARTIQ scheduler)'
+        # Check default policy, reverse, pipeline, job priority, and reset jobs flag
+        assert isinstance(cls.DEFAULT_SCHEDULING_POLICY, Policy), 'Default policy must be of type Policy'
+        assert isinstance(cls.DEFAULT_REVERSE_DEPENDENCIES, bool), \
+            'Default reverse dependencies flag must be of type bool'
+        assert isinstance(cls.DEFAULT_JOB_PIPELINE, str) and cls.DEFAULT_JOB_PIPELINE, \
+            'Default job pipeline must be of type str'
+        assert isinstance(cls.DEFAULT_JOB_PRIORITY, int), 'Default job priority must be of type int'
+        assert -99 <= cls.DEFAULT_JOB_PRIORITY <= 99, 'Default job priority must be in the domain [-99, 99]'
+        assert isinstance(cls.DEFAULT_RESET_JOBS, bool), 'Default reset jobs flag must be of type bool'
+        # Check graphviz format
+        assert isinstance(cls._GRAPHVIZ_FORMAT, str), 'Graphviz format must be of type str'
+
 
 class _DaxSchedulerClient(dax.base.system.DaxBase, artiq.experiment.Experiment):
     """A client experiment class for a scheduler."""
@@ -1075,7 +1086,9 @@ class _DaxSchedulerClient(dax.base.system.DaxBase, artiq.experiment.Experiment):
     """The policy option to use the schedulers policy."""
     _POLICY_NAMES: typing.List[str] = [_SCHEDULER_POLICY] + sorted(str(p) for p in Policy)
     """A list with policy names."""
-    _REVERSE_DICT: typing.Dict[str, typing.Optional[bool]] = {'<Scheduler reverse>': None,
+    _SCHEDULER_REVERSE: str = '<Scheduler reverse>'
+    """The reverse job dependencies option to use the schedulers reverse flag."""
+    _REVERSE_DICT: typing.Dict[str, typing.Optional[bool]] = {_SCHEDULER_REVERSE: None,
                                                               'False': False, 'True': True}
     """A dict with reverse job dependencies names and values."""
 
@@ -1084,19 +1097,20 @@ class _DaxSchedulerClient(dax.base.system.DaxBase, artiq.experiment.Experiment):
         self.set_default_scheduling(pipeline_name=f'_{self.SCHEDULER_NAME}')
 
         # Arguments
-        self._job: str = self.get_argument('Job name',
+        self._job: str = self.get_argument('Job',
                                            artiq.experiment.EnumerationValue(self.JOB_NAMES),
                                            tooltip='Job to submit')
         self._action: str = self.get_argument('Action',
                                               artiq.experiment.EnumerationValue(self._JOB_ACTION_NAMES,
-                                                                                str(JobAction.FORCE)),
+                                                                                default=str(JobAction.FORCE)),
                                               tooltip='Initial job action')
         self._policy: str = self.get_argument('Policy',
                                               artiq.experiment.EnumerationValue(self._POLICY_NAMES,
-                                                                                self._SCHEDULER_POLICY),
+                                                                                default=self._SCHEDULER_POLICY),
                                               tooltip='Scheduling policy')
         self._reverse: str = self.get_argument('Reverse',
-                                               artiq.experiment.EnumerationValue(sorted(self._REVERSE_DICT)),
+                                               artiq.experiment.EnumerationValue(sorted(self._REVERSE_DICT),
+                                                                                 default=self._SCHEDULER_REVERSE),
                                                tooltip='Reverse the job dependencies when visiting jobs')
 
         # Get the DAX scheduler controller
@@ -1133,6 +1147,7 @@ def dax_scheduler_client(scheduler_class: typing.Type[DaxScheduler]) -> typing.T
     """
 
     assert issubclass(scheduler_class, DaxScheduler), 'The scheduler class must be a subclass of DaxScheduler'
+    scheduler_class.check_attributes()
     assert isinstance(scheduler_class.CONTROLLER, str), 'The scheduler class must have a controller key'
 
     class WrapperClass(_DaxSchedulerClient):

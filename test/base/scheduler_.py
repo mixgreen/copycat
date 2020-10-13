@@ -14,6 +14,7 @@ from artiq.experiment import TerminationRequested, NumberValue
 from dax.base.scheduler import *
 from dax.util.artiq import get_managers
 import dax.base.system
+import dax.base.exceptions
 import dax.util.output
 
 if os.getenv('GITLAB_CI'):
@@ -230,6 +231,50 @@ class SchedulerMiscTestCase(unittest.TestCase):
                 else:
                     # All other cases the policies return the same actions
                     self.assertEqual(lazy, greedy, 'Policies unexpectedly returned different actions')
+
+
+class SchedulerClientTestCase(unittest.TestCase):
+
+    def test_client_class_instantiation(self):
+        # noinspection PyProtectedMember
+        from dax.base.scheduler import _DaxSchedulerClient
+
+        class S(_Scheduler):
+            CONTROLLER = 'dax_scheduler'
+
+        self.assertTrue(issubclass(dax_scheduler_client(S), _DaxSchedulerClient))
+
+    def test_client_class_instantiation_bad(self):
+        with self.assertRaises(AssertionError, msg='Lack of scheduler controller did not raise'):
+            dax_scheduler_client(_Scheduler)
+
+        class S(_Scheduler):
+            CONTROLLER = 'scheduler'
+
+        with self.assertRaises(AssertionError, msg='Invalid scheduler controller name did not raise'):
+            dax_scheduler_client(S)
+
+    def test_client_instantiation(self):
+        class S(_Scheduler):
+            CONTROLLER = 'dax_scheduler'
+            JOBS = {_JobA, _JobB, _JobC}
+
+        class Client(dax_scheduler_client(S)):
+            pass
+
+        device_db = _DEVICE_DB.copy()
+        device_db['dax_scheduler'] = {
+            'type': 'local',
+            'module': 'dax.sim.coredevice.dummy',
+            'class': 'Dummy',
+            'arguments': {'_key': 'dax_scheduler'}  # Add key argument which is normally added by DAX.sim
+        }
+
+        # noinspection PyArgumentList
+        c = Client(get_managers(device_db, Job=_JobB.get_name()))
+        c.prepare()
+        with self.assertRaises(AttributeError, msg='Dummy device did not raise expected error'):
+            c.run()
 
 
 class LazySchedulerTestCase(unittest.TestCase):
