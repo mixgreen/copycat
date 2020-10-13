@@ -778,15 +778,10 @@ class LazySchedulerTestCase(unittest.TestCase):
                 self.assertDictEqual(j.counter, ref_counter,
                                      'Job call pattern did not match expected pattern')
 
-    def test_scheduler_controller(self):
+    def _test_scheduler_controller(self, requests):
         class S(_Scheduler):
             JOBS = {_Job1, _Job2, _Job3, _Job4, _JobA, _JobB, _JobC}
             CONTROLLER = 'dax_scheduler'
-
-            REQUESTS = [
-                ((_Job4.get_name(), _JobA.get_name()), {}),
-                ((_JobC.get_name(),), {'action': str(JobAction.PASS)}),
-            ]
 
             counter = 0
 
@@ -794,7 +789,7 @@ class LazySchedulerTestCase(unittest.TestCase):
                 super(S, self).wave(**kwargs)
 
                 self.counter += 1
-                if self.counter >= _NUM_WAVES + len(self.REQUESTS):
+                if self.counter >= _NUM_WAVES + len(requests):
                     raise TerminationRequested
 
             def controller_callback(self) -> None:
@@ -804,7 +799,7 @@ class LazySchedulerTestCase(unittest.TestCase):
                 # This is required because we can not use get_device() to obtain the controller
                 # Because the server and the client are running on the same thread then, the situation deadlocks
                 controller = _SchedulerController(self.queue)
-                for args, kwargs in self.REQUESTS:
+                for args, kwargs in requests:
                     controller.submit(*args, **kwargs)
 
         with _isolation():
@@ -815,10 +810,19 @@ class LazySchedulerTestCase(unittest.TestCase):
 
         # Run the scheduler
         s.run()
-        self.assertTrue(s.queue.empty(), 'Request queue is not empty')
-        self._check_scheduler_controller(s)
+        # Return the scheduler
+        return s
 
-    def _check_scheduler_controller(self, scheduler):
+    def test_scheduler_controller0(self):
+        requests = [
+            ((_Job4.get_name(), _JobA.get_name()), {}),
+            ((_JobC.get_name(),), {'action': str(JobAction.PASS)}),
+        ]
+        s = self._test_scheduler_controller(requests)
+        self.assertTrue(s.queue.empty(), 'Request queue is not empty')
+        self._check_scheduler_controller0(s)
+
+    def _check_scheduler_controller0(self, scheduler):
         for j in scheduler._job_graph:
             with self.subTest(job=j.get_name()):
                 if isinstance(j, _Job1):
@@ -837,6 +841,41 @@ class LazySchedulerTestCase(unittest.TestCase):
                     self.fail('Statement should not be reachable')
                 self.assertDictEqual(j.counter, ref_counter,
                                      'Job call pattern did not match expected pattern')
+
+    def test_scheduler_controller1(self):
+        requests = [
+            ((_Job4.get_name(), _JobB.get_name()), {'reverse': True}),
+        ]
+        s = self._test_scheduler_controller(requests)
+        self.assertTrue(s.queue.empty(), 'Request queue is not empty')
+        self._check_scheduler_controller1(s)
+
+    def _check_scheduler_controller1(self, scheduler):
+        for j in scheduler._job_graph:
+            with self.subTest(job=j.get_name()):
+                if isinstance(j, _Job4):
+                    ref_counter = {'init': 1, 'visit': _NUM_WAVES * 2 + 1, 'submit': 1, 'schedule': 1}
+                elif isinstance(j, _Job1):
+                    ref_counter = {'init': 1, 'visit': _NUM_WAVES + 1 + 2, 'submit': 1, 'schedule': 1}
+                elif isinstance(j, (_Job2, _Job3, _JobA)):
+                    ref_counter = {'init': 1, 'visit': _NUM_WAVES + 1}
+                elif isinstance(j, _JobB):
+                    ref_counter = {'init': 1, 'visit': _NUM_WAVES + 1 + 2, 'submit': 2, 'schedule': 2}
+                elif isinstance(j, _JobC):
+                    ref_counter = {'init': 1, 'visit': _NUM_WAVES}
+                else:
+                    self.fail('Statement should not be reachable')
+                self.assertDictEqual(j.counter, ref_counter,
+                                     'Job call pattern did not match expected pattern')
+
+    def test_scheduler_controller1_sequential(self):
+        requests = [
+            ((_Job4.get_name(),), {'reverse': True}),
+            ((_JobB.get_name(),), {'reverse': True}),
+        ]
+        s = self._test_scheduler_controller(requests)
+        self.assertTrue(s.queue.empty(), 'Request queue is not empty')
+        self._check_scheduler_controller1(s)
 
 
 class LazySchedulerReversedTestCase(LazySchedulerTestCase):
@@ -932,7 +971,7 @@ class GreedySchedulerTestCase(LazySchedulerTestCase):
                 self.assertDictEqual(j.counter, ref_counter,
                                      'Job call pattern did not match expected pattern')
 
-    def _check_scheduler_controller(self, scheduler):
+    def _check_scheduler_controller0(self, scheduler):
         for j in scheduler._job_graph:
             with self.subTest(job=j.get_name()):
                 if isinstance(j, _Job1):
@@ -947,6 +986,26 @@ class GreedySchedulerTestCase(LazySchedulerTestCase):
                     ref_counter = {'init': 1, 'visit': _NUM_WAVES + 1 + 1 + 1, 'submit': 1 + 1, 'schedule': 1 + 1}
                 else:
                     ref_counter = {'init': 1, 'visit': _NUM_WAVES + 1, 'submit': 1, 'schedule': 1}
+                self.assertDictEqual(j.counter, ref_counter,
+                                     'Job call pattern did not match expected pattern')
+
+    def _check_scheduler_controller1(self, scheduler):
+        for j in scheduler._job_graph:
+            with self.subTest(job=j.get_name()):
+                if isinstance(j, _Job4):
+                    ref_counter = {'init': 1, 'visit': _NUM_WAVES * 2 + 1, 'submit': 2, 'schedule': 2}
+                elif isinstance(j, _Job1):
+                    ref_counter = {'init': 1, 'visit': _NUM_WAVES + 1 + 3, 'submit': 2, 'schedule': 2}
+                elif isinstance(j, (_Job2, _Job3)):
+                    ref_counter = {'init': 1, 'visit': _NUM_WAVES + 1, 'submit': 2, 'schedule': 2}
+                elif isinstance(j, _JobA):
+                    ref_counter = {'init': 1, 'visit': _NUM_WAVES + 1, 'submit': 1, 'schedule': 1}
+                elif isinstance(j, _JobB):
+                    ref_counter = {'init': 1, 'visit': _NUM_WAVES + 1 + 2, 'submit': 2, 'schedule': 2}
+                elif isinstance(j, _JobC):
+                    ref_counter = {'init': 1, 'visit': _NUM_WAVES, 'submit': 1, 'schedule': 1}
+                else:
+                    self.fail('Statement should not be reachable')
                 self.assertDictEqual(j.counter, ref_counter,
                                      'Job call pattern did not match expected pattern')
 
