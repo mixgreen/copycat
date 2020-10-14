@@ -124,6 +124,87 @@ class NodeAction(enum.Enum):
         return self.name
 
 
+class Policy(enum.Enum):
+    """Policy enumeration for the scheduler.
+
+    The policy enumeration includes definitions for the policies using a mapping table.
+    """
+
+    if typing.TYPE_CHECKING:
+        # Only add type when type checking is enabled to not conflict with iterations over the Policy enum
+        __P_T = typing.Dict[typing.Tuple[NodeAction, NodeAction], NodeAction]  # Policy enum type
+
+    LAZY: __P_T = {
+        (NodeAction.PASS, NodeAction.PASS): NodeAction.PASS,
+        (NodeAction.PASS, NodeAction.RUN): NodeAction.RUN,
+        (NodeAction.PASS, NodeAction.FORCE): NodeAction.RUN,
+        (NodeAction.RUN, NodeAction.PASS): NodeAction.PASS,
+        (NodeAction.RUN, NodeAction.RUN): NodeAction.RUN,
+        (NodeAction.RUN, NodeAction.FORCE): NodeAction.RUN,
+        (NodeAction.FORCE, NodeAction.PASS): NodeAction.RUN,
+        (NodeAction.FORCE, NodeAction.RUN): NodeAction.RUN,
+        (NodeAction.FORCE, NodeAction.FORCE): NodeAction.RUN,
+    }
+    """Lazy scheduling policy, only submit nodes that expired."""
+
+    GREEDY: __P_T = {
+        (NodeAction.PASS, NodeAction.PASS): NodeAction.PASS,
+        (NodeAction.PASS, NodeAction.RUN): NodeAction.RUN,
+        (NodeAction.PASS, NodeAction.FORCE): NodeAction.RUN,
+        (NodeAction.RUN, NodeAction.PASS): NodeAction.RUN,
+        (NodeAction.RUN, NodeAction.RUN): NodeAction.RUN,
+        (NodeAction.RUN, NodeAction.FORCE): NodeAction.RUN,
+        (NodeAction.FORCE, NodeAction.PASS): NodeAction.RUN,
+        (NodeAction.FORCE, NodeAction.RUN): NodeAction.RUN,
+        (NodeAction.FORCE, NodeAction.FORCE): NodeAction.RUN,
+    }
+    """Greedy scheduling policy, submit nodes that expired including its dependencies."""
+
+    def action(self, previous: NodeAction, current: NodeAction) -> NodeAction:
+        """Apply the policy on two node actions.
+
+        :param previous: The node action of the predecessor (previous node)
+        :param current: The current node action
+        :return: The new node action based on this policy
+        """
+        assert isinstance(previous, NodeAction)
+        assert isinstance(current, NodeAction)
+        policy: Policy.__P_T = self.value
+        return policy[previous, current]
+
+    @classmethod
+    def from_str(cls, string_: str) -> Policy:
+        """Convert a string into its corresponding policy enumeration.
+
+        :param string_: The name of the policy as a string (case insensitive)
+        :return: The policy enumeration object
+        :raises KeyError: Raised if the policy name does not exist
+        """
+        return {str(p).lower(): p for p in cls}[string_.lower()]
+
+    def __str__(self) -> str:
+        """Return the name of this policy.
+
+        :return: The name of this policy as a string
+        """
+        return self.name
+
+
+@dataclasses.dataclass(frozen=True)
+class _Request:
+    """Data class for scheduler controller requests."""
+    nodes: typing.Collection[str]
+    action: str
+    policy: typing.Optional[str]
+    reverse: typing.Optional[bool]
+
+
+if typing.TYPE_CHECKING:
+    __RQ_T = queue.SimpleQueue[_Request]  # Type variable for the request queue
+else:
+    __RQ_T = queue.SimpleQueue
+
+
 class Node(dax.base.system.DaxHasKey, abc.ABC):
     """Abstract node class for the scheduler."""
 
@@ -163,6 +244,11 @@ class Node(dax.base.system.DaxHasKey, abc.ABC):
 
     def build(self) -> None:  # type: ignore
         """Build the node object."""
+
+        # Process dependencies
+        self._dependencies: typing.FrozenSet[typing.Type[Node]] = frozenset(self.DEPENDENCIES)
+        if len(self._dependencies) < len(self.DEPENDENCIES):
+            self.logger.warning('Duplicate dependencies were dropped')
 
         # Obtain the scheduler
         self._scheduler = self.get_device('scheduler')
@@ -282,6 +368,13 @@ class Node(dax.base.system.DaxHasKey, abc.ABC):
         """
         pass
 
+    def get_dependencies(self) -> typing.FrozenSet[typing.Type[Node]]:
+        """Get the dependencies of this node.
+
+        :return: A set of node on which this node depends
+        """
+        return self._dependencies
+
     @classmethod
     def get_name(cls) -> str:
         """Get the name of this node.
@@ -301,7 +394,7 @@ class Job(Node):
     - :attr:`CLASS_NAME`: The class name of the experiment
     - :attr:`ARGUMENTS`: A dictionary with experiment arguments (scan objects can be used directly as arguments)
     - :attr:`INTERVAL`: The submit interval
-    - :attr:`DEPENDENCIES`: A collection of node classes on which this node depends
+    - :attr:`DEPENDENCIES`: A collection of node classes on which this job depends
 
     Optionally, users can override the :func:`build_job` method to add configurable arguments.
     """
@@ -386,11 +479,11 @@ class Job(Node):
         pass
 
     def init(self, *, reset: bool, **kwargs: typing.Any) -> None:
+        assert isinstance(reset, bool)
+
         # Extract arguments
         self._pipeline: str = kwargs['job_pipeline'] if self.PIPELINE is None else self.PIPELINE
         self._priority: int = kwargs['job_priority'] + self.PRIORITY
-
-        assert isinstance(reset, bool)
         assert isinstance(self._pipeline, str) and self._pipeline
         assert isinstance(self._priority, int)
 
@@ -472,129 +565,67 @@ class Job(Node):
 
 
 class Trigger(Node):
-    """Job class to define a job for the scheduler.
+    """Trigger class to define a trigger for the scheduler.
 
-    Users only have to override class attributes to create a job definition.
+    Users only have to override class attributes to create a trigger definition.
     The following main attributes can be overridden:
 
-    - :attr:`FILE`: The file name containing the experiment
-    - :attr:`CLASS_NAME`: The class name of the experiment
-    - :attr:`ARGUMENTS`: A dictionary with experiment arguments (scan objects can be used directly as arguments)
-    - :attr:`INTERVAL`: The job submit interval
-    - :attr:`DEPENDENCIES`: A collection of job classes on which this job depends
-
-    Optionally, users can override the :func:`build_job` method to add configurable arguments.
+    - :attr:`NODES`: A collection of nodes to trigger
+    - :attr:`ACTION`: The root node action of this trigger (defaults to :attr:`NodeAction.FORCE`)
+    - :attr:`POLICY`: The scheduling policy of this trigger (defaults to the schedulers policy)
+    - :attr:`REVERSE`: Reverse the node dependencies flag of this trigger (defaults to the schedulers reverse flag)
+    - :attr:`INTERVAL`: The trigger interval
+    - :attr:`DEPENDENCIES`: A collection of node classes on which this trigger depends
     """
 
-    # TODO: nodes and strings, check if nodes exist?
+    # TODO: check if nodes are available
     NODES: typing.Collection[typing.Type[Node]] = []
     """Collection of nodes to trigger."""
-    POLICY: Policy
     ACTION: NodeAction = NodeAction.FORCE
-    REVERSE: bool
+    """The root node action of this trigger."""
+    POLICY: typing.Optional[Policy] = None
+    """The scheduling policy of this trigger."""
+    REVERSE: typing.Optional[bool] = None
+    """Reverse node dependencies flag for this trigger."""
+
+    def build(self) -> None:  # type: ignore
+        # Check nodes, action, policy, and reverse dependencies flag
+        assert isinstance(self.NODES, collections.abc.Collection), 'The nodes must be a collection'
+        assert all(issubclass(node, Node) for node in self.NODES), 'All nodes must be subclasses of Node'
+        assert isinstance(self.ACTION, NodeAction), 'Action must be of type NodeAction'
+        assert isinstance(self.POLICY, Policy) or self.POLICY is None, 'Policy must be of type Policy or None'
+        assert isinstance(self.REVERSE, bool) or self.REVERSE is None, 'Reverse flag must be of type bool or None'
+
+        # Assemble the collection of node names
+        self._nodes: typing.Set[str] = {node.get_name() for node in self.NODES}
+        if len(self._nodes) < len(self.NODES):
+            self.logger.warning('Duplicate nodes were dropped')
+
+        # Call super
+        super(Trigger, self).build()
 
     def init(self, *, reset: bool, **kwargs: typing.Any) -> None:
         # Extract attributes
         self._request_queue: __RQ_T = kwargs['request_queue']
         assert isinstance(self._request_queue, queue.SimpleQueue)
 
+        # Call super
         super(Trigger, self).init(reset=reset, **kwargs)
 
     def _submit(self, *, wave: float) -> None:
-        # TODO: submit trigger to request queue
-        pass
+        # Add the request to the request queue
+        self._request_queue.put_nowait(_Request(self._nodes,
+                                                str(self.ACTION),
+                                                str(self.POLICY) if self.POLICY is not None else None,
+                                                self.REVERSE))
 
     def cancel(self) -> None:
+        # Triggers can not be cancelled
         pass
 
     def is_meta(self) -> bool:
-        """Check if this trigger is a meta-trigger (i.e. no experiment is associated with it).
-
-        :return: True if this trigger is a meta-trigger
-        """
-        # TODO: return true if there are no jobs to trigger
-        return False
-
-
-class Policy(enum.Enum):
-    """Policy enumeration for the scheduler.
-
-    The policy enumeration includes definitions for the policies using a mapping table.
-    """
-
-    if typing.TYPE_CHECKING:
-        # Only add type when type checking is enabled to not conflict with iterations over the Policy enum
-        __P_T = typing.Dict[typing.Tuple[NodeAction, NodeAction], NodeAction]  # Policy enum type
-
-    LAZY: __P_T = {
-        (NodeAction.PASS, NodeAction.PASS): NodeAction.PASS,
-        (NodeAction.PASS, NodeAction.RUN): NodeAction.RUN,
-        (NodeAction.PASS, NodeAction.FORCE): NodeAction.RUN,
-        (NodeAction.RUN, NodeAction.PASS): NodeAction.PASS,
-        (NodeAction.RUN, NodeAction.RUN): NodeAction.RUN,
-        (NodeAction.RUN, NodeAction.FORCE): NodeAction.RUN,
-        (NodeAction.FORCE, NodeAction.PASS): NodeAction.RUN,
-        (NodeAction.FORCE, NodeAction.RUN): NodeAction.RUN,
-        (NodeAction.FORCE, NodeAction.FORCE): NodeAction.RUN,
-    }
-    """Lazy scheduling policy, only submit nodes that expired."""
-
-    GREEDY: __P_T = {
-        (NodeAction.PASS, NodeAction.PASS): NodeAction.PASS,
-        (NodeAction.PASS, NodeAction.RUN): NodeAction.RUN,
-        (NodeAction.PASS, NodeAction.FORCE): NodeAction.RUN,
-        (NodeAction.RUN, NodeAction.PASS): NodeAction.RUN,
-        (NodeAction.RUN, NodeAction.RUN): NodeAction.RUN,
-        (NodeAction.RUN, NodeAction.FORCE): NodeAction.RUN,
-        (NodeAction.FORCE, NodeAction.PASS): NodeAction.RUN,
-        (NodeAction.FORCE, NodeAction.RUN): NodeAction.RUN,
-        (NodeAction.FORCE, NodeAction.FORCE): NodeAction.RUN,
-    }
-    """Greedy scheduling policy, submit nodes that expired including its dependencies."""
-
-    def action(self, previous: NodeAction, current: NodeAction) -> NodeAction:
-        """Apply the policy on two node actions.
-
-        :param previous: The node action of the predecessor (previous node)
-        :param current: The current node action
-        :return: The new node action based on this policy
-        """
-        assert isinstance(previous, NodeAction)
-        assert isinstance(current, NodeAction)
-        policy: Policy.__P_T = self.value
-        return policy[previous, current]
-
-    @classmethod
-    def from_str(cls, string_: str) -> Policy:
-        """Convert a string into its corresponding policy enumeration.
-
-        :param string_: The name of the policy as a string (case insensitive)
-        :return: The policy enumeration object
-        :raises KeyError: Raised if the policy name does not exist
-        """
-        return {str(p).lower(): p for p in cls}[string_.lower()]
-
-    def __str__(self) -> str:
-        """Return the name of this policy.
-
-        :return: The name of this policy as a string
-        """
-        return self.name
-
-
-@dataclasses.dataclass(frozen=True)
-class _Request:
-    """Data class for scheduler controller requests."""
-    nodes: typing.Collection[str]
-    action: str
-    policy: typing.Optional[str]
-    reverse: typing.Optional[bool]
-
-
-if typing.TYPE_CHECKING:
-    __RQ_T = queue.SimpleQueue[_Request]  # Type variable for the request queue
-else:
-    __RQ_T = queue.SimpleQueue
+        # This trigger is a meta-trigger if there are no nodes to trigger
+        return len(self.NODES) == 0
 
 
 class _SchedulerController:
@@ -804,7 +835,7 @@ class DaxScheduler(dax.base.system.DaxHasKey):
         self._process_graph()
 
         # Plot the dependency graph
-        self._plot_dependency_graph()
+        self._plot_graph()
         # Terminate other instances of this scheduler
         self._terminate_running_instances()
 
@@ -993,6 +1024,10 @@ class DaxScheduler(dax.base.system.DaxHasKey):
         self.logger.debug(f'Created {len(self._nodes)} node(s)')
         if len(self._nodes) < len(self.NODES):
             self.logger.warning('Duplicate nodes were dropped')
+        base_classes: typing.Sequence[typing.Type[Node]] = [Job, Trigger]
+        for c in base_classes:
+            if self._nodes.pop(c, None) is not None:
+                self.logger.warning(f'Removed base class "{c.get_name()}" from nodes')
         if len(self._node_name_map) < len(self._nodes):
             msg = 'Node name conflict, two nodes are not allowed to have the same class name'
             self.logger.error(msg)
@@ -1006,7 +1041,7 @@ class DaxScheduler(dax.base.system.DaxHasKey):
         self._graph.add_nodes_from(self._nodes.values())
         try:
             self._graph.add_edges_from(((node, self._nodes[d])
-                                        for node in self._nodes.values() for d in node.DEPENDENCIES))
+                                        for node in self._nodes.values() for d in node.get_dependencies()))
         except KeyError as e:
             raise KeyError(f'Dependency "{e.args[0].get_name()}" is not in the node set') from None
 
@@ -1038,14 +1073,22 @@ class DaxScheduler(dax.base.system.DaxHasKey):
         # Log the root nodes
         self.logger.debug(f'Root nodes: {", ".join(sorted(node.get_name() for node in self._root_nodes))}')
 
-    def _plot_dependency_graph(self) -> None:
+    def _plot_graph(self) -> None:
         """Plot the dependency graph."""
 
         # Create a directed graph object
         plot = graphviz.Digraph(name=self.NAME, directory=str(dax.util.output.get_base_path(self._scheduler)))
+        # Add all nodes
         for node in self._graph:
-            plot.node(node.get_name())
+            plot.node(node.get_name(),
+                      style='dashed' if node.is_meta() else None,
+                      label=f'{node.get_name()}\n({node.INTERVAL})' if node.is_timed() else None,
+                      shape='box' if isinstance(node, Trigger) else None)
+        # Add all dependencies
         plot.edges(((m.get_name(), n.get_name()) for m, n in self._graph.edges))
+        # Add trigger edges
+        for t, n in ((t, n) for t in self._graph if isinstance(t, Trigger) for n in t.NODES):
+            plot.edge(t.get_name(), n.get_name(), style='dashed')
         # Render the graph
         plot.render(view=self._view_graph, format=self._GRAPHVIZ_FORMAT)
 
@@ -1240,7 +1283,7 @@ def dax_scheduler_client(scheduler_class: typing.Type[DaxScheduler]) -> typing.T
         """A wrapped/instantiated client experiment class for a scheduler."""
 
         SCHEDULER_NAME = scheduler_class.NAME
-        NODE_NAMES = sorted(node.get_name() for node in scheduler_class.NODES)
+        NODE_NAMES = sorted({node.get_name() for node in scheduler_class.NODES})
         if isinstance(scheduler_class.CONTROLLER, str):
             CONTROLLER_KEY = scheduler_class.CONTROLLER
         else:
