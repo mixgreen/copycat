@@ -12,6 +12,7 @@ from artiq.language.scan import *
 from artiq.experiment import TerminationRequested, NumberValue
 
 from dax.base.scheduler import *
+import dax.base.scheduler
 from dax.util.artiq import get_managers
 import dax.base.system
 import dax.base.exceptions
@@ -62,6 +63,14 @@ def _isolation() -> typing.Generator[None, None, None]:
     with dax.util.output.temp_dir(), open(os.devnull, 'w') as devnull:
         with contextlib.redirect_stdout(devnull), contextlib.redirect_stderr(devnull):
             yield
+
+
+def _get_init_kwargs(scheduler, **kwargs):
+    kwargs.setdefault('job_pipeline', scheduler._job_pipeline)
+    kwargs.setdefault('job_priority', scheduler._job_priority)
+    kwargs.setdefault('request_queue', scheduler._request_queue)
+    kwargs.setdefault('reset', scheduler._reset_nodes)
+    return kwargs
 
 
 class _Job(Job):
@@ -128,7 +137,7 @@ class _JobA(_Job):
 
 class _Scheduler(DaxScheduler):
     NAME = 'test_scheduler'
-    JOBS: typing.Set[typing.Type[Job]] = set()
+    NODES: typing.Set[typing.Type[dax.base.scheduler.Node]] = set()
 
     # Modify graphviz format to prevent usage of visual render engines
     _GRAPHVIZ_FORMAT = 'gv'
@@ -144,23 +153,23 @@ class _Scheduler(DaxScheduler):
 
     def wave(self, *,
              wave=None,
-             root_jobs=None,
+             root_nodes=None,
              root_action=None,
              policy=None,
              reverse=None) -> None:
         # Use defaults for simplicity
         if wave is None:
             wave = time.time()
-        if root_jobs is None:
-            root_jobs = self._root_jobs
+        if root_nodes is None:
+            root_nodes = self._root_nodes
         if root_action is None:
-            root_action = JobAction.PASS
+            root_action = NodeAction.PASS
         if policy is None:
             policy = self._policy
         if reverse is None:
             reverse = self._reverse
 
-        super(_Scheduler, self).wave(wave=wave, root_jobs=root_jobs, root_action=root_action,
+        super(_Scheduler, self).wave(wave=wave, root_nodes=root_nodes, root_action=root_action,
                                      policy=policy, reverse=reverse)
 
     async def _run_scheduler(self) -> None:
@@ -201,32 +210,32 @@ class SchedulerMiscTestCase(unittest.TestCase):
                 self.assertEqual(str_to_time(s), v, 'Converted time string does not equal expected float value')
 
     def test_job_action_str(self):
-        for a in JobAction:
+        for a in NodeAction:
             with self.subTest(job_action=a):
                 self.assertEqual(str(a), a.name)
 
     def test_job_action_submittable(self):
-        submittable = {JobAction.RUN, JobAction.FORCE}
+        submittable = {NodeAction.RUN, NodeAction.FORCE}
 
-        for a in JobAction:
+        for a in NodeAction:
             with self.subTest(job_action=a):
                 self.assertEqual(a in submittable, a.submittable())
 
     def test_policy_complete(self):
         for p in Policy:
             with self.subTest(policy=str(p)):
-                self.assertEqual(len(p.value), len(JobAction) ** 2, 'Policy not fully implemented')
+                self.assertEqual(len(p.value), len(NodeAction) ** 2, 'Policy not fully implemented')
 
     def test_policy_differences(self):
-        for a0 in JobAction:
-            for a1 in JobAction:
+        for a0 in NodeAction:
+            for a1 in NodeAction:
                 lazy = Policy.LAZY.action(a0, a1)
                 greedy = Policy.GREEDY.action(a0, a1)
 
-                if a0 is JobAction.RUN and a1 is JobAction.PASS:
+                if a0 is NodeAction.RUN and a1 is NodeAction.PASS:
                     # Only for this one scenario the policies are different
-                    self.assertEqual(lazy, JobAction.PASS, 'Policy lazy returned an unexpected action')
-                    self.assertEqual(greedy, JobAction.RUN, 'Policy greedy returned an unexpected action')
+                    self.assertEqual(lazy, NodeAction.PASS, 'Policy lazy returned an unexpected action')
+                    self.assertEqual(greedy, NodeAction.RUN, 'Policy greedy returned an unexpected action')
                 else:
                     # All other cases the policies return the same actions
                     self.assertEqual(lazy, greedy, 'Policies unexpectedly returned different actions')
@@ -256,7 +265,7 @@ class SchedulerClientTestCase(unittest.TestCase):
     def test_client_instantiation(self):
         class S(_Scheduler):
             CONTROLLER = 'dax_scheduler'
-            JOBS = {_JobA, _JobB, _JobC}
+            NODES = {_JobA, _JobB, _JobC}
 
         class Client(dax_scheduler_client(S)):
             pass
@@ -270,7 +279,7 @@ class SchedulerClientTestCase(unittest.TestCase):
         }
 
         # noinspection PyArgumentList
-        c = Client(get_managers(device_db, Job=_JobB.get_name()))
+        c = Client(get_managers(device_db, Node=_JobB.get_name()))
         c.prepare()
         with self.assertRaises(AttributeError, msg='Dummy device did not raise expected error'):
             c.run()
@@ -333,7 +342,7 @@ class LazySchedulerTestCase(unittest.TestCase):
                 for reset in [False, True]:  # reset=True must be last for the next test
                     with self.subTest(task='init', is_timed=is_timed, reset=reset):
                         # Test init
-                        j.init(reset=reset)
+                        j.init(**_get_init_kwargs(s, reset=reset))
                         self.assertIsInstance(j._next_submit, float)
                         if is_timed:
                             self.assertLess(j._next_submit, float('inf'))
@@ -343,17 +352,17 @@ class LazySchedulerTestCase(unittest.TestCase):
 
                 with self.subTest(task='visit', is_timed=is_timed):
                     # Test visit
-                    self.assertEqual(j.visit(wave=old_time), JobAction.PASS)
+                    self.assertEqual(j.visit(wave=old_time), NodeAction.PASS)
                     new_time = time.time()
-                    self.assertEqual(j.visit(wave=new_time), JobAction.RUN if is_timed else JobAction.PASS)
+                    self.assertEqual(j.visit(wave=new_time), NodeAction.RUN if is_timed else NodeAction.PASS)
 
                 with self.subTest(task='submit', is_meta=is_meta):
                     # Test submit
                     if not is_meta:
                         with self.assertLogs(j.logger, logging.INFO):
-                            j.submit(wave=new_time, pipeline='main', priority=0)
+                            j.submit(wave=new_time)
                     else:
-                        j.submit(wave=new_time, pipeline='main', priority=0)
+                        j.submit(wave=new_time)
 
                 with self.subTest(task='cancel'):
                     j.cancel()
@@ -384,7 +393,7 @@ class LazySchedulerTestCase(unittest.TestCase):
         test_data = [
             (J0, BuildError),
             (J1, BuildError),
-            (J2, AssertionError),
+            (J2, BuildError),
             (J3, AssertionError),
             (J4, AssertionError),
             (J5, TypeError),  # Caused by failing issubclass() call
@@ -457,16 +466,16 @@ class LazySchedulerTestCase(unittest.TestCase):
             INTERVAL = '1h'
 
         class S(_Scheduler):
-            JOBS = [J0]
+            NODES = [J0]
 
         def start_scheduler(*, reset):
             # Prepare scheduler
             scheduler = S(self.mop)
             scheduler.prepare()
             # Extract job object
-            job = scheduler._jobs[J0]
+            job = scheduler._nodes[J0]
             # Initialize job
-            job.init(reset=reset)
+            job.init(**_get_init_kwargs(scheduler, reset=reset))
             # Return scheduler and job
             return scheduler, job
 
@@ -506,16 +515,16 @@ class LazySchedulerTestCase(unittest.TestCase):
             INTERVAL = '1h'
 
         class S(_Scheduler):
-            JOBS = [J0]
+            NODES = [J0]
 
         def start_scheduler(*, reset):
             # Prepare scheduler
             scheduler = S(self.mop)
             scheduler.prepare()
             # Extract job object
-            job = scheduler._jobs[J0]
+            job = scheduler._nodes[J0]
             # Initialize job
-            job.init(reset=reset)
+            job.init(**_get_init_kwargs(scheduler, reset=reset))
             # Return scheduler and job
             return scheduler, job
 
@@ -556,7 +565,7 @@ class LazySchedulerTestCase(unittest.TestCase):
     def test_create_scheduler(self):
         with self.assertRaises(AssertionError, msg='Scheduler without name did not raise'):
             class S(DaxScheduler):
-                JOBS = {}
+                NODES = {}
 
             S(self.mop)
 
@@ -568,7 +577,7 @@ class LazySchedulerTestCase(unittest.TestCase):
 
         class S(DaxScheduler):
             NAME = 'test_scheduler'
-            JOBS = {}
+            NODES = {}
 
         # Instantiate a well defined scheduler
         self.assertIsInstance(S(self.mop), DaxScheduler)
@@ -585,7 +594,7 @@ class LazySchedulerTestCase(unittest.TestCase):
 
     def test_scheduler_duplicate_jobs(self):
         class S(_Scheduler):
-            JOBS = [_Job1, _Job2, _Job3, _Job4, _JobA, _JobB, _JobC, _Job1]
+            NODES = [_Job1, _Job2, _Job3, _Job4, _JobA, _JobB, _JobC, _Job1]
 
         s = S(self.mop)
         with self.assertLogs(s.logger, logging.WARNING), _isolation():
@@ -595,13 +604,13 @@ class LazySchedulerTestCase(unittest.TestCase):
         class S(_Scheduler):
             # noinspection PyGlobalUndefined
             global _JobA
-            JOBS = [_JobA]
+            NODES = [_JobA]
 
         # noinspection PyShadowingNames
         class _JobA(Job):
             pass
 
-        S.JOBS.append(_JobA)
+        S.NODES.append(_JobA)
 
         s = S(self.mop)
         with self.assertRaises(ValueError, msg='Job class name conflict did not raise'), _isolation():
@@ -609,7 +618,7 @@ class LazySchedulerTestCase(unittest.TestCase):
 
     def test_scheduler_dependencies(self):
         class S(_Scheduler):
-            JOBS = {_JobA}
+            NODES = {_JobA}
 
         with self.assertRaises(KeyError, msg='Dependency not in job set did not raise'), _isolation():
             s = S(self.mop)
@@ -627,7 +636,7 @@ class LazySchedulerTestCase(unittest.TestCase):
         JobA.DEPENDENCIES = {JobA}
 
         class S(_Scheduler):
-            JOBS = {JobA}
+            NODES = {JobA}
 
         with self.assertRaises(RuntimeError, msg='Non-DAG dependency graph did not raise'), _isolation():
             s = S(self.mop)
@@ -653,13 +662,13 @@ class LazySchedulerTestCase(unittest.TestCase):
         with _isolation():
             for jobs, root_jobs in job_sets:
                 class S(_Scheduler):
-                    JOBS = jobs
+                    NODES = jobs
 
                 s = S(self.mop)
                 s.prepare()
 
-                self.assertEqual(len(s._root_jobs), len(root_jobs), 'Did not found expected number of root jobs')
-                for j in s._root_jobs:
+                self.assertEqual(len(s._root_nodes), len(root_jobs), 'Did not found expected number of root jobs')
+                for j in s._root_nodes:
                     self.assertIsInstance(j, root_jobs, 'Root jobs have an unexpected type')
 
     def test_scheduler_custom_root_jobs(self):
@@ -680,14 +689,14 @@ class LazySchedulerTestCase(unittest.TestCase):
         with _isolation():
             for jobs, root_jobs in job_sets:
                 class S(_Scheduler):
-                    JOBS = jobs
-                    ROOT_JOBS = root_jobs
+                    NODES = jobs
+                    ROOT_NODES = root_jobs
 
                 s = S(self.mop)
                 s.prepare()
 
-                self.assertEqual(len(s._root_jobs), len(root_jobs), 'Did not found expected number of root jobs')
-                for j in s._root_jobs:
+                self.assertEqual(len(s._root_nodes), len(root_jobs), 'Did not found expected number of root jobs')
+                for j in s._root_nodes:
                     self.assertIsInstance(j, root_jobs, 'Root jobs have an unexpected type')
 
     def test_scheduler_custom_root_jobs_bad(self):
@@ -708,8 +717,8 @@ class LazySchedulerTestCase(unittest.TestCase):
         with _isolation():
             for jobs, root_job in job_sets:
                 class S(_Scheduler):
-                    JOBS = jobs
-                    ROOT_JOBS = {root_job}
+                    NODES = jobs
+                    ROOT_NODES = {root_job}
 
                 s = S(self.mop)
                 with self.assertRaises(KeyError, msg='Root job outside job set did not raise'):
@@ -722,7 +731,7 @@ class LazySchedulerTestCase(unittest.TestCase):
 
     def test_scheduler_unreachable_jobs(self):
         class S(_Scheduler):
-            JOBS = {_JobC}
+            NODES = {_JobC}
 
         s = S(self.mop)
         with self.assertLogs(s.logger, logging.WARNING), _isolation():
@@ -730,15 +739,15 @@ class LazySchedulerTestCase(unittest.TestCase):
 
     def test_scheduler_wave(self):
         class S(_Scheduler):
-            JOBS = {_Job1, _Job2, _Job3, _Job4, _JobA, _JobB, _JobC}
+            NODES = {_Job1, _Job2, _Job3, _Job4, _JobA, _JobB, _JobC}
 
         with _isolation():
             s = S(self.mop)
             s.prepare()
 
         # Manually call init
-        for j in s._job_graph:
-            j.init(reset=True)
+        for j in s._graph:
+            j.init(**_get_init_kwargs(s, reset=True))
 
         # Check data store calls
         self.assertEqual(len(s.data_store.method_calls), 0, 'Unexpected data store calls')
@@ -748,7 +757,7 @@ class LazySchedulerTestCase(unittest.TestCase):
         self._check_scheduler_wave_0(s)
 
         # Wave
-        s.wave(wave=time.time(), root_jobs=s._root_jobs, root_action=JobAction.PASS, policy=s._policy)
+        s.wave(wave=time.time(), root_nodes=s._root_nodes, root_action=NodeAction.PASS, policy=s._policy)
         self._check_scheduler_wave_1(s)
 
         # Check data store calls
@@ -756,7 +765,7 @@ class LazySchedulerTestCase(unittest.TestCase):
         self._check_scheduler_datastore_calls(s)
 
     def _check_scheduler_wave_0(self, scheduler):
-        for j in scheduler._job_graph:
+        for j in scheduler._graph:
             with self.subTest(job=j.get_name()):
                 if isinstance(j, (_Job1, _JobB)):
                     ref_counter = {'init': 1, 'visit': 2, 'submit': 1, 'schedule': 1}
@@ -770,7 +779,7 @@ class LazySchedulerTestCase(unittest.TestCase):
                                      'Job call pattern did not match expected pattern')
 
     def _check_scheduler_wave_1(self, scheduler):
-        for j in scheduler._job_graph:
+        for j in scheduler._graph:
             with self.subTest(job=j.get_name()):
                 if isinstance(j, (_Job1, _JobB)):
                     ref_counter = {'init': 1, 'visit': 3, 'submit': 1, 'schedule': 1}
@@ -790,7 +799,7 @@ class LazySchedulerTestCase(unittest.TestCase):
     def test_scheduler_run(self):
 
         class S(_Scheduler):
-            JOBS = {_Job1, _Job2, _Job3, _Job4, _JobA, _JobB, _JobC}
+            NODES = {_Job1, _Job2, _Job3, _Job4, _JobA, _JobB, _JobC}
             counter = 0
 
             def wave(self, **kwargs) -> None:
@@ -809,7 +818,7 @@ class LazySchedulerTestCase(unittest.TestCase):
         self._check_scheduler_run(s)
 
     def _check_scheduler_run(self, scheduler):
-        for j in scheduler._job_graph:
+        for j in scheduler._graph:
             with self.subTest(job=j.get_name()):
                 if isinstance(j, (_Job1, _JobB)):
                     ref_counter = {'init': 1, 'visit': _NUM_WAVES + 1, 'submit': 1, 'schedule': 1}
@@ -824,7 +833,7 @@ class LazySchedulerTestCase(unittest.TestCase):
 
     def _test_scheduler_controller(self, requests):
         class S(_Scheduler):
-            JOBS = {_Job1, _Job2, _Job3, _Job4, _JobA, _JobB, _JobC}
+            NODES = {_Job1, _Job2, _Job3, _Job4, _JobA, _JobB, _JobC}
             CONTROLLER = 'dax_scheduler'
 
             counter = 0
@@ -842,7 +851,7 @@ class LazySchedulerTestCase(unittest.TestCase):
                 # Construct a separate controller with the same queue
                 # This is required because we can not use get_device() to obtain the controller
                 # Because the server and the client are running on the same thread then, the situation deadlocks
-                controller = _SchedulerController(self.request_queue)
+                controller = _SchedulerController(self._request_queue)
                 for args, kwargs in requests:
                     controller.submit(*args, **kwargs)
 
@@ -860,14 +869,14 @@ class LazySchedulerTestCase(unittest.TestCase):
     def test_scheduler_controller0(self):
         requests = [
             ((_Job4.get_name(), _JobA.get_name()), {}),
-            ((_JobC.get_name(),), {'action': str(JobAction.PASS)}),
+            ((_JobC.get_name(),), {'action': str(NodeAction.PASS)}),
         ]
         s = self._test_scheduler_controller(requests)
-        self.assertTrue(s.request_queue.empty(), 'Request queue is not empty')
+        self.assertTrue(s._request_queue.empty(), 'Request queue is not empty')
         self._check_scheduler_controller0(s)
 
     def _check_scheduler_controller0(self, scheduler):
-        for j in scheduler._job_graph:
+        for j in scheduler._graph:
             with self.subTest(job=j.get_name()):
                 if isinstance(j, _Job1):
                     ref_counter = {'init': 1, 'visit': _NUM_WAVES + 1, 'submit': 1, 'schedule': 1}
@@ -891,11 +900,11 @@ class LazySchedulerTestCase(unittest.TestCase):
             ((_Job4.get_name(), _JobB.get_name()), {'reverse': True}),
         ]
         s = self._test_scheduler_controller(requests)
-        self.assertTrue(s.request_queue.empty(), 'Request queue is not empty')
+        self.assertTrue(s._request_queue.empty(), 'Request queue is not empty')
         self._check_scheduler_controller1(s)
 
     def _check_scheduler_controller1(self, scheduler):
-        for j in scheduler._job_graph:
+        for j in scheduler._graph:
             with self.subTest(job=j.get_name()):
                 if isinstance(j, _Job4):
                     ref_counter = {'init': 1, 'visit': _NUM_WAVES * 2 + 1, 'submit': 1, 'schedule': 1}
@@ -918,7 +927,7 @@ class LazySchedulerTestCase(unittest.TestCase):
             ((_JobB.get_name(),), {'reverse': True}),
         ]
         s = self._test_scheduler_controller(requests)
-        self.assertTrue(s.request_queue.empty(), 'Request queue is not empty')
+        self.assertTrue(s._request_queue.empty(), 'Request queue is not empty')
         self._check_scheduler_controller1(s)
 
 
@@ -927,7 +936,7 @@ class LazySchedulerReversedTestCase(LazySchedulerTestCase):
     REVERSE_GRAPH = True
 
     def _check_scheduler_wave_0(self, scheduler):
-        for j in scheduler._job_graph:
+        for j in scheduler._graph:
             with self.subTest(job=j.get_name()):
                 if isinstance(j, _Job1):
                     ref_counter = {'init': 1, 'visit': 3, 'submit': 1, 'schedule': 1}
@@ -943,7 +952,7 @@ class LazySchedulerReversedTestCase(LazySchedulerTestCase):
                                      'Job call pattern did not match expected pattern')
 
     def _check_scheduler_wave_1(self, scheduler):
-        for j in scheduler._job_graph:
+        for j in scheduler._graph:
             with self.subTest(job=j.get_name()):
                 if isinstance(j, _Job1):
                     ref_counter = {'init': 1, 'visit': 5, 'submit': 1, 'schedule': 1}
@@ -969,7 +978,7 @@ class GreedySchedulerTestCase(LazySchedulerTestCase):
             super(GreedySchedulerTestCase, self).test_scheduler_unreachable_jobs()
 
     def _check_scheduler_wave_0(self, scheduler):
-        for j in scheduler._job_graph:
+        for j in scheduler._graph:
             with self.subTest(job=j.get_name()):
                 if isinstance(j, (_Job1, _JobB)):
                     ref_counter = {'init': 1, 'visit': 2, 'submit': 1, 'schedule': 1}
@@ -983,7 +992,7 @@ class GreedySchedulerTestCase(LazySchedulerTestCase):
                                      'Job call pattern did not match expected pattern')
 
     def _check_scheduler_wave_1(self, scheduler):
-        for j in scheduler._job_graph:
+        for j in scheduler._graph:
             with self.subTest(job=j.get_name()):
                 if isinstance(j, (_Job1, _JobB)):
                     ref_counter = {'init': 1, 'visit': 3, 'submit': 1, 'schedule': 1}
@@ -1002,7 +1011,7 @@ class GreedySchedulerTestCase(LazySchedulerTestCase):
                          'Data store was called an unexpected number of times')
 
     def _check_scheduler_run(self, scheduler):
-        for j in scheduler._job_graph:
+        for j in scheduler._graph:
             with self.subTest(job=j.get_name()):
                 if isinstance(j, (_Job1, _JobB)):
                     ref_counter = {'init': 1, 'visit': _NUM_WAVES + 1, 'submit': 1, 'schedule': 1}
@@ -1016,7 +1025,7 @@ class GreedySchedulerTestCase(LazySchedulerTestCase):
                                      'Job call pattern did not match expected pattern')
 
     def _check_scheduler_controller0(self, scheduler):
-        for j in scheduler._job_graph:
+        for j in scheduler._graph:
             with self.subTest(job=j.get_name()):
                 if isinstance(j, _Job1):
                     ref_counter = {'init': 1, 'visit': _NUM_WAVES + 1, 'submit': 1, 'schedule': 1}
@@ -1034,7 +1043,7 @@ class GreedySchedulerTestCase(LazySchedulerTestCase):
                                      'Job call pattern did not match expected pattern')
 
     def _check_scheduler_controller1(self, scheduler):
-        for j in scheduler._job_graph:
+        for j in scheduler._graph:
             with self.subTest(job=j.get_name()):
                 if isinstance(j, _Job4):
                     ref_counter = {'init': 1, 'visit': _NUM_WAVES * 2 + 1, 'submit': 2, 'schedule': 2}
@@ -1059,7 +1068,7 @@ class GreedySchedulerReversedTestCase(GreedySchedulerTestCase):
     REVERSE_GRAPH = True
 
     def _check_scheduler_wave_0(self, scheduler):
-        for j in scheduler._job_graph:
+        for j in scheduler._graph:
             with self.subTest(job=j.get_name()):
                 if isinstance(j, _Job1):
                     ref_counter = {'init': 1, 'visit': 2 + 1, 'submit': 1, 'schedule': 1}
@@ -1073,7 +1082,7 @@ class GreedySchedulerReversedTestCase(GreedySchedulerTestCase):
                                      'Job call pattern did not match expected pattern')
 
     def _check_scheduler_wave_1(self, scheduler):
-        for j in scheduler._job_graph:
+        for j in scheduler._graph:
             with self.subTest(job=j.get_name()):
                 if isinstance(j, _Job1):
                     ref_counter = {'init': 1, 'visit': 3 + 2, 'submit': 1, 'schedule': 1}

@@ -1,5 +1,6 @@
 from __future__ import annotations  # Postponed evaluation of annotations
 
+import abc
 import typing
 import logging
 import collections.abc
@@ -20,7 +21,7 @@ import sipyco.pc_rpc  # type: ignore
 import dax.base.system
 import dax.util.output
 
-__all__ = ['JobAction', 'Job', 'Policy', 'DaxScheduler', 'dax_scheduler_client']
+__all__ = ['NodeAction', 'Job', 'Trigger', 'Policy', 'DaxScheduler', 'dax_scheduler_client']
 
 
 def _str_to_time(string: str) -> float:
@@ -88,42 +89,209 @@ def _hash_dict(d: typing.Dict[str, typing.Any]) -> str:
     return arguments_hash.hexdigest()
 
 
-class JobAction(enum.Enum):
-    """Job action enumeration."""
+class NodeAction(enum.Enum):
+    """Node action enumeration."""
 
     PASS = enum.auto()
-    """Pass this job."""
+    """Pass this node."""
     RUN = enum.auto()
-    """Run this job."""
+    """Run this node."""
     FORCE = enum.auto()
-    """Force this job."""
+    """Force this node."""
 
     def submittable(self) -> bool:
-        """Check if a job should be submitted or not.
+        """Check if a node should be submitted or not.
 
-        :return: True if the job is submittable
+        :return: True if the node is submittable
         """
-        return self in {JobAction.RUN, JobAction.FORCE}
+        return self in {NodeAction.RUN, NodeAction.FORCE}
 
     @classmethod
-    def from_str(cls, string_: str) -> JobAction:
-        """Convert a string into its corresponding job action enumeration.
+    def from_str(cls, string_: str) -> NodeAction:
+        """Convert a string into its corresponding node action enumeration.
 
-        :param string_: The name of the job action as a string (case insensitive)
-        :return: The job action enumeration object
-        :raises KeyError: Raised if the job action name does not exist
+        :param string_: The name of the node action as a string (case insensitive)
+        :return: The node action enumeration object
+        :raises KeyError: Raised if the node action name does not exist
         """
         return {str(p).lower(): p for p in cls}[string_.lower()]
 
     def __str__(self) -> str:
-        """String representation of this job action.
+        """String representation of this node action.
 
-        :return: The name of the action
+        :return: The name of the node action
         """
         return self.name
 
 
-class Job(dax.base.system.DaxHasKey):
+class Node(dax.base.system.DaxHasKey, abc.ABC):
+    """Abstract node class for the scheduler."""
+
+    INTERVAL: typing.Optional[str] = None
+    """Interval to run this node, defaults to no interval."""
+    DEPENDENCIES: typing.Collection[typing.Type[Node]] = []
+    """Collection of node dependencies."""
+
+    _LAST_SUBMIT_KEY: str = 'last_submit'
+    """Key to store the last submit timestamp."""
+
+    def __init__(self, managers_or_parent: DaxScheduler,
+                 *args: typing.Any, **kwargs: typing.Any):
+        """Initialize the node object.
+
+        :param managers_or_parent: The manager or parent, must be of type :class:`DaxScheduler`
+        :param args: Positional arguments passed to the superclass
+        :param kwargs: Keyword arguments passed to the superclass
+        """
+
+        # Check interval and dependencies
+        assert isinstance(self.INTERVAL, str) or self.INTERVAL is None, 'Interval must be of type str or None'
+        assert isinstance(self.DEPENDENCIES, collections.abc.Collection), 'The dependencies must be a collection'
+        assert all(issubclass(node, Node) for node in self.DEPENDENCIES), 'All dependencies must be subclasses of Node'
+
+        # Check parent
+        if not isinstance(managers_or_parent, DaxScheduler):
+            raise TypeError(f'Parent of node "{self.get_name()}" is not a DAX scheduler')
+
+        # Take key attributes from parent
+        self._take_parent_key_attributes(managers_or_parent)
+
+        # Call super
+        super(Node, self).__init__(managers_or_parent, *args,
+                                   name=self.get_name(), system_key=managers_or_parent.get_system_key(self.get_name()),
+                                   **kwargs)
+
+    def build(self) -> None:  # type: ignore
+        """Build the node object."""
+
+        # Obtain the scheduler
+        self._scheduler = self.get_device('scheduler')
+
+        # Convert the interval
+        if self.is_timed():
+            # Convert the interval string
+            self._interval: float = _str_to_time(typing.cast(str, self.INTERVAL))
+            # Check the value
+            if self._interval > 0.0:
+                self.logger.info(f'Interval set to {self._interval:.0f} second(s)')
+            else:
+                raise ValueError(f'The interval of node "{self.get_name()}" must be greater than zero')
+        else:
+            # No interval was set
+            self._interval = 0.0
+            self.logger.info('No interval set')
+
+    def init(self, *, reset: bool, **_: typing.Any) -> None:
+        """Initialize the node, called once before the scheduler starts.
+
+        :param reset: Reset the state of this node
+        """
+        assert isinstance(reset, bool), 'The reset flag must be of type bool'
+
+        if self.is_timed():
+            self.logger.debug('Initializing timed node')
+            if reset:
+                # Reset the node by resetting the next submit time
+                self._next_submit: float = time.time()
+                self.logger.debug('Node reset requested')
+            else:
+                # Try to obtain the last submit time
+                last_submit = self.get_dataset_sys(self._LAST_SUBMIT_KEY, 0.0, data_store=False)
+                assert isinstance(last_submit, float), 'Unexpected type returned from dataset'
+                # Add the interval to the last submit time
+                self._next_submit = last_submit + self._interval
+                self.logger.debug('Loaded last submit timestamp')
+        else:
+            # This node is untimed, next submit will not happen
+            self._next_submit = float('inf')
+            self.logger.debug('Initialized untimed node')
+
+    def visit(self, *, wave: float) -> NodeAction:
+        """Visit this node.
+
+        :param wave: Wave identifier
+        :return: The action for this node
+        """
+        assert isinstance(wave, float), 'Wave must be of type float'
+
+        if self._next_submit <= wave:
+            # Interval expired
+            return NodeAction.RUN
+        else:
+            # Interval did not expire
+            return NodeAction.PASS
+
+    def submit(self, *, wave: float) -> None:
+        """Submit this node.
+
+        :param wave: Wave identifier
+        """
+        assert isinstance(wave, float), 'Wave must be of type float'
+
+        # Store current wave timestamp
+        self.set_dataset_sys(self._LAST_SUBMIT_KEY, wave, data_store=False)
+
+        if not self.is_meta():
+            # Submit
+            self._submit(wave=wave)
+
+        # Reschedule node
+        self.schedule(wave=wave)
+
+    @abc.abstractmethod
+    def _submit(self, *, wave: float) -> None:
+        pass
+
+    def schedule(self, *, wave: float) -> None:
+        """Schedule this node.
+
+        :param wave: Wave identifier
+        """
+        assert isinstance(wave, float), 'Wave must be of type float'
+
+        if self.is_timed():
+            if self.visit(wave=wave).submittable():
+                # Update next submit time using the interval
+                self._next_submit += self._interval
+            else:
+                # Involuntary submit, reset phase
+                self._next_submit = wave + self._interval
+
+            if self._next_submit <= time.time():
+                # Prevent setting next submit time in the past
+                self._next_submit = time.time() + self._interval
+                self.logger.warning('Next submit was rescheduled because the interval time expired')
+
+    @abc.abstractmethod
+    def cancel(self) -> None:
+        """Cancel the submit action of this node."""
+        pass
+
+    def is_timed(self) -> bool:
+        """Check if this node is timed.
+
+        :return: True if this node has an interval
+        """
+        return self.INTERVAL is not None
+
+    @abc.abstractmethod
+    def is_meta(self) -> bool:
+        """Check if this node is a meta-node (i.e. a node without submittable action).
+
+        :return: True if this node is a meta-node
+        """
+        pass
+
+    @classmethod
+    def get_name(cls) -> str:
+        """Get the name of this node.
+
+        :return: The name of this node as a string
+        """
+        return cls.__name__
+
+
+class Job(Node):
     """Job class to define a job for the scheduler.
 
     Users only have to override class attributes to create a job definition.
@@ -132,8 +300,8 @@ class Job(dax.base.system.DaxHasKey):
     - :attr:`FILE`: The file name containing the experiment
     - :attr:`CLASS_NAME`: The class name of the experiment
     - :attr:`ARGUMENTS`: A dictionary with experiment arguments (scan objects can be used directly as arguments)
-    - :attr:`INTERVAL`: The job submit interval
-    - :attr:`DEPENDENCIES`: A collection of job classes on which this job depends
+    - :attr:`INTERVAL`: The submit interval
+    - :attr:`DEPENDENCIES`: A collection of node classes on which this node depends
 
     Optionally, users can override the :func:`build_job` method to add configurable arguments.
     """
@@ -144,11 +312,6 @@ class Job(dax.base.system.DaxHasKey):
     """Class name of the experiment."""
     ARGUMENTS: typing.Dict[str, typing.Any] = {}
     """The experiment arguments."""
-
-    INTERVAL: typing.Optional[str] = None
-    """Interval to run this job, defaults to no interval."""
-    DEPENDENCIES: typing.Collection[typing.Type[Job]] = []
-    """Collection of dependencies of this job."""
 
     LOG_LEVEL: typing.Union[int, str] = logging.WARNING
     """The log level for the experiment."""
@@ -161,18 +324,13 @@ class Job(dax.base.system.DaxHasKey):
 
     _RID_LIST_KEY: str = 'rid_list'
     """Key to store every submitted RID."""
-    _LAST_SUBMIT_KEY: str = 'last_submit'
-    """Key to store the last submit timestamp."""
     _ARGUMENTS_HASH_KEY: str = 'arguments_hash'
     """Key to store the last arguments hash."""
 
-    def __init__(self, managers_or_parent: DaxScheduler,
-                 *args: typing.Any, **kwargs: typing.Any):
-        """Initialize a job object.
+    def build(self) -> None:  # type: ignore
+        """Build the job object.
 
-        :param managers_or_parent: The manager or parent, must be a :class:`DaxScheduler`
-        :param args: Positional arguments passed to the superclass
-        :param kwargs: Keyword arguments passed to the superclass
+        To add configurable arguments to this job, override the :func:`build_job` method instead.
         """
 
         # Check file, class, and arguments
@@ -181,10 +339,6 @@ class Job(dax.base.system.DaxHasKey):
             'The class name attribute must be of type str or None'
         assert isinstance(self.ARGUMENTS, dict), 'The arguments must be of type dict'
         assert all(isinstance(k, str) for k in self.ARGUMENTS), 'All argument keys must be of type str'
-        # Check interval and dependencies
-        assert isinstance(self.INTERVAL, str) or self.INTERVAL is None, 'Interval must be of type str or None'
-        assert isinstance(self.DEPENDENCIES, collections.abc.Collection), 'The dependencies must be a collection'
-        assert all(issubclass(d, Job) for d in self.DEPENDENCIES), 'All dependencies must be subclasses of Job'
         # Check log level, pipeline, priority, and flush
         assert isinstance(self.LOG_LEVEL, (int, str)), 'Log level must be of type int or str'
         assert self.PIPELINE is None or isinstance(self.PIPELINE, str), 'Pipeline must be of type str or None'
@@ -192,26 +346,9 @@ class Job(dax.base.system.DaxHasKey):
         assert -99 <= self.PRIORITY <= 99, 'Priority must be in the domain [-99, 99]'
         assert isinstance(self.FLUSH, bool), 'Flush must be of type bool'
 
-        # Check parent
-        if not isinstance(managers_or_parent, DaxScheduler):
-            raise TypeError(f'Parent of job "{self.get_name()}" is not a DAX scheduler')
-
-        # Take key attributes from parent
-        self._take_parent_key_attributes(managers_or_parent)
-
         # Call super
-        super(Job, self).__init__(managers_or_parent, *args,
-                                  name=self.get_name(), system_key=managers_or_parent.get_system_key(self.get_name()),
-                                  **kwargs)
+        super(Job, self).build()
 
-    def build(self) -> None:  # type: ignore
-        """Build the job object.
-
-        To add configurable arguments to this job, override the :func:`build_job` method.
-        """
-
-        # Obtain the scheduler
-        self._scheduler = self.get_device('scheduler')
         # Copy the class arguments attribute (prevents class attribute from being mutated)
         self.ARGUMENTS = self.ARGUMENTS.copy()
         # Build this job
@@ -233,20 +370,6 @@ class Job(dax.base.system.DaxHasKey):
             self._expid = {}
             self.logger.debug('This job is a meta-job')
 
-        # Convert the interval
-        if self.is_timed():
-            # Convert the interval string
-            self._interval: float = _str_to_time(typing.cast(str, self.INTERVAL))
-            # Check the value
-            if self._interval > 0.0:
-                self.logger.info(f'Interval set to {self._interval:.0f} second(s)')
-            else:
-                raise ValueError(f'The interval of job "{self.get_name()}" must be greater than zero')
-        else:
-            # No interval was set
-            self._interval = 0.0
-            self.logger.info('No interval set')
-
     def build_job(self) -> None:
         """Build this job.
 
@@ -262,11 +385,14 @@ class Job(dax.base.system.DaxHasKey):
         """
         pass
 
-    def init(self, *, reset: bool) -> None:
-        """Initialize the job, should be called once just before the scheduler starts.
+    def init(self, *, reset: bool, **kwargs: typing.Any) -> None:
+        # Extract arguments
+        self._pipeline: str = kwargs['job_pipeline'] if self.PIPELINE is None else self.PIPELINE
+        self._priority: int = kwargs['job_priority'] + self.PRIORITY
 
-        :param reset: Reset the previous state of this job
-        """
+        assert isinstance(reset, bool)
+        assert isinstance(self._pipeline, str) and self._pipeline
+        assert isinstance(self._priority, int)
 
         # Initialize last RID to a non-existing value
         self._last_rid: int = -1
@@ -286,107 +412,49 @@ class Job(dax.base.system.DaxHasKey):
 
         if arguments_changed:
             # Store the new arguments hash
-            self.logger.debug(f'Job arguments changed: {arguments_hash}')
+            self.logger.debug(f'Forcing reset because job arguments changed: {arguments_hash}')
             self.set_dataset_sys(self._ARGUMENTS_HASH_KEY, arguments_hash, data_store=False)
+            # Force a reset
+            reset = True
 
-        if self.is_timed():
-            self.logger.debug('Initializing timed job')
-            if reset:
-                # Reset the job by resetting the next submit time
-                self._next_submit: float = time.time()
-                self.logger.debug('Job reset requested')
-            elif arguments_changed:
-                # Arguments changed, reset the next submit time
-                self._next_submit = time.time()
-                self.logger.debug('Job was reset due to changed arguments')
-            else:
-                # Try to obtain the last submit time
-                last_submit = self.get_dataset_sys(self._LAST_SUBMIT_KEY, 0.0, data_store=False)
-                assert isinstance(last_submit, float), 'Unexpected type returned from dataset'
-                # Add the interval to the last submit time
-                self._next_submit = last_submit + self._interval
-                self.logger.debug('Initialized job by loading the last submit time')
+        # Call super
+        super(Job, self).init(reset=reset, **kwargs)
+
+    def _submit(self, *, wave: float) -> None:
+        if self._last_rid not in self._scheduler.get_status():
+            # Submit experiment of this job
+            self._last_rid = self._scheduler.submit(
+                pipeline_name=self._pipeline,
+                expid=self._expid,
+                priority=self._priority,
+                flush=self.FLUSH
+            )
+            self.logger.info(f'Submitted job with RID {self._last_rid}')
+
+            # Archive the RID
+            self.append_to_dataset(self._rid_list_key, self._last_rid)
+            self.data_store.append(self._rid_list_key, self._last_rid)
         else:
-            # This job is untimed, next submit will not happen
-            self._next_submit = float('inf')
-            self.logger.debug('Initialized untimed job')
-
-    def visit(self, *, wave: float) -> JobAction:
-        """Visit this job.
-
-        :param wave: Wave identifier
-        :return: The job action for this job
-        """
-        assert isinstance(wave, float), 'Wave must be of type float'
-
-        if self._next_submit <= wave:
-            # Interval expired, run this job
-            return JobAction.RUN
-        else:
-            # Interval did not expire, do not run
-            return JobAction.PASS
-
-    def submit(self, *, wave: float, pipeline: str, priority: int) -> None:
-        """Submit this job.
-
-        :param wave: Wave identifier
-        :param pipeline: The default pipeline to submit to
-        :param priority: The baseline priority of the experiment
-        """
-        assert isinstance(wave, float), 'Wave must be of type float'
-        assert isinstance(pipeline, str) and pipeline, 'Pipeline name must be of type string and can not be empty'
-        assert isinstance(priority, int), 'Priority must be of type int'
-
-        # Store current wave timestamp
-        self.set_dataset_sys(self._LAST_SUBMIT_KEY, wave, data_store=False)
-
-        if not self.is_meta():
-            if self._last_rid not in self._scheduler.get_status():
-                # Submit experiment of this job
-                self._last_rid = self._scheduler.submit(
-                    pipeline_name=pipeline if self.PIPELINE is None else self.PIPELINE,
-                    expid=self._expid,
-                    priority=priority + self.PRIORITY,
-                    flush=self.FLUSH
-                )
-                self.logger.info(f'Submitted job with RID {self._last_rid}')
-
-                # Archive the RID
-                self.append_to_dataset(self._rid_list_key, self._last_rid)
-                self.data_store.append(self._rid_list_key, self._last_rid)
-            else:
-                # Previous job was still running
-                self.logger.warning(f'Skipping job, previous job with RID {self._last_rid} is still running')
-
-        # Reschedule job
-        self.schedule(wave=wave)
-
-    def schedule(self, *, wave: float) -> None:
-        """Schedule this job.
-
-        :param wave: Wave identifier
-        """
-        assert isinstance(wave, float), 'Wave must be of type float'
-
-        if self.is_timed():
-            if self.visit(wave=wave).submittable():
-                # Update next submit time using the interval
-                self._next_submit += self._interval
-            else:
-                # Involuntary submit, reset phase
-                self._next_submit = wave + self._interval
-
-            if self._next_submit <= time.time():
-                # Prevent setting next submit time in the past
-                self._next_submit = time.time() + self._interval
-                self.logger.warning('Next job was rescheduled because the interval time expired')
+            # Previous job was still running
+            self.logger.warning(f'Skipping job, previous job with RID {self._last_rid} is still running')
 
     def cancel(self) -> None:
-        """Cancel this job."""
         if self._last_rid >= 0:
             # Cancel the last RID (returns if the RID is not running)
             self.logger.debug(f'Cancelling job (RID {self._last_rid})')
             self._scheduler.request_termination(self._last_rid)
+
+    def is_meta(self) -> bool:
+        # Decide if this job is a meta-job
+        attributes = (self.FILE, self.CLASS_NAME)
+        meta = all(a is None for a in attributes)
+
+        if meta or all(a is not None for a in attributes):
+            return meta
+        else:
+            # Attributes not consistent, raise an exception
+            raise ValueError(f'The FILE and CLASS_NAME attributes of job "{self.get_name()}" '
+                             f'should both be None or not None')
 
     def _process_arguments(self) -> typing.Dict[str, typing.Any]:
         """Process and return the arguments of this job.
@@ -402,33 +470,50 @@ class Job(dax.base.system.DaxHasKey):
 
         return {key: process(arg) for key, arg in self.ARGUMENTS.items()}
 
+
+class Trigger(Node):
+    """Job class to define a job for the scheduler.
+
+    Users only have to override class attributes to create a job definition.
+    The following main attributes can be overridden:
+
+    - :attr:`FILE`: The file name containing the experiment
+    - :attr:`CLASS_NAME`: The class name of the experiment
+    - :attr:`ARGUMENTS`: A dictionary with experiment arguments (scan objects can be used directly as arguments)
+    - :attr:`INTERVAL`: The job submit interval
+    - :attr:`DEPENDENCIES`: A collection of job classes on which this job depends
+
+    Optionally, users can override the :func:`build_job` method to add configurable arguments.
+    """
+
+    # TODO: nodes and strings, check if nodes exist?
+    NODES: typing.Collection[typing.Type[Node]] = []
+    """Collection of nodes to trigger."""
+    POLICY: Policy
+    ACTION: NodeAction = NodeAction.FORCE
+    REVERSE: bool
+
+    def init(self, *, reset: bool, **kwargs: typing.Any) -> None:
+        # Extract attributes
+        self._request_queue: __RQ_T = kwargs['request_queue']
+        assert isinstance(self._request_queue, queue.SimpleQueue)
+
+        super(Trigger, self).init(reset=reset, **kwargs)
+
+    def _submit(self, *, wave: float) -> None:
+        # TODO: submit trigger to request queue
+        pass
+
+    def cancel(self) -> None:
+        pass
+
     def is_meta(self) -> bool:
-        """Check if this job is a meta-job (i.e. no experiment is associated with it).
+        """Check if this trigger is a meta-trigger (i.e. no experiment is associated with it).
 
-        :return: True if this job is a meta-job
+        :return: True if this trigger is a meta-trigger
         """
-        attributes = (self.FILE, self.CLASS_NAME)
-        meta = all(a is None for a in attributes)
-        if meta or all(a is not None for a in attributes):
-            return meta
-        else:
-            raise ValueError(f'The FILE and CLASS_NAME attributes of job "{self.get_name()}" '
-                             f'should both be None or not None')
-
-    def is_timed(self) -> bool:
-        """Check if this job is timed.
-
-        :return: True if this job has an interval
-        """
-        return self.INTERVAL is not None
-
-    @classmethod
-    def get_name(cls) -> str:
-        """Get the name of this job.
-
-        :return: The name of this job as a string
-        """
-        return cls.__name__
+        # TODO: return true if there are no jobs to trigger
+        return False
 
 
 class Policy(enum.Enum):
@@ -439,43 +524,43 @@ class Policy(enum.Enum):
 
     if typing.TYPE_CHECKING:
         # Only add type when type checking is enabled to not conflict with iterations over the Policy enum
-        __P_T = typing.Dict[typing.Tuple[JobAction, JobAction], JobAction]  # Policy enum type
+        __P_T = typing.Dict[typing.Tuple[NodeAction, NodeAction], NodeAction]  # Policy enum type
 
     LAZY: __P_T = {
-        (JobAction.PASS, JobAction.PASS): JobAction.PASS,
-        (JobAction.PASS, JobAction.RUN): JobAction.RUN,
-        (JobAction.PASS, JobAction.FORCE): JobAction.RUN,
-        (JobAction.RUN, JobAction.PASS): JobAction.PASS,
-        (JobAction.RUN, JobAction.RUN): JobAction.RUN,
-        (JobAction.RUN, JobAction.FORCE): JobAction.RUN,
-        (JobAction.FORCE, JobAction.PASS): JobAction.RUN,
-        (JobAction.FORCE, JobAction.RUN): JobAction.RUN,
-        (JobAction.FORCE, JobAction.FORCE): JobAction.RUN,
+        (NodeAction.PASS, NodeAction.PASS): NodeAction.PASS,
+        (NodeAction.PASS, NodeAction.RUN): NodeAction.RUN,
+        (NodeAction.PASS, NodeAction.FORCE): NodeAction.RUN,
+        (NodeAction.RUN, NodeAction.PASS): NodeAction.PASS,
+        (NodeAction.RUN, NodeAction.RUN): NodeAction.RUN,
+        (NodeAction.RUN, NodeAction.FORCE): NodeAction.RUN,
+        (NodeAction.FORCE, NodeAction.PASS): NodeAction.RUN,
+        (NodeAction.FORCE, NodeAction.RUN): NodeAction.RUN,
+        (NodeAction.FORCE, NodeAction.FORCE): NodeAction.RUN,
     }
-    """Lazy scheduling policy, only submit jobs that expired."""
+    """Lazy scheduling policy, only submit nodes that expired."""
 
     GREEDY: __P_T = {
-        (JobAction.PASS, JobAction.PASS): JobAction.PASS,
-        (JobAction.PASS, JobAction.RUN): JobAction.RUN,
-        (JobAction.PASS, JobAction.FORCE): JobAction.RUN,
-        (JobAction.RUN, JobAction.PASS): JobAction.RUN,
-        (JobAction.RUN, JobAction.RUN): JobAction.RUN,
-        (JobAction.RUN, JobAction.FORCE): JobAction.RUN,
-        (JobAction.FORCE, JobAction.PASS): JobAction.RUN,
-        (JobAction.FORCE, JobAction.RUN): JobAction.RUN,
-        (JobAction.FORCE, JobAction.FORCE): JobAction.RUN,
+        (NodeAction.PASS, NodeAction.PASS): NodeAction.PASS,
+        (NodeAction.PASS, NodeAction.RUN): NodeAction.RUN,
+        (NodeAction.PASS, NodeAction.FORCE): NodeAction.RUN,
+        (NodeAction.RUN, NodeAction.PASS): NodeAction.RUN,
+        (NodeAction.RUN, NodeAction.RUN): NodeAction.RUN,
+        (NodeAction.RUN, NodeAction.FORCE): NodeAction.RUN,
+        (NodeAction.FORCE, NodeAction.PASS): NodeAction.RUN,
+        (NodeAction.FORCE, NodeAction.RUN): NodeAction.RUN,
+        (NodeAction.FORCE, NodeAction.FORCE): NodeAction.RUN,
     }
-    """Greedy scheduling policy, submit jobs that expired or depend on an expired job."""
+    """Greedy scheduling policy, submit nodes that expired including its dependencies."""
 
-    def action(self, previous: JobAction, current: JobAction) -> JobAction:
-        """Apply the policy on two job actions.
+    def action(self, previous: NodeAction, current: NodeAction) -> NodeAction:
+        """Apply the policy on two node actions.
 
-        :param previous: The job action of the predecessor (previous node)
-        :param current: The current job action
-        :return: The new job action based on this policy
+        :param previous: The node action of the predecessor (previous node)
+        :param current: The current node action
+        :return: The new node action based on this policy
         """
-        assert isinstance(previous, JobAction)
-        assert isinstance(current, JobAction)
+        assert isinstance(previous, NodeAction)
+        assert isinstance(current, NodeAction)
         policy: Policy.__P_T = self.value
         return policy[previous, current]
 
@@ -500,7 +585,7 @@ class Policy(enum.Enum):
 @dataclasses.dataclass(frozen=True)
 class _Request:
     """Data class for scheduler controller requests."""
-    jobs: typing.Collection[str]
+    nodes: typing.Collection[str]
     action: str
     policy: typing.Optional[str]
     reverse: typing.Optional[bool]
@@ -519,20 +604,20 @@ class _SchedulerController:
         # Store a reference to the request queue
         self._request_queue: __RQ_T = request_queue
 
-    def submit(self, *jobs: str,
-               action: str = str(JobAction.FORCE),
+    def submit(self, *nodes: str,
+               action: str = str(NodeAction.FORCE),
                policy: typing.Optional[str] = None,
                reverse: typing.Optional[bool] = None) -> None:
         """Submit a request to the scheduler.
 
-        :param jobs: A sequence of job names as strings (case sensitive)
-        :param action: The root job action as a string (defaults to :attr:`JobAction.FORCE`)
+        :param nodes: A sequence of node names as strings (case sensitive)
+        :param action: The root node action as a string (defaults to :attr:`NodeAction.FORCE`)
         :param policy: The scheduling policy as a string (defaults to the schedulers policy)
-        :param reverse: Reverse the job dependencies (defaults to the schedulers reverse flag)
+        :param reverse: Reverse the node dependencies (defaults to the schedulers reverse flag)
         """
 
         # Put this request in the queue without checking any of the inputs
-        self._request_queue.put_nowait(_Request(jobs, action, policy, reverse))
+        self._request_queue.put_nowait(_Request(nodes, action, policy, reverse))
 
 
 class DaxScheduler(dax.base.system.DaxHasKey):
@@ -545,27 +630,27 @@ class DaxScheduler(dax.base.system.DaxHasKey):
     The following attributes must be overridden:
 
     - :attr:`NAME`: The name of this scheduler
-    - :attr:`JOBS`: A collection of job classes that form the job set for this scheduler
+    - :attr:`NODES`: A collection of node classes for this scheduler
 
     Other optional attributes that can be overridden are:
 
-    - :attr:`ROOT_JOBS`: A collection of job classes that are the root jobs, defaults to all entry nodes
+    - :attr:`ROOT_NODES`: A collection of node classes that are the root nodes, defaults to all entry nodes
     - :attr:`SYSTEM`: A DAX system type to enable additional logging of data
     - :attr:`CONTROLLER`: The scheduler controller name as defined in the device DB
     - :attr:`DEFAULT_SCHEDULING_POLICY`: The default scheduling policy
-    - :attr:`DEFAULT_REVERSE_DEPENDENCIES`: The default value for the reverse job dependencies flag
+    - :attr:`DEFAULT_REVERSE_DEPENDENCIES`: The default value for the reverse node dependencies flag
+    - :attr:`DEFAULT_RESET_NODES`: The default value for the reset nodes flag
     - :attr:`DEFAULT_JOB_PIPELINE`: The default pipeline to submit jobs to
     - :attr:`DEFAULT_JOB_PRIORITY`: The baseline priority for jobs submitted by this scheduler
-    - :attr:`DEFAULT_RESET_JOBS`: The default value for the reset jobs flag
     """
 
     NAME: str
     """Scheduler name, used as top key."""
-    JOBS: typing.Collection[typing.Type[Job]]
-    """The collection of job classes."""
+    NODES: typing.Collection[typing.Type[Node]]
+    """The collection of node classes."""
 
-    ROOT_JOBS: typing.Collection[typing.Type[Job]] = []
-    """The collection of root jobs, all entry nodes if not provided."""
+    ROOT_NODES: typing.Collection[typing.Type[Node]] = []
+    """The collection of root nodes, all entry nodes if not provided."""
     SYSTEM: typing.Optional[typing.Type[dax.base.system.DaxSystem]] = None
     """Optional DAX system type, enables Influx DB logging if provided."""
     CONTROLLER: typing.Optional[str] = None
@@ -574,13 +659,13 @@ class DaxScheduler(dax.base.system.DaxHasKey):
     DEFAULT_SCHEDULING_POLICY: Policy = Policy.LAZY
     """Default scheduling policy."""
     DEFAULT_REVERSE_DEPENDENCIES: bool = False
-    """Default value for the reverse job dependencies flag."""
+    """Default value for the reverse node dependencies flag."""
+    DEFAULT_RESET_NODES: bool = False
+    """Default value for the reset nodes flag."""
     DEFAULT_JOB_PIPELINE: str = 'main'
     """Default pipeline to submit jobs to."""
     DEFAULT_JOB_PRIORITY: int = 0
     """Default baseline priority to submit jobs."""
-    DEFAULT_RESET_JOBS: bool = False
-    """Default value for the reset jobs flag."""
 
     _GRAPHVIZ_FORMAT: str = 'pdf'
     """Format specification for the graphviz renderer."""
@@ -597,7 +682,7 @@ class DaxScheduler(dax.base.system.DaxHasKey):
         # Check attributes
         self.check_attributes()
         # Create a request queue
-        self.__request_queue: __RQ_T = queue.SimpleQueue()
+        self._request_queue: __RQ_T = queue.SimpleQueue()
         # Call super
         super(DaxScheduler, self).__init__(managers_or_parent, *args,
                                            name=self.NAME, system_key=self.NAME, **kwargs)
@@ -623,10 +708,10 @@ class DaxScheduler(dax.base.system.DaxHasKey):
             # No data store configured
             self.__data_store: dax.base.system.DaxDataStore = dax.base.system.DaxDataStore()
 
-        # Create the job objects
-        self._jobs: typing.Dict[typing.Type[Job], Job] = {job: job(self) for job in self.JOBS}
-        # Store a map from job names to jobs
-        self._job_name_map: typing.Dict[str, Job] = {job.get_name(): job for job in self._jobs.values()}
+        # Create the node objects
+        self._nodes: typing.Dict[typing.Type[Node], Node] = {node: node(self) for node in self.NODES}
+        # Store a map from node names to nodes
+        self._node_name_map: typing.Dict[str, Node] = {node.get_name(): node for node in self._nodes.values()}
 
         # Scheduling arguments
         default_scheduling_policy: str = str(self.DEFAULT_SCHEDULING_POLICY)
@@ -637,11 +722,11 @@ class DaxScheduler(dax.base.system.DaxHasKey):
                                                   group='Scheduler')
         self._reverse: bool = self.get_argument('Reverse dependencies',
                                                 artiq.experiment.BooleanValue(self.DEFAULT_REVERSE_DEPENDENCIES),
-                                                tooltip='Reverse the job dependencies when visiting jobs',
+                                                tooltip='Reverse the node dependencies when traversing the graph',
                                                 group='Scheduler')
         self._wave_interval: int = self.get_argument('Wave interval',
                                                      artiq.experiment.NumberValue(60, 's', min=1, step=1, ndecimals=0),
-                                                     tooltip='Interval to visit jobs',
+                                                     tooltip='Interval to visit nodes',
                                                      group='Scheduler')
         self._clock_period: float = self.get_argument('Clock period',
                                                       artiq.experiment.NumberValue(0.5, 's', min=0.1),
@@ -655,6 +740,16 @@ class DaxScheduler(dax.base.system.DaxHasKey):
                                                         tooltip='Enable the scheduler controller',
                                                         group='Scheduler')
 
+        # Node arguments
+        self._reset_nodes: bool = self.get_argument('Reset nodes',
+                                                    artiq.experiment.BooleanValue(self.DEFAULT_RESET_NODES),
+                                                    tooltip='Reset the node states at scheduler startup',
+                                                    group='Nodes')
+        self._cancel_nodes: bool = self.get_argument('Cancel nodes at exit',
+                                                     artiq.experiment.BooleanValue(False),
+                                                     tooltip='Cancel the submit action of nodes during scheduler exit',
+                                                     group='Nodes')
+
         # Job arguments
         self._job_pipeline: str = self.get_argument('Job pipeline',
                                                     artiq.experiment.StringValue(self.DEFAULT_JOB_PIPELINE),
@@ -665,23 +760,15 @@ class DaxScheduler(dax.base.system.DaxHasKey):
                                                                                  min=-99, max=99, step=1, ndecimals=0),
                                                     tooltip='Baseline job priority',
                                                     group='Jobs')
-        self._reset_jobs: bool = self.get_argument('Reset jobs',
-                                                   artiq.experiment.BooleanValue(self.DEFAULT_RESET_JOBS),
-                                                   tooltip='Reset job timestamps at startup, marking them all expired',
-                                                   group='Jobs')
-        self._terminate_jobs: bool = self.get_argument('Terminate jobs at exit',
-                                                       artiq.experiment.BooleanValue(False),
-                                                       tooltip='Terminate running jobs at exit',
-                                                       group='Jobs')
 
         # Graph arguments
         self._reduce_graph: bool = self.get_argument('Reduce graph',
                                                      artiq.experiment.BooleanValue(True),
-                                                     tooltip='Use transitive reduction of the job dependency graph',
+                                                     tooltip='Use transitive reduction of the dependency graph',
                                                      group='Dependency graph')
         self._view_graph: bool = self.get_argument('View graph',
                                                    artiq.experiment.BooleanValue(False),
-                                                   tooltip='View the job dependency graph at startup',
+                                                   tooltip='View the dependency graph at startup',
                                                    group='Dependency graph')
 
         # Call super and forward arguments, for compatibility with other libraries
@@ -695,14 +782,6 @@ class DaxScheduler(dax.base.system.DaxHasKey):
         :return: The data store object
         """
         return self.__data_store
-
-    @property
-    def request_queue(self) -> __RQ_T:
-        """Get the request queue.
-
-        :return: The request queue object
-        """
-        return self.__request_queue
 
     def prepare(self) -> None:
         # Check pipeline
@@ -721,10 +800,10 @@ class DaxScheduler(dax.base.system.DaxHasKey):
 
         # Obtain the scheduling policy
         self._policy: Policy = Policy.from_str(self._policy_arg)
-        # Process the job set
-        self._process_job_set()
+        # Process the graph
+        self._process_graph()
 
-        # Plot the job dependency graph
+        # Plot the dependency graph
         self._plot_dependency_graph()
         # Terminate other instances of this scheduler
         self._terminate_running_instances()
@@ -746,10 +825,13 @@ class DaxScheduler(dax.base.system.DaxHasKey):
     async def _run_scheduler(self) -> None:
         """Coroutine for running the scheduler"""
 
-        # Initialize all jobs
-        self.logger.debug(f'Initializing {len(self._job_graph)} job(s)')
-        for job in self._job_graph:
-            job.init(reset=self._reset_jobs)
+        # Initialize all nodes
+        self.logger.debug(f'Initializing {len(self._graph)} node(s)')
+        for node in self._graph:
+            node.init(reset=self._reset_nodes,
+                      job_pipeline=self._job_pipeline,
+                      job_priority=self._job_priority,
+                      request_queue=self._request_queue)
 
         # Time for the next wave
         next_wave: float = time.time()
@@ -761,7 +843,7 @@ class DaxScheduler(dax.base.system.DaxHasKey):
                         # Pause
                         self.logger.debug('Pausing scheduler')
                         self._scheduler.pause()
-                    elif not self.request_queue.empty():
+                    elif not self._request_queue.empty():
                         # Handle external request
                         self.logger.debug('Handling external request')
                         self._handle_external_request()
@@ -774,8 +856,8 @@ class DaxScheduler(dax.base.system.DaxHasKey):
                 # Start the wave
                 self.logger.debug(f'Starting wave {wave:.0f}')
                 self.wave(wave=wave,
-                          root_jobs=self._root_jobs,
-                          root_action=JobAction.PASS,
+                          root_nodes=self._root_nodes,
+                          root_action=NodeAction.PASS,
                           policy=self._policy,
                           reverse=self._reverse)
                 # Update next wave time
@@ -790,23 +872,23 @@ class DaxScheduler(dax.base.system.DaxHasKey):
             self.logger.info('Scheduler was terminated')
 
         finally:
-            if self._terminate_jobs:
-                # Cancel all jobs
-                self.logger.debug(f'Cancelling {len(self._job_graph)} job(s)')
-                for job in self._job_graph:
-                    job.cancel()
+            if self._cancel_nodes:
+                # Cancel nodes
+                self.logger.debug(f'Cancelling {len(self._graph)} node(s)')
+                for node in self._graph:
+                    node.cancel()
 
     async def _run_scheduler_and_controller(self) -> None:
         """Coroutine for running the scheduler and the controller."""
 
         # Create the controller and the server objects
-        controller = _SchedulerController(self.request_queue)
+        controller = _SchedulerController(self._request_queue)
         server = sipyco.pc_rpc.Server({'DaxSchedulerController': controller},
                                       description=f'DaxScheduler controller: {self.get_identifier()}')
 
         # Start the server task
         host, port = self._get_controller_details()
-        self.logger.debug(f'Starting the scheduler controller: bind address {host}, port {port}')
+        self.logger.debug(f'Starting the scheduler controller on [{host}]:{port}')
         await asyncio.create_task(server.start(host, port))
 
         try:
@@ -817,79 +899,77 @@ class DaxScheduler(dax.base.system.DaxHasKey):
             self.logger.debug('Stopping the scheduler controller')
             await server.stop()
 
-            if not self.request_queue.empty():
+            if not self._request_queue.empty():
                 # Warn if not all schedule requests were handled
-                self.logger.warning(f'The scheduler controller cancelled {self.request_queue.qsize()} request(s)')
+                self.logger.warning(f'The scheduler controller dropped {self._request_queue.qsize()} request(s)')
 
     def wave(self, *, wave: float,
-             root_jobs: typing.Collection[Job],
-             root_action: JobAction,
+             root_nodes: typing.Collection[Node],
+             root_action: NodeAction,
              policy: Policy,
              reverse: bool) -> None:
-        """Run a wave over the job set.
+        """Run a wave over the graph.
 
         :param wave: The wave identifier
-        :param root_jobs: A collection of root jobs
-        :param root_action: The root job action
+        :param root_nodes: A collection of root nodes
+        :param root_action: The root node action
         :param policy: The policy for this wave
-        :param reverse: Reverse the job dependencies
+        :param reverse: Reverse the node dependencies
         """
         assert isinstance(wave, float), 'Wave must be of type float'
-        assert isinstance(root_jobs, collections.abc.Collection), 'Root jobs must be a collection'
-        assert all(isinstance(j, Job) for j in root_jobs), 'All root jobs must be of type Job'
-        assert isinstance(root_action, JobAction), 'Root action must be of type JobAction'
+        assert isinstance(root_nodes, collections.abc.Collection), 'Root nodes must be a collection'
+        assert all(isinstance(j, Node) for j in root_nodes), 'All root nodes must be of type Node'
+        assert isinstance(root_action, NodeAction), 'Root action must be of type NodeAction'
         assert isinstance(policy, Policy), 'Policy must be of type Policy'
         assert isinstance(reverse, bool), 'Reverse flag must be of type bool'
 
         # Select the correct graph for this wave
-        graph: nx.DiGraph[Job] = self._job_graph_reversed if reverse else self._job_graph
-        # Set of submitted jobs in this wave
-        submitted: typing.Set[Job] = set()
+        graph: nx.DiGraph[Node] = self._graph_reversed if reverse else self._graph
+        # Set of submitted nodes in this wave
+        submitted: typing.Set[Node] = set()
 
-        def recurse(job: Job, action: JobAction) -> None:
-            """Recurse over the dependencies of a job.
+        def recurse(node: Node, action: NodeAction) -> None:
+            """Process nodes recursively.
 
-            :param job: The current job to process
-            :param action: The action provided by the previous job
+            :param node: The current node to process
+            :param action: The action provided by the previous node
             """
 
-            # Visit the current job
-            current_action = job.visit(wave=wave)
+            # Visit the current node
+            current_action = node.visit(wave=wave)
             # Get the new action based on the policy
             new_action = policy.action(action, current_action)
             # Recurse over successors
-            for successor in graph.successors(job):
+            for successor in graph.successors(node):
                 recurse(successor, new_action)
 
-            if new_action.submittable() and job not in submitted:
-                # Submit this job
-                job.submit(wave=wave,
-                           pipeline=self._job_pipeline,
-                           priority=self._job_priority)
-                submitted.add(job)
+            if new_action.submittable() and node not in submitted:
+                # Submit this node
+                node.submit(wave=wave)
+                submitted.add(node)
 
-        for root_job in root_jobs:
-            # Recurse over all root jobs using the root action
-            recurse(root_job, root_action)
+        for root_node in root_nodes:
+            # Recurse over all root nodes using the root action
+            recurse(root_node, root_action)
 
         if submitted:
-            # Log submitted jobs
-            self.logger.debug(f'Submitted jobs: {", ".join(sorted(j.get_name() for j in submitted))}')
+            # Log submitted nodes
+            self.logger.debug(f'Submitted node(s): {", ".join(sorted(node.get_name() for node in submitted))}')
 
     def _handle_external_request(self) -> None:
         """Handle a single external request from the queue."""
 
         # Get one element from the queue (there must be an element)
-        request: _Request = self.request_queue.get_nowait()
+        request: _Request = self._request_queue.get_nowait()
 
-        if not isinstance(request.jobs, collections.abc.Collection):
-            self.logger.error('Dropping invalid request, jobs parameter is not a collection')
+        if not isinstance(request.nodes, collections.abc.Collection):
+            self.logger.error('Dropping invalid request, nodes parameter is not a collection')
             return
 
         try:
             # Convert the input parameters
-            root_jobs: typing.Collection[Job] = {self._job_name_map[job] for job in request.jobs}
-            root_action: JobAction = JobAction.from_str(request.action)
+            root_nodes: typing.Collection[Node] = {self._node_name_map[node] for node in request.nodes}
+            root_action: NodeAction = NodeAction.from_str(request.action)
             policy: Policy = self._policy if request.policy is None else Policy.from_str(request.policy)
             reverse: bool = self._reverse if request.reverse is None else request.reverse
         except KeyError:
@@ -901,71 +981,71 @@ class DaxScheduler(dax.base.system.DaxHasKey):
             # Submit a wave for the external request
             self.logger.debug(f'Starting externally triggered wave {wave:.0f}')
             self.wave(wave=wave,
-                      root_jobs=root_jobs,
+                      root_nodes=root_nodes,
                       root_action=root_action,
                       policy=policy,
                       reverse=reverse)
 
-    def _process_job_set(self) -> None:
-        """Process the job set of this scheduler."""
+    def _process_graph(self) -> None:
+        """Process the graph of this scheduler."""
 
-        # Check job set integrity
-        self.logger.debug(f'Created {len(self._jobs)} job(s)')
-        if len(self._jobs) < len(self.JOBS):
-            self.logger.warning('Duplicate jobs were dropped from the job set')
-        if len(self._job_name_map) < len(self._jobs):
-            msg = 'Job name conflict, two jobs are not allowed to have the same class name'
+        # Check node set integrity
+        self.logger.debug(f'Created {len(self._nodes)} node(s)')
+        if len(self._nodes) < len(self.NODES):
+            self.logger.warning('Duplicate nodes were dropped')
+        if len(self._node_name_map) < len(self._nodes):
+            msg = 'Node name conflict, two nodes are not allowed to have the same class name'
             self.logger.error(msg)
             raise ValueError(msg)
 
-        # Log the job set
-        self.logger.debug(f'Job set: {", ".join(sorted(self._job_name_map))}')
+        # Log the node set
+        self.logger.debug(f'Nodes: {", ".join(sorted(self._node_name_map))}')
 
-        # Create the job dependency graph
-        self._job_graph: nx.DiGraph[Job] = nx.DiGraph()
-        self._job_graph.add_nodes_from(self._jobs.values())
+        # Create the dependency graph
+        self._graph: nx.DiGraph[Node] = nx.DiGraph()
+        self._graph.add_nodes_from(self._nodes.values())
         try:
-            self._job_graph.add_edges_from(((job, self._jobs[d])
-                                            for job in self._jobs.values() for d in job.DEPENDENCIES))
+            self._graph.add_edges_from(((node, self._nodes[d])
+                                        for node in self._nodes.values() for d in node.DEPENDENCIES))
         except KeyError as e:
-            raise KeyError(f'Dependency "{e.args[0].get_name()}" is not in the job set') from None
+            raise KeyError(f'Dependency "{e.args[0].get_name()}" is not in the node set') from None
 
         # Check graph
-        if not nx.algorithms.is_directed_acyclic_graph(self._job_graph):
-            raise RuntimeError('Dependency graph is not a directed acyclic graph')
-        if self._policy is Policy.LAZY and self.CONTROLLER is None and any(not j.is_timed() for j in self._job_graph):
-            self.logger.warning('Found unreachable jobs (untimed jobs in a lazy scheduling policy)')
+        if not nx.algorithms.is_directed_acyclic_graph(self._graph):
+            raise RuntimeError('The dependency graph is not a directed acyclic graph')
+        if self._policy is Policy.LAZY and self.CONTROLLER is None and any(not node.is_timed() for node in self._graph):
+            self.logger.warning('Found unreachable nodes (untimed nodes in a lazy scheduling policy)')
 
         if self._reduce_graph:
-            # Get the transitive reduction of the job dependency graph
-            self._job_graph = nx.algorithms.transitive_reduction(self._job_graph)
+            # Get the transitive reduction of the dependency graph
+            self._graph = nx.algorithms.transitive_reduction(self._graph)
 
         # Store reversed graph
-        self._job_graph_reversed: nx.DiGraph[Job] = self._job_graph.reverse(copy=False)
+        self._graph_reversed: nx.DiGraph[Node] = self._graph.reverse(copy=False)
 
-        if self.ROOT_JOBS:
+        if self.ROOT_NODES:
             try:
-                # Get the root jobs
-                self._root_jobs: typing.Set[Job] = {self._jobs[job] for job in self.ROOT_JOBS}
+                # Get the root nodes
+                self._root_nodes: typing.Set[Node] = {self._nodes[node] for node in self.ROOT_NODES}
             except KeyError as e:
-                raise KeyError(f'Root job "{e.args[0].get_name()}" is not in the job set') from None
+                raise KeyError(f'Root node "{e.args[0].get_name()}" is not in the node set') from None
         else:
-            # Find entry nodes to use as root jobs
-            graph: nx.DiGraph[Job] = self._job_graph_reversed if self._reverse else self._job_graph
+            # Find entry nodes to use as root nodes
+            graph: nx.DiGraph[Node] = self._graph_reversed if self._reverse else self._graph
             # noinspection PyTypeChecker
-            self._root_jobs = {job for job, degree in graph.in_degree if degree == 0}
+            self._root_nodes = {node for node, degree in graph.in_degree if degree == 0}
 
-        # Log the root jobs
-        self.logger.debug(f'Root jobs: {", ".join(sorted(j.get_name() for j in self._root_jobs))}')
+        # Log the root nodes
+        self.logger.debug(f'Root nodes: {", ".join(sorted(node.get_name() for node in self._root_nodes))}')
 
     def _plot_dependency_graph(self) -> None:
-        """Plot the job dependency graph."""
+        """Plot the dependency graph."""
 
         # Create a directed graph object
         plot = graphviz.Digraph(name=self.NAME, directory=str(dax.util.output.get_base_path(self._scheduler)))
-        for job in self._job_graph:
-            plot.node(job.get_name())
-        plot.edges(((j.get_name(), k.get_name()) for j, k in self._job_graph.edges))
+        for node in self._graph:
+            plot.node(node.get_name())
+        plot.edges(((m.get_name(), n.get_name()) for m, n in self._graph.edges))
         # Render the graph
         plot.render(view=self._view_graph, format=self._GRAPHVIZ_FORMAT)
 
@@ -1055,26 +1135,26 @@ class DaxScheduler(dax.base.system.DaxHasKey):
 
         # Check name
         assert hasattr(cls, 'NAME'), 'No name was provided'
-        # Check jobs
-        assert hasattr(cls, 'JOBS'), 'No job list was provided'
-        assert isinstance(cls.JOBS, collections.abc.Collection), 'The jobs attribute must be a collection'
-        assert all(issubclass(job, Job) for job in cls.JOBS), 'All jobs must be subclasses of Job'
-        # Check root jobs, system, and controller
-        assert isinstance(cls.ROOT_JOBS, collections.abc.Collection), 'The root jobs attribute must be a collection'
-        assert all(issubclass(job, Job) for job in cls.ROOT_JOBS), 'All root jobs must be subclasses of Job'
+        # Check nodes
+        assert hasattr(cls, 'NODES'), 'No nodes were provided'
+        assert isinstance(cls.NODES, collections.abc.Collection), 'The nodes attribute must be a collection'
+        assert all(issubclass(node, Node) for node in cls.NODES), 'All nodes must be subclasses of Node'
+        # Check root nodes, system, and controller
+        assert isinstance(cls.ROOT_NODES, collections.abc.Collection), 'The root nodes attribute must be a collection'
+        assert all(issubclass(node, Node) for node in cls.ROOT_NODES), 'All root nodes must be subclasses of Node'
         assert cls.SYSTEM is None or issubclass(cls.SYSTEM, dax.base.system.DaxSystem), \
             'The provided system must be a subclass of DaxSystem or None'
         assert cls.CONTROLLER is None or isinstance(cls.CONTROLLER, str), 'Controller must be of type str or None'
         assert cls.CONTROLLER != 'scheduler', 'Controller can not be "scheduler" (aliases with the ARTIQ scheduler)'
-        # Check default policy, reverse, pipeline, job priority, and reset jobs flag
+        # Check default policy, reverse, reset nodes flag, pipeline, and job priority
         assert isinstance(cls.DEFAULT_SCHEDULING_POLICY, Policy), 'Default policy must be of type Policy'
         assert isinstance(cls.DEFAULT_REVERSE_DEPENDENCIES, bool), \
             'Default reverse dependencies flag must be of type bool'
+        assert isinstance(cls.DEFAULT_RESET_NODES, bool), 'Default reset nodes flag must be of type bool'
         assert isinstance(cls.DEFAULT_JOB_PIPELINE, str) and cls.DEFAULT_JOB_PIPELINE, \
             'Default job pipeline must be of type str'
         assert isinstance(cls.DEFAULT_JOB_PRIORITY, int), 'Default job priority must be of type int'
         assert -99 <= cls.DEFAULT_JOB_PRIORITY <= 99, 'Default job priority must be in the domain [-99, 99]'
-        assert isinstance(cls.DEFAULT_RESET_JOBS, bool), 'Default reset jobs flag must be of type bool'
         # Check graphviz format
         assert isinstance(cls._GRAPHVIZ_FORMAT, str), 'Graphviz format must be of type str'
 
@@ -1084,43 +1164,40 @@ class _DaxSchedulerClient(dax.base.system.DaxBase, artiq.experiment.Experiment):
 
     SCHEDULER_NAME: str
     """The name of the scheduler."""
-    JOB_NAMES: typing.List[str]
-    """A List with the names of the jobs."""
+    NODE_NAMES: typing.List[str]
+    """A List with the names of the nodes."""
     CONTROLLER_KEY: str
     """Key of the scheduler controller."""
 
-    _JOB_ACTION_NAMES: typing.List[str] = sorted(str(a) for a in JobAction)
-    """A list with job action names."""
-    _SCHEDULER_POLICY: str = '<Scheduler policy>'
-    """The policy option to use the schedulers policy."""
-    _POLICY_NAMES: typing.List[str] = [_SCHEDULER_POLICY] + sorted(str(p) for p in Policy)
+    _NODE_ACTION_NAMES: typing.List[str] = sorted(str(a) for a in NodeAction)
+    """A list with node action names."""
+    _SCHEDULER_SETTING: str = '<Scheduler setting>'
+    """The option for using the scheduler setting."""
+    _POLICY_NAMES: typing.List[str] = [_SCHEDULER_SETTING] + sorted(str(p) for p in Policy)
     """A list with policy names."""
-    _SCHEDULER_REVERSE: str = '<Scheduler reverse>'
-    """The reverse job dependencies option to use the schedulers reverse flag."""
-    _REVERSE_DICT: typing.Dict[str, typing.Optional[bool]] = {_SCHEDULER_REVERSE: None,
-                                                              'False': False, 'True': True}
-    """A dict with reverse job dependencies names and values."""
+    _REVERSE_DICT: typing.Dict[str, typing.Optional[bool]] = {_SCHEDULER_SETTING: None, 'False': False, 'True': True}
+    """A dict with reverse node dependencies names and values."""
 
     def build(self) -> None:  # type: ignore
         # Set default scheduling options for the client
         self.set_default_scheduling(pipeline_name=f'_{self.SCHEDULER_NAME}')
 
         # Arguments
-        self._job: str = self.get_argument('Job',
-                                           artiq.experiment.EnumerationValue(self.JOB_NAMES),
-                                           tooltip='Job to submit')
+        self._node: str = self.get_argument('Node',
+                                            artiq.experiment.EnumerationValue(self.NODE_NAMES),
+                                            tooltip='Node to submit')
         self._action: str = self.get_argument('Action',
-                                              artiq.experiment.EnumerationValue(self._JOB_ACTION_NAMES,
-                                                                                default=str(JobAction.FORCE)),
-                                              tooltip='Initial job action')
+                                              artiq.experiment.EnumerationValue(self._NODE_ACTION_NAMES,
+                                                                                default=str(NodeAction.FORCE)),
+                                              tooltip='Initial node action')
         self._policy: str = self.get_argument('Policy',
                                               artiq.experiment.EnumerationValue(self._POLICY_NAMES,
-                                                                                default=self._SCHEDULER_POLICY),
+                                                                                default=self._SCHEDULER_SETTING),
                                               tooltip='Scheduling policy')
         self._reverse: str = self.get_argument('Reverse',
                                                artiq.experiment.EnumerationValue(sorted(self._REVERSE_DICT),
-                                                                                 default=self._SCHEDULER_REVERSE),
-                                               tooltip='Reverse the job dependencies when visiting jobs')
+                                                                                 default=self._SCHEDULER_SETTING),
+                                               tooltip='Reverse the node dependencies when traversing the graph')
 
         # Get the DAX scheduler controller
         self._dax_scheduler: _SchedulerController = self.get_device(self.CONTROLLER_KEY)
@@ -1134,11 +1211,11 @@ class _DaxSchedulerClient(dax.base.system.DaxBase, artiq.experiment.Experiment):
 
     def run(self) -> None:
         # Submit the request
-        self.logger.info(f'Submitting request: job={self._job}, action={self._action}, '
+        self.logger.info(f'Submitting request: node={self._node}, action={self._action}, '
                          f'policy={self._policy}, reverse={self._reverse}')
-        self._dax_scheduler.submit(self._job,
+        self._dax_scheduler.submit(self._node,
                                    action=self._action,
-                                   policy=None if self._policy == self._SCHEDULER_POLICY else self._policy,
+                                   policy=None if self._policy == self._SCHEDULER_SETTING else self._policy,
                                    reverse=self._REVERSE_DICT[self._reverse])
 
     def get_identifier(self) -> str:
@@ -1149,7 +1226,7 @@ class _DaxSchedulerClient(dax.base.system.DaxBase, artiq.experiment.Experiment):
 def dax_scheduler_client(scheduler_class: typing.Type[DaxScheduler]) -> typing.Type[_DaxSchedulerClient]:
     """Decorator to generate a client experiment class from a :class:`DaxScheduler` class.
 
-    The client experiment can be used to manually trigger jobs.
+    The client experiment can be used to manually trigger nodes.
 
     :param scheduler_class: The scheduler class
     :return: An instantiated client experiment class
@@ -1163,7 +1240,7 @@ def dax_scheduler_client(scheduler_class: typing.Type[DaxScheduler]) -> typing.T
         """A wrapped/instantiated client experiment class for a scheduler."""
 
         SCHEDULER_NAME = scheduler_class.NAME
-        JOB_NAMES = sorted(j.get_name() for j in scheduler_class.JOBS)
+        NODE_NAMES = sorted(node.get_name() for node in scheduler_class.NODES)
         if isinstance(scheduler_class.CONTROLLER, str):
             CONTROLLER_KEY = scheduler_class.CONTROLLER
         else:
