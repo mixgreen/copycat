@@ -65,6 +65,7 @@ def _isolation() -> typing.Generator[None, None, None]:
             yield
 
 
+# noinspection PyProtectedMember
 def _get_init_kwargs(scheduler, **kwargs):
     kwargs.setdefault('job_pipeline', scheduler._job_pipeline)
     kwargs.setdefault('job_priority', scheduler._job_priority)
@@ -179,9 +180,9 @@ class _Scheduler(DaxScheduler):
     def controller_callback(self) -> None:
         pass
 
-    def _handle_external_request(self) -> None:
+    def _handle_request(self) -> None:
         self.external_requests += 1
-        super(_Scheduler, self)._handle_external_request()
+        super(_Scheduler, self)._handle_request()
 
 
 class SchedulerMiscTestCase(unittest.TestCase):

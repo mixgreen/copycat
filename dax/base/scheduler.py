@@ -780,17 +780,15 @@ class DaxScheduler(dax.base.system.DaxHasKey):
                                                      artiq.experiment.BooleanValue(False),
                                                      tooltip='Cancel the submit action of nodes during scheduler exit',
                                                      group='Nodes')
-
-        # Job arguments
         self._job_pipeline: str = self.get_argument('Job pipeline',
                                                     artiq.experiment.StringValue(self.DEFAULT_JOB_PIPELINE),
                                                     tooltip='Default pipeline to submit jobs to',
-                                                    group='Jobs')
+                                                    group='Nodes')
         self._job_priority: int = self.get_argument('Job priority',
                                                     artiq.experiment.NumberValue(self.DEFAULT_JOB_PRIORITY,
                                                                                  min=-99, max=99, step=1, ndecimals=0),
                                                     tooltip='Baseline job priority',
-                                                    group='Jobs')
+                                                    group='Nodes')
 
         # Graph arguments
         self._reduce_graph: bool = self.get_argument('Reduce graph',
@@ -875,9 +873,9 @@ class DaxScheduler(dax.base.system.DaxHasKey):
                         self.logger.debug('Pausing scheduler')
                         self._scheduler.pause()
                     elif not self._request_queue.empty():
-                        # Handle external request
-                        self.logger.debug('Handling external request')
-                        self._handle_external_request()
+                        # Handle a request
+                        self.logger.debug('Handling request')
+                        self._handle_request()
                     else:
                         # Sleep for a clock period
                         await asyncio.sleep(self._clock_period)
@@ -885,7 +883,7 @@ class DaxScheduler(dax.base.system.DaxHasKey):
                 # Generate the unique wave timestamp
                 wave: float = time.time()
                 # Start the wave
-                self.logger.debug(f'Starting wave {wave:.0f}')
+                self.logger.debug(f'Starting timed wave {wave:.0f}')
                 self.wave(wave=wave,
                           root_nodes=self._root_nodes,
                           root_action=NodeAction.PASS,
@@ -987,10 +985,10 @@ class DaxScheduler(dax.base.system.DaxHasKey):
             # Log submitted nodes
             self.logger.debug(f'Submitted node(s): {", ".join(sorted(node.get_name() for node in submitted))}')
 
-    def _handle_external_request(self) -> None:
-        """Handle a single external request from the queue."""
+    def _handle_request(self) -> None:
+        """Handle a single request from the queue."""
 
-        # Get one element from the queue (there must be an element)
+        # Get one element from the request queue (there must be an element)
         request: _Request = self._request_queue.get_nowait()
 
         if not isinstance(request.nodes, collections.abc.Collection):
@@ -1009,8 +1007,8 @@ class DaxScheduler(dax.base.system.DaxHasKey):
         else:
             # Generate the unique wave timestamp
             wave: float = time.time()
-            # Submit a wave for the external request
-            self.logger.debug(f'Starting externally triggered wave {wave:.0f}')
+            # Submit a wave for the request
+            self.logger.debug(f'Starting triggered wave {wave:.0f}')
             self.wave(wave=wave,
                       root_nodes=root_nodes,
                       root_action=root_action,
@@ -1044,6 +1042,11 @@ class DaxScheduler(dax.base.system.DaxHasKey):
                                         for node in self._nodes.values() for d in node.get_dependencies()))
         except KeyError as e:
             raise KeyError(f'Dependency "{e.args[0].get_name()}" is not in the node set') from None
+
+        # Check trigger nodes
+        for trigger in (node for node in self._graph if isinstance(node, Trigger)):
+            if any(n not in self._nodes for n in trigger.NODES):
+                raise KeyError(f'Not all nodes of trigger "{trigger.get_name()}" are in the node set')
 
         # Check graph
         if not nx.algorithms.is_directed_acyclic_graph(self._graph):
