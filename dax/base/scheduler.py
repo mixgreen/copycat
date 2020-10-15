@@ -145,7 +145,7 @@ class Policy(enum.Enum):
         (NodeAction.FORCE, NodeAction.RUN): NodeAction.RUN,
         (NodeAction.FORCE, NodeAction.FORCE): NodeAction.RUN,
     }
-    """Lazy scheduling policy, only submit nodes that expired."""
+    """Lazy scheduling policy."""
 
     GREEDY: __P_T = {
         (NodeAction.PASS, NodeAction.PASS): NodeAction.PASS,
@@ -158,7 +158,7 @@ class Policy(enum.Enum):
         (NodeAction.FORCE, NodeAction.RUN): NodeAction.RUN,
         (NodeAction.FORCE, NodeAction.FORCE): NodeAction.RUN,
     }
-    """Greedy scheduling policy, submit nodes that expired including its dependencies."""
+    """Greedy scheduling policy."""
 
     def action(self, previous: NodeAction, current: NodeAction) -> NodeAction:
         """Apply the policy on two node actions.
@@ -655,8 +655,8 @@ class DaxScheduler(dax.base.system.DaxHasKey, abc.ABC):
     """DAX scheduler class to inherit from.
 
     Users only have to override class attributes to create a scheduling definition.
-    **The scheduler subclass must also inherit from :class:`Experiment` or :class:`EnvExperiment`
-    to make the scheduler available as an ARTIQ experiment.**
+    The scheduler subclass must also inherit from the ARTIQ :class:`Experiment` or
+    :class:`EnvExperiment` class to make the scheduler available as an ARTIQ experiment.
 
     The following attributes must be overridden:
 
