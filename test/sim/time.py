@@ -1,6 +1,5 @@
 import unittest
 import random
-import os
 
 from artiq.language.core import now_mu, at_mu, delay, delay_mu, parallel, sequential, set_time_manager
 from artiq.language.core import watchdog
@@ -9,10 +8,9 @@ from artiq.language.units import *
 
 from dax.sim.time import DaxTimeManager
 
-if os.getenv('GITLAB_CI'):
-    _NUM_SAMPLES = 1000
-else:
-    _NUM_SAMPLES = 100
+from test.environment import *
+
+_NUM_SAMPLES = 1000 if CI_ENABLED else 100
 
 
 class TimeManagerTestCase(unittest.TestCase):

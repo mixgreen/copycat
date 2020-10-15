@@ -1,15 +1,13 @@
 import unittest
 import random
-import os
 
 import artiq.coredevice.ad53xx  # type: ignore
 
 import dax.sim.coredevice.ad53xx
 
-if os.getenv('GITLAB_CI'):
-    _NUM_SAMPLES = 1000
-else:
-    _NUM_SAMPLES = 100
+from test.environment import *
+
+_NUM_SAMPLES = 1000 if CI_ENABLED else 100
 
 
 class AD53xxTestCase(unittest.TestCase):

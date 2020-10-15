@@ -578,7 +578,6 @@ class Trigger(Node):
     - :attr:`DEPENDENCIES`: A collection of node classes on which this trigger depends
     """
 
-    # TODO: check if nodes are available
     NODES: typing.Collection[typing.Type[Node]] = []
     """Collection of nodes to trigger."""
     ACTION: NodeAction = NodeAction.FORCE
@@ -618,6 +617,7 @@ class Trigger(Node):
                                                 str(self.ACTION),
                                                 str(self.POLICY) if self.POLICY is not None else None,
                                                 self.REVERSE))
+        self.logger.info(f'Submitted trigger')
 
     def cancel(self) -> None:
         # Triggers can not be cancelled
@@ -651,7 +651,7 @@ class _SchedulerController:
         self._request_queue.put_nowait(_Request(nodes, action, policy, reverse))
 
 
-class DaxScheduler(dax.base.system.DaxHasKey):
+class DaxScheduler(dax.base.system.DaxHasKey, abc.ABC):
     """DAX scheduler class to inherit from.
 
     Users only have to override class attributes to create a scheduling definition.

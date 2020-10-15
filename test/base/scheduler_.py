@@ -6,6 +6,7 @@ import collections
 import contextlib
 import os
 import socket
+import abc
 from unittest.mock import MagicMock, call
 
 from artiq.language.scan import *
@@ -18,10 +19,9 @@ import dax.base.system
 import dax.base.exceptions
 import dax.util.output
 
-if os.getenv('GITLAB_CI'):
-    _NUM_WAVES = 5
-else:
-    _NUM_WAVES = 1
+from test.environment import *
+
+_NUM_WAVES = 5 if CI_ENABLED else 1
 
 
 def _find_free_port() -> int:
@@ -66,7 +66,7 @@ def _isolation() -> typing.Generator[None, None, None]:
 
 
 # noinspection PyProtectedMember
-def _get_init_kwargs(scheduler, **kwargs):
+def _get_init_kwargs(scheduler: DaxScheduler, **kwargs):
     kwargs.setdefault('job_pipeline', scheduler._job_pipeline)
     kwargs.setdefault('job_priority', scheduler._job_priority)
     kwargs.setdefault('request_queue', scheduler._request_queue)
@@ -74,30 +74,38 @@ def _get_init_kwargs(scheduler, **kwargs):
     return kwargs
 
 
-class _Job(Job):
+class _Node(dax.base.scheduler.Node, abc.ABC):
     def __init__(self, *args, **kwargs):
-        super(_Job, self).__init__(*args, **kwargs)
+        super(_Node, self).__init__(*args, **kwargs)
         self.counter = collections.Counter()
 
-    def init(self, *args, **kwargs):
+    def init(self, *, reset, **kwargs):
         self.counter['init'] += 1
-        return super(_Job, self).init(*args, **kwargs)
+        return super(_Node, self).init(reset=reset, **kwargs)
 
     def visit(self, *args, **kwargs):
         self.counter['visit'] += 1
-        return super(_Job, self).visit(*args, **kwargs)
+        return super(_Node, self).visit(*args, **kwargs)
 
     def submit(self, *args, **kwargs):
         self.counter['submit'] += 1
-        return super(_Job, self).submit(*args, **kwargs)
+        return super(_Node, self).submit(*args, **kwargs)
 
     def schedule(self, *args, **kwargs):
         self.counter['schedule'] += 1
-        return super(_Job, self).schedule(*args, **kwargs)
+        return super(_Node, self).schedule(*args, **kwargs)
 
     def cancel(self):
         self.counter['cancel'] += 1
-        return super(_Job, self).cancel()
+        return super(_Node, self).cancel()
+
+
+class _Job(Job, _Node):
+    pass
+
+
+class _Trigger(Trigger, _Node):
+    pass
 
 
 class _Job4(_Job):
@@ -145,7 +153,7 @@ class _Scheduler(DaxScheduler):
 
     def __init__(self, *args, **kwargs):
         self._data_store = MagicMock(spec=dax.base.system.DaxDataStore)
-        self.external_requests = 0
+        self.handled_requests = 0
         super(_Scheduler, self).__init__(*args, **kwargs)
 
     @property
@@ -181,7 +189,7 @@ class _Scheduler(DaxScheduler):
         pass
 
     def _handle_request(self) -> None:
-        self.external_requests += 1
+        self.handled_requests += 1
         super(_Scheduler, self)._handle_request()
 
 
@@ -291,10 +299,11 @@ class LazySchedulerTestCase(unittest.TestCase):
     REVERSE_GRAPH = False
 
     def setUp(self) -> None:
-        self.mop = get_managers(arguments={'Scheduling policy': str(self.POLICY),
-                                           'Reverse dependencies': self.REVERSE_GRAPH,
-                                           'Job pipeline': 'test_pipeline',
-                                           'View graph': False})
+        self.arguments: typing.Dict[str, typing.Any] = {'Scheduling policy': str(self.POLICY),
+                                                        'Reverse dependencies': self.REVERSE_GRAPH,
+                                                        'Job pipeline': 'test_pipeline',
+                                                        'View graph': False}
+        self.mop = get_managers(arguments=self.arguments)
 
     def test_create_job(self):
         s = _Scheduler(self.mop)
@@ -404,12 +413,18 @@ class LazySchedulerTestCase(unittest.TestCase):
             with self.subTest(job_class=J.__name__), self.assertRaises(error_type, msg='Bad job did not raise'):
                 J(s)
 
-    def test_create_job_bad_parent(self):
+    def test_create_node_bad_parent(self):
         class J0(Job):
             pass
 
         with self.assertRaises(TypeError, msg='Wrong job parent type did not raise'):
             J0(self.mop)
+
+        class T0(Trigger):
+            pass
+
+        with self.assertRaises(TypeError, msg='Wrong trigger parent type did not raise'):
+            T0(self.mop)
 
     def test_job_arguments(self):
         s = _Scheduler(self.mop)
@@ -419,8 +434,7 @@ class LazySchedulerTestCase(unittest.TestCase):
                          'range': RangeScan(1, 10, 9),
                          'center': CenterScan(1, 10, 9),
                          'explicit': ExplicitScan([1, 10, 9]),
-                         'no': NoScan(10),
-                         }
+                         'no': NoScan(10)}
 
         j = J0(s)
         arguments = j._process_arguments()
@@ -438,8 +452,7 @@ class LazySchedulerTestCase(unittest.TestCase):
                          'range': RangeScan(1, 10, 9),
                          'center': CenterScan(1, 10, 9),
                          'explicit': ExplicitScan([1, 10, 9]),
-                         'no': NoScan(10),
-                         }
+                         'no': NoScan(10)}
 
             def build_job(self) -> None:
                 self.ARGUMENTS['bar'] = self.get_argument('bar', NumberValue(20))
@@ -585,15 +598,15 @@ class LazySchedulerTestCase(unittest.TestCase):
 
     def test_scheduler_pipeline(self):
         with _isolation():
-            with self.assertRaises(ValueError, msg='Pipeline conflict did not raise'):
-                s = _Scheduler(get_managers(arguments={'Scheduling policy': str(self.POLICY), 'Job pipeline': 'main',
-                                                       'View graph': False}))
-                s.prepare()
-
             s = _Scheduler(self.mop)
             s.prepare()
 
-    def test_scheduler_duplicate_jobs(self):
+            self.arguments['Job pipeline'] = 'main'
+            with self.assertRaises(ValueError, msg='Pipeline conflict did not raise'):
+                s = _Scheduler(get_managers(arguments=self.arguments))
+                s.prepare()
+
+    def test_duplicate_nodes(self):
         class S(_Scheduler):
             NODES = [_Job1, _Job2, _Job3, _Job4, _JobA, _JobB, _JobC, _Job1]
 
@@ -601,7 +614,17 @@ class LazySchedulerTestCase(unittest.TestCase):
         with self.assertLogs(s.logger, logging.WARNING), _isolation():
             s.prepare()
 
-    def test_scheduler_job_name_conflict(self):
+        class T(_Trigger):
+            pass
+
+        class S(_Scheduler):
+            NODES = [T, T]
+
+        s = S(self.mop)
+        with self.assertLogs(s.logger, logging.WARNING), _isolation():
+            s.prepare()
+
+    def test_node_name_conflict(self):
         class S(_Scheduler):
             # noinspection PyGlobalUndefined
             global _JobA
@@ -614,19 +637,50 @@ class LazySchedulerTestCase(unittest.TestCase):
         S.NODES.append(_JobA)
 
         s = S(self.mop)
-        with self.assertRaises(ValueError, msg='Job class name conflict did not raise'), _isolation():
+        with self.assertRaises(ValueError, msg='Node class name conflict did not raise'), _isolation():
             s.prepare()
 
-    def test_scheduler_dependencies(self):
+    def test_node_name_conflict2(self):
+        class S(_Scheduler):
+            # noinspection PyGlobalUndefined
+            global _JobA
+            NODES = [_JobA]
+
+        # noinspection PyShadowingNames
+        class _JobA(Trigger):
+            pass
+
+        S.NODES.append(_JobA)
+
+        s = S(self.mop)
+        with self.assertRaises(ValueError, msg='Node class name conflict did not raise'), _isolation():
+            s.prepare()
+
+    def test_node_dependencies(self):
         class S(_Scheduler):
             NODES = {_JobA}
 
-        with self.assertRaises(KeyError, msg='Dependency not in job set did not raise'), _isolation():
+        with self.assertRaises(KeyError, msg='Dependency not in node set did not raise'), _isolation():
             s = S(self.mop)
             try:
                 s.prepare()
             except KeyError as e:
                 self.assertIn(f'"{_JobB.get_name()}"', str(e), 'Job name not correctly displayed in error message')
+                raise
+
+    def test_trigger_nodes(self):
+        class T(_Trigger):
+            NODES = [_JobA]
+
+        class S(_Scheduler):
+            NODES = {T}
+
+        with self.assertRaises(KeyError, msg='Trigger node not in node set did not raise'), _isolation():
+            s = S(self.mop)
+            try:
+                s.prepare()
+            except KeyError as e:
+                self.assertIn(f'"{T.get_name()}"', str(e), 'Node name not correctly displayed in error message')
                 raise
 
     def test_scheduler_dag(self):
@@ -810,8 +864,9 @@ class LazySchedulerTestCase(unittest.TestCase):
                     raise TerminationRequested
 
         with _isolation():
-            s = S(get_managers(arguments={'Scheduling policy': str(self.POLICY), 'Job pipeline': 'test_pipeline',
-                                          'Wave interval': 1.0, 'Clock period': 0.1, 'View graph': False}))
+            self.arguments['Wave interval'] = 1.0
+            self.arguments['Clock period'] = 0.1
+            s = S(get_managers(arguments=self.arguments))
             s.prepare()
 
         # Run the scheduler
@@ -857,9 +912,9 @@ class LazySchedulerTestCase(unittest.TestCase):
                     controller.submit(*args, **kwargs)
 
         with _isolation():
-            s = S(get_managers(_DEVICE_DB,
-                               arguments={'Scheduling policy': str(self.POLICY), 'Job pipeline': 'test_pipeline',
-                                          'Wave interval': 1.0, 'Clock period': 0.1, 'View graph': False}))
+            self.arguments['Wave interval'] = 1.0
+            self.arguments['Clock period'] = 0.1
+            s = S(get_managers(_DEVICE_DB, arguments=self.arguments))
             s.prepare()
 
         # Run the scheduler
@@ -931,6 +986,217 @@ class LazySchedulerTestCase(unittest.TestCase):
         self.assertTrue(s._request_queue.empty(), 'Request queue is not empty')
         self._check_scheduler_controller1(s)
 
+    def test_create_trigger(self):
+        s = _Scheduler(self.mop)
+        queue_len = s._request_queue.qsize()
+        self.assertEqual(queue_len, 0)
+
+        class T0(Trigger):
+            pass
+
+        class T1(Trigger):
+            NODES = [T0]
+
+        class T2(Trigger):
+            DEPENDENCIES = [T1]
+
+        class T3(Trigger):
+            DEPENDENCIES = {T1: 'foo'}
+            INTERVAL = '1h'
+
+        class T4(T1):
+            DEPENDENCIES = {T1}
+            INTERVAL = '1h'
+
+        class T5(Trigger):
+            NODES = {T1, T2}
+            DEPENDENCIES = (T1,)
+            INTERVAL = '1h'
+
+        test_data = [
+            (T0, True, False),
+            (T1, False, False),
+            (T2, True, False),
+            (T3, True, True),
+            (T4, False, True),
+            (T5, False, True),
+        ]
+
+        # Save an old timestamp
+        old_time = time.time()
+
+        for T, is_meta, is_timed in test_data:
+            with self.subTest(job_class=T.__name__):
+                t = T(s)
+                self.assertEqual(t.is_meta(), is_meta)
+                self.assertEqual(t.is_timed(), is_timed)
+
+                for reset in [False, True]:  # reset=True must be last for the next test
+                    with self.subTest(task='init', is_timed=is_timed, reset=reset):
+                        # Test init
+                        t.init(**_get_init_kwargs(s, reset=reset))
+                        self.assertIsInstance(t._next_submit, float)
+                        if is_timed:
+                            self.assertLess(t._next_submit, float('inf'))
+                            self.assertGreater(t._next_submit, 0.0)
+                        else:
+                            self.assertEqual(t._next_submit, float('inf'))
+
+                with self.subTest(task='visit', is_timed=is_timed):
+                    # Test visit
+                    self.assertEqual(t.visit(wave=old_time), NodeAction.PASS)
+                    new_time = time.time()
+                    self.assertEqual(t.visit(wave=new_time), NodeAction.RUN if is_timed else NodeAction.PASS)
+
+                with self.subTest(task='submit', is_meta=is_meta):
+                    # Test submit
+                    if not is_meta:
+                        with self.assertLogs(t.logger, logging.INFO):
+                            t.submit(wave=new_time)
+                            queue_len += 1
+                    else:
+                        t.submit(wave=new_time)
+                    self.assertEqual(s._request_queue.qsize(), queue_len, 'Queue length did not match expected length')
+
+                with self.subTest(task='cancel'):
+                    t.cancel()
+
+    def test_create_trigger_bad(self):
+        from dax.base.exceptions import BuildError
+
+        s = _Scheduler(self.mop)
+
+        class T0(Trigger):
+            NODES = ['T0']
+
+        class T1(Trigger):
+            POLICY = 'Bar'
+
+        class T2(Trigger):
+            ACTION = 'foo'
+
+        class T3(Trigger):
+            INTERVAL = 2.0
+
+        class T4(Trigger):
+            DEPENDENCIES = T3
+
+        class T5(Trigger):
+            DEPENDENCIES = ['T3']
+
+        class T6(Trigger):
+            REVERSE = 'foo'
+
+        test_data = [
+            (T0, BuildError),
+            (T1, BuildError),
+            (T2, BuildError),
+            (T3, AssertionError),
+            (T4, AssertionError),
+            (T5, TypeError),  # Caused by failing issubclass() call
+            (T6, BuildError),
+        ]
+
+        for T, error_type in test_data:
+            with self.subTest(job_class=T.__name__), self.assertRaises(error_type, msg='Bad trigger did not raise'):
+                T(s)
+
+    def test_scheduler_time_run(self):
+        wave_interval = 1.0
+        job_interval = (_NUM_WAVES * wave_interval) / 1.5
+
+        class J0(_Job):
+            INTERVAL = f'{job_interval}s'
+
+        # There should be 2 submits, but there is only one if the wave interval is larger than the job interval
+        num_submits = 2 if job_interval > wave_interval else 1
+
+        class S(_Scheduler):
+            NODES = {J0}
+            counter = 0
+
+            def wave(self, **kwargs) -> None:
+                super(S, self).wave(**kwargs)
+                self.counter += 1
+                if self.counter >= _NUM_WAVES:
+                    raise TerminationRequested
+
+        with _isolation():
+            self.arguments['Wave interval'] = 1.0
+            self.arguments['Clock period'] = 0.1
+            s = S(get_managers(arguments=self.arguments))
+            s.prepare()
+
+        # Run the scheduler
+        s.run()
+
+        for j in s._graph:
+            with self.subTest(job=j.get_name()):
+                if isinstance(j, J0):
+                    ref_counter = {'init': 1, 'visit': _NUM_WAVES + num_submits,
+                                   'submit': num_submits, 'schedule': num_submits}
+                else:
+                    self.fail('Unexpected job type encountered')
+                self.assertDictEqual(j.counter, ref_counter,
+                                     'Job call pattern did not match expected pattern')
+
+    @unittest.skipUnless(CI_ENABLED, 'Skipping long test when not running in CI environment')
+    def test_scheduler_run_long(self):
+        num_waves = 10
+        wave_interval = 1.0
+        total_time = num_waves * wave_interval
+        num_submits = 4
+
+        class J1(_Job):
+            pass
+
+        class J0(_Job):
+            DEPENDENCIES = [J1]
+
+        class T0(_Trigger):
+            NODES = [J0]
+            INTERVAL = f'{total_time / (num_submits - 0.5)}s'
+
+        class S(_Scheduler):
+            NODES = {J0, J1, T0}
+            counter = num_waves + num_submits
+
+            def wave(self, **kwargs) -> None:
+                super(S, self).wave(**kwargs)
+                self.counter -= 1
+                if self.counter <= 0:
+                    raise TerminationRequested
+
+        with _isolation():
+            self.arguments['Wave interval'] = 1.0
+            self.arguments['Clock period'] = 0.1
+            s = S(get_managers(arguments=self.arguments))
+            s.prepare()
+
+        # Run the scheduler
+        s.run()
+
+        for n in s._graph:
+            with self.subTest(job=n.get_name()):
+                if isinstance(n, T0):
+                    ref_counter = {'init': 1, 'visit': num_waves + num_submits,
+                                   'submit': num_submits, 'schedule': num_submits}
+                elif isinstance(n, J0):
+                    ref_counter = {'init': 1, 'visit': num_waves + num_submits,
+                                   'submit': num_submits, 'schedule': num_submits}
+                elif isinstance(n, J1):
+                    if self.REVERSE_GRAPH:
+                        ref_counter = {'init': 1, 'visit': num_waves}
+                    elif self.POLICY is Policy.LAZY:
+                        ref_counter = {'init': 1, 'visit': num_waves + num_submits}
+                    else:
+                        ref_counter = {'init': 1, 'visit': num_waves + num_submits,
+                                       'submit': num_submits, 'schedule': num_submits}
+                else:
+                    self.fail('Unexpected job type encountered')
+                self.assertDictEqual(n.counter, ref_counter,
+                                     'Node call pattern did not match expected pattern')
+
 
 class LazySchedulerReversedTestCase(LazySchedulerTestCase):
     POLICY = Policy.LAZY
@@ -941,9 +1207,7 @@ class LazySchedulerReversedTestCase(LazySchedulerTestCase):
             with self.subTest(job=j.get_name()):
                 if isinstance(j, _Job1):
                     ref_counter = {'init': 1, 'visit': 3, 'submit': 1, 'schedule': 1}
-                elif isinstance(j, (_Job2, _Job3)):
-                    ref_counter = {'init': 1, 'visit': 1}
-                elif isinstance(j, _Job4):
+                elif isinstance(j, (_Job2, _Job3, _Job4)):
                     ref_counter = {'init': 1, 'visit': 1}
                 elif isinstance(j, _JobB):
                     ref_counter = {'init': 1, 'visit': 2, 'submit': 1, 'schedule': 1}
@@ -957,14 +1221,60 @@ class LazySchedulerReversedTestCase(LazySchedulerTestCase):
             with self.subTest(job=j.get_name()):
                 if isinstance(j, _Job1):
                     ref_counter = {'init': 1, 'visit': 5, 'submit': 1, 'schedule': 1}
-                elif isinstance(j, (_Job2, _Job3)):
-                    ref_counter = {'init': 1, 'visit': 2}
-                elif isinstance(j, _Job4):
+                elif isinstance(j, (_Job2, _Job3, _Job4)):
                     ref_counter = {'init': 1, 'visit': 2}
                 elif isinstance(j, _JobB):
                     ref_counter = {'init': 1, 'visit': 3, 'submit': 1, 'schedule': 1}
                 else:
                     ref_counter = {'init': 1, 'visit': 2}
+                self.assertDictEqual(j.counter, ref_counter,
+                                     'Job call pattern did not match expected pattern')
+
+    def _check_scheduler_run(self, scheduler):
+        for j in scheduler._graph:
+            with self.subTest(job=j.get_name()):
+                if isinstance(j, _JobB):
+                    ref_counter = {'init': 1, 'visit': _NUM_WAVES + 1, 'submit': 1, 'schedule': 1}
+                elif isinstance(j, _Job1):
+                    ref_counter = {'init': 1, 'visit': _NUM_WAVES * 2 + 1, 'submit': 1, 'schedule': 1}
+                else:
+                    ref_counter = {'init': 1, 'visit': _NUM_WAVES}
+                self.assertDictEqual(j.counter, ref_counter,
+                                     'Job call pattern did not match expected pattern')
+
+    def _check_scheduler_controller0(self, scheduler):
+        for j in scheduler._graph:
+            with self.subTest(job=j.get_name()):
+                if isinstance(j, _Job1):
+                    ref_counter = {'init': 1, 'visit': (_NUM_WAVES + 1) * 2 + 1, 'submit': 1, 'schedule': 1}
+                elif isinstance(j, (_Job2, _Job3)):
+                    ref_counter = {'init': 1, 'visit': _NUM_WAVES + 1}
+                elif isinstance(j, _Job4):
+                    ref_counter = {'init': 1, 'visit': _NUM_WAVES + 1, 'submit': 1, 'schedule': 1}
+                elif isinstance(j, (_JobA, _JobB)):
+                    ref_counter = {'init': 1, 'visit': _NUM_WAVES + 1 + 1, 'submit': 1, 'schedule': 1}
+                elif isinstance(j, _JobC):
+                    ref_counter = {'init': 1, 'visit': _NUM_WAVES + 1}
+                else:
+                    self.fail('Statement should not be reachable')
+                self.assertDictEqual(j.counter, ref_counter,
+                                     'Job call pattern did not match expected pattern')
+
+    def _check_scheduler_controller1(self, scheduler):
+        for j in scheduler._graph:
+            with self.subTest(job=j.get_name()):
+                if isinstance(j, _Job4):
+                    ref_counter = {'init': 1, 'visit': _NUM_WAVES + 1, 'submit': 1, 'schedule': 1}
+                elif isinstance(j, _Job1):
+                    ref_counter = {'init': 1, 'visit': _NUM_WAVES * 2 + 1 + 2, 'submit': 1, 'schedule': 1}
+                elif isinstance(j, (_Job2, _Job3, _JobA)):
+                    ref_counter = {'init': 1, 'visit': _NUM_WAVES + 1}
+                elif isinstance(j, _JobB):
+                    ref_counter = {'init': 1, 'visit': _NUM_WAVES + 1 + 2, 'submit': 2, 'schedule': 2}
+                elif isinstance(j, _JobC):
+                    ref_counter = {'init': 1, 'visit': _NUM_WAVES}
+                else:
+                    self.fail('Statement should not be reachable')
                 self.assertDictEqual(j.counter, ref_counter,
                                      'Job call pattern did not match expected pattern')
 
@@ -1011,20 +1321,6 @@ class GreedySchedulerTestCase(LazySchedulerTestCase):
         self.assertEqual(len(scheduler.data_store.method_calls), 3,
                          'Data store was called an unexpected number of times')
 
-    def _check_scheduler_run(self, scheduler):
-        for j in scheduler._graph:
-            with self.subTest(job=j.get_name()):
-                if isinstance(j, (_Job1, _JobB)):
-                    ref_counter = {'init': 1, 'visit': _NUM_WAVES + 1, 'submit': 1, 'schedule': 1}
-                elif isinstance(j, (_Job2, _Job3, _JobC)):
-                    ref_counter = {'init': 1, 'visit': _NUM_WAVES, 'submit': 1, 'schedule': 1}
-                elif isinstance(j, _Job4):
-                    ref_counter = {'init': 1, 'visit': _NUM_WAVES * 2, 'submit': 1, 'schedule': 1}
-                else:
-                    ref_counter = {'init': 1, 'visit': _NUM_WAVES}
-                self.assertDictEqual(j.counter, ref_counter,
-                                     'Job call pattern did not match expected pattern')
-
     def _check_scheduler_controller0(self, scheduler):
         for j in scheduler._graph:
             with self.subTest(job=j.get_name()):
@@ -1060,6 +1356,20 @@ class GreedySchedulerTestCase(LazySchedulerTestCase):
                     ref_counter = {'init': 1, 'visit': _NUM_WAVES, 'submit': 1, 'schedule': 1}
                 else:
                     self.fail('Statement should not be reachable')
+                self.assertDictEqual(j.counter, ref_counter,
+                                     'Job call pattern did not match expected pattern')
+
+    def _check_scheduler_run(self, scheduler):
+        for j in scheduler._graph:
+            with self.subTest(job=j.get_name()):
+                if isinstance(j, (_Job1, _JobB)):
+                    ref_counter = {'init': 1, 'visit': _NUM_WAVES + 1, 'submit': 1, 'schedule': 1}
+                elif isinstance(j, (_Job2, _Job3, _JobC)):
+                    ref_counter = {'init': 1, 'visit': _NUM_WAVES, 'submit': 1, 'schedule': 1}
+                elif isinstance(j, _Job4):
+                    ref_counter = {'init': 1, 'visit': _NUM_WAVES * 2, 'submit': 1, 'schedule': 1}
+                else:
+                    ref_counter = {'init': 1, 'visit': _NUM_WAVES}
                 self.assertDictEqual(j.counter, ref_counter,
                                      'Job call pattern did not match expected pattern')
 
@@ -1100,3 +1410,53 @@ class GreedySchedulerReversedTestCase(GreedySchedulerTestCase):
         # Check data store calls (only jobs that are not meta-jobs perform a call)
         self.assertEqual(len(scheduler.data_store.method_calls), 2,
                          'Data store was called an unexpected number of times')
+
+    def _check_scheduler_controller0(self, scheduler):
+        for j in scheduler._graph:
+            with self.subTest(job=j.get_name()):
+                if isinstance(j, _Job1):
+                    ref_counter = {'init': 1, 'visit': _NUM_WAVES * 2 + 1 + 2 + 1, 'submit': 2, 'schedule': 2}
+                elif isinstance(j, (_Job2, _Job3, _Job4)):
+                    ref_counter = {'init': 1, 'visit': _NUM_WAVES + 1, 'submit': 1, 'schedule': 1}
+                elif isinstance(j, _JobA):
+                    ref_counter = {'init': 1, 'visit': _NUM_WAVES + 1 + 1, 'submit': 2, 'schedule': 2}
+                elif isinstance(j, _JobB):
+                    ref_counter = {'init': 1, 'visit': _NUM_WAVES + 1 + 1, 'submit': 1, 'schedule': 1}
+                elif isinstance(j, _JobC):
+                    ref_counter = {'init': 1, 'visit': _NUM_WAVES + 1}
+                else:
+                    self.fail('Statement should not be reachable')
+                self.assertDictEqual(j.counter, ref_counter,
+                                     'Job call pattern did not match expected pattern')
+
+    def _check_scheduler_controller1(self, scheduler):
+        for j in scheduler._graph:
+            with self.subTest(job=j.get_name()):
+                if isinstance(j, (_Job2, _Job3, _Job4)):
+                    ref_counter = {'init': 1, 'visit': _NUM_WAVES + 1, 'submit': 1, 'schedule': 1}
+                elif isinstance(j, _Job1):
+                    ref_counter = {'init': 1, 'visit': _NUM_WAVES * 2 + 1 + 2 + 1, 'submit': 2, 'schedule': 2}
+                elif isinstance(j, _JobA):
+                    ref_counter = {'init': 1, 'visit': _NUM_WAVES + 1, 'submit': 2, 'schedule': 2}
+                elif isinstance(j, _JobB):
+                    ref_counter = {'init': 1, 'visit': _NUM_WAVES + 1 + 2, 'submit': 2, 'schedule': 2}
+                elif isinstance(j, _JobC):
+                    ref_counter = {'init': 1, 'visit': _NUM_WAVES}
+                else:
+                    self.fail('Statement should not be reachable')
+                self.assertDictEqual(j.counter, ref_counter,
+                                     'Job call pattern did not match expected pattern')
+
+    def _check_scheduler_run(self, scheduler):
+        for j in scheduler._graph:
+            with self.subTest(job=j.get_name()):
+                if isinstance(j, _JobB):
+                    ref_counter = {'init': 1, 'visit': _NUM_WAVES + 1, 'submit': 1, 'schedule': 1}
+                elif isinstance(j, _JobA):
+                    ref_counter = {'init': 1, 'visit': _NUM_WAVES, 'submit': 1, 'schedule': 1}
+                elif isinstance(j, _Job1):
+                    ref_counter = {'init': 1, 'visit': _NUM_WAVES * 2 + 1, 'submit': 1, 'schedule': 1}
+                else:
+                    ref_counter = {'init': 1, 'visit': _NUM_WAVES}
+                self.assertDictEqual(j.counter, ref_counter,
+                                     'Job call pattern did not match expected pattern')
