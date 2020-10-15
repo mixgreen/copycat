@@ -266,7 +266,7 @@ class Scan1TestCase(unittest.TestCase):
             # Read HDF5 file with scan reader
             r = DaxScanReader(file_name)
 
-            # Verify if the data matches
+            # Verify if the data matches with the scan object
             scannables = self.scan.get_scannables()
             scan_points = self.scan.get_scan_points()
             keys = list(scannables.keys())
@@ -276,6 +276,15 @@ class Scan1TestCase(unittest.TestCase):
                                      'Scannable in reader did not match object scannable')
                 self.assertListEqual(scan_points[k], list(r.scan_points[k]),
                                      'Scan points in reader did not match object scan points')
+
+            # Verify if the data matches with a scan reader using a different source
+            r_ = DaxScanReader(self.scan)
+            self.assertSetEqual(set(r.keys), set(r_.keys), 'Keys in readers did not match')
+            for k in r.keys:
+                self.assertListEqual(list(r_.scannables[k]), list(r.scannables[k]),
+                                     'Scannable in readers did not match')
+                self.assertListEqual(list(r_.scan_points[k]), list(r.scan_points[k]),
+                                     'Scan points in readers did not match')
 
 
 class BuildScanTestCase(unittest.TestCase):

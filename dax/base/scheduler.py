@@ -617,7 +617,7 @@ class Trigger(Node):
                                                 str(self.ACTION),
                                                 str(self.POLICY) if self.POLICY is not None else None,
                                                 self.REVERSE))
-        self.logger.info(f'Submitted trigger')
+        self.logger.info('Submitted trigger')
 
     def cancel(self) -> None:
         # Triggers can not be cancelled
