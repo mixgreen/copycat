@@ -22,7 +22,7 @@ stages:
     CONDA_DIR: "$HOME/miniconda"
   before_script:
     # Setup conda
-    - apt -qq update; apt -qq -y install wget
+    - apt-get -qq update; apt-get -qq -y install wget
     - wget -nv -O $CONDA_SCRIPT https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
     - bash $CONDA_SCRIPT -b -p $CONDA_DIR
     - source $CONDA_DIR/bin/activate
