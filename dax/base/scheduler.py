@@ -21,7 +21,7 @@ import sipyco.pc_rpc  # type: ignore
 import dax.base.system
 import dax.util.output
 
-__all__ = ['NodeAction', 'Job', 'Trigger', 'Policy', 'DaxScheduler', 'dax_scheduler_client']
+__all__ = ['NodeAction', 'Policy', 'Job', 'Trigger', 'DaxScheduler', 'dax_scheduler_client']
 
 
 def _str_to_time(string: str) -> float:
@@ -393,8 +393,8 @@ class Job(Node):
     - :attr:`FILE`: The file name containing the experiment
     - :attr:`CLASS_NAME`: The class name of the experiment
     - :attr:`ARGUMENTS`: A dictionary with experiment arguments (scan objects can be used directly as arguments)
-    - :attr:`INTERVAL`: The submit interval
-    - :attr:`DEPENDENCIES`: A collection of node classes on which this job depends
+    - :attr:`Node.INTERVAL`: The submit interval
+    - :attr:`Node.DEPENDENCIES`: A collection of node classes on which this job depends
 
     Optionally, users can override the :func:`build_job` method to add configurable arguments.
     """
@@ -574,8 +574,8 @@ class Trigger(Node):
     - :attr:`ACTION`: The root node action of this trigger (defaults to :attr:`NodeAction.FORCE`)
     - :attr:`POLICY`: The scheduling policy of this trigger (defaults to the schedulers policy)
     - :attr:`REVERSE`: Reverse the node dependencies flag of this trigger (defaults to the schedulers reverse flag)
-    - :attr:`INTERVAL`: The trigger interval
-    - :attr:`DEPENDENCIES`: A collection of node classes on which this trigger depends
+    - :attr:`Node.INTERVAL`: The trigger interval
+    - :attr:`Node.DEPENDENCIES`: A collection of node classes on which this trigger depends
     """
 
     NODES: typing.Collection[typing.Type[Node]] = []
