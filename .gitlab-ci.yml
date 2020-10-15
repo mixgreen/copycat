@@ -18,8 +18,8 @@ stages:
 .conda_env:
   image: ubuntu
   variables:
-    CONDA_SCRIPT: "$TEMP/miniconda.sh"
-    CONDA_DIR: "$HOME/miniconda"
+    CONDA_SCRIPT: "~/miniconda.sh"
+    CONDA_DIR: "~/miniconda"
   before_script:
     # Setup conda
     - apt-get -q update; apt-get -q -y install wget
