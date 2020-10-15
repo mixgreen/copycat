@@ -31,6 +31,7 @@ dax.base.scheduler module
     :members:
     :undoc-members:
     :show-inheritance:
+    :ignore-module-all:
 
 dax.base.interface module
 -------------------------

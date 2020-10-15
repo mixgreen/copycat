@@ -25,17 +25,18 @@ class Dot:
         ...
 
     def node(self, name: str, label: typing.Optional[str] = ...,
-             _attributes: typing.Any = ..., **attrs: str) -> None:
+             _attributes: typing.Any = ..., **attrs: typing.Optional[str]) -> None:
         ...
 
     def edge(self, tail_name: str, head_name: str, label: typing.Optional[str] = ...,
-             _attributes: typing.Any = ..., **attrs: str) -> None:
+             _attributes: typing.Any = ..., **attrs: typing.Optional[str]) -> None:
         ...
 
     def edges(self, tail_head_iter: typing.Iterable[typing.Tuple[str, str]]) -> None:
         ...
 
-    def attr(self, kw: typing.Optional[str] = ..., _attributes: typing.Any = ..., **attrs: str) -> None:
+    def attr(self, kw: typing.Optional[str] = ...,
+             _attributes: typing.Any = ..., **attrs: typing.Optional[str]) -> None:
         ...
 
     def subgraph(self, graph: typing.Optional[Dot] = ...,

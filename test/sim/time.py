@@ -8,12 +8,14 @@ from artiq.language.units import *
 
 from dax.sim.time import DaxTimeManager
 
+from test.environment import *
+
+_NUM_SAMPLES = 1000 if CI_ENABLED else 100
+
 
 class TimeManagerTestCase(unittest.TestCase):
     # The reference period for this class
     REF_PERIOD = us
-    # Number of samples to test
-    NUM_SAMPLES = 100
     # Seed for random samples
     SEED = None
 
@@ -27,7 +29,7 @@ class TimeManagerTestCase(unittest.TestCase):
         # Reference time
         ref_time = now_mu()
 
-        for i in range(self.NUM_SAMPLES):
+        for i in range(_NUM_SAMPLES):
             # Random duration
             duration = self.rnd.randrange(1000000000)
 
@@ -42,7 +44,7 @@ class TimeManagerTestCase(unittest.TestCase):
         # Reference time
         ref_time = now_mu()
 
-        for i in range(self.NUM_SAMPLES):
+        for i in range(_NUM_SAMPLES):
             # Random duration
             duration = self.rnd.random()
 
@@ -57,7 +59,7 @@ class TimeManagerTestCase(unittest.TestCase):
         # Reference time
         ref_time = now_mu()
 
-        for i in range(self.NUM_SAMPLES):
+        for i in range(_NUM_SAMPLES):
             with self.subTest('sequential sub test', i=i):
                 with sequential:
                     for _ in range(10):
@@ -75,7 +77,7 @@ class TimeManagerTestCase(unittest.TestCase):
         # Reference time
         ref_time = now_mu()
 
-        for i in range(self.NUM_SAMPLES):
+        for i in range(_NUM_SAMPLES):
             with self.subTest('parallel sub test', i=i):
                 # Block duration
                 block_duration = 0
@@ -94,7 +96,7 @@ class TimeManagerTestCase(unittest.TestCase):
                 self.assertEqual(now_mu(), ref_time, 'Reference does not match now_mu()')
 
     def test_at_mu(self):
-        for i in range(self.NUM_SAMPLES):
+        for i in range(_NUM_SAMPLES):
             with self.subTest('at_mu() sub test', i=i):
                 # Random time
                 ref_time = self.rnd.randrange(1000000000)
@@ -116,8 +118,6 @@ class TimeManagerTestCase5ns(TimeManagerTestCase):
 class WatchdogTestCase(unittest.TestCase):
     # The reference period for this class
     REF_PERIOD = ns
-    # Number of samples to test
-    NUM_SAMPLES = 20
     # Seed for random samples
     SEED = None
     # Window size
@@ -132,11 +132,11 @@ class WatchdogTestCase(unittest.TestCase):
     def test_watchdog_in_time(self):
         with watchdog(self.WINDOW):
             with parallel:
-                for _ in range(self.NUM_SAMPLES):
+                for _ in range(_NUM_SAMPLES):
                     # All delays are less than the window, so no exceptions should be raised
                     delay(self.WINDOW * self.rnd.random())
 
-        for _ in range(self.NUM_SAMPLES):
+        for _ in range(_NUM_SAMPLES):
             with watchdog(self.WINDOW):
                 # All delays are less than the window, so no exceptions should be raised
                 delay(self.WINDOW * self.rnd.random())
@@ -162,11 +162,11 @@ class WatchdogTestCase(unittest.TestCase):
             with watchdog(self.WINDOW):
                 with watchdog(self.WINDOW):
                     with parallel:
-                        for _ in range(self.NUM_SAMPLES):
+                        for _ in range(_NUM_SAMPLES):
                             # All delays are less than the window, so no exceptions should be raised
                             delay(self.WINDOW * self.rnd.random())
 
-        for _ in range(self.NUM_SAMPLES):
+        for _ in range(_NUM_SAMPLES):
             with watchdog(self.WINDOW):
                 with watchdog(self.WINDOW):
                     with watchdog(self.WINDOW):

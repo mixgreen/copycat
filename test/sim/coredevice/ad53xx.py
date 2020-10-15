@@ -5,9 +5,12 @@ import artiq.coredevice.ad53xx  # type: ignore
 
 import dax.sim.coredevice.ad53xx
 
+from test.environment import *
+
+_NUM_SAMPLES = 1000 if CI_ENABLED else 100
+
 
 class AD53xxTestCase(unittest.TestCase):
-    NUM_SAMPLES = 20
     SEED = None
 
     def setUp(self) -> None:
@@ -15,7 +18,7 @@ class AD53xxTestCase(unittest.TestCase):
 
     def test_conversion(self):
         for v_ref in [2.0, 5.0]:
-            for _ in range(self.NUM_SAMPLES):
+            for _ in range(_NUM_SAMPLES):
                 v = self.rng.uniform(0.0, v_ref * 4)
                 with self.subTest(v_ref=v_ref, v_in=v):
                     o = dax.sim.coredevice.ad53xx._mu_to_voltage(
