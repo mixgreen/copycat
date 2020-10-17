@@ -75,10 +75,11 @@ from dax.scheduler import *
 
 ## Testing
 
-To run the DAX unit tests, execute the following command in the root directory of DAX:
+To run the DAX unit tests, execute one of the following commands in the root directory of DAX:
 
 ```shell
-python3 -m unittest
+pytest  # Requires pytest to be installed
+python3 -m unittest  # No additional libraries required
 ```
 
 ## Main contributors

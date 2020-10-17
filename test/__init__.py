@@ -1,8 +1,4 @@
-# flake8: noqa
-from .attributes import *
-from .code_style import *
-
-# Suppress logging for all tests if test discovery is used
 import logging
 
+# Suppresses log output during testing
 logging.basicConfig(level=logging.CRITICAL)

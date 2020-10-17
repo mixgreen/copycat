@@ -13,12 +13,13 @@ We recommend the following naming conventions for branches:
 ## Testing
 
 DAX is shipped with unit tests and default configurations for mypy type checking and flake8 style checking.
-The unit tests can run without additional libraries.
-Mypy and flake8 need to be installed separately.
+Unit tests are based on the standard Python unittest library.
+To run unit tests, use pytest or Python unittest test discovery.
+pytest, mypy, and flake8 need to be installed separately.
 Tests can be executed by using the following commands:
 
 ```shell
-python3 -m unittest
+pytest
 mypy
 flake8
 ```

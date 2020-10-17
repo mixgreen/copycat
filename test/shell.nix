@@ -18,6 +18,7 @@ in
                 ps.h5py
                 ps.networkx
                 # Packages required for testing
+                ps.pytest
                 ps.mypy
                 ps.pycodestyle
                 ps.coverage
