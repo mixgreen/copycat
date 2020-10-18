@@ -1,3 +1,3 @@
 from .writer import VCDPhaseError, VCDWriter
 
-__all__ = ('VCDWriter', 'VCDPhaseError')
+__all__ = ['VCDWriter', 'VCDPhaseError']

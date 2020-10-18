@@ -4,7 +4,6 @@ import logging
 import typing
 import collections
 import contextlib
-import os
 import socket
 import abc
 from unittest.mock import MagicMock, call
@@ -17,7 +16,6 @@ import dax.base.scheduler
 from dax.util.artiq import get_managers
 import dax.base.system
 import dax.base.exceptions
-import dax.util.output
 
 from test.environment import *
 
@@ -55,14 +53,6 @@ _DEVICE_DB: typing.Dict[str, typing.Any] = {
         'port': _find_free_port(),
     },
 }
-
-
-@contextlib.contextmanager
-def _isolation() -> typing.Generator[None, None, None]:
-    """Move into a temp dir and suppress stdout/stderr."""
-    with dax.util.output.temp_dir(), open(os.devnull, 'w') as devnull:
-        with contextlib.redirect_stdout(devnull), contextlib.redirect_stderr(devnull):
-            yield
 
 
 # noinspection PyProtectedMember
@@ -148,9 +138,6 @@ class _Scheduler(DaxScheduler):
     NAME = 'test_scheduler'
     NODES: typing.Set[typing.Type[dax.base.scheduler.Node]] = set()
 
-    # Modify graphviz format to prevent usage of visual render engines
-    _GRAPHVIZ_FORMAT = 'gv'
-
     def __init__(self, *args, **kwargs):
         self._data_store = MagicMock(spec=dax.base.system.DaxDataStore)
         self.handled_requests = 0
@@ -191,6 +178,10 @@ class _Scheduler(DaxScheduler):
     def _handle_request(self) -> None:
         self.handled_requests += 1
         super(_Scheduler, self)._handle_request()
+
+    def _plot_graph(self) -> None:
+        # Skip plotting graph, prevents output and call to the renderer
+        pass
 
 
 class SchedulerMiscTestCase(unittest.TestCase):
@@ -493,33 +484,32 @@ class LazySchedulerTestCase(unittest.TestCase):
             # Return scheduler and job
             return scheduler, job
 
-        with _isolation():
-            # Start scheduler
-            s, j = start_scheduler(reset=False)
-            # First run, job will run because it has never before
-            s.wave()
-            self.assertDictEqual(j.counter, {'init': 1, 'visit': 2, 'submit': 1, 'schedule': 1})
-            # Second run, job will not run because interval did not expire
-            s.wave()
-            self.assertDictEqual(j.counter, {'init': 1, 'visit': 3, 'submit': 1, 'schedule': 1})
+        # Start scheduler
+        s, j = start_scheduler(reset=False)
+        # First run, job will run because it has never before
+        s.wave()
+        self.assertDictEqual(j.counter, {'init': 1, 'visit': 2, 'submit': 1, 'schedule': 1})
+        # Second run, job will not run because interval did not expire
+        s.wave()
+        self.assertDictEqual(j.counter, {'init': 1, 'visit': 3, 'submit': 1, 'schedule': 1})
 
-            # Restart scheduler
-            s, j = start_scheduler(reset=False)
-            # First run, job will not run because interval did not expire
-            s.wave()
-            self.assertDictEqual(j.counter, {'init': 1, 'visit': 1})
+        # Restart scheduler
+        s, j = start_scheduler(reset=False)
+        # First run, job will not run because interval did not expire
+        s.wave()
+        self.assertDictEqual(j.counter, {'init': 1, 'visit': 1})
 
-            # Restart scheduler
-            s, j = start_scheduler(reset=True)
-            # First run, job will run because of reset
-            s.wave()
-            self.assertDictEqual(j.counter, {'init': 1, 'visit': 2, 'submit': 1, 'schedule': 1})
+        # Restart scheduler
+        s, j = start_scheduler(reset=True)
+        # First run, job will run because of reset
+        s.wave()
+        self.assertDictEqual(j.counter, {'init': 1, 'visit': 2, 'submit': 1, 'schedule': 1})
 
-            # Restart scheduler
-            s, j = start_scheduler(reset=False)
-            # First run, job will not run because interval did not expire
-            s.wave()
-            self.assertDictEqual(j.counter, {'init': 1, 'visit': 1})
+        # Restart scheduler
+        s, j = start_scheduler(reset=False)
+        # First run, job will not run because interval did not expire
+        s.wave()
+        self.assertDictEqual(j.counter, {'init': 1, 'visit': 1})
 
     def test_job_changed_arguments(self):
         class J0(_Job):
@@ -542,35 +532,34 @@ class LazySchedulerTestCase(unittest.TestCase):
             # Return scheduler and job
             return scheduler, job
 
-        with _isolation():
-            # Start scheduler
-            s, j = start_scheduler(reset=False)
-            # First run, job will run because it has never before
-            s.wave()
-            self.assertDictEqual(j.counter, {'init': 1, 'visit': 2, 'submit': 1, 'schedule': 1})
-            # Second run, job will not run because interval did not expire
-            s.wave()
-            self.assertDictEqual(j.counter, {'init': 1, 'visit': 3, 'submit': 1, 'schedule': 1})
+        # Start scheduler
+        s, j = start_scheduler(reset=False)
+        # First run, job will run because it has never before
+        s.wave()
+        self.assertDictEqual(j.counter, {'init': 1, 'visit': 2, 'submit': 1, 'schedule': 1})
+        # Second run, job will not run because interval did not expire
+        s.wave()
+        self.assertDictEqual(j.counter, {'init': 1, 'visit': 3, 'submit': 1, 'schedule': 1})
 
-            # Restart scheduler
-            s, j = start_scheduler(reset=False)
-            # First run, job will not run because interval did not expire
-            s.wave()
-            self.assertDictEqual(j.counter, {'init': 1, 'visit': 1})
+        # Restart scheduler
+        s, j = start_scheduler(reset=False)
+        # First run, job will not run because interval did not expire
+        s.wave()
+        self.assertDictEqual(j.counter, {'init': 1, 'visit': 1})
 
-            # Change arguments
-            J0.ARGUMENTS['bar'] = 2
-            # Restart scheduler
-            s, j = start_scheduler(reset=False)
-            # First run, job will run because of changed arguments
-            s.wave()
-            self.assertDictEqual(j.counter, {'init': 1, 'visit': 2, 'submit': 1, 'schedule': 1})
+        # Change arguments
+        J0.ARGUMENTS['bar'] = 2
+        # Restart scheduler
+        s, j = start_scheduler(reset=False)
+        # First run, job will run because of changed arguments
+        s.wave()
+        self.assertDictEqual(j.counter, {'init': 1, 'visit': 2, 'submit': 1, 'schedule': 1})
 
-            # Restart scheduler
-            s, j = start_scheduler(reset=False)
-            # First run, job will not run because interval did not expire and arguments did not change
-            s.wave()
-            self.assertDictEqual(j.counter, {'init': 1, 'visit': 1})
+        # Restart scheduler
+        s, j = start_scheduler(reset=False)
+        # First run, job will not run because interval did not expire and arguments did not change
+        s.wave()
+        self.assertDictEqual(j.counter, {'init': 1, 'visit': 1})
 
     def test_job_name(self):
         self.assertEqual(_JobA.get_name(), '_JobA')
@@ -597,21 +586,20 @@ class LazySchedulerTestCase(unittest.TestCase):
         self.assertIsInstance(S(self.mop), DaxScheduler)
 
     def test_scheduler_pipeline(self):
-        with _isolation():
-            s = _Scheduler(self.mop)
-            s.prepare()
+        s = _Scheduler(self.mop)
+        s.prepare()
 
-            self.arguments['Job pipeline'] = 'main'
-            with self.assertRaises(ValueError, msg='Pipeline conflict did not raise'):
-                s = _Scheduler(get_managers(arguments=self.arguments))
-                s.prepare()
+        self.arguments['Job pipeline'] = 'main'
+        with self.assertRaises(ValueError, msg='Pipeline conflict did not raise'):
+            s = _Scheduler(get_managers(arguments=self.arguments))
+            s.prepare()
 
     def test_duplicate_nodes(self):
         class S(_Scheduler):
             NODES = [_Job1, _Job2, _Job3, _Job4, _JobA, _JobB, _JobC, _Job1]
 
         s = S(self.mop)
-        with self.assertLogs(s.logger, logging.WARNING), _isolation():
+        with self.assertLogs(s.logger, logging.WARNING):
             s.prepare()
 
         class T(_Trigger):
@@ -621,7 +609,7 @@ class LazySchedulerTestCase(unittest.TestCase):
             NODES = [T, T]
 
         s = S(self.mop)
-        with self.assertLogs(s.logger, logging.WARNING), _isolation():
+        with self.assertLogs(s.logger, logging.WARNING):
             s.prepare()
 
     def test_node_name_conflict(self):
@@ -637,7 +625,7 @@ class LazySchedulerTestCase(unittest.TestCase):
         S.NODES.append(_JobA)
 
         s = S(self.mop)
-        with self.assertRaises(ValueError, msg='Node class name conflict did not raise'), _isolation():
+        with self.assertRaises(ValueError, msg='Node class name conflict did not raise'):
             s.prepare()
 
     def test_node_name_conflict2(self):
@@ -653,14 +641,14 @@ class LazySchedulerTestCase(unittest.TestCase):
         S.NODES.append(_JobA)
 
         s = S(self.mop)
-        with self.assertRaises(ValueError, msg='Node class name conflict did not raise'), _isolation():
+        with self.assertRaises(ValueError, msg='Node class name conflict did not raise'):
             s.prepare()
 
     def test_node_dependencies(self):
         class S(_Scheduler):
             NODES = {_JobA}
 
-        with self.assertRaises(KeyError, msg='Dependency not in node set did not raise'), _isolation():
+        with self.assertRaises(KeyError, msg='Dependency not in node set did not raise'):
             s = S(self.mop)
             try:
                 s.prepare()
@@ -675,7 +663,7 @@ class LazySchedulerTestCase(unittest.TestCase):
         class S(_Scheduler):
             NODES = {T}
 
-        with self.assertRaises(KeyError, msg='Trigger node not in node set did not raise'), _isolation():
+        with self.assertRaises(KeyError, msg='Trigger node not in node set did not raise'):
             s = S(self.mop)
             try:
                 s.prepare()
@@ -693,7 +681,7 @@ class LazySchedulerTestCase(unittest.TestCase):
         class S(_Scheduler):
             NODES = {JobA}
 
-        with self.assertRaises(RuntimeError, msg='Non-DAG dependency graph did not raise'), _isolation():
+        with self.assertRaises(RuntimeError, msg='Non-DAG dependency graph did not raise'):
             s = S(self.mop)
             s.prepare()
 
@@ -714,17 +702,16 @@ class LazySchedulerTestCase(unittest.TestCase):
              (_JobA, JobX, JobY) if not self.REVERSE_GRAPH else (_JobC, JobZ)),
         ]
 
-        with _isolation():
-            for jobs, root_jobs in job_sets:
-                class S(_Scheduler):
-                    NODES = jobs
+        for jobs, root_jobs in job_sets:
+            class S(_Scheduler):
+                NODES = jobs
 
-                s = S(self.mop)
-                s.prepare()
+            s = S(self.mop)
+            s.prepare()
 
-                self.assertEqual(len(s._root_nodes), len(root_jobs), 'Did not found expected number of root jobs')
-                for j in s._root_nodes:
-                    self.assertIsInstance(j, root_jobs, 'Root jobs have an unexpected type')
+            self.assertEqual(len(s._root_nodes), len(root_jobs), 'Did not found expected number of root jobs')
+            for j in s._root_nodes:
+                self.assertIsInstance(j, root_jobs, 'Root jobs have an unexpected type')
 
     def test_scheduler_custom_root_jobs(self):
         class JobZ(Job):
@@ -741,18 +728,17 @@ class LazySchedulerTestCase(unittest.TestCase):
             ({_JobA, _JobB, _JobC, JobX, JobY, JobZ}, (_JobB, JobY)),
         ]
 
-        with _isolation():
-            for jobs, root_jobs in job_sets:
-                class S(_Scheduler):
-                    NODES = jobs
-                    ROOT_NODES = root_jobs
+        for jobs, root_jobs in job_sets:
+            class S(_Scheduler):
+                NODES = jobs
+                ROOT_NODES = root_jobs
 
-                s = S(self.mop)
-                s.prepare()
+            s = S(self.mop)
+            s.prepare()
 
-                self.assertEqual(len(s._root_nodes), len(root_jobs), 'Did not found expected number of root jobs')
-                for j in s._root_nodes:
-                    self.assertIsInstance(j, root_jobs, 'Root jobs have an unexpected type')
+            self.assertEqual(len(s._root_nodes), len(root_jobs), 'Did not found expected number of root jobs')
+            for j in s._root_nodes:
+                self.assertIsInstance(j, root_jobs, 'Root jobs have an unexpected type')
 
     def test_scheduler_custom_root_jobs_bad(self):
         class JobZ(Job):
@@ -769,36 +755,34 @@ class LazySchedulerTestCase(unittest.TestCase):
             ({_JobA, _JobB, _JobC, JobX, JobY, JobZ}, _Job4),
         ]
 
-        with _isolation():
-            for jobs, root_job in job_sets:
-                class S(_Scheduler):
-                    NODES = jobs
-                    ROOT_NODES = {root_job}
+        for jobs, root_job in job_sets:
+            class S(_Scheduler):
+                NODES = jobs
+                ROOT_NODES = {root_job}
 
-                s = S(self.mop)
-                with self.assertRaises(KeyError, msg='Root job outside job set did not raise'):
-                    try:
-                        s.prepare()
-                    except KeyError as e:
-                        self.assertIn(f'"{root_job.get_name()}"', str(e),
-                                      'Job name not correctly displayed in error message')
-                        raise
+            s = S(self.mop)
+            with self.assertRaises(KeyError, msg='Root job outside job set did not raise'):
+                try:
+                    s.prepare()
+                except KeyError as e:
+                    self.assertIn(f'"{root_job.get_name()}"', str(e),
+                                  'Job name not correctly displayed in error message')
+                    raise
 
     def test_scheduler_unreachable_jobs(self):
         class S(_Scheduler):
             NODES = {_JobC}
 
         s = S(self.mop)
-        with self.assertLogs(s.logger, logging.WARNING), _isolation():
+        with self.assertLogs(s.logger, logging.WARNING):
             s.prepare()
 
     def test_scheduler_wave(self):
         class S(_Scheduler):
             NODES = {_Job1, _Job2, _Job3, _Job4, _JobA, _JobB, _JobC}
 
-        with _isolation():
-            s = S(self.mop)
-            s.prepare()
+        s = S(self.mop)
+        s.prepare()
 
         # Manually call init
         for j in s._graph:
@@ -863,11 +847,10 @@ class LazySchedulerTestCase(unittest.TestCase):
                 if self.counter >= _NUM_WAVES:
                     raise TerminationRequested
 
-        with _isolation():
-            self.arguments['Wave interval'] = 1.0
-            self.arguments['Clock period'] = 0.1
-            s = S(get_managers(arguments=self.arguments))
-            s.prepare()
+        self.arguments['Wave interval'] = 1.0
+        self.arguments['Clock period'] = 0.1
+        s = S(get_managers(arguments=self.arguments))
+        s.prepare()
 
         # Run the scheduler
         s.run()
@@ -911,11 +894,10 @@ class LazySchedulerTestCase(unittest.TestCase):
                 for args, kwargs in requests:
                     controller.submit(*args, **kwargs)
 
-        with _isolation():
-            self.arguments['Wave interval'] = 1.0
-            self.arguments['Clock period'] = 0.1
-            s = S(get_managers(_DEVICE_DB, arguments=self.arguments))
-            s.prepare()
+        self.arguments['Wave interval'] = 1.0
+        self.arguments['Clock period'] = 0.1
+        s = S(get_managers(_DEVICE_DB, arguments=self.arguments))
+        s.prepare()
 
         # Run the scheduler
         s.run()
@@ -1121,11 +1103,10 @@ class LazySchedulerTestCase(unittest.TestCase):
                 if self.counter >= _NUM_WAVES:
                     raise TerminationRequested
 
-        with _isolation():
-            self.arguments['Wave interval'] = 1.0
-            self.arguments['Clock period'] = 0.1
-            s = S(get_managers(arguments=self.arguments))
-            s.prepare()
+        self.arguments['Wave interval'] = 1.0
+        self.arguments['Clock period'] = 0.1
+        s = S(get_managers(arguments=self.arguments))
+        s.prepare()
 
         # Run the scheduler
         s.run()
@@ -1167,11 +1148,10 @@ class LazySchedulerTestCase(unittest.TestCase):
                 if self.counter <= 0:
                     raise TerminationRequested
 
-        with _isolation():
-            self.arguments['Wave interval'] = 1.0
-            self.arguments['Clock period'] = 0.1
-            s = S(get_managers(arguments=self.arguments))
-            s.prepare()
+        self.arguments['Wave interval'] = 1.0
+        self.arguments['Clock period'] = 0.1
+        s = S(get_managers(arguments=self.arguments))
+        s.prepare()
 
         # Run the scheduler
         s.run()

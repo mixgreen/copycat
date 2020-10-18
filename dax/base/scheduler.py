@@ -698,9 +698,6 @@ class DaxScheduler(dax.base.system.DaxHasKey, abc.ABC):
     DEFAULT_JOB_PRIORITY: int = 0
     """Default baseline priority to submit jobs."""
 
-    _GRAPHVIZ_FORMAT: str = 'pdf'
-    """Format specification for the graphviz renderer."""
-
     def __init__(self, managers_or_parent: typing.Any,
                  *args: typing.Any, **kwargs: typing.Any):
         """Initialize the scheduler object.
@@ -1093,7 +1090,7 @@ class DaxScheduler(dax.base.system.DaxHasKey, abc.ABC):
         for t, n in ((t, n) for t in self._graph if isinstance(t, Trigger) for n in t.NODES):
             plot.edge(t.get_name(), n.get_name(), style='dashed')
         # Render the graph
-        plot.render(view=self._view_graph, format=self._GRAPHVIZ_FORMAT)
+        plot.render(view=self._view_graph)
 
     def _terminate_running_instances(self) -> None:
         """Terminate running instances of this scheduler."""
@@ -1201,8 +1198,6 @@ class DaxScheduler(dax.base.system.DaxHasKey, abc.ABC):
             'Default job pipeline must be of type str'
         assert isinstance(cls.DEFAULT_JOB_PRIORITY, int), 'Default job priority must be of type int'
         assert -99 <= cls.DEFAULT_JOB_PRIORITY <= 99, 'Default job priority must be in the domain [-99, 99]'
-        # Check graphviz format
-        assert isinstance(cls._GRAPHVIZ_FORMAT, str), 'Graphviz format must be of type str'
 
 
 class _DaxSchedulerClient(dax.base.system.DaxBase, artiq.experiment.Experiment):

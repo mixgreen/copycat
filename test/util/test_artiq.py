@@ -6,8 +6,6 @@ import artiq.experiment
 import dax.util.artiq
 import dax.util.output
 
-__all__ = ['ArtiqTestCase']
-
 
 class ArtiqTestCase(unittest.TestCase):
 
