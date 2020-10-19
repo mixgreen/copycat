@@ -12,7 +12,6 @@ import asyncio
 import json
 import hashlib
 import dataclasses
-import queue
 
 import artiq.experiment
 import artiq.master.worker_db
@@ -200,9 +199,9 @@ class _Request:
 
 
 if typing.TYPE_CHECKING:
-    __RQ_T = queue.SimpleQueue[_Request]  # Type variable for the request queue
+    __RQ_T = asyncio.Queue[_Request]  # Type variable for the request queue
 else:
-    __RQ_T = queue.SimpleQueue
+    __RQ_T = asyncio.Queue
 
 
 class Node(dax.base.system.DaxHasKey, abc.ABC):
@@ -606,7 +605,7 @@ class Trigger(Node):
     def init(self, *, reset: bool, **kwargs: typing.Any) -> None:
         # Extract attributes
         self._request_queue: __RQ_T = kwargs['request_queue']
-        assert isinstance(self._request_queue, queue.SimpleQueue)
+        assert isinstance(self._request_queue, asyncio.Queue)
 
         # Call super
         super(Trigger, self).init(reset=reset, **kwargs)
@@ -635,20 +634,26 @@ class _SchedulerController:
         # Store a reference to the request queue
         self._request_queue: __RQ_T = request_queue
 
-    def submit(self, *nodes: str,
-               action: str = str(NodeAction.FORCE),
-               policy: typing.Optional[str] = None,
-               reverse: typing.Optional[bool] = None) -> None:
+    async def submit(self, *nodes: str,
+                     action: str = str(NodeAction.FORCE),
+                     policy: typing.Optional[str] = None,
+                     reverse: typing.Optional[bool] = None,
+                     block: bool = True) -> None:
         """Submit a request to the scheduler.
 
         :param nodes: A sequence of node names as strings (case sensitive)
         :param action: The root node action as a string (defaults to :attr:`NodeAction.FORCE`)
         :param policy: The scheduling policy as a string (defaults to the schedulers policy)
         :param reverse: Reverse the node dependencies (defaults to the schedulers reverse flag)
+        :param block: Block until the request was handled
         """
 
         # Put this request in the queue without checking any of the inputs
         self._request_queue.put_nowait(_Request(nodes, action, policy, reverse))
+
+        if block:
+            # Wait until all requests are handled
+            await self._request_queue.join()
 
 
 class DaxScheduler(dax.base.system.DaxHasKey, abc.ABC):
@@ -709,8 +714,6 @@ class DaxScheduler(dax.base.system.DaxHasKey, abc.ABC):
 
         # Check attributes
         self.check_attributes()
-        # Create a request queue
-        self._request_queue: __RQ_T = queue.SimpleQueue()
         # Call super
         super(DaxScheduler, self).__init__(managers_or_parent, *args,
                                            name=self.NAME, system_key=self.NAME, **kwargs)
@@ -815,7 +818,7 @@ class DaxScheduler(dax.base.system.DaxHasKey, abc.ABC):
             raise ValueError(f'The scheduler can not run in pipeline "{self._job_pipeline}"')
 
         # Check arguments
-        if self._wave_interval < 1.0:
+        if self._wave_interval < 1:
             raise ValueError('The chosen wave interval is too small')
         if self._clock_period < 0.1:
             raise ValueError('The chosen clock period is too small')
@@ -841,14 +844,38 @@ class DaxScheduler(dax.base.system.DaxHasKey, abc.ABC):
     async def _async_run(self) -> None:
         """Async entry point for the scheduler."""
 
+        # Create a request queue
+        request_queue: __RQ_T = asyncio.Queue()
+
         if self._enable_controller:
             # Run the scheduler and the controller
-            await self._run_scheduler_and_controller()
+            await self._run_scheduler_and_controller(request_queue=request_queue)
         else:
             # Only run the scheduler
-            await self._run_scheduler()
+            await self._run_scheduler(request_queue=request_queue)
 
-    async def _run_scheduler(self) -> None:
+    async def _run_scheduler_and_controller(self, *, request_queue: __RQ_T) -> None:
+        """Coroutine for running the scheduler and the controller."""
+
+        # Create the controller and the server objects
+        controller = _SchedulerController(request_queue)
+        server = sipyco.pc_rpc.Server({'DaxSchedulerController': controller},
+                                      description=f'DaxScheduler controller: {self.get_identifier()}')
+
+        # Start the server task
+        host, port = self._get_controller_details()
+        self.logger.debug(f'Starting the scheduler controller on [{host}]:{port}')
+        await asyncio.create_task(server.start(host, port))
+
+        try:
+            # Run the scheduler
+            await self._run_scheduler(request_queue=request_queue)
+        finally:
+            # Stop the server
+            self.logger.debug('Stopping the scheduler controller')
+            await server.stop()
+
+    async def _run_scheduler(self, *, request_queue: __RQ_T) -> None:
         """Coroutine for running the scheduler"""
 
         # Initialize all nodes
@@ -857,22 +884,22 @@ class DaxScheduler(dax.base.system.DaxHasKey, abc.ABC):
             node.init(reset=self._reset_nodes,
                       job_pipeline=self._job_pipeline,
                       job_priority=self._job_priority,
-                      request_queue=self._request_queue)
+                      request_queue=request_queue)
 
-        # Time for the next wave
-        next_wave: float = time.time()
+        # Start the request handler task
+        self.logger.debug('Starting the request handler')
+        request_handler = asyncio.create_task(self._run_request_handler(request_queue=request_queue))
 
         try:
+            # Time for the next wave
+            next_wave: float = time.time()
+
             while True:
                 while next_wave > time.time():
                     if self._scheduler.check_pause():
                         # Pause
                         self.logger.debug('Pausing scheduler')
                         self._scheduler.pause()
-                    elif not self._request_queue.empty():
-                        # Handle a request
-                        self.logger.debug('Handling request')
-                        self._handle_request()
                     else:
                         # Sleep for a clock period
                         await asyncio.sleep(self._clock_period)
@@ -898,36 +925,61 @@ class DaxScheduler(dax.base.system.DaxHasKey, abc.ABC):
             self.logger.info('Scheduler was terminated')
 
         finally:
+            # Cancel the request handler task
+            self.logger.debug('Cancelling the request handler')
+            request_handler.cancel()
+            try:
+                await request_handler
+            except asyncio.CancelledError:
+                pass  # Ignore expected error
+
+            if not request_queue.empty():
+                # Warn if not all scheduler requests were handled
+                self.logger.warning(f'The scheduler dropped {request_queue.qsize()} unhandled request(s)')
+
             if self._cancel_nodes:
                 # Cancel nodes
                 self.logger.debug(f'Cancelling {len(self._graph)} node(s)')
                 for node in self._graph:
                     node.cancel()
 
-    async def _run_scheduler_and_controller(self) -> None:
-        """Coroutine for running the scheduler and the controller."""
+    async def _run_request_handler(self, *, request_queue: __RQ_T) -> None:
+        """Coroutine for the request handler."""
 
-        # Create the controller and the server objects
-        controller = _SchedulerController(self._request_queue)
-        server = sipyco.pc_rpc.Server({'DaxSchedulerController': controller},
-                                      description=f'DaxScheduler controller: {self.get_identifier()}')
+        while True:
+            # Wait for a request
+            request: _Request = await request_queue.get()
+            # Handle the request
+            self._handle_request(request=request)
+            # Mark the request done
+            request_queue.task_done()
 
-        # Start the server task
-        host, port = self._get_controller_details()
-        self.logger.debug(f'Starting the scheduler controller on [{host}]:{port}')
-        await asyncio.create_task(server.start(host, port))
+    def _handle_request(self, *, request: _Request) -> None:
+        """Handle a single request."""
+
+        if not isinstance(request.nodes, collections.abc.Collection):
+            self.logger.error('Dropping invalid request, nodes parameter is not a collection')
+            return
 
         try:
-            # Run the scheduler
-            await self._run_scheduler()
-        finally:
-            # Stop the server
-            self.logger.debug('Stopping the scheduler controller')
-            await server.stop()
-
-            if not self._request_queue.empty():
-                # Warn if not all schedule requests were handled
-                self.logger.warning(f'The scheduler controller dropped {self._request_queue.qsize()} request(s)')
+            # Convert the input parameters
+            root_nodes: typing.Collection[Node] = {self._node_name_map[node] for node in request.nodes}
+            root_action: NodeAction = NodeAction.from_str(request.action)
+            policy: Policy = self._policy if request.policy is None else Policy.from_str(request.policy)
+            reverse: bool = self._reverse if request.reverse is None else request.reverse
+        except KeyError:
+            # Log the error
+            self.logger.exception(f'Dropping invalid request: {request}')
+        else:
+            # Generate the unique wave timestamp
+            wave: float = time.time()
+            # Submit a wave for the request
+            self.logger.debug(f'Starting triggered wave {wave:.0f}')
+            self.wave(wave=wave,
+                      root_nodes=root_nodes,
+                      root_action=root_action,
+                      policy=policy,
+                      reverse=reverse)
 
     def wave(self, *, wave: float,
              root_nodes: typing.Collection[Node],
@@ -981,36 +1033,6 @@ class DaxScheduler(dax.base.system.DaxHasKey, abc.ABC):
         if submitted:
             # Log submitted nodes
             self.logger.debug(f'Submitted node(s): {", ".join(sorted(node.get_name() for node in submitted))}')
-
-    def _handle_request(self) -> None:
-        """Handle a single request from the queue."""
-
-        # Get one element from the request queue (there must be an element)
-        request: _Request = self._request_queue.get_nowait()
-
-        if not isinstance(request.nodes, collections.abc.Collection):
-            self.logger.error('Dropping invalid request, nodes parameter is not a collection')
-            return
-
-        try:
-            # Convert the input parameters
-            root_nodes: typing.Collection[Node] = {self._node_name_map[node] for node in request.nodes}
-            root_action: NodeAction = NodeAction.from_str(request.action)
-            policy: Policy = self._policy if request.policy is None else Policy.from_str(request.policy)
-            reverse: bool = self._reverse if request.reverse is None else request.reverse
-        except KeyError:
-            # Log the error
-            self.logger.exception(f'Dropping invalid request: {request}')
-        else:
-            # Generate the unique wave timestamp
-            wave: float = time.time()
-            # Submit a wave for the request
-            self.logger.debug(f'Starting triggered wave {wave:.0f}')
-            self.wave(wave=wave,
-                      root_nodes=root_nodes,
-                      root_action=root_action,
-                      policy=policy,
-                      reverse=reverse)
 
     def _process_graph(self) -> None:
         """Process the graph of this scheduler."""

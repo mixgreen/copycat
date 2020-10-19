@@ -6,10 +6,12 @@ import collections
 import contextlib
 import socket
 import abc
+import asyncio
 from unittest.mock import MagicMock, call
 
 from artiq.language.scan import *
 from artiq.experiment import TerminationRequested, NumberValue
+import artiq.frontend.artiq_run  # type: ignore
 
 from dax.base.scheduler import *
 import dax.base.scheduler
@@ -59,9 +61,26 @@ _DEVICE_DB: typing.Dict[str, typing.Any] = {
 def _get_init_kwargs(scheduler: DaxScheduler, **kwargs):
     kwargs.setdefault('job_pipeline', scheduler._job_pipeline)
     kwargs.setdefault('job_priority', scheduler._job_priority)
-    kwargs.setdefault('request_queue', scheduler._request_queue)
     kwargs.setdefault('reset', scheduler._reset_nodes)
     return kwargs
+
+
+class _DummyScheduler(artiq.frontend.artiq_run.DummyScheduler):
+    """Used for quick termination of tests"""
+
+    def __init__(self):
+        super(_DummyScheduler, self).__init__()
+        self._terminate = False
+
+    def terminate_this_experiment(self):
+        self._terminate = True
+
+    def check_pause(self):
+        return self._terminate
+
+    def pause(self):
+        if self.check_pause():
+            raise TerminationRequested
 
 
 class _Node(dax.base.scheduler.Node, abc.ABC):
@@ -139,9 +158,14 @@ class _Scheduler(DaxScheduler):
     NODES: typing.Set[typing.Type[dax.base.scheduler.Node]] = set()
 
     def __init__(self, *args, **kwargs):
+        # Mock data store
         self._data_store = MagicMock(spec=dax.base.system.DaxDataStore)
-        self.handled_requests = 0
+        # Variable for testing purposes
+        self.testing_handled_requests = 0
+        # Call super
         super(_Scheduler, self).__init__(*args, **kwargs)
+        # Replace scheduler with custom dummy scheduler
+        self._scheduler = _DummyScheduler()
 
     @property
     def data_store(self):
@@ -168,16 +192,22 @@ class _Scheduler(DaxScheduler):
         super(_Scheduler, self).wave(wave=wave, root_nodes=root_nodes, root_action=root_action,
                                      policy=policy, reverse=reverse)
 
-    async def _run_scheduler(self) -> None:
-        self.controller_callback()
-        await super(_Scheduler, self)._run_scheduler()
+    async def _run_scheduler(self, *, request_queue) -> None:
+        await self.controller_callback(request_queue)
+        await super(_Scheduler, self)._run_scheduler(request_queue=request_queue)
+        # Variable for testing purposes
+        self.testing_request_queue_qsize = request_queue.qsize()
 
-    def controller_callback(self) -> None:
+    async def controller_callback(self, request_queue) -> None:
         pass
 
-    def _handle_request(self) -> None:
-        self.handled_requests += 1
-        super(_Scheduler, self)._handle_request()
+    def _handle_request(self, *, request) -> None:
+        self.testing_handled_requests += 1
+        try:
+            super(_Scheduler, self)._handle_request(request=request)
+        except TerminationRequested:
+            # Test ended, catch exception and mark this experiment as terminated using the dummy scheduler
+            self._scheduler.terminate_this_experiment()
 
     def _plot_graph(self) -> None:
         # Skip plotting graph, prevents output and call to the renderer
@@ -288,6 +318,11 @@ class SchedulerClientTestCase(unittest.TestCase):
 class LazySchedulerTestCase(unittest.TestCase):
     POLICY = Policy.LAZY
     REVERSE_GRAPH = False
+
+    FAST_WAVE_ARGUMENTS = {
+        'Wave interval': 1,
+        'Clock period': 0.1,
+    }
 
     def setUp(self) -> None:
         self.arguments: typing.Dict[str, typing.Any] = {'Scheduling policy': str(self.POLICY),
@@ -847,13 +882,14 @@ class LazySchedulerTestCase(unittest.TestCase):
                 if self.counter >= _NUM_WAVES:
                     raise TerminationRequested
 
-        self.arguments['Wave interval'] = 1.0
-        self.arguments['Clock period'] = 0.1
+        self.arguments.update(self.FAST_WAVE_ARGUMENTS)
         s = S(get_managers(arguments=self.arguments))
         s.prepare()
 
         # Run the scheduler
         s.run()
+        self.assertEqual(s.testing_handled_requests, 0, 'Unexpected number of requests handled')
+        self.assertEqual(s.testing_request_queue_qsize, 0, 'Request queue was not empty')
         self._check_scheduler_run(s)
 
     def _check_scheduler_run(self, scheduler):
@@ -884,18 +920,18 @@ class LazySchedulerTestCase(unittest.TestCase):
                 if self.counter >= _NUM_WAVES + len(requests):
                     raise TerminationRequested
 
-            def controller_callback(self) -> None:
+            async def controller_callback(self, request_queue) -> None:
                 # noinspection PyProtectedMember
                 from dax.base.scheduler import _SchedulerController
                 # Construct a separate controller with the same queue
                 # This is required because we can not use get_device() to obtain the controller
-                # Because the server and the client are running on the same thread then, the situation deadlocks
-                controller = _SchedulerController(self._request_queue)
+                # Because the server and the client are running on the same thread, the situation deadlocks
+                controller = _SchedulerController(request_queue)
                 for args, kwargs in requests:
-                    controller.submit(*args, **kwargs)
+                    kwargs.setdefault('block', False)
+                    await controller.submit(*args, **kwargs)
 
-        self.arguments['Wave interval'] = 1.0
-        self.arguments['Clock period'] = 0.1
+        self.arguments.update(self.FAST_WAVE_ARGUMENTS)
         s = S(get_managers(_DEVICE_DB, arguments=self.arguments))
         s.prepare()
 
@@ -910,7 +946,9 @@ class LazySchedulerTestCase(unittest.TestCase):
             ((_JobC.get_name(),), {'action': str(NodeAction.PASS)}),
         ]
         s = self._test_scheduler_controller(requests)
-        self.assertTrue(s._request_queue.empty(), 'Request queue is not empty')
+
+        self.assertEqual(s.testing_handled_requests, len(requests), 'Unexpected number of requests handled')
+        self.assertEqual(s.testing_request_queue_qsize, 0, 'Request queue was not empty')
         self._check_scheduler_controller0(s)
 
     def _check_scheduler_controller0(self, scheduler):
@@ -938,7 +976,9 @@ class LazySchedulerTestCase(unittest.TestCase):
             ((_Job4.get_name(), _JobB.get_name()), {'reverse': True}),
         ]
         s = self._test_scheduler_controller(requests)
-        self.assertTrue(s._request_queue.empty(), 'Request queue is not empty')
+
+        self.assertEqual(s.testing_handled_requests, len(requests), 'Unexpected number of requests handled')
+        self.assertEqual(s.testing_request_queue_qsize, 0, 'Request queue was not empty')
         self._check_scheduler_controller1(s)
 
     def _check_scheduler_controller1(self, scheduler):
@@ -965,12 +1005,21 @@ class LazySchedulerTestCase(unittest.TestCase):
             ((_JobB.get_name(),), {'reverse': True}),
         ]
         s = self._test_scheduler_controller(requests)
-        self.assertTrue(s._request_queue.empty(), 'Request queue is not empty')
+
+        self.assertEqual(s.testing_handled_requests, len(requests), 'Unexpected number of requests handled')
+        self.assertEqual(s.testing_request_queue_qsize, 0, 'Request queue was not empty')
         self._check_scheduler_controller1(s)
 
     def test_create_trigger(self):
+        # asyncio entry point
+        asyncio.run(self._test_create_trigger())
+
+    async def _test_create_trigger(self):
         s = _Scheduler(self.mop)
-        queue_len = s._request_queue.qsize()
+
+        # Use a "stand-in" queue for testing
+        request_queue = asyncio.Queue()
+        queue_len = request_queue.qsize()
         self.assertEqual(queue_len, 0)
 
         class T0(Trigger):
@@ -1016,7 +1065,7 @@ class LazySchedulerTestCase(unittest.TestCase):
                 for reset in [False, True]:  # reset=True must be last for the next test
                     with self.subTest(task='init', is_timed=is_timed, reset=reset):
                         # Test init
-                        t.init(**_get_init_kwargs(s, reset=reset))
+                        t.init(**_get_init_kwargs(s, reset=reset, request_queue=request_queue))
                         self.assertIsInstance(t._next_submit, float)
                         if is_timed:
                             self.assertLess(t._next_submit, float('inf'))
@@ -1038,7 +1087,7 @@ class LazySchedulerTestCase(unittest.TestCase):
                             queue_len += 1
                     else:
                         t.submit(wave=new_time)
-                    self.assertEqual(s._request_queue.qsize(), queue_len, 'Queue length did not match expected length')
+                    self.assertEqual(request_queue.qsize(), queue_len, 'Queue length did not match expected length')
 
                 with self.subTest(task='cancel'):
                     t.cancel()
@@ -1103,8 +1152,7 @@ class LazySchedulerTestCase(unittest.TestCase):
                 if self.counter >= _NUM_WAVES:
                     raise TerminationRequested
 
-        self.arguments['Wave interval'] = 1.0
-        self.arguments['Clock period'] = 0.1
+        self.arguments.update(self.FAST_WAVE_ARGUMENTS)
         s = S(get_managers(arguments=self.arguments))
         s.prepare()
 
@@ -1148,8 +1196,7 @@ class LazySchedulerTestCase(unittest.TestCase):
                 if self.counter <= 0:
                     raise TerminationRequested
 
-        self.arguments['Wave interval'] = 1.0
-        self.arguments['Clock period'] = 0.1
+        self.arguments.update(self.FAST_WAVE_ARGUMENTS)
         s = S(get_managers(arguments=self.arguments))
         s.prepare()
 
