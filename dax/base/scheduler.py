@@ -572,7 +572,7 @@ class Trigger(Node):
     - :attr:`NODES`: A collection of nodes to trigger
     - :attr:`ACTION`: The root node action of this trigger (defaults to :attr:`NodeAction.FORCE`)
     - :attr:`POLICY`: The scheduling policy of this trigger (defaults to the schedulers policy)
-    - :attr:`REVERSE`: Reverse the node dependencies flag of this trigger (defaults to the schedulers reverse flag)
+    - :attr:`REVERSE`: The reverse wave flag of this trigger (defaults to the schedulers reverse wave flag)
     - :attr:`Node.INTERVAL`: The trigger interval
     - :attr:`Node.DEPENDENCIES`: A collection of node classes on which this trigger depends
     """
@@ -584,15 +584,15 @@ class Trigger(Node):
     POLICY: typing.Optional[Policy] = None
     """The scheduling policy of this trigger."""
     REVERSE: typing.Optional[bool] = None
-    """Reverse node dependencies flag for this trigger."""
+    """The r wave flag for this trigger."""
 
     def build(self) -> None:  # type: ignore
-        # Check nodes, action, policy, and reverse dependencies flag
+        # Check nodes, action, policy, and reverse flag
         assert isinstance(self.NODES, collections.abc.Collection), 'The nodes must be a collection'
         assert all(issubclass(node, Node) for node in self.NODES), 'All nodes must be subclasses of Node'
         assert isinstance(self.ACTION, NodeAction), 'Action must be of type NodeAction'
         assert isinstance(self.POLICY, Policy) or self.POLICY is None, 'Policy must be of type Policy or None'
-        assert isinstance(self.REVERSE, bool) or self.REVERSE is None, 'Reverse flag must be of type bool or None'
+        assert isinstance(self.REVERSE, bool) or self.REVERSE is None, 'Reverse must be of type bool or None'
 
         # Assemble the collection of node names
         self._nodes: typing.Set[str] = {node.get_name() for node in self.NODES}
@@ -644,7 +644,7 @@ class _SchedulerController:
         :param nodes: A sequence of node names as strings (case sensitive)
         :param action: The root node action as a string (defaults to :attr:`NodeAction.FORCE`)
         :param policy: The scheduling policy as a string (defaults to the schedulers policy)
-        :param reverse: Reverse the node dependencies (defaults to the schedulers reverse flag)
+        :param reverse: The reverse wave flag (defaults to the schedulers reverse wave flag)
         :param block: Block until the request was handled
         """
 
@@ -674,8 +674,9 @@ class DaxScheduler(dax.base.system.DaxHasKey, abc.ABC):
     - :attr:`SYSTEM`: A DAX system type to enable additional logging of data
     - :attr:`CONTROLLER`: The scheduler controller name as defined in the device DB
     - :attr:`DEFAULT_SCHEDULING_POLICY`: The default scheduling policy
-    - :attr:`DEFAULT_REVERSE_DEPENDENCIES`: The default value for the reverse node dependencies flag
+    - :attr:`DEFAULT_REVERSE_WAVE`: The default value for the reverse wave flag
     - :attr:`DEFAULT_RESET_NODES`: The default value for the reset nodes flag
+    - :attr:`DEFAULT_CANCEL_NODES`: The default value for the cancel nodes at exit flag
     - :attr:`DEFAULT_JOB_PIPELINE`: The default pipeline to submit jobs to
     - :attr:`DEFAULT_JOB_PRIORITY`: The baseline priority for jobs submitted by this scheduler
     """
@@ -694,10 +695,12 @@ class DaxScheduler(dax.base.system.DaxHasKey, abc.ABC):
 
     DEFAULT_SCHEDULING_POLICY: Policy = Policy.LAZY
     """Default scheduling policy."""
-    DEFAULT_REVERSE_DEPENDENCIES: bool = False
-    """Default value for the reverse node dependencies flag."""
+    DEFAULT_REVERSE_WAVE: bool = False
+    """Default value for the reverse wave flag."""
     DEFAULT_RESET_NODES: bool = False
     """Default value for the reset nodes flag."""
+    DEFAULT_CANCEL_NODES: bool = False
+    """Default value for the cancel nodes at exit flag."""
     DEFAULT_JOB_PIPELINE: str = 'main'
     """Default pipeline to submit jobs to."""
     DEFAULT_JOB_PRIORITY: int = 0
@@ -751,9 +754,9 @@ class DaxScheduler(dax.base.system.DaxHasKey, abc.ABC):
                                                                                     default=default_scheduling_policy),
                                                   tooltip='Scheduling policy',
                                                   group='Scheduler')
-        self._reverse: bool = self.get_argument('Reverse dependencies',
-                                                artiq.experiment.BooleanValue(self.DEFAULT_REVERSE_DEPENDENCIES),
-                                                tooltip='Reverse the node dependencies when traversing the graph',
+        self._reverse: bool = self.get_argument('Reverse wave',
+                                                artiq.experiment.BooleanValue(self.DEFAULT_REVERSE_WAVE),
+                                                tooltip='Reverse the wave direction when traversing the graph',
                                                 group='Scheduler')
         self._wave_interval: int = self.get_argument('Wave interval',
                                                      artiq.experiment.NumberValue(60, 's', min=1, step=1, ndecimals=0),
@@ -777,7 +780,7 @@ class DaxScheduler(dax.base.system.DaxHasKey, abc.ABC):
                                                     tooltip='Reset the node states at scheduler startup',
                                                     group='Nodes')
         self._cancel_nodes: bool = self.get_argument('Cancel nodes at exit',
-                                                     artiq.experiment.BooleanValue(False),
+                                                     artiq.experiment.BooleanValue(self.DEFAULT_CANCEL_NODES),
                                                      tooltip='Cancel the submit action of nodes during scheduler exit',
                                                      group='Nodes')
         self._job_pipeline: str = self.get_argument('Job pipeline',
@@ -992,7 +995,7 @@ class DaxScheduler(dax.base.system.DaxHasKey, abc.ABC):
         :param root_nodes: A collection of root nodes
         :param root_action: The root node action
         :param policy: The policy for this wave
-        :param reverse: Reverse the node dependencies
+        :param reverse: The reverse wave flag
         """
         assert isinstance(wave, float), 'Wave must be of type float'
         assert isinstance(root_nodes, collections.abc.Collection), 'Root nodes must be a collection'
@@ -1006,6 +1009,17 @@ class DaxScheduler(dax.base.system.DaxHasKey, abc.ABC):
         # Set of submitted nodes in this wave
         submitted: typing.Set[Node] = set()
 
+        def submit(node: Node) -> None:
+            """Submit a node.
+
+            :param node: The node to submit
+            """
+
+            if node not in submitted:
+                # Submit this node
+                node.submit(wave=wave)
+                submitted.add(node)
+
         def recurse(node: Node, action: NodeAction) -> None:
             """Process nodes recursively.
 
@@ -1017,14 +1031,18 @@ class DaxScheduler(dax.base.system.DaxHasKey, abc.ABC):
             current_action = node.visit(wave=wave)
             # Get the new action based on the policy
             new_action = policy.action(action, current_action)
+
+            if reverse and new_action.submittable():
+                # Submit this node before recursion
+                submit(node)
+
             # Recurse over successors
             for successor in graph.successors(node):
                 recurse(successor, new_action)
 
-            if new_action.submittable() and node not in submitted:
-                # Submit this node
-                node.submit(wave=wave)
-                submitted.add(node)
+            if not reverse and new_action.submittable():
+                # Submit this node after recursion
+                submit(node)
 
         for root_node in root_nodes:
             # Recurse over all root nodes using the root action
@@ -1213,9 +1231,9 @@ class DaxScheduler(dax.base.system.DaxHasKey, abc.ABC):
         assert cls.CONTROLLER != 'scheduler', 'Controller can not be "scheduler" (aliases with the ARTIQ scheduler)'
         # Check default policy, reverse, reset nodes flag, pipeline, and job priority
         assert isinstance(cls.DEFAULT_SCHEDULING_POLICY, Policy), 'Default policy must be of type Policy'
-        assert isinstance(cls.DEFAULT_REVERSE_DEPENDENCIES, bool), \
-            'Default reverse dependencies flag must be of type bool'
+        assert isinstance(cls.DEFAULT_REVERSE_WAVE, bool), 'Default reverse wave flag must be of type bool'
         assert isinstance(cls.DEFAULT_RESET_NODES, bool), 'Default reset nodes flag must be of type bool'
+        assert isinstance(cls.DEFAULT_CANCEL_NODES, bool), 'Default cancel nodes at startup flag must be of type bool'
         assert isinstance(cls.DEFAULT_JOB_PIPELINE, str) and cls.DEFAULT_JOB_PIPELINE, \
             'Default job pipeline must be of type str'
         assert isinstance(cls.DEFAULT_JOB_PRIORITY, int), 'Default job priority must be of type int'
@@ -1239,7 +1257,7 @@ class _DaxSchedulerClient(dax.base.system.DaxBase, artiq.experiment.Experiment):
     _POLICY_NAMES: typing.List[str] = [_SCHEDULER_SETTING] + sorted(str(p) for p in Policy)
     """A list with policy names."""
     _REVERSE_DICT: typing.Dict[str, typing.Optional[bool]] = {_SCHEDULER_SETTING: None, 'False': False, 'True': True}
-    """A dict with reverse node dependencies names and values."""
+    """A dict with reverse wave flag names and values."""
 
     def build(self) -> None:  # type: ignore
         # Set default scheduling options for the client
@@ -1260,7 +1278,7 @@ class _DaxSchedulerClient(dax.base.system.DaxBase, artiq.experiment.Experiment):
         self._reverse: str = self.get_argument('Reverse',
                                                artiq.experiment.EnumerationValue(sorted(self._REVERSE_DICT),
                                                                                  default=self._SCHEDULER_SETTING),
-                                               tooltip='Reverse the node dependencies when traversing the graph')
+                                               tooltip='Reverse the wave direction when traversing the graph')
 
         # Get the DAX scheduler controller
         self._dax_scheduler: _SchedulerController = self.get_device(self.CONTROLLER_KEY)
@@ -1297,7 +1315,6 @@ def dax_scheduler_client(scheduler_class: typing.Type[DaxScheduler]) -> typing.T
 
     assert issubclass(scheduler_class, DaxScheduler), 'The scheduler class must be a subclass of DaxScheduler'
     scheduler_class.check_attributes()
-    assert isinstance(scheduler_class.CONTROLLER, str), 'The scheduler class must have a controller key'
 
     class WrapperClass(_DaxSchedulerClient):
         """A wrapped/instantiated client experiment class for a scheduler."""

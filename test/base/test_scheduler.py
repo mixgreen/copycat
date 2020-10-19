@@ -283,7 +283,7 @@ class SchedulerClientTestCase(unittest.TestCase):
         self.assertTrue(issubclass(dax_scheduler_client(S), _DaxSchedulerClient))
 
     def test_client_class_instantiation_bad(self):
-        with self.assertRaises(AssertionError, msg='Lack of scheduler controller did not raise'):
+        with self.assertRaises(TypeError, msg='Lack of scheduler controller did not raise'):
             dax_scheduler_client(_Scheduler)
 
         class S(_Scheduler):
@@ -317,7 +317,7 @@ class SchedulerClientTestCase(unittest.TestCase):
 
 class LazySchedulerTestCase(unittest.TestCase):
     POLICY = Policy.LAZY
-    REVERSE_GRAPH = False
+    REVERSE_WAVE = False
 
     FAST_WAVE_ARGUMENTS = {
         'Wave interval': 1,
@@ -326,7 +326,7 @@ class LazySchedulerTestCase(unittest.TestCase):
 
     def setUp(self) -> None:
         self.arguments: typing.Dict[str, typing.Any] = {'Scheduling policy': str(self.POLICY),
-                                                        'Reverse dependencies': self.REVERSE_GRAPH,
+                                                        'Reverse wave': self.REVERSE_WAVE,
                                                         'Job pipeline': 'test_pipeline',
                                                         'View graph': False}
         self.mop = get_managers(arguments=self.arguments)
@@ -732,9 +732,9 @@ class LazySchedulerTestCase(unittest.TestCase):
 
         job_sets = [
             ({_Job1, _Job2, _Job3, _Job4, _JobA, _JobB, _JobC},
-             (_Job1, _JobA) if not self.REVERSE_GRAPH else (_Job4, _JobC)),
+             (_Job1, _JobA) if not self.REVERSE_WAVE else (_Job4, _JobC)),
             ({_JobA, _JobB, _JobC, JobX, JobY, JobZ},
-             (_JobA, JobX, JobY) if not self.REVERSE_GRAPH else (_JobC, JobZ)),
+             (_JobA, JobX, JobY) if not self.REVERSE_WAVE else (_JobC, JobZ)),
         ]
 
         for jobs, root_jobs in job_sets:
@@ -1212,7 +1212,7 @@ class LazySchedulerTestCase(unittest.TestCase):
                     ref_counter = {'init': 1, 'visit': num_waves + num_submits,
                                    'submit': num_submits, 'schedule': num_submits}
                 elif isinstance(n, J1):
-                    if self.REVERSE_GRAPH:
+                    if self.REVERSE_WAVE:
                         ref_counter = {'init': 1, 'visit': num_waves}
                     elif self.POLICY is Policy.LAZY:
                         ref_counter = {'init': 1, 'visit': num_waves + num_submits}
@@ -1227,7 +1227,7 @@ class LazySchedulerTestCase(unittest.TestCase):
 
 class LazySchedulerReversedTestCase(LazySchedulerTestCase):
     POLICY = Policy.LAZY
-    REVERSE_GRAPH = True
+    REVERSE_WAVE = True
 
     def _check_scheduler_wave_0(self, scheduler):
         for j in scheduler._graph:
@@ -1308,7 +1308,7 @@ class LazySchedulerReversedTestCase(LazySchedulerTestCase):
 
 class GreedySchedulerTestCase(LazySchedulerTestCase):
     POLICY = Policy.GREEDY
-    REVERSE_GRAPH = False
+    REVERSE_WAVE = False
 
     def test_scheduler_unreachable_jobs(self):
         with self.assertRaises(self.failureException, msg='Expected test failure did not happen'):
@@ -1403,7 +1403,7 @@ class GreedySchedulerTestCase(LazySchedulerTestCase):
 
 class GreedySchedulerReversedTestCase(GreedySchedulerTestCase):
     POLICY = Policy.GREEDY
-    REVERSE_GRAPH = True
+    REVERSE_WAVE = True
 
     def _check_scheduler_wave_0(self, scheduler):
         for j in scheduler._graph:
