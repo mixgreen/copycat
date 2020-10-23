@@ -65,12 +65,13 @@ class GraphvizBase(graphviz.Digraph):
         super(GraphvizBase, self).__init__(**kwargs)
 
     def _add_modules(self, graph: graphviz.Digraph,
-                     module: dax.base.system.DaxModuleBase,
+                     module: dax.base.system.DaxModuleBase, *,
                      to_module_edges: bool) -> None:
         """Recursive function to add a tree of modules to a graph.
 
         :param graph: The graph object
         :param module: The top module to start the recursion
+        :param to_module_edges: Add edges to other modules
         """
         assert isinstance(graph, graphviz.Digraph)
         assert isinstance(module, dax.base.system.DaxModuleBase)
@@ -86,7 +87,7 @@ class GraphvizBase(graphviz.Digraph):
 
         for child in child_modules:
             # Recursive call
-            self._add_modules(graph, child, to_module_edges)
+            self._add_modules(graph, child, to_module_edges=to_module_edges)
             if to_module_edges:
                 # Add edge
                 graph.edge(module.get_system_key(), child.get_system_key(),
@@ -110,12 +111,13 @@ class GraphvizBase(graphviz.Digraph):
                               else self._module_edge_attr))
 
     def _add_services(self, graph: graphviz.Digraph,
-                      services: typing.Sequence[dax.base.system.DaxService],
+                      services: typing.Sequence[dax.base.system.DaxService], *,
                       to_service_edges: bool) -> None:
         """Add services to a sub-graph.
 
         :param graph: The graph object
         :param services: The sequence of services to add
+        :param to_service_edges: Add edges to other services
         """
         assert isinstance(graph, graphviz.Digraph)
         assert isinstance(services, collections.abc.Sequence)
@@ -285,7 +287,7 @@ class RelationGraphviz(GraphvizBase):
         system_cluster = graphviz.Digraph(name='cluster_system',
                                           graph_attr={'label': 'System'})
         # Add the system
-        self._add_modules(system_cluster, system, False)
+        self._add_modules(system_cluster, system, to_module_edges=False)
 
         # Add inter-cluster edges
         self._add_service_system_edges(self, services)

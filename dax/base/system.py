@@ -1732,6 +1732,9 @@ __DCF_S_T = typing.TypeVar('__DCF_S_T', bound=DaxSystem)  # Type variable for da
 def dax_client_factory(c: typing.Type[__DCF_C_T]) -> typing.Callable[[typing.Type[__DCF_S_T]], typing.Type[__DCF_C_T]]:
     """Decorator to convert a DaxClient class to a factory function for that class.
 
+    Note that the factory function and the dynamically generated class can cause type checkers
+    to raise issues. These errors and warnings can be ignored.
+
     :param c: The DAX client to create a factory function for
     :return: A factory for the client class that allows the client to be matched with a system
     """

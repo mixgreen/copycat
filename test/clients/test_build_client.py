@@ -81,10 +81,11 @@ class BuildClientTestCase(unittest.TestCase):
     ]
     """List of custom client types (not subclasses of DaxClient)."""
 
-    def test_build_client(self):
+    def test_build_client(self) -> None:
         for client_type in self._CLIENTS:
             with self.subTest(client_type=client_type.__name__):
-                class _InstantiatedClient(client_type(_TestSystem)):
+                # noinspection PyTypeChecker
+                class _InstantiatedClient(client_type(_TestSystem)):  # type: ignore[misc]
                     pass
 
                 # Create client
@@ -103,10 +104,11 @@ class BuildClientTestCase(unittest.TestCase):
                     # Initialize system
                     self.assertIsNone(system.dax_init())
 
-    def test_build_custom_clients(self):
+    def test_build_custom_clients(self) -> None:
         for client_type in self._CUSTOM_CLIENTS:
             with self.subTest(client_type=client_type.__name__):
-                class _InstantiatedClient(client_type(_TestSystem)):
+                # noinspection PyTypeChecker
+                class _InstantiatedClient(client_type(_TestSystem)):  # type: ignore[misc]
                     pass
 
                 # Create client

@@ -729,7 +729,7 @@ class DaxScheduler(dax.base.system.DaxHasKey, abc.ABC):
         """
 
         # Set default scheduling options for the scheduler itself
-        self.set_default_scheduling(pipeline_name=self.NAME, priority=99)
+        self.set_default_scheduling(pipeline_name=self.NAME, priority=99, flush=False)
 
         # The ARTIQ scheduler
         self._scheduler = self.get_device('scheduler')

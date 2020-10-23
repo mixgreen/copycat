@@ -117,7 +117,7 @@ def get_managers(device_db: typing.Union[typing.Dict[str, typing.Any], str, None
     argument_mgr = artiq.language.environment.ProcessArgumentManager(arguments)
 
     # Return a tuple that is accepted as managers_or_parent
-    # DeviceManager, DatasetManager, ProcessArgumentManager, dict
+    # DeviceManager, DatasetManager, ProcessArgumentManager, scheduler defaults
     return device_mgr, dataset_mgr, argument_mgr, {}
 
 
