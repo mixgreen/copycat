@@ -1,5 +1,6 @@
 import typing
 import string
+import numbers
 
 from artiq.language.core import host_only
 from artiq.language.units import *  # noqa: F401
@@ -14,8 +15,8 @@ __all__ = ['time_to_str', 'str_to_time',
 
 @host_only
 def _value_to_str(value: float, threshold: float, precision: int, scales: typing.Sequence[str]) -> str:
-    assert isinstance(value, float), 'Input value must be of type float'
-    assert isinstance(threshold, float), 'Threshold must be a float'
+    assert isinstance(value, numbers.Real), 'Input value must be of type float'
+    assert isinstance(threshold, numbers.Real), 'Threshold must be a float'
     assert isinstance(precision, int) and precision >= 0, 'Precision must be a positive int'
 
     # Take the abs of threshold
