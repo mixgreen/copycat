@@ -2,6 +2,8 @@ import collections
 import typing
 import abc
 
+import artiq.coredevice.edge_counter
+
 from dax.experiment import *
 from dax.interfaces.detection import DetectionInterface
 from dax.util.ccb import get_ccb_tool
@@ -32,10 +34,9 @@ class _PmtMonitorBase(DaxClient, EnvExperiment, abc.ABC):
         assert isinstance(self.DEFAULT_DATASET, str), 'Default dataset must be of type str'
         assert is_kernel(self.device_setup), 'device_setup() must be a kernel function'
 
-        # Obtain the detection interface
-        detection = self.registry.find_interface(DetectionInterface)  # type: ignore[misc]
         # Obtain the PMT array
-        self.pmt_array = detection.get_pmt_array()
+        self.pmt_array: typing.List[artiq.coredevice.edge_counter.EdgeCounter] = self.get_pmt_array()
+        assert isinstance(self.pmt_array, list), 'PMT array is not a list'
         self.update_kernel_invariants('pmt_array')
         self.logger.debug(f'Found PMT array with {len(self.pmt_array)} channel(s)')
 
@@ -91,6 +92,18 @@ class _PmtMonitorBase(DaxClient, EnvExperiment, abc.ABC):
                                                    group='Applet',
                                                    tooltip='Close applet when experiment is terminated')
 
+    def get_pmt_array(self) -> typing.List[artiq.coredevice.edge_counter.EdgeCounter]:
+        """Get the PMT array from the system.
+
+        By default, search for a detection interface and request the PMT array.
+
+        :return: A list with `EdgeCounter` objects
+        """
+        # Obtain the detection interface
+        detection = self.registry.find_interface(DetectionInterface)  # type: ignore[misc]
+        # Return its PMT array
+        return detection.get_pmt_array()
+
     def _add_custom_arguments(self) -> None:
         """Add custom arguments."""
         pass
@@ -101,6 +114,8 @@ class _PmtMonitorBase(DaxClient, EnvExperiment, abc.ABC):
         pass
 
     def prepare(self) -> None:
+        assert all(isinstance(c, artiq.coredevice.edge_counter.EdgeCounter) for c in self.pmt_array)
+
         if self.sliding_window > 0 and self.detection_window > 0.0:
             # Convert window size to dataset size
             self.sliding_window = int(self.sliding_window / self.detection_window)
