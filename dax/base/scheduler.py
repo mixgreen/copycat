@@ -196,6 +196,7 @@ class _Request:
     action: str
     policy: typing.Optional[str]
     reverse: typing.Optional[bool]
+    depth: int
 
 
 if typing.TYPE_CHECKING:
@@ -573,6 +574,7 @@ class Trigger(Node):
     - :attr:`ACTION`: The root node action of this trigger (defaults to :attr:`NodeAction.FORCE`)
     - :attr:`POLICY`: The scheduling policy of this trigger (defaults to the schedulers policy)
     - :attr:`REVERSE`: The reverse wave flag of this trigger (defaults to the schedulers reverse wave flag)
+    - :attr:`DEPTH`: Maximum recursion depth (`-1` for infinite recursion depth, which is the default)
     - :attr:`Node.INTERVAL`: The trigger interval
     - :attr:`Node.DEPENDENCIES`: A collection of node classes on which this trigger depends
     """
@@ -584,7 +586,9 @@ class Trigger(Node):
     POLICY: typing.Optional[Policy] = None
     """The scheduling policy of this trigger."""
     REVERSE: typing.Optional[bool] = None
-    """The r wave flag for this trigger."""
+    """The reverse wave flag for this trigger."""
+    DEPTH: int = -1
+    """Maximum recursion depth (`-1` for infinite recursion depth)."""
 
     def build(self) -> None:  # type: ignore
         # Check nodes, action, policy, and reverse flag
@@ -593,6 +597,7 @@ class Trigger(Node):
         assert isinstance(self.ACTION, NodeAction), 'Action must be of type NodeAction'
         assert isinstance(self.POLICY, Policy) or self.POLICY is None, 'Policy must be of type Policy or None'
         assert isinstance(self.REVERSE, bool) or self.REVERSE is None, 'Reverse must be of type bool or None'
+        assert isinstance(self.DEPTH, int), 'Depth must be of type int'
 
         # Assemble the collection of node names
         self._nodes: typing.Set[str] = {node.get_name() for node in self.NODES}
@@ -615,7 +620,8 @@ class Trigger(Node):
         self._request_queue.put_nowait(_Request(self._nodes,
                                                 str(self.ACTION),
                                                 str(self.POLICY) if self.POLICY is not None else None,
-                                                self.REVERSE))
+                                                self.REVERSE,
+                                                self.DEPTH))
         self.logger.info('Submitted trigger')
 
     def cancel(self) -> None:
@@ -638,6 +644,7 @@ class _SchedulerController:
                      action: str = str(NodeAction.FORCE),
                      policy: typing.Optional[str] = None,
                      reverse: typing.Optional[bool] = None,
+                     depth: int = -1,
                      block: bool = True) -> None:
         """Submit a request to the scheduler.
 
@@ -645,11 +652,12 @@ class _SchedulerController:
         :param action: The root node action as a string (defaults to :attr:`NodeAction.FORCE`)
         :param policy: The scheduling policy as a string (defaults to the schedulers policy)
         :param reverse: The reverse wave flag (defaults to the schedulers reverse wave flag)
+        :param depth: Maximum recursion depth (`-1` for infinite recursion depth, which is the default)
         :param block: Block until the request was handled
         """
 
         # Put this request in the queue without checking any of the inputs
-        self._request_queue.put_nowait(_Request(nodes, action, policy, reverse))
+        self._request_queue.put_nowait(_Request(nodes, action, policy, reverse, depth))
 
         if block:
             # Wait until all requests are handled
@@ -970,7 +978,11 @@ class DaxScheduler(dax.base.system.DaxHasKey, abc.ABC):
             root_action: NodeAction = NodeAction.from_str(request.action)
             policy: Policy = self._policy if request.policy is None else Policy.from_str(request.policy)
             reverse: bool = self._reverse if request.reverse is None else request.reverse
-        except KeyError:
+            depth: int = request.depth
+            # Verify unchecked fields
+            assert isinstance(reverse, bool), 'Reverse flag must be of type bool'
+            assert isinstance(depth, int), 'Depth must be of type int'
+        except (KeyError, AssertionError):
             # Log the error
             self.logger.exception(f'Dropping invalid request: {request}')
         else:
@@ -982,13 +994,15 @@ class DaxScheduler(dax.base.system.DaxHasKey, abc.ABC):
                       root_nodes=root_nodes,
                       root_action=root_action,
                       policy=policy,
-                      reverse=reverse)
+                      reverse=reverse,
+                      depth=depth)
 
     def wave(self, *, wave: float,
              root_nodes: typing.Collection[Node],
              root_action: NodeAction,
              policy: Policy,
-             reverse: bool) -> None:
+             reverse: bool,
+             depth: int = -1) -> None:
         """Run a wave over the graph.
 
         :param wave: The wave identifier
@@ -996,6 +1010,7 @@ class DaxScheduler(dax.base.system.DaxHasKey, abc.ABC):
         :param root_action: The root node action
         :param policy: The policy for this wave
         :param reverse: The reverse wave flag
+        :param depth: Maximum recursion depth (`-1` for infinite recursion depth)
         """
         assert isinstance(wave, float), 'Wave must be of type float'
         assert isinstance(root_nodes, collections.abc.Collection), 'Root nodes must be a collection'
@@ -1003,6 +1018,7 @@ class DaxScheduler(dax.base.system.DaxHasKey, abc.ABC):
         assert isinstance(root_action, NodeAction), 'Root action must be of type NodeAction'
         assert isinstance(policy, Policy), 'Policy must be of type Policy'
         assert isinstance(reverse, bool), 'Reverse flag must be of type bool'
+        assert isinstance(depth, int), 'Depth must be of type int'
 
         # Select the correct graph for this wave
         graph: nx.DiGraph[Node] = self._graph_reversed if reverse else self._graph
@@ -1020,11 +1036,12 @@ class DaxScheduler(dax.base.system.DaxHasKey, abc.ABC):
                 node.submit(wave=wave)
                 submitted.add(node)
 
-        def recurse(node: Node, action: NodeAction) -> None:
+        def recurse(node: Node, action: NodeAction, current_depth: int) -> None:
             """Process nodes recursively.
 
             :param node: The current node to process
             :param action: The action provided by the previous node
+            :param current_depth: Current remaining recursion depth
             """
 
             # Visit the current node
@@ -1036,9 +1053,10 @@ class DaxScheduler(dax.base.system.DaxHasKey, abc.ABC):
                 # Submit this node before recursion
                 submit(node)
 
-            # Recurse over successors
-            for successor in graph.successors(node):
-                recurse(successor, new_action)
+            if current_depth != 0:
+                # Recurse over successors
+                for successor in graph.successors(node):
+                    recurse(successor, new_action, current_depth - 1)
 
             if not reverse and new_action.submittable():
                 # Submit this node after recursion
@@ -1046,7 +1064,7 @@ class DaxScheduler(dax.base.system.DaxHasKey, abc.ABC):
 
         for root_node in root_nodes:
             # Recurse over all root nodes using the root action
-            recurse(root_node, root_action)
+            recurse(root_node, root_action, depth)
 
         if submitted:
             # Log submitted nodes
@@ -1279,6 +1297,12 @@ class _DaxSchedulerClient(dax.base.system.DaxBase, artiq.experiment.Experiment):
                                                artiq.experiment.EnumerationValue(sorted(self._REVERSE_DICT),
                                                                                  default=self._SCHEDULER_SETTING),
                                                tooltip='Reverse the wave direction when traversing the graph')
+        self._depth: int = self.get_argument('Depth',
+                                             artiq.experiment.NumberValue(-1, min=-1, step=1, ndecimals=0),
+                                             tooltip='Maximum recursion depth (`-1` for infinite recursion depth)')
+        self._block: bool = self.get_argument('Block',
+                                              artiq.experiment.BooleanValue(True),
+                                              tooltip='Block until the request was handled')
 
         # Get the DAX scheduler controller
         self._dax_scheduler: _SchedulerController = self.get_device(self.CONTROLLER_KEY)
@@ -1297,7 +1321,9 @@ class _DaxSchedulerClient(dax.base.system.DaxBase, artiq.experiment.Experiment):
         self._dax_scheduler.submit(self._node,
                                    action=self._action,
                                    policy=None if self._policy == self._SCHEDULER_SETTING else self._policy,
-                                   reverse=self._REVERSE_DICT[self._reverse])
+                                   reverse=self._REVERSE_DICT[self._reverse],
+                                   depth=self._depth,
+                                   block=self._block)
 
     def get_identifier(self) -> str:
         """Return the identifier of this scheduler client."""
