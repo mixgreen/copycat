@@ -56,9 +56,34 @@ def get_base_path(scheduler: typing.Any) -> pathlib.Path:
     return base_path
 
 
+def _unique_file_name(base_path: pathlib.Path, name: str, ext: typing.Optional[str], *,
+                      count: int = 0) -> pathlib.Path:
+    """Given the input parameters, return a unique file name using sequence numbers if necessary.
+
+    :param base_path: The base path of the file
+    :param name: Name of the file
+    :param ext: The extension of the file
+    :param count: Current sequence number
+    """
+
+    # Generate count string
+    count_str: str = '' if count == 0 else f' ({count})'
+    # Generate ext string
+    ext_str: str = '' if ext is None else f'.{ext}'
+    # Join base path with assembled name
+    file_name: pathlib.Path = base_path.joinpath(f'{name}{count_str}{ext_str}')
+
+    if file_name.exists():
+        # File name exists, recurse
+        return _unique_file_name(base_path, name, ext, count=count + 1)
+    else:
+        # File name is unique
+        return file_name
+
+
 # Type ignore required to pass type checking without use of typing.Protocol
 def get_file_name_generator(scheduler: typing.Any):  # type: ignore
-    """Obtain a generator that generates file names in a single path based on the experiment metadata.
+    """Obtain a generator that generates unique file names in a single path based on the experiment metadata.
 
     :param scheduler: The scheduler object
     :return: Generator function for file names
@@ -69,7 +94,7 @@ def get_file_name_generator(scheduler: typing.Any):  # type: ignore
 
     # Generator function
     def file_name_generator(name: str, ext: typing.Optional[str] = None) -> str:
-        """Generate a uniformly styled output file names.
+        """Generate unique and uniformly styled output file names.
 
         :param name: Name of the file
         :param ext: The extension of the file
@@ -82,11 +107,8 @@ def get_file_name_generator(scheduler: typing.Any):  # type: ignore
         if not name:
             raise ValueError('The given name can not be empty')
 
-        if ext is not None:
-            # Add file extension
-            name = f'{name}.{ext}'
-        # Join base path and provided name
-        file_name = base_path.joinpath(name)
+        # Obtain a unique file name
+        file_name = _unique_file_name(base_path, name, ext)
         # Return full file name as a string
         return str(file_name)
 
@@ -119,7 +141,7 @@ def dummy_file_name_generator(name: str, ext: typing.Optional[str] = None) -> st
 
 
 def get_file_name(scheduler: typing.Any, name: str, ext: typing.Optional[str] = None) -> str:
-    """Generate a single uniformly styled output file name based on the experiment metadata.
+    """Generate a single unique and uniformly styled output file name based on the experiment metadata.
 
     When using this function in combination with :func:`temp_dir`, make sure
     this function is called before leaving the context.
