@@ -158,17 +158,11 @@ class _PmtMonitorBase(DaxClient, EnvExperiment, abc.ABC):
         # Device setup
         self.device_setup()
 
-        while True:
-            # Check for pause condition and return if true
-            if self.scheduler.check_pause():
-                return
-
+        while not self.scheduler.check_pause():
             # Guarantee slack
             self.core.break_realtime()
-
             # Insert delay
             delay(self.detection_delay)
-
             # Perform detection and store count
             self._count()
 

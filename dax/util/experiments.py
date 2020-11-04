@@ -3,12 +3,12 @@ import logging
 import time
 import inspect
 
-from artiq.experiment import EnvExperiment, HasEnvironment
+import artiq.experiment
 
 __all__ = ['Barrier']
 
 
-class Barrier(EnvExperiment):
+class Barrier(artiq.experiment.EnvExperiment):
     """Barrier
 
     This experiment functions as a barrier that prevents other experiments from running.
@@ -39,13 +39,17 @@ class Barrier(EnvExperiment):
             time.sleep(self.CLOCK_PERIOD)
 
     @classmethod
-    def submit(cls, environment: HasEnvironment, *, pipeline: typing.Optional[str] = None) -> None:
+    @artiq.experiment.host_only
+    def submit(cls, environment: artiq.experiment.HasEnvironment, *, pipeline: typing.Optional[str] = None) -> None:
         """Submit this barrier experiment to the ARTIQ scheduler.
+
+        Note that submitting the barrier experiment does not pause the current experiment.
 
         :param environment: An object which inherits from ARTIQ HasEnvironment, required to get the ARTIQ scheduler
         :param pipeline: The pipeline to submit to, default to the current pipeline
         """
-        assert isinstance(environment, HasEnvironment), 'The given environment must be of type HasEnvironment'
+        assert isinstance(environment, artiq.experiment.HasEnvironment), \
+            'The given environment must be of type HasEnvironment'
         assert isinstance(pipeline, str) or pipeline is None, 'The given pipeline must be None or of type str'
 
         # Construct expid

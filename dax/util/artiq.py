@@ -14,6 +14,50 @@ __all__ = ['is_kernel', 'is_portable', 'is_host_only',
            'get_managers']
 
 
+class _TemporaryDirectory(tempfile.TemporaryDirectory):  # type: ignore[type-arg]
+    """Custom `TemporaryDirectory` class."""
+
+    _refs: typing.List[_TemporaryDirectory] = []
+    """List of references to instances of this class."""
+
+    def __init__(self, *args: typing.Any, **kwargs: typing.Any):
+        # Call super
+        super(_TemporaryDirectory, self).__init__(*args, **kwargs)
+
+        # Add self to list of (strong) references to make sure the object is not destructed too soon
+        _TemporaryDirectory._refs.append(self)
+        # Add a finalizer to cleanup this temp dir (prevents resource warning for implicit cleanup)
+        weakref.finalize(self, self.cleanup)
+
+
+_EXPID_DEFAULTS: typing.Dict[str, typing.Any] = {
+    'file': 'dax_artiq_helper_file.py',
+    'class_name': 'DaxArtiqHelperExperiment',
+    'repo_rev': 'N/A'
+}
+"""Default expid values."""
+
+_DEVICE_DB: typing.Dict[str, typing.Any] = {
+    'core': {
+        'type': 'local',
+        'module': 'artiq.coredevice.core',
+        'class': 'Core',
+        'arguments': {'host': '0.0.0.0', 'ref_period': 1e-9}
+    },
+    'core_cache': {
+        'type': 'local',
+        'module': 'artiq.coredevice.cache',
+        'class': 'CoreCache'
+    },
+    'core_dma': {
+        'type': 'local',
+        'module': 'artiq.coredevice.dma',
+        'class': 'CoreDMA'
+    },
+}
+"""Default device DB."""
+
+
 def is_kernel(func: typing.Any) -> bool:
     """Helper function to detect if a function is an ARTIQ kernel (`@kernel`) or not.
 
@@ -119,45 +163,3 @@ def get_managers(device_db: typing.Union[typing.Dict[str, typing.Any], str, None
     # Return a tuple that is accepted as managers_or_parent
     # DeviceManager, DatasetManager, ProcessArgumentManager, scheduler defaults
     return device_mgr, dataset_mgr, argument_mgr, {}
-
-
-class _TemporaryDirectory(tempfile.TemporaryDirectory):  # type: ignore[type-arg]
-    """Custom `TemporaryDirectory` class."""
-
-    _refs: typing.List[_TemporaryDirectory] = []
-    """List of references to instances of this class."""
-
-    def __init__(self, *args: typing.Any, **kwargs: typing.Any):
-        # Call super
-        super(_TemporaryDirectory, self).__init__(*args, **kwargs)
-
-        # Add self to list of (strong) references to make sure the object is not destructed too soon
-        _TemporaryDirectory._refs.append(self)
-        # Add a finalizer to cleanup this temp dir (prevents resource warning for implicit cleanup)
-        weakref.finalize(self, self.cleanup)
-
-
-# Default device DB
-_DEVICE_DB: typing.Dict[str, typing.Any] = {
-    'core': {
-        'type': 'local',
-        'module': 'artiq.coredevice.core',
-        'class': 'Core',
-        'arguments': {'host': '0.0.0.0', 'ref_period': 1e-9}
-    },
-    'core_cache': {
-        'type': 'local',
-        'module': 'artiq.coredevice.cache',
-        'class': 'CoreCache'
-    },
-    'core_dma': {
-        'type': 'local',
-        'module': 'artiq.coredevice.dma',
-        'class': 'CoreDMA'
-    },
-}
-
-# Default expid values
-_EXPID_DEFAULTS: typing.Dict[str, typing.Any] = {'file': 'dax_artiq_helper_file.py',
-                                                 'class_name': 'DaxArtiqHelperExperiment',
-                                                 'repo_rev': 'N/A'}
