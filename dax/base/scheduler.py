@@ -12,6 +12,7 @@ import asyncio
 import json
 import hashlib
 import dataclasses
+import os
 
 import artiq.experiment
 import artiq.master.worker_db
@@ -400,7 +401,9 @@ class Job(Node):
     """
 
     FILE: typing.Optional[str] = None
-    """File containing the experiment, relative from the `repository` directory."""
+    """File containing the experiment (by default relative from the `repository` directory, see :attr:`REPOSITORY`)."""
+    REPOSITORY: bool = True
+    """True if the given file is in the experiment repository."""
     CLASS_NAME: typing.Optional[str] = None
     """Class name of the experiment."""
     ARGUMENTS: typing.Dict[str, typing.Any] = {}
@@ -426,8 +429,9 @@ class Job(Node):
         To add configurable arguments to this job, override the :func:`build_job` method instead.
         """
 
-        # Check file, class, and arguments
+        # Check file, repository flag, class, and arguments
         assert isinstance(self.FILE, str) or self.FILE is None, 'The file attribute must be of type str or None'
+        assert isinstance(self.REPOSITORY, bool), 'Repository flag must be of type bool'
         assert isinstance(self.CLASS_NAME, str) or self.CLASS_NAME is None, \
             'The class name attribute must be of type str or None'
         assert isinstance(self.ARGUMENTS, dict), 'The arguments must be of type dict'
@@ -449,6 +453,11 @@ class Job(Node):
         # Process the arguments
         self._arguments = self._process_arguments()
 
+        if self.FILE is not None and not self.REPOSITORY:
+            # Expand file
+            self.FILE = os.path.expanduser(self.FILE)
+            assert os.path.isabs(self.FILE), 'The given file must be an absolute path'
+
         # Construct an expid for this job
         if not self.is_meta():
             self._expid: typing.Dict[str, typing.Any] = {
@@ -456,8 +465,10 @@ class Job(Node):
                 'class_name': self.CLASS_NAME,
                 'arguments': self._arguments,
                 'log_level': self.LOG_LEVEL,
-                'repo_rev': None,  # Requests current revision
             }
+            if self.REPOSITORY:
+                # Request current revision and interpret file location relative from the repository
+                self._expid['repo_rev'] = None
             self.logger.debug(f'expid: {self._expid}')
         else:
             self._expid = {}

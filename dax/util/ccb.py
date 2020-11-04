@@ -50,7 +50,15 @@ class CcbTool:
         """
 
         # Store the CCB object
-        self.ccb = ccb
+        self.__ccb: typing.Any = ccb
+
+    @property
+    def ccb(self) -> typing.Any:
+        """Return the underlying ARTIQ CCB object.
+
+        :return: The ARTIQ CCB object
+        """
+        return self.__ccb
 
     def issue(self, action: str, *args: typing.Any, **kwargs: typing.Any) -> None:
         """Plain CCB issue command.
@@ -274,4 +282,5 @@ def get_ccb_tool(environment: HasEnvironment) -> CcbTool:
     :param environment: An object which inherits from ARTIQ HasEnvironment, required to get the ARTIQ CCB object
     :return: The CCB tool object
     """
+    assert isinstance(environment, HasEnvironment), 'The given environment must be of type HasEnvironment'
     return CcbTool(environment.get_device('ccb'))
