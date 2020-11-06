@@ -18,13 +18,6 @@ _GENERIC_DEVICE: typing.Dict[str, str] = {
 }
 """The properties of a generic device."""
 
-_DUMMY_DEVICE: typing.Dict[str, str] = {
-    'type': 'local',
-    'module': f'{_DAX_COREDEVICE_PACKAGE}.dummy',
-    'class': 'Dummy',
-}
-"""The properties of a dummy device."""
-
 _SIMULATION_ARG: str = '--simulation'
 """The simulation argument/option for controllers as proposed by the ARTIQ manual."""
 

@@ -2,10 +2,11 @@ import typing
 import logging
 import time
 import inspect
+import numpy as np
 
 import artiq.experiment
 
-__all__ = ['Barrier']
+__all__ = ['Barrier', 'SetDataset']
 
 
 class Barrier(artiq.experiment.EnvExperiment):
@@ -62,3 +63,45 @@ class Barrier(artiq.experiment.EnvExperiment):
 
         # Submit this class to the scheduler
         environment.get_device('scheduler').submit(pipeline_name=pipeline, expid=expid, priority=cls.PRIORITY)
+
+
+class SetDataset(artiq.experiment.EnvExperiment):
+    """Set dataset
+
+    This experiment is a utility to set/write arbitrary datasets.
+    When importing this class directly into the global namespace, it will be recognized by ARTIQ as an experiment.
+    """
+
+    def build(self) -> None:  # type: ignore
+        # Dataset key
+        self.key: str = self.get_argument('Key', artiq.experiment.StringValue(),
+                                          tooltip='The key of the dataset')
+        # Dataset value
+        self.value: str = self.get_argument('Value', artiq.experiment.StringValue(),
+                                            tooltip='The value to store, which is directly interpreted using `eval()`\n'
+                                                    'Globals include `np` (Numpy)')
+
+        # Persist flag
+        self.persist: bool = self.get_argument('Persist', artiq.experiment.BooleanValue(False),
+                                               tooltip='The master should store the data on-disk')
+        # Overwrite flag
+        self.overwrite: bool = self.get_argument('Overwrite', artiq.experiment.BooleanValue(False),
+                                                 tooltip='Allow overwriting of existing values')
+
+    def run(self) -> None:
+        if not self.overwrite:
+            try:
+                # Try to obtain dataset
+                self.get_dataset(self.key, archive=False)
+            except KeyError:
+                # Key does not exist, we are not overwriting
+                pass
+            else:
+                # Key does exist, we are overwriting
+                raise RuntimeError(f'Key "{self.key}" already exists and overwrite is disabled')
+
+        # Evaluate value
+        value: typing.Any = eval(self.value, {'np': np}, {})
+        # Set dataset
+        self.set_dataset(self.key, value,
+                         broadcast=True, persist=self.persist, archive=False)

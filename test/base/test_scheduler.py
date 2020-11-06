@@ -631,22 +631,28 @@ class LazySchedulerTestCase(unittest.TestCase):
             s.prepare()
 
     def test_duplicate_nodes(self):
-        class S(_Scheduler):
+        class SchedulerA(_Scheduler):
             NODES = [_Job1, _Job2, _Job3, _Job4, _JobA, _JobB, _JobC, _Job1]
 
-        s = S(self.mop)
-        with self.assertLogs(s.logger, logging.WARNING):
-            s.prepare()
+            # noinspection PyMethodParameters
+            def build(self_, *args: typing.Any, **kwargs: typing.Any) -> None:
+                with self.assertLogs(self_.logger, logging.WARNING):
+                    super(SchedulerA, self_).build(*args, **kwargs)
 
         class T(_Trigger):
             pass
 
-        class S(_Scheduler):
+        class SchedulerB(SchedulerA):
             NODES = [T, T]
 
-        s = S(self.mop)
-        with self.assertLogs(s.logger, logging.WARNING):
-            s.prepare()
+        class SchedulerC(SchedulerA):
+            NODES = SchedulerA.NODES + SchedulerB.NODES
+
+        for S in [SchedulerA, SchedulerB, SchedulerC]:
+            with self.subTest(cls=S.__name__):
+                s = S(self.mop)
+                self.assertLess(len(s._nodes), len(S.NODES), 'Number of nodes is expected to decrease')
+                self.assertEqual(len(s._nodes), len(set(S.NODES)), 'Number of nodes does not match expected number')
 
     def test_node_name_conflict(self):
         class S(_Scheduler):

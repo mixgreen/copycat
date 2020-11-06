@@ -762,7 +762,10 @@ class DaxScheduler(dax.base.system.DaxHasKey, abc.ABC):
             self.__data_store: dax.base.system.DaxDataStore = dax.base.system.DaxDataStore()
 
         # Create the node objects
-        self._nodes: typing.Dict[typing.Type[Node], Node] = {node: node(self) for node in self.NODES}
+        self._nodes: typing.Dict[typing.Type[Node], Node] = {node: node(self) for node in set(self.NODES)}
+        self.logger.debug(f'Created {len(self._nodes)} node(s)')
+        if len(self._nodes) < len(self.NODES):
+            self.logger.warning('Duplicate nodes were dropped')
         # Store a map from node names to nodes
         self._node_name_map: typing.Dict[str, Node] = {node.get_name(): node for node in self._nodes.values()}
 
@@ -1085,9 +1088,6 @@ class DaxScheduler(dax.base.system.DaxHasKey, abc.ABC):
         """Process the graph of this scheduler."""
 
         # Check node set integrity
-        self.logger.debug(f'Created {len(self._nodes)} node(s)')
-        if len(self._nodes) < len(self.NODES):
-            self.logger.warning('Duplicate nodes were dropped')
         base_classes: typing.Sequence[typing.Type[Node]] = [Job, Trigger]
         for c in base_classes:
             if self._nodes.pop(c, None) is not None:
@@ -1133,6 +1133,9 @@ class DaxScheduler(dax.base.system.DaxHasKey, abc.ABC):
                 self._root_nodes: typing.Set[Node] = {self._nodes[node] for node in self.ROOT_NODES}
             except KeyError as e:
                 raise KeyError(f'Root node "{e.args[0].get_name()}" is not in the node set') from None
+            else:
+                if len(self._root_nodes) < len(self.ROOT_NODES):
+                    self.logger.warning('Duplicate root nodes were dropped')
         else:
             # Find entry nodes to use as root nodes
             graph: nx.DiGraph[Node] = self._graph_reversed if self._reverse else self._graph
