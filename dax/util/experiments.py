@@ -72,6 +72,15 @@ class SetDataset(artiq.experiment.EnvExperiment):
     When importing this class directly into the global namespace, it will be recognized by ARTIQ as an experiment.
     """
 
+    _UNITS: typing.Dict[str, float] = {unit: getattr(artiq.experiment, unit)
+                                       for unit in ['ps', 'ns', 'us', 'ms', 's',
+                                                    'mHz', 'Hz', 'kHz', 'MHz', 'GHz',
+                                                    'dB',
+                                                    'uV', 'mV', 'V', 'kV',
+                                                    'uA', 'mA', 'A',
+                                                    'uW', 'mW', 'W']}
+    """Dict with all units."""
+
     def build(self) -> None:  # type: ignore
         # Dataset key
         self.key: str = self.get_argument('Key', artiq.experiment.StringValue(),
@@ -79,7 +88,7 @@ class SetDataset(artiq.experiment.EnvExperiment):
         # Dataset value
         self.value: str = self.get_argument('Value', artiq.experiment.StringValue(),
                                             tooltip='The value to store, which is directly interpreted using `eval()`\n'
-                                                    'Globals include `np` (Numpy)')
+                                                    'Globals include `np` (Numpy) and the ARTIQ units')
 
         # Persist flag
         self.persist: bool = self.get_argument('Persist', artiq.experiment.BooleanValue(False),
@@ -100,8 +109,11 @@ class SetDataset(artiq.experiment.EnvExperiment):
                 # Key does exist, we are overwriting
                 raise RuntimeError(f'Key "{self.key}" already exists and overwrite is disabled')
 
+        # Set up globals
+        g: typing.Dict[str, typing.Any] = {'np': np}
+        g.update(self._UNITS)
         # Evaluate value
-        value: typing.Any = eval(self.value, {'np': np}, {})
+        value: typing.Any = eval(self.value, g, {})
         # Set dataset
         self.set_dataset(self.key, value,
                          broadcast=True, persist=self.persist, archive=False)

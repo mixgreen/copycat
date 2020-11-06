@@ -75,6 +75,13 @@ class ExperimentsTestCase(unittest.TestCase):
             {'Key': 'key', 'Value': '[1, 2, 3, 4]'},
             {'Key': 'key', 'Value': 'list(range(7))'},
             {'Key': 'key', 'Value': 'np.asarray([3, 4], dtype=np.int32)'},
+            {'Key': 'key', 'Value': '3 * ms'},
+            {'Key': 'key', 'Value': '3 * s'},
+            {'Key': 'key', 'Value': '3 * Hz'},
+            {'Key': 'key', 'Value': '3 * dB'},
+            {'Key': 'key', 'Value': '3 * V'},
+            {'Key': 'key', 'Value': '3 * A'},
+            {'Key': 'key', 'Value': '3 * W'},
         ]
 
         for args in arguments:
@@ -88,8 +95,10 @@ class ExperimentsTestCase(unittest.TestCase):
                 exp.analyze()
 
                 # Verify value
+                g = {'np': np}
+                g.update(dax.util.experiments.SetDataset._UNITS)
+                ref_value = eval(args['Value'], g, {})
                 value = exp.get_dataset(args['Key'])
-                ref_value = eval(args['Value'], {'np': np}, {})
                 if isinstance(value, np.ndarray):
                     self.assertTrue(np.array_equal(value, ref_value),
                                     'Obtained dataset does not match written dataset (type: ndarray)')
