@@ -197,6 +197,7 @@ class _Request:
     action: str
     policy: typing.Optional[str]
     reverse: typing.Optional[bool]
+    priority: typing.Optional[int]
     depth: int
 
 
@@ -308,25 +309,27 @@ class Node(dax.base.system.DaxHasKey, abc.ABC):
             # Interval did not expire
             return NodeAction.PASS
 
-    def submit(self, *, wave: float) -> None:
+    def submit(self, *, wave: float, priority: int) -> None:
         """Submit this node.
 
         :param wave: Wave identifier
+        :param priority: Submit priority
         """
         assert isinstance(wave, float), 'Wave must be of type float'
+        assert isinstance(priority, int), 'Priority must be of type int'
 
         # Store current wave timestamp
         self.set_dataset_sys(self._LAST_SUBMIT_KEY, wave, data_store=False)
 
         if not self.is_meta():
             # Submit
-            self._submit(wave=wave)
+            self._submit(wave=wave, priority=priority)
 
         # Reschedule node
         self.schedule(wave=wave)
 
     @abc.abstractmethod
-    def _submit(self, *, wave: float) -> None:
+    def _submit(self, *, wave: float, priority: int) -> None:
         pass
 
     def schedule(self, *, wave: float) -> None:
@@ -492,11 +495,9 @@ class Job(Node):
     def init(self, *, reset: bool, **kwargs: typing.Any) -> None:
         assert isinstance(reset, bool)
 
-        # Extract arguments
+        # Extract attributes
         self._pipeline: str = kwargs['job_pipeline'] if self.PIPELINE is None else self.PIPELINE
-        self._priority: int = kwargs['job_priority'] + self.PRIORITY
         assert isinstance(self._pipeline, str) and self._pipeline
-        assert isinstance(self._priority, int)
 
         # Initialize last RID to a non-existing value
         self._last_rid: int = -1
@@ -524,13 +525,13 @@ class Job(Node):
         # Call super
         super(Job, self).init(reset=reset, **kwargs)
 
-    def _submit(self, *, wave: float) -> None:
+    def _submit(self, *, wave: float, priority: int) -> None:
         if self._last_rid not in self._scheduler.get_status():
             # Submit experiment of this job
             self._last_rid = self._scheduler.submit(
                 pipeline_name=self._pipeline,
                 expid=self._expid,
-                priority=self._priority,
+                priority=priority + self.PRIORITY,
                 flush=self.FLUSH
             )
             self.logger.info(f'Submitted job with RID {self._last_rid}')
@@ -585,6 +586,7 @@ class Trigger(Node):
     - :attr:`ACTION`: The root node action of this trigger (defaults to :attr:`NodeAction.FORCE`)
     - :attr:`POLICY`: The scheduling policy of this trigger (defaults to the schedulers policy)
     - :attr:`REVERSE`: The reverse wave flag of this trigger (defaults to the schedulers reverse wave flag)
+    - :attr:`PRIORITY`: The job priority of this trigger (defaults to the schedulers job priority)
     - :attr:`DEPTH`: Maximum recursion depth (`-1` for infinite recursion depth, which is the default)
     - :attr:`Node.INTERVAL`: The trigger interval
     - :attr:`Node.DEPENDENCIES`: A collection of node classes on which this trigger depends
@@ -598,6 +600,8 @@ class Trigger(Node):
     """The scheduling policy of this trigger."""
     REVERSE: typing.Optional[bool] = None
     """The reverse wave flag for this trigger."""
+    PRIORITY: typing.Optional[int] = None
+    """The job priority of this trigger."""
     DEPTH: int = -1
     """Maximum recursion depth (`-1` for infinite recursion depth)."""
 
@@ -608,6 +612,7 @@ class Trigger(Node):
         assert isinstance(self.ACTION, NodeAction), 'Action must be of type NodeAction'
         assert isinstance(self.POLICY, Policy) or self.POLICY is None, 'Policy must be of type Policy or None'
         assert isinstance(self.REVERSE, bool) or self.REVERSE is None, 'Reverse must be of type bool or None'
+        assert isinstance(self.PRIORITY, int) or self.PRIORITY is None, 'Priority must be of type int or None'
         assert isinstance(self.DEPTH, int), 'Depth must be of type int'
 
         # Assemble the collection of node names
@@ -626,13 +631,14 @@ class Trigger(Node):
         # Call super
         super(Trigger, self).init(reset=reset, **kwargs)
 
-    def _submit(self, *, wave: float) -> None:
+    def _submit(self, *, wave: float, priority: int) -> None:
         # Add the request to the request queue
-        self._request_queue.put_nowait(_Request(self._nodes,
-                                                str(self.ACTION),
-                                                str(self.POLICY) if self.POLICY is not None else None,
-                                                self.REVERSE,
-                                                self.DEPTH))
+        self._request_queue.put_nowait(_Request(nodes=self._nodes,
+                                                action=str(self.ACTION),
+                                                policy=str(self.POLICY) if self.POLICY is not None else None,
+                                                reverse=self.REVERSE,
+                                                priority=self.PRIORITY,
+                                                depth=self.DEPTH))
         self.logger.info('Submitted trigger')
 
     def cancel(self) -> None:
@@ -655,6 +661,7 @@ class _SchedulerController:
                      action: str = str(NodeAction.FORCE),
                      policy: typing.Optional[str] = None,
                      reverse: typing.Optional[bool] = None,
+                     priority: typing.Optional[int] = None,
                      depth: int = -1,
                      block: bool = True) -> None:
         """Submit a request to the scheduler.
@@ -663,12 +670,18 @@ class _SchedulerController:
         :param action: The root node action as a string (defaults to :attr:`NodeAction.FORCE`)
         :param policy: The scheduling policy as a string (defaults to the schedulers policy)
         :param reverse: The reverse wave flag (defaults to the schedulers reverse wave flag)
+        :param priority: The job priority of this trigger (defaults to the schedulers job priority)
         :param depth: Maximum recursion depth (`-1` for infinite recursion depth, which is the default)
         :param block: Block until the request was handled
         """
 
         # Put this request in the queue without checking any of the inputs
-        self._request_queue.put_nowait(_Request(nodes, action, policy, reverse, depth))
+        self._request_queue.put_nowait(_Request(nodes=nodes,
+                                                action=action,
+                                                policy=policy,
+                                                reverse=reverse,
+                                                priority=priority,
+                                                depth=depth))
 
         if block:
             # Wait until all requests are handled
@@ -908,7 +921,6 @@ class DaxScheduler(dax.base.system.DaxHasKey, abc.ABC):
         for node in self._graph:
             node.init(reset=self._reset_nodes,
                       job_pipeline=self._job_pipeline,
-                      job_priority=self._job_priority,
                       request_queue=request_queue)
 
         # Start the request handler task
@@ -937,7 +949,8 @@ class DaxScheduler(dax.base.system.DaxHasKey, abc.ABC):
                           root_nodes=self._root_nodes,
                           root_action=NodeAction.PASS,
                           policy=self._policy,
-                          reverse=self._reverse)
+                          reverse=self._reverse,
+                          priority=self._job_priority)
                 # Update next wave time
                 next_wave += self._wave_interval
                 # Prevent setting next wave time in the past
@@ -992,9 +1005,11 @@ class DaxScheduler(dax.base.system.DaxHasKey, abc.ABC):
             root_action: NodeAction = NodeAction.from_str(request.action)
             policy: Policy = self._policy if request.policy is None else Policy.from_str(request.policy)
             reverse: bool = self._reverse if request.reverse is None else request.reverse
+            priority: int = self._job_priority if request.priority is None else request.priority
             depth: int = request.depth
             # Verify unchecked fields
             assert isinstance(reverse, bool), 'Reverse flag must be of type bool'
+            assert isinstance(priority, int), 'Priority must be of type int'
             assert isinstance(depth, int), 'Depth must be of type int'
         except (KeyError, AssertionError):
             # Log the error
@@ -1009,6 +1024,7 @@ class DaxScheduler(dax.base.system.DaxHasKey, abc.ABC):
                       root_action=root_action,
                       policy=policy,
                       reverse=reverse,
+                      priority=priority,
                       depth=depth)
 
     def wave(self, *, wave: float,
@@ -1016,6 +1032,7 @@ class DaxScheduler(dax.base.system.DaxHasKey, abc.ABC):
              root_action: NodeAction,
              policy: Policy,
              reverse: bool,
+             priority: int,
              depth: int = -1) -> None:
         """Run a wave over the graph.
 
@@ -1024,6 +1041,7 @@ class DaxScheduler(dax.base.system.DaxHasKey, abc.ABC):
         :param root_action: The root node action
         :param policy: The policy for this wave
         :param reverse: The reverse wave flag
+        :param priority: Submit priority
         :param depth: Maximum recursion depth (`-1` for infinite recursion depth)
         """
         assert isinstance(wave, float), 'Wave must be of type float'
@@ -1032,6 +1050,7 @@ class DaxScheduler(dax.base.system.DaxHasKey, abc.ABC):
         assert isinstance(root_action, NodeAction), 'Root action must be of type NodeAction'
         assert isinstance(policy, Policy), 'Policy must be of type Policy'
         assert isinstance(reverse, bool), 'Reverse flag must be of type bool'
+        assert isinstance(priority, int), 'Priority must be of type int'
         assert isinstance(depth, int), 'Depth must be of type int'
 
         # Select the correct graph for this wave
@@ -1047,7 +1066,7 @@ class DaxScheduler(dax.base.system.DaxHasKey, abc.ABC):
 
             if node not in submitted:
                 # Submit this node
-                node.submit(wave=wave)
+                node.submit(wave=wave, priority=priority)
                 submitted.add(node)
 
         def recurse(node: Node, action: NodeAction, current_depth: int) -> None:
@@ -1311,6 +1330,9 @@ class _DaxSchedulerClient(dax.base.system.DaxBase, artiq.experiment.Experiment):
                                                artiq.experiment.EnumerationValue(sorted(self._REVERSE_DICT),
                                                                                  default=self._SCHEDULER_SETTING),
                                                tooltip='Reverse the wave direction when traversing the graph')
+        self._priority: int = self.get_argument('Priority',
+                                                artiq.experiment.NumberValue(0, min=-99, max=99, step=1, ndecimals=0),
+                                                tooltip='Baseline job priority')
         self._depth: int = self.get_argument('Depth',
                                              artiq.experiment.NumberValue(-1, min=-1, step=1, ndecimals=0),
                                              tooltip='Maximum recursion depth (`-1` for infinite recursion depth)')
@@ -1336,6 +1358,7 @@ class _DaxSchedulerClient(dax.base.system.DaxBase, artiq.experiment.Experiment):
                                    action=self._action,
                                    policy=None if self._policy == self._SCHEDULER_SETTING else self._policy,
                                    reverse=self._REVERSE_DICT[self._reverse],
+                                   priority=self._priority,
                                    depth=self._depth,
                                    block=self._block)
 

@@ -177,6 +177,7 @@ class _Scheduler(DaxScheduler):
              root_action=None,
              policy=None,
              reverse=None,
+             priority=None,
              **kwargs) -> None:
         # Use defaults for simplicity
         if wave is None:
@@ -189,9 +190,11 @@ class _Scheduler(DaxScheduler):
             policy = self._policy
         if reverse is None:
             reverse = self._reverse
+        if priority is None:
+            priority = self._job_priority
 
         super(_Scheduler, self).wave(wave=wave, root_nodes=root_nodes, root_action=root_action,
-                                     policy=policy, reverse=reverse, **kwargs)
+                                     policy=policy, reverse=reverse, priority=priority, **kwargs)
 
     async def _run_scheduler(self, *, request_queue) -> None:
         await self.controller_callback(request_queue)
@@ -397,9 +400,9 @@ class LazySchedulerTestCase(unittest.TestCase):
                     # Test submit
                     if not is_meta:
                         with self.assertLogs(j.logger, logging.INFO):
-                            j.submit(wave=new_time)
+                            j.submit(wave=new_time, priority=0)
                     else:
-                        j.submit(wave=new_time)
+                        j.submit(wave=new_time, priority=0)
 
                 with self.subTest(task='cancel'):
                     j.cancel()
@@ -1126,10 +1129,10 @@ class LazySchedulerTestCase(unittest.TestCase):
                     # Test submit
                     if not is_meta:
                         with self.assertLogs(t.logger, logging.INFO):
-                            t.submit(wave=new_time)
+                            t.submit(wave=new_time, priority=0)
                             queue_len += 1
                     else:
-                        t.submit(wave=new_time)
+                        t.submit(wave=new_time, priority=0)
                     self.assertEqual(request_queue.qsize(), queue_len, 'Queue length did not match expected length')
 
                 with self.subTest(task='cancel'):
