@@ -23,6 +23,11 @@ else:
     _TD_T = dict
 
 
+class TimeResolvedContextError(RuntimeError):
+    """Class for time resolved context errors."""
+    pass
+
+
 class TimeResolvedContext(DaxModule):
     """Context class for managing storage of time-resolved detection output.
 
@@ -543,8 +548,9 @@ class TimeResolvedAnalyzer:
 
     """Plotting functions"""
 
-    def plot_trace(self, key: str,
-                   x_label: typing.Optional[str] = 'Time', y_label: typing.Optional[str] = 'Count',
+    def plot_trace(self, key: str, *,
+                   x_label: typing.Optional[str] = 'Time',
+                   y_label: typing.Optional[str] = 'Count',
                    labels: typing.Optional[typing.Sequence[str]] = None,
                    legend_loc: typing.Optional[typing.Union[str, typing.Tuple[float, float]]] = None,
                    ext: str = 'pdf',
@@ -615,8 +621,3 @@ class TimeResolvedAnalyzer:
         """
         for key in self.traces:
             self.plot_trace(key, **kwargs)
-
-
-class TimeResolvedContextError(RuntimeError):
-    """Class for time resolved context errors."""
-    pass
