@@ -1132,6 +1132,8 @@ class DaxModuleBaseTestCase(unittest.TestCase):
 
         with self.assertRaises(TypeError, msg='get_device() type check did not raise'):
             s.get_device('ttl1', artiq.coredevice.edge_counter.EdgeCounter)
+        with self.assertRaises(TypeError, msg='get_device() type check did not raise'):
+            s.get_device('ttl1', artiq.coredevice.ttl.TTLInOut)
 
         # Correct type, should not raise
         self.assertIsNotNone(s.get_device('ttl1', artiq.coredevice.ttl.TTLOut),

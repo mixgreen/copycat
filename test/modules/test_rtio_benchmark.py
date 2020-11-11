@@ -25,7 +25,7 @@ class _LoopTestSystem(DaxSystem):
         self.rtio = RtioLoopBenchmarkModule(self, 'rtio', ttl_out='ttl_out', ttl_in='ttl_in', **kwargs)
 
 
-class RtioBenchmarkModuleTestCase(dax.sim.test_case.PeekTestCase):
+class RtioBenchmarkModuleTtlOutTestCase(dax.sim.test_case.PeekTestCase):
     _DEVICE_DB: typing.Dict[str, typing.Any] = {
         'core': {
             'type': 'local',
@@ -46,19 +46,7 @@ class RtioBenchmarkModuleTestCase(dax.sim.test_case.PeekTestCase):
         'ttl_out': {
             'type': 'local',
             'module': 'artiq.coredevice.ttl',
-            'class': 'TTLInOut'
-        },
-        'ttl_in': {
-            'type': 'local',
-            'module': 'artiq.coredevice.ttl',
-            'class': 'TTLInOut',
-            'sim_args': {'input_freq': 0.0}  # Zero input frequency, loop is disconnected
-        },
-        'ttl_in_connected': {
-            'type': 'local',
-            'module': 'artiq.coredevice.ttl',
-            'class': 'TTLInOut',
-            'sim_args': {'input_freq': 1e7}
+            'class': 'TTLOut'  # Output pin only
         },
     }
 
@@ -66,50 +54,11 @@ class RtioBenchmarkModuleTestCase(dax.sim.test_case.PeekTestCase):
         return self.construct_env(_TestSystem, device_db=self._DEVICE_DB, build_kwargs=kwargs)
 
     def test_dax_init(self):
+        # Verify that the module builds and initializes correctly
         s = self._construct_env(init_kernel=True)
         self.expect(s.rtio.ttl_out, 'state', 'x')
-        self.expect(s.rtio.ttl_out, 'direction', 'x')
         s.dax_init()
         self.expect(s.rtio.ttl_out, 'state', 'x')
-        self.expect(s.rtio.ttl_out, 'direction', 1)
-
-    def test_dax_init_disabled(self):
-        s = self._construct_env(init_kernel=False)
-        self.expect(s.rtio.ttl_out, 'state', 'x')
-        self.expect(s.rtio.ttl_out, 'direction', 'x')
-        s.dax_init()
-        self.expect(s.rtio.ttl_out, 'state', 'x')
-        self.expect(s.rtio.ttl_out, 'direction', 'x')
-        s.rtio.init_kernel()
-        self.expect(s.rtio.ttl_out, 'state', 'x')
-        self.expect(s.rtio.ttl_out, 'direction', 1)
-
-    def test_manual_init(self):
-        s = self._construct_env(init_kernel=False)
-        self.expect(s.rtio.ttl_out, 'state', 'x')
-        self.expect(s.rtio.ttl_out, 'direction', 'x')
-        s.rtio.init()
-        self.expect(s.rtio.ttl_out, 'state', 'x')
-        self.expect(s.rtio.ttl_out, 'direction', 'x')
-        s.rtio.init_kernel()
-        self.expect(s.rtio.ttl_out, 'state', 'x')
-        self.expect(s.rtio.ttl_out, 'direction', 1)
-
-    def test_manual_init_2(self):
-        s = self._construct_env(init_kernel=True)
-        self.expect(s.rtio.ttl_out, 'state', 'x')
-        self.expect(s.rtio.ttl_out, 'direction', 'x')
-        s.rtio.init(force=True)
-        self.expect(s.rtio.ttl_out, 'state', 'x')
-        self.expect(s.rtio.ttl_out, 'direction', 1)
-
-    def test_manual_init_force(self):
-        s = self._construct_env(init_kernel=False)
-        self.expect(s.rtio.ttl_out, 'state', 'x')
-        self.expect(s.rtio.ttl_out, 'direction', 'x')
-        s.rtio.init(force=True)
-        self.expect(s.rtio.ttl_out, 'state', 'x')
-        self.expect(s.rtio.ttl_out, 'direction', 1)
 
     def test_event_throughput(self):
         s = self._construct_env()
@@ -168,6 +117,90 @@ class RtioBenchmarkModuleTestCase(dax.sim.test_case.PeekTestCase):
         s.rtio.burst_slow()
         s.rtio.burst_dma()
         self.assertEqual(s.rtio.burst, s.rtio.burst_dma, 'Burst function did not default to DMA burst')
+
+
+class RtioBenchmarkModuleTestCase(RtioBenchmarkModuleTtlOutTestCase):
+    _DEVICE_DB: typing.Dict[str, typing.Any] = {
+        'core': {
+            'type': 'local',
+            'module': 'artiq.coredevice.core',
+            'class': 'Core',
+            'arguments': {'host': '0.0.0.0', 'ref_period': 1e-9}
+        },
+        'core_cache': {
+            'type': 'local',
+            'module': 'artiq.coredevice.cache',
+            'class': 'CoreCache'
+        },
+        'core_dma': {
+            'type': 'local',
+            'module': 'artiq.coredevice.dma',
+            'class': 'CoreDMA'
+        },
+        'ttl_out': {
+            'type': 'local',
+            'module': 'artiq.coredevice.ttl',
+            'class': 'TTLInOut'
+        },
+        'ttl_in': {
+            'type': 'local',
+            'module': 'artiq.coredevice.ttl',
+            'class': 'TTLInOut',
+            'sim_args': {'input_freq': 0.0}  # Zero input frequency, loop is disconnected
+        },
+        'ttl_in_connected': {
+            'type': 'local',
+            'module': 'artiq.coredevice.ttl',
+            'class': 'TTLInOut',
+            'sim_args': {'input_freq': 1e7}
+        },
+    }
+
+    def test_dax_init(self):
+        s = self._construct_env(init_kernel=True)
+        self.expect(s.rtio.ttl_out, 'state', 'x')
+        self.expect(s.rtio.ttl_out, 'direction', 'x')
+        s.dax_init()
+        self.expect(s.rtio.ttl_out, 'state', 'x')
+        self.expect(s.rtio.ttl_out, 'direction', 1)
+
+    def test_dax_init_disabled(self):
+        s = self._construct_env(init_kernel=False)
+        self.expect(s.rtio.ttl_out, 'state', 'x')
+        self.expect(s.rtio.ttl_out, 'direction', 'x')
+        s.dax_init()
+        self.expect(s.rtio.ttl_out, 'state', 'x')
+        self.expect(s.rtio.ttl_out, 'direction', 'x')
+        s.rtio.init_kernel()
+        self.expect(s.rtio.ttl_out, 'state', 'x')
+        self.expect(s.rtio.ttl_out, 'direction', 1)
+
+    def test_manual_init(self):
+        s = self._construct_env(init_kernel=False)
+        self.expect(s.rtio.ttl_out, 'state', 'x')
+        self.expect(s.rtio.ttl_out, 'direction', 'x')
+        s.rtio.init()
+        self.expect(s.rtio.ttl_out, 'state', 'x')
+        self.expect(s.rtio.ttl_out, 'direction', 'x')
+        s.rtio.init_kernel()
+        self.expect(s.rtio.ttl_out, 'state', 'x')
+        self.expect(s.rtio.ttl_out, 'direction', 1)
+
+    def test_manual_init_2(self):
+        s = self._construct_env(init_kernel=True)
+        self.expect(s.rtio.ttl_out, 'state', 'x')
+        self.expect(s.rtio.ttl_out, 'direction', 'x')
+        s.rtio.init(force=True)
+        self.expect(s.rtio.ttl_out, 'state', 'x')
+        self.expect(s.rtio.ttl_out, 'direction', 1)
+
+    def test_manual_init_force(self):
+        s = self._construct_env(init_kernel=False)
+        self.expect(s.rtio.ttl_out, 'state', 'x')
+        self.expect(s.rtio.ttl_out, 'direction', 'x')
+        s.rtio.init(force=True)
+        self.expect(s.rtio.ttl_out, 'state', 'x')
+        self.expect(s.rtio.ttl_out, 'direction', 1)
 
 
 class RtioLoopBenchmarkModuleTestCase(RtioBenchmarkModuleTestCase):

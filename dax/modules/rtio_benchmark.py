@@ -40,7 +40,11 @@ class RtioBenchmarkModule(DaxModule):
         self.update_kernel_invariants('_dma_enabled', '_dma_burst_name', '_max_burst')
 
         # TTL output device
-        self.ttl_out = self.get_device(ttl_out, artiq.coredevice.ttl.TTLInOut)
+        try:
+            self.ttl_out = self.get_device(ttl_out, artiq.coredevice.ttl.TTLInOut)
+        except TypeError:
+            # Retry with device type TTLOut
+            self.ttl_out = self.get_device(ttl_out, artiq.coredevice.ttl.TTLOut)
         self.update_kernel_invariants('ttl_out')
 
     def init(self, *, force: bool = False) -> None:
