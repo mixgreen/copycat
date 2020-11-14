@@ -1,6 +1,7 @@
 import collections
 import typing
 import abc
+import numpy as np
 
 import artiq.coredevice.edge_counter
 
@@ -127,7 +128,7 @@ class _PmtMonitorBase(DaxClient, EnvExperiment, abc.ABC):
 
         # Convert the detection delay to machine units and set lowest to 10 machine units
         # Without 10 machine units, the core device fuses consecutive detection windows as one
-        self.detection_delay_mu: int = max(self.core.seconds_to_mu(self.detection_delay), 10)
+        self.detection_delay_mu: np.int64 = np.int64(max(self.core.seconds_to_mu(self.detection_delay), 10))
         self.update_kernel_invariants('detection_delay_mu')
 
         if self.sliding_window > 0:
