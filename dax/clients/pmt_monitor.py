@@ -64,7 +64,8 @@ class _PmtMonitorBase(DaxClient, EnvExperiment, abc.ABC):
                                                          tooltip='Detection window duration')
         self.detection_delay: float = self.get_argument('PMT detection delay',
                                                         NumberValue(default=0 * ms, unit='ms', min=0.0),
-                                                        tooltip='Delay between detection windows')
+                                                        tooltip='Delay between detection windows (when set to zero, '
+                                                                'the delay will be 10 machine units)')
         self.buffer_size: int = self.get_argument('Buffer size',
                                                   NumberValue(default=self.DEFAULT_BUFFER_SIZE, min=1,
                                                               max=self.MAX_BUFFER_SIZE, ndecimals=0, step=1),
@@ -77,7 +78,7 @@ class _PmtMonitorBase(DaxClient, EnvExperiment, abc.ABC):
                                                      NumberValue(default=120 * s, unit='s', min=0, ndecimals=0, step=1),
                                                      tooltip='Data window size (use 0 for infinite window size) '
                                                              '(requires applet restart)')
-        self.update_kernel_invariants('detection_window', 'detection_delay', 'buffer_size')
+        self.update_kernel_invariants('detection_window', 'buffer_size')
 
         # Add custom arguments here
         self._add_custom_arguments()
@@ -123,6 +124,11 @@ class _PmtMonitorBase(DaxClient, EnvExperiment, abc.ABC):
     def prepare(self) -> None:
         if self.detection_window <= 0.0:
             raise ValueError('Detection window must be greater than zero')
+
+        # Convert the detection delay to machine units and set lowest to 10 machine units
+        # Without 10 machine units, the core device fuses consecutive detection windows as one
+        self.detection_delay_mu: int = max(self.core.seconds_to_mu(self.detection_delay), 10)
+        self.update_kernel_invariants('detection_delay_mu')
 
         if self.sliding_window > 0:
             # Convert window size to dataset size
@@ -201,13 +207,13 @@ class _PmtMonitorBase(DaxClient, EnvExperiment, abc.ABC):
 
         for _ in range(self.buffer_size):
             # Build up a buffer
-            delay(self.detection_delay)
+            delay_mu(self.detection_delay_mu)
             self._detect()
 
         try:
             while not self.scheduler.check_pause():
                 # Detect
-                delay(self.detection_delay)
+                delay_mu(self.detection_delay_mu)
                 self._detect()
                 # Count
                 self._count()
