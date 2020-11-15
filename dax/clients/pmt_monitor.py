@@ -133,7 +133,7 @@ class _PmtMonitorBase(DaxClient, EnvExperiment, abc.ABC):
 
         if self.sliding_window > 0:
             # Convert window size to dataset size
-            self.sliding_window = round(self.sliding_window / self.detection_window)
+            self.sliding_window = round(self.sliding_window / (self.detection_window + self.detection_delay))
             self.logger.debug(f'Window size set to {self.sliding_window}')
 
         if self.count_scale_label != self._RAW_COUNT:
@@ -190,11 +190,12 @@ class _PmtMonitorBase(DaxClient, EnvExperiment, abc.ABC):
 
         except RTIOUnderflow:
             # Underflow exception
-            self.logger.exception('RTIO underflow exception, increase buffer size to increase the amount of slack')
+            self.logger.exception('RTIO underflow exception; increase buffer size, detection window size, '
+                                  'or detection delay')
 
         except RTIOOverflow:
             # Buffer overflow
-            self.logger.exception('RTIO overflow exception, buffer size exceeds the size of the hardware buffers')
+            self.logger.exception('RTIO overflow exception; buffer size exceeds the size of the hardware buffers')
 
         finally:
             if self.applet_auto_close:
