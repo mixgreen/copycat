@@ -412,7 +412,7 @@ class Job(Node):
     ARGUMENTS: typing.Dict[str, typing.Any] = {}
     """The experiment arguments."""
 
-    LOG_LEVEL: typing.Union[int, str] = logging.WARNING
+    LOG_LEVEL: int = logging.WARNING
     """The log level for the experiment."""
     PIPELINE: typing.Optional[str] = None
     """The pipeline to submit this job to, defaults to the pipeline assigned by the scheduler."""
@@ -440,10 +440,9 @@ class Job(Node):
         assert isinstance(self.ARGUMENTS, dict), 'The arguments must be of type dict'
         assert all(isinstance(k, str) for k in self.ARGUMENTS), 'All argument keys must be of type str'
         # Check log level, pipeline, priority, and flush
-        assert isinstance(self.LOG_LEVEL, (int, str)), 'Log level must be of type int or str'
+        assert isinstance(self.LOG_LEVEL, int), 'Log level must be of type int'
         assert self.PIPELINE is None or isinstance(self.PIPELINE, str), 'Pipeline must be of type str or None'
         assert isinstance(self.PRIORITY, int), 'Priority must be of type int'
-        assert -99 <= self.PRIORITY <= 99, 'Priority must be in the domain [-99, 99]'
         assert isinstance(self.FLUSH, bool), 'Flush must be of type bool'
 
         # Call super
@@ -824,7 +823,7 @@ class DaxScheduler(dax.base.system.DaxHasKey, abc.ABC):
                                                     group='Nodes')
         self._job_priority: int = self.get_argument('Job priority',
                                                     artiq.experiment.NumberValue(self.DEFAULT_JOB_PRIORITY,
-                                                                                 min=-99, max=99, step=1, ndecimals=0),
+                                                                                 step=1, ndecimals=0),
                                                     tooltip='Baseline job priority',
                                                     group='Nodes')
 
@@ -862,8 +861,6 @@ class DaxScheduler(dax.base.system.DaxHasKey, abc.ABC):
             raise ValueError('The chosen clock period is too small')
         if self._wave_interval < 2 * self._clock_period:
             raise ValueError('The wave interval is too small compared to the clock period')
-        if -99 > self._job_priority > 99:
-            raise ValueError('Job priority must be in the domain [-99, 99]')
 
         # Obtain the scheduling policy
         self._policy: Policy = Policy.from_str(self._policy_arg)
@@ -1288,7 +1285,6 @@ class DaxScheduler(dax.base.system.DaxHasKey, abc.ABC):
         assert isinstance(cls.DEFAULT_JOB_PIPELINE, str) and cls.DEFAULT_JOB_PIPELINE, \
             'Default job pipeline must be of type str'
         assert isinstance(cls.DEFAULT_JOB_PRIORITY, int), 'Default job priority must be of type int'
-        assert -99 <= cls.DEFAULT_JOB_PRIORITY <= 99, 'Default job priority must be in the domain [-99, 99]'
 
 
 class _DaxSchedulerClient(dax.base.system.DaxBase, artiq.experiment.Experiment):
@@ -1331,7 +1327,7 @@ class _DaxSchedulerClient(dax.base.system.DaxBase, artiq.experiment.Experiment):
                                                                                  default=self._SCHEDULER_SETTING),
                                                tooltip='Reverse the wave direction when traversing the graph')
         self._priority: int = self.get_argument('Priority',
-                                                artiq.experiment.NumberValue(0, min=-99, max=99, step=1, ndecimals=0),
+                                                artiq.experiment.NumberValue(0, step=1, ndecimals=0),
                                                 tooltip='Baseline job priority')
         self._depth: int = self.get_argument('Depth',
                                              artiq.experiment.NumberValue(-1, min=-1, step=1, ndecimals=0),
