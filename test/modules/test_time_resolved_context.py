@@ -345,6 +345,7 @@ class TimeResolvedContextTestCase(unittest.TestCase):
     def test_applets(self):
         # In simulation we can only call these functions, but nothing will happen
         self.t.plot()
+        self.t.clear_plot()
         self.t.disable_plot()
         self.t.disable_all_plots()
 

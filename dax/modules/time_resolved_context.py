@@ -89,6 +89,10 @@ class TimeResolvedContext(DaxModule):
         # Cache for processed data
         self._cache: typing.Dict[str, typing.List[_TD_T]] = {}
 
+        # Local plot data (required for extending the plot datasets efficiently)
+        self._plot_result_data: typing.List[typing.Sequence[float]] = []
+        self._plot_time_data: typing.List[float] = []
+
         # Target dataset key
         self._dataset_key: str = self._default_dataset_key
         # Store plot base key
@@ -402,13 +406,15 @@ class TimeResolvedContext(DaxModule):
 
             # Store results in the cache
             self._cache.setdefault(self._dataset_key, []).append(result_dict)
-
             # Write results to sub-dataset for archiving
             for column in self.DATASET_COLUMNS:
                 self.set_dataset(sub_dataset_keys[column], result_dict[column], archive=True)
-            # Write result to plotting dataset
-            self.set_dataset(self._plot_time_key, time + (width * 0.5), broadcast=True, archive=False)
-            self.set_dataset(self._plot_result_key, np.column_stack(result), broadcast=True, archive=False)
+
+            # Store results in local plot data
+            self._plot_result_data.extend(np.column_stack(result))
+            self._plot_time_data.extend(time + (width * 0.5))
+            # Update plotting datasets
+            self._update_plot_datasets()
 
         else:
             # Add empty element to the cache (keeps indexing consistent)
@@ -421,6 +427,11 @@ class TimeResolvedContext(DaxModule):
         self._open_datasets[self._dataset_key] += 1
         # Update context counter
         self._in_context -= 1
+
+    def _update_plot_datasets(self) -> None:
+        """Update the result and time datasets based on the current local plot data."""
+        self.set_dataset(self._plot_result_key, self._plot_result_data, broadcast=True, archive=False)
+        self.set_dataset(self._plot_time_key, self._plot_time_data, broadcast=True, archive=False)
 
     """Applet plotting functions"""
 
@@ -440,6 +451,18 @@ class TimeResolvedContext(DaxModule):
         # Plot
         self._ccb.plot_xy_multi(self.PLOT_NAME, self._plot_result_key,
                                 x=self._plot_time_key, group=self._plot_group, **kwargs)
+
+    @rpc(flags={'async'})
+    def clear_plot(self):  # type: () -> None
+        """Clear the plot.
+
+        This function can only be called after the module is initialized.
+        """
+        # Clear the local plot data
+        self._plot_result_data = []
+        self._plot_time_data = []
+        # Update the plot datasets
+        self._update_plot_datasets()
 
     @rpc(flags={'async'})
     def disable_plot(self):  # type: () -> None

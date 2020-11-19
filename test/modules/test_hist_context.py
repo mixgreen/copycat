@@ -339,6 +339,8 @@ class HistogramContextTestCase(unittest.TestCase):
         self.h.plot_histogram()
         self.h.plot_probability()
         self.h.plot_mean_count()
+        self.h.clear_probability_plot()
+        self.h.clear_mean_count_plot()
         self.h.disable_histogram_plot()
         self.h.disable_probability_plot()
         self.h.disable_mean_count_plot()
