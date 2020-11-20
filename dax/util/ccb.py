@@ -99,7 +99,8 @@ class CcbTool:
 
     def big_number(self, name: str, dataset: str, *,
                    digit_count: typing.Optional[int] = None,
-                   update_delay: typing.Optional[float] = None, group: typing.Optional[_G_T] = None,
+                   update_delay: typing.Optional[float] = None,
+                   group: typing.Optional[_G_T] = None,
                    **kwargs: typing.Any) -> None:
         """Create a big number applet.
 
@@ -117,7 +118,8 @@ class CcbTool:
         self.create_applet(name, command, group=group)
 
     def image(self, name: str, img: str, *,
-              update_delay: typing.Optional[float] = None, group: typing.Optional[_G_T] = None,
+              update_delay: typing.Optional[float] = None,
+              group: typing.Optional[_G_T] = None,
               **kwargs: typing.Any) -> None:
         """Create an image applet.
 
@@ -135,13 +137,18 @@ class CcbTool:
 
     def plot_xy(self, name: str, y: str, *,
                 x: typing.Optional[str] = None,
-                error: typing.Optional[str] = None, fit: typing.Optional[str] = None,
-                v_lines: typing.Optional[str] = None, h_lines: typing.Optional[str] = None,
+                error: typing.Optional[str] = None,
+                fit: typing.Optional[str] = None,
+                v_lines: typing.Optional[str] = None,
+                h_lines: typing.Optional[str] = None,
                 sliding_window: typing.Optional[int] = None,
-                crosshair: typing.Optional[bool] = None, last: typing.Optional[bool] = None,
+                crosshair: typing.Optional[bool] = None,
+                last: typing.Optional[bool] = None,
                 title: typing.Optional[str] = None,
-                x_label: typing.Optional[str] = None, y_label: typing.Optional[str] = None,
-                update_delay: typing.Optional[float] = None, group: typing.Optional[_G_T] = None,
+                x_label: typing.Optional[str] = None,
+                y_label: typing.Optional[str] = None,
+                update_delay: typing.Optional[float] = None,
+                group: typing.Optional[_G_T] = None,
                 **kwargs: typing.Any) -> None:
         """Create a plot XY applet.
 
@@ -173,12 +180,16 @@ class CcbTool:
 
     def plot_xy_multi(self, name: str, y: str, *,
                       x: typing.Optional[str] = None,
-                      v_lines: typing.Optional[str] = None, h_lines: typing.Optional[str] = None,
+                      v_lines: typing.Optional[str] = None,
+                      h_lines: typing.Optional[str] = None,
                       sliding_window: typing.Optional[int] = None,
                       plot_names: typing.Optional[str] = None,
+                      markers_only: typing.Optional[bool] = None,
                       title: typing.Optional[str] = None,
-                      x_label: typing.Optional[str] = None, y_label: typing.Optional[str] = None,
-                      update_delay: typing.Optional[float] = None, group: typing.Optional[_G_T] = None,
+                      x_label: typing.Optional[str] = None,
+                      y_label: typing.Optional[str] = None,
+                      update_delay: typing.Optional[float] = None,
+                      group: typing.Optional[_G_T] = None,
                       **kwargs: typing.Any) -> None:
         """Create a plot XY applet with multiple plots.
 
@@ -189,6 +200,7 @@ class CcbTool:
         :param h_lines: Horizontal lines dataset
         :param sliding_window: Set size of the sliding window, or `None` to disable
         :param plot_names: Base name of the plots in the legend (numbered automatically)
+        :param markers_only: Only plot markers and no lines between them
         :param title: Graph title
         :param x_label: X-axis label
         :param y_label: Y-axis label
@@ -199,8 +211,8 @@ class CcbTool:
         # Assemble command
         command = f'{self.DAX_APPLET}plot_xy_multi {y}'
         command = _generate_command(command, x=x, v_lines=v_lines, h_lines=h_lines,
-                                    sliding_window=sliding_window, plot_names=plot_names, title=title,
-                                    x_label=x_label, y_label=y_label, update_delay=update_delay, **kwargs)
+                                    sliding_window=sliding_window, plot_names=plot_names, markers_only=markers_only,
+                                    title=title, x_label=x_label, y_label=y_label, update_delay=update_delay, **kwargs)
         # Create applet
         self.create_applet(name, command, group=group)
 
@@ -208,8 +220,10 @@ class CcbTool:
                   index: typing.Optional[int] = None,
                   plot_names: typing.Optional[str] = None,
                   title: typing.Optional[str] = None,
-                  x_label: typing.Optional[str] = None, y_label: typing.Optional[str] = None,
-                  update_delay: typing.Optional[float] = None, group: typing.Optional[_G_T] = None,
+                  x_label: typing.Optional[str] = None,
+                  y_label: typing.Optional[str] = None,
+                  update_delay: typing.Optional[float] = None,
+                  group: typing.Optional[_G_T] = None,
                   **kwargs: typing.Any) -> None:
         """Create a plot histogram applet using DAX specific data formatting.
 
@@ -235,7 +249,8 @@ class CcbTool:
     def plot_hist_artiq(self, name: str, y: str, *,
                         x: typing.Optional[str] = None,
                         title: typing.Optional[str] = None,
-                        update_delay: typing.Optional[float] = None, group: typing.Optional[_G_T] = None,
+                        update_delay: typing.Optional[float] = None,
+                        group: typing.Optional[_G_T] = None,
                         **kwargs: typing.Any) -> None:
         """Create an ARTIQ plot histogram applet.
 
@@ -254,7 +269,8 @@ class CcbTool:
         self.create_applet(name, command, group=group)
 
     def plot_xy_hist(self, name: str, xs: str, histogram_bins: str, histogram_counts: str, *,
-                     update_delay: typing.Optional[float] = None, group: typing.Optional[_G_T] = None,
+                     update_delay: typing.Optional[float] = None,
+                     group: typing.Optional[_G_T] = None,
                      **kwargs: typing.Any) -> None:
         """Create a 2D histogram applet.
 
