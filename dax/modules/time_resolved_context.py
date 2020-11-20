@@ -604,10 +604,15 @@ class TimeResolvedAnalyzer:
             # Obtain raw data
             time = np.asarray(t['time'])
             width = np.asarray(t['width'])
-            results = t['result']  # List with result arrays
+            results = typing.cast(typing.Sequence[np.ndarray], t['result'])  # List with result arrays
 
             # Create X values
             x_values = time + width / 2  # Points are plotted in the middle of the bin
+
+            # Sort data
+            ind = x_values.argsort()
+            x_values = x_values[ind]
+            results = [r[ind] for r in results]
 
             # Current labels
             current_labels = [f'Plot {i}' for i in range(len(results))] if labels is None else labels

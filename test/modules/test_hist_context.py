@@ -614,6 +614,37 @@ class HistogramAnalyzerTestCase(unittest.TestCase):
             a.plot_all_mean_counts()
             a.plot_all_state_probabilities()
 
+    def test_plot_hdf5(self):
+        # Add data to the archive
+        num_histograms = 4
+        data = [
+            [4, 1, 0],
+            [5, 2, 0],
+            [6, 3, 0],
+            [7, 4, 0],
+        ]
+
+        # Store data
+        for _ in range(num_histograms):
+            with self.h:
+                for d in data:
+                    self.h.append(d)
+
+        with temp_dir():
+            # Write data to HDF5 file
+            file_name = 'result.h5'
+            _, dataset_mgr, _, _ = self.mop
+            with h5py.File(file_name, 'w') as f:
+                dataset_mgr.write_hdf5(f)
+
+            # Make analyzer object
+            a = HistogramAnalyzer(file_name, self.s.detection.get_state_detection_threshold())
+            # Call plot functions to see if no exceptions occur
+            a.plot_all_histograms()
+            a.plot_all_probabilities()
+            a.plot_all_mean_counts()
+            a.plot_all_state_probabilities()
+
 
 if __name__ == '__main__':
     unittest.main()

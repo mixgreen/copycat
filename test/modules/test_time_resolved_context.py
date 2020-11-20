@@ -493,6 +493,30 @@ class TimeResolvedAnalyzerTestCase(unittest.TestCase):
             # Call plot functions to see if no exceptions occur
             a.plot_all_traces()
 
+    def test_plot_hdf5(self):
+        # Add data to the archive
+        bin_width = 1 * us
+        bin_spacing = 1 * ns
+        offset = 5 * ns
+        offset_mu = 10
+        data = [[16, 25, 56], [66, 84, 83], [45, 77, 96], [88, 63, 79]]
+
+        # Store data
+        with self.t:
+            self.t.append(data, bin_width, bin_spacing, offset, offset_mu)
+
+        with temp_dir():
+            # Write data to HDF5 file
+            file_name = 'result.h5'
+            _, dataset_mgr, _, _ = self.mop
+            with h5py.File(file_name, 'w') as f:
+                dataset_mgr.write_hdf5(f)
+
+            # Make analyzer object
+            a = TimeResolvedAnalyzer(file_name)
+            # Call plot functions to see if no exceptions occur
+            a.plot_all_traces()
+
 
 if __name__ == '__main__':
     unittest.main()

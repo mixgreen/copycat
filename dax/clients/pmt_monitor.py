@@ -345,6 +345,7 @@ class MultiPmtMonitor(_PmtMonitorBase):
     def _create_applet(self, *args: typing.Any, **kwargs: typing.Any) -> None:
         # Use multi-plot XY applet
         kwargs.setdefault('plot_names', 'PMT')
+        kwargs.setdefault('markers_only', True)
         self.ccb.plot_xy_multi(*args, **kwargs)
 
     @kernel
