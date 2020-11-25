@@ -166,7 +166,7 @@ class _PmtMonitorBase(DaxClient, EnvExperiment, abc.ABC):
                 # No sliding window
                 window_size_samples = 0
                 # Construct X-label
-                x_label = f'Sample'
+                x_label = 'Sample'
 
             # Create the applet Y-label
             if self.count_scale_label != self._RAW_COUNT:
