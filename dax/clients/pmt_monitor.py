@@ -10,6 +10,7 @@ from dax.experiment import *
 from dax.interfaces.detection import DetectionInterface
 from dax.util.ccb import get_ccb_tool
 from dax.util.artiq import is_kernel
+from dax.util.units import time_to_str
 
 __all__ = ['PmtMonitor', 'MultiPmtMonitor']
 
@@ -136,11 +137,6 @@ class _PmtMonitorBase(DaxClient, EnvExperiment, abc.ABC):
                                                          self.core.ref_multiplier))
         self.update_kernel_invariants('detection_delay_mu')
 
-        if self.sliding_window > 0:
-            # Convert window size to dataset size
-            self.sliding_window = round(self.sliding_window / (self.detection_window + self.detection_delay))
-            self.logger.debug(f'Window size set to {self.sliding_window}')
-
         if self.count_scale_label != self._RAW_COUNT:
             # Pre-calculate Y-scalar
             self.y_scalar: float = 1.0 / self.detection_window / self._COUNT_SCALES[self.count_scale_label]
@@ -160,6 +156,18 @@ class _PmtMonitorBase(DaxClient, EnvExperiment, abc.ABC):
         self.set_dataset(self.dataset_key, init_value, **dataset_kwargs)
 
         if self.create_applet:
+            if self.sliding_window > 0:
+                # Calculate window size in samples
+                window_size_samples: int = round(self.sliding_window / (self.detection_window + self.detection_delay))
+                self.logger.debug(f'Window size set to {window_size_samples} sample(s)')
+                # Construct X-label
+                x_label: str = f'Window size: {time_to_str(self.sliding_window, precision=0)}'
+            else:
+                # No sliding window
+                window_size_samples = 0
+                # Construct X-label
+                x_label = f'Sample'
+
             # Create the applet Y-label
             if self.count_scale_label != self._RAW_COUNT:
                 y_label: str = f'Counts per second ({self.count_scale_label})'
@@ -167,9 +175,8 @@ class _PmtMonitorBase(DaxClient, EnvExperiment, abc.ABC):
                 y_label = 'Raw counts'
 
             # Create the applet
-            self._create_applet(self.dataset_key,
-                                group=self.APPLET_GROUP, update_delay=self.applet_update_delay,
-                                sliding_window=self.sliding_window, x_label='Sample', y_label=y_label)
+            self._create_applet(self.dataset_key, group=self.APPLET_GROUP, update_delay=self.applet_update_delay,
+                                sliding_window=window_size_samples, x_label=x_label, y_label=y_label)
 
         try:
             # Only stop when termination is requested
@@ -271,7 +278,7 @@ class PmtMonitor(_PmtMonitorBase):
     """PMT monitor utility to monitor a single PMT channel."""
 
     APPLET_GROUP = 'dax.pmt_monitor'
-    DEFAULT_DATASET = 'plot.dax.pmt_monitor_count'
+    DEFAULT_DATASET = 'plot.dax.pmt_monitor'
 
     NUM_DIGITS_BIG_NUMBER: int = 5
     """Number of digits to display for the big number applet."""
@@ -339,13 +346,14 @@ class MultiPmtMonitor(_PmtMonitorBase):
     APPLET_GROUP = 'dax.multi_pmt_monitor'
     DEFAULT_DATASET = 'plot.dax.multi_pmt_monitor'
 
-    TITLES: typing.Sequence[str] = []
+    TITLES: typing.Sequence[typing.Optional[str]] = []
     """A sequence of applet titles when using separate applets."""
 
     def _add_custom_arguments(self) -> None:
         assert isinstance(self.TITLES, collections.abc.Sequence), 'Separate titles must be a sequence'
         assert not self.TITLES or len(self.TITLES) == len(self.pmt_array), \
             'The sequence of applet titles must be empty or have the same length as the PMT array'
+        assert all(t is None or isinstance(t, str) for t in self.TITLES), 'Titles must be of type str or None'
 
         # Arguments
         self.separate_applets: bool = self.get_argument('Separate applets',
