@@ -1,6 +1,7 @@
 import typing
 import string
 import numbers
+import numpy as np
 
 from artiq.language.core import host_only
 from artiq.language.units import *  # noqa: F401
@@ -12,11 +13,13 @@ __all__ = ['time_to_str', 'str_to_time',
            'watt_to_str', 'str_to_watt',
            'UnitsFormatter']
 
+_R_T = typing.Union[int, float, np.integer]  # Real number type
+
 
 @host_only
-def _value_to_str(value: float, threshold: float, precision: int, scales: typing.Sequence[str]) -> str:
-    assert isinstance(value, numbers.Real), 'Input value must be of type float'
-    assert isinstance(threshold, numbers.Real), 'Threshold must be a float'
+def _value_to_str(value: _R_T, threshold: _R_T, precision: int, scales: typing.Sequence[str]) -> str:
+    assert isinstance(value, numbers.Real), 'Input value must be a real'
+    assert isinstance(threshold, numbers.Real), 'Threshold must be a real'
     assert isinstance(precision, int) and precision >= 0, 'Precision must be a positive int'
 
     # Take the abs of threshold
@@ -36,31 +39,31 @@ def _value_to_str(value: float, threshold: float, precision: int, scales: typing
 
 
 @host_only
-def time_to_str(time: float, *, threshold: float = 1.0, precision: int = 2) -> str:
+def time_to_str(time: _R_T, *, threshold: _R_T = 1.0, precision: int = 2) -> str:
     """Convert a time to a string for pretty printing."""
     return _value_to_str(time, threshold, precision, ['s', 'ms', 'us', 'ns', 'ps'])
 
 
 @host_only
-def freq_to_str(frequency: float, *, threshold: float = 1.0, precision: int = 2) -> str:
+def freq_to_str(frequency: _R_T, *, threshold: _R_T = 1.0, precision: int = 2) -> str:
     """Convert a frequency to a string for pretty printing."""
     return _value_to_str(frequency, threshold, precision, ['GHz', 'MHz', 'kHz', 'Hz', 'mHz'])
 
 
 @host_only
-def volt_to_str(volt: float, *, threshold: float = 1.0, precision: int = 2) -> str:
+def volt_to_str(volt: _R_T, *, threshold: _R_T = 1.0, precision: int = 2) -> str:
     """Convert a voltage to a string for pretty printing."""
     return _value_to_str(volt, threshold, precision, ['kV', 'V', 'mV', 'uV'])
 
 
 @host_only
-def ampere_to_str(ampere: float, *, threshold: float = 1.0, precision: int = 2) -> str:
+def ampere_to_str(ampere: _R_T, *, threshold: _R_T = 1.0, precision: int = 2) -> str:
     """Convert an amperage to a string for pretty printing."""
     return _value_to_str(ampere, threshold, precision, ['A', 'mA', 'uA'])
 
 
 @host_only
-def watt_to_str(watt: float, *, threshold: float = 1.0, precision: int = 2) -> str:
+def watt_to_str(watt: _R_T, *, threshold: _R_T = 1.0, precision: int = 2) -> str:
     """Convert a wattage to a string for pretty printing."""
     return _value_to_str(watt, threshold, precision, ['W', 'mW', 'uW'])
 
