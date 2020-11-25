@@ -93,7 +93,7 @@ class CcbTool:
 
         :param group: Group name of the applets
         """
-        self.issue('disable_applet_groups', _convert_group(group))
+        self.issue('disable_applet_group', _convert_group(group))
 
     """Functions that directly create ARTIQ applets"""
 
@@ -182,6 +182,7 @@ class CcbTool:
                       x: typing.Optional[str] = None,
                       v_lines: typing.Optional[str] = None,
                       h_lines: typing.Optional[str] = None,
+                      index: typing.Optional[int] = None,
                       sliding_window: typing.Optional[int] = None,
                       plot_names: typing.Optional[str] = None,
                       markers_only: typing.Optional[bool] = None,
@@ -198,6 +199,7 @@ class CcbTool:
         :param x: X-value dataset
         :param v_lines: Vertical lines dataset
         :param h_lines: Horizontal lines dataset
+        :param index: The index of the results to plot (default plots all)
         :param sliding_window: Set size of the sliding window, or `None` to disable
         :param plot_names: Base name of the plots in the legend (numbered automatically)
         :param markers_only: Only plot markers and no lines between them
@@ -210,7 +212,7 @@ class CcbTool:
         """
         # Assemble command
         command = f'{self.DAX_APPLET}plot_xy_multi {y}'
-        command = _generate_command(command, x=x, v_lines=v_lines, h_lines=h_lines,
+        command = _generate_command(command, x=x, v_lines=v_lines, h_lines=h_lines, index=index,
                                     sliding_window=sliding_window, plot_names=plot_names, markers_only=markers_only,
                                     title=title, x_label=x_label, y_label=y_label, update_delay=update_delay, **kwargs)
         # Create applet

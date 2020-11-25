@@ -1,4 +1,5 @@
 import collections
+import collections.abc
 import typing
 import abc
 import numpy as np
@@ -16,8 +17,6 @@ __all__ = ['PmtMonitor', 'MultiPmtMonitor']
 class _PmtMonitorBase(DaxClient, EnvExperiment, abc.ABC):
     """Base PMT monitor class."""
 
-    APPLET_NAME: str
-    """Name of the applet in the dashboard."""
     APPLET_GROUP: str
     """Group of the applet."""
     DEFAULT_DATASET: str
@@ -36,7 +35,6 @@ class _PmtMonitorBase(DaxClient, EnvExperiment, abc.ABC):
     """Disable DAX init."""
 
     def build(self) -> None:  # type: ignore
-        assert isinstance(self.APPLET_NAME, str), 'Applet name must be of type str'
         assert isinstance(self.APPLET_GROUP, str), 'Applet group must be of type str'
         assert isinstance(self.DEFAULT_DATASET, str), 'Default dataset must be of type str'
         assert isinstance(self.DEFAULT_BUFFER_SIZE, int), 'Default buffer size must be of type int'
@@ -53,6 +51,7 @@ class _PmtMonitorBase(DaxClient, EnvExperiment, abc.ABC):
         assert isinstance(self.pmt_array, list), 'PMT array is not a list'
         self.update_kernel_invariants('pmt_array')
         self.logger.debug(f'Found PMT array with {len(self.pmt_array)} channel(s)')
+        assert self.pmt_array, 'The PMT array can not be empty'
 
         # Get the scheduler and CCB tool
         self.scheduler = self.get_device('scheduler')
@@ -119,7 +118,11 @@ class _PmtMonitorBase(DaxClient, EnvExperiment, abc.ABC):
 
     @abc.abstractmethod
     def _create_applet(self, *args: typing.Any, **kwargs: typing.Any) -> None:
-        """Create applet."""
+        """Create applet.
+
+        :param args: Positional arguments for plotting **excluding the applet name**
+        :param kwargs: Keyword arguments for plotting
+        """
         pass
 
     def prepare(self) -> None:
@@ -164,7 +167,7 @@ class _PmtMonitorBase(DaxClient, EnvExperiment, abc.ABC):
                 y_label = 'Raw counts'
 
             # Create the applet
-            self._create_applet(self.APPLET_NAME, self.dataset_key,
+            self._create_applet(self.dataset_key,
                                 group=self.APPLET_GROUP, update_delay=self.applet_update_delay,
                                 sliding_window=self.sliding_window, x_label='Sample', y_label=y_label)
 
@@ -202,7 +205,7 @@ class _PmtMonitorBase(DaxClient, EnvExperiment, abc.ABC):
         finally:
             if self.applet_auto_close:
                 # Disable the applet
-                self.ccb.disable_applet(self.APPLET_NAME, self.APPLET_GROUP)
+                self.ccb.disable_applet_group(self.APPLET_GROUP)
 
     @kernel
     def monitor(self):  # type: () -> None
@@ -267,8 +270,7 @@ class _PmtMonitorBase(DaxClient, EnvExperiment, abc.ABC):
 class PmtMonitor(_PmtMonitorBase):
     """PMT monitor utility to monitor a single PMT channel."""
 
-    APPLET_NAME = 'pmt_monitor'
-    APPLET_GROUP = 'dax'
+    APPLET_GROUP = 'dax.pmt_monitor'
     DEFAULT_DATASET = 'plot.dax.pmt_monitor_count'
 
     NUM_DIGITS_BIG_NUMBER: int = 5
@@ -282,10 +284,6 @@ class PmtMonitor(_PmtMonitorBase):
     def _add_custom_arguments(self) -> None:
         assert self.NUM_DIGITS_BIG_NUMBER >= 0, 'Number of digits must be zero or greater'
 
-        # Get max for PMT channel argument
-        pmt_channel_max = len(self.pmt_array) - 1
-        assert pmt_channel_max >= 0, 'PMT array can not be empty'
-
         # Dict with available applet types
         self._applet_types: typing.Dict[str, typing.Callable[..., None]] = {
             self._PLOT_XY: self.ccb.plot_xy,
@@ -294,7 +292,7 @@ class PmtMonitor(_PmtMonitorBase):
 
         # Arguments
         self.pmt_channel: int = self.get_argument('PMT channel',
-                                                  NumberValue(default=0, step=1, min=0, max=pmt_channel_max,
+                                                  NumberValue(default=0, step=1, min=0, max=len(self.pmt_array) - 1,
                                                               ndecimals=0),
                                                   tooltip='PMT channel to monitor')
         self.applet_type: str = self.get_argument('Applet type',
@@ -312,7 +310,7 @@ class PmtMonitor(_PmtMonitorBase):
             kwargs.setdefault('digit_count', self.NUM_DIGITS_BIG_NUMBER)
 
         # Create applet based on chosen applet type
-        self._applet_types[self.applet_type](*args, **kwargs)
+        self._applet_types[self.applet_type](self.applet_type, *args, **kwargs)
 
     @kernel
     def _detect(self):  # type: () -> None
@@ -338,15 +336,40 @@ class PmtMonitor(_PmtMonitorBase):
 class MultiPmtMonitor(_PmtMonitorBase):
     """PMT monitor utility to monitor multiple PMT channels simultaneously."""
 
-    APPLET_NAME = 'multi_pmt_monitor'
-    APPLET_GROUP = 'dax'
+    APPLET_GROUP = 'dax.multi_pmt_monitor'
     DEFAULT_DATASET = 'plot.dax.multi_pmt_monitor'
 
+    TITLES: typing.Sequence[str] = []
+    """A sequence of applet titles when using separate applets."""
+
+    def _add_custom_arguments(self) -> None:
+        assert isinstance(self.TITLES, collections.abc.Sequence), 'Separate titles must be a sequence'
+        assert not self.TITLES or len(self.TITLES) == len(self.pmt_array), \
+            'The sequence of applet titles must be empty or have the same length as the PMT array'
+
+        # Arguments
+        self.separate_applets: bool = self.get_argument('Separate applets',
+                                                        BooleanValue(False),
+                                                        tooltip='Create a separate applet for each PMT')
+
     def _create_applet(self, *args: typing.Any, **kwargs: typing.Any) -> None:
-        # Use multi-plot XY applet
+        # Modify keyword arguments
         kwargs.setdefault('plot_names', 'PMT')
         kwargs.setdefault('markers_only', True)
-        self.ccb.plot_xy_multi(*args, **kwargs)
+
+        if self.separate_applets:
+            # Assemble titles
+            if self.TITLES:
+                titles: typing.Sequence[typing.Optional[str]] = self.TITLES
+            else:
+                titles = [None] * len(self.pmt_array)
+
+            # Create separate applets for each channel using multi-plot XY
+            for i, t in zip(range(len(self.pmt_array)), titles):
+                self.ccb.plot_xy_multi(f'pmt_{i}', *args, index=i, title=t, **kwargs)
+        else:
+            # Plot all data using multi-plot XY
+            self.ccb.plot_xy_multi('plot_all', *args, **kwargs)
 
     @kernel
     def _detect(self):  # type: () -> None
