@@ -42,7 +42,10 @@ class PeekTestCase(unittest.TestCase):
                       **kwargs: typing.Any) -> __E_T:
         """Construct an ARTIQ environment based on the given class.
 
-        The constructed environment can be used as a Device Under Testing (DUT).
+        The constructed environment can be used for testing.
+
+        Devices in the device manager are automatically closed by a finalizer.
+        It is not required to close the devices in the device manager explicitly.
 
         :param env_class: The environment class to construct
         :param device_db: The device DB to use (defaults to file configured in :attr:`DEFAULT_DEVICE_DB`)
@@ -65,6 +68,7 @@ class PeekTestCase(unittest.TestCase):
         assert isinstance(logging_level, (int, str)), 'Logging level must be of type int or str'
         assert isinstance(build_args, collections.abc.Sequence), 'Build arguments must be a sequence'
         assert isinstance(build_kwargs, dict), 'Build keyword arguments must be a dict'
+        assert all(isinstance(k, str) for k in build_kwargs), 'Keys of the build kwargs dict must be of type str'
 
         # Set level of module logger
         _logger.setLevel(logging_level)
