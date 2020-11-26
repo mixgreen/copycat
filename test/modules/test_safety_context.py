@@ -42,10 +42,16 @@ class _GenericSafetyContextTestCase(unittest.TestCase):
     SYSTEM_TYPE = _ReentrantTestSystem
 
     def setUp(self) -> None:
-        self.s = self.SYSTEM_TYPE(get_managers())
+        self.managers = get_managers()
+        self.s = self.SYSTEM_TYPE(self.managers)
         self.s.dax_init()
         self.counter = self.s.counter
         self.context = self.s.context
+
+    def tearDown(self) -> None:
+        # Close devices
+        device_mgr, _, _, _ = self.managers
+        device_mgr.close_devices()
 
     def test_exit_mismatch(self):
         if self.SYSTEM_TYPE.EXIT_ERROR:

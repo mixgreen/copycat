@@ -48,7 +48,8 @@ class CcbTestCase(unittest.TestCase):
 
     def test_ccb_tool(self):
         from dax.util.ccb import get_ccb_tool
-        ccb = get_ccb_tool(_TestSystem(get_managers()))
+        managers = get_managers()
+        ccb = get_ccb_tool(_TestSystem(managers))
 
         # Just call methods to see if no errors occur
         self.assertIsNone(ccb.big_number('name', 'key'))
@@ -60,6 +61,10 @@ class CcbTestCase(unittest.TestCase):
         self.assertIsNone(ccb.plot_xy_hist('name', 'key', 'key', 'key'))
         self.assertIsNone(ccb.disable_applet('name'))
         self.assertIsNone(ccb.disable_applet_group('group'))
+
+        # Close devices
+        device_mgr, _, _, _ = managers
+        device_mgr.close_devices()
 
 
 if __name__ == '__main__':

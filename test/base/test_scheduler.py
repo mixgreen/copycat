@@ -312,11 +312,16 @@ class SchedulerClientTestCase(unittest.TestCase):
             'arguments': {'_key': 'dax_scheduler'}  # Add key argument which is normally added by DAX.sim
         }
 
+        managers = get_managers(device_db, Node=_JobB.get_name())
         # noinspection PyArgumentList
-        c = Client(get_managers(device_db, Node=_JobB.get_name()))
+        c = Client(managers)
         c.prepare()
         with self.assertRaises(AttributeError, msg='Dummy device did not raise expected error'):
             c.run()
+
+        # Close devices
+        device_mgr, _, _, _ = managers
+        device_mgr.close_devices()
 
 
 class LazySchedulerTestCase(unittest.TestCase):
@@ -333,10 +338,15 @@ class LazySchedulerTestCase(unittest.TestCase):
                                                         'Reverse wave': self.REVERSE_WAVE,
                                                         'Job pipeline': 'test_pipeline',
                                                         'View graph': False}
-        self.mop = get_managers(arguments=self.arguments)
+        self.managers = get_managers(arguments=self.arguments)
+
+    def tearDown(self) -> None:
+        # Close devices
+        device_mgr, _, _, _ = self.managers
+        device_mgr.close_devices()
 
     def test_create_job(self):
-        s = _Scheduler(self.mop)
+        s = _Scheduler(self.managers)
 
         class J0(Job):
             pass
@@ -410,7 +420,7 @@ class LazySchedulerTestCase(unittest.TestCase):
     def test_create_job_bad(self):
         from dax.base.exceptions import BuildError
 
-        s = _Scheduler(self.mop)
+        s = _Scheduler(self.managers)
 
         class J0(Job):
             FILE = 'foo.py'
@@ -448,16 +458,18 @@ class LazySchedulerTestCase(unittest.TestCase):
             pass
 
         with self.assertRaises(TypeError, msg='Wrong job parent type did not raise'):
-            J0(self.mop)
+            # noinspection PyTypeChecker
+            J0(self.managers)
 
         class T0(Trigger):
             pass
 
         with self.assertRaises(TypeError, msg='Wrong trigger parent type did not raise'):
-            T0(self.mop)
+            # noinspection PyTypeChecker
+            T0(self.managers)
 
     def test_job_arguments(self):
-        s = _Scheduler(self.mop)
+        s = _Scheduler(self.managers)
 
         class J0(Job):
             ARGUMENTS = {'foo': 1,
@@ -475,7 +487,7 @@ class LazySchedulerTestCase(unittest.TestCase):
                              {k: v.describe() if isinstance(v, ScanObject) else v for k, v in J0.ARGUMENTS.items()})
 
     def test_job_configurable_arguments(self):
-        s = _Scheduler(self.mop)
+        s = _Scheduler(self.managers)
 
         class J0(Job):
             ARGUMENTS = {'foo': 1,
@@ -514,7 +526,7 @@ class LazySchedulerTestCase(unittest.TestCase):
 
         def start_scheduler(*, reset):
             # Prepare scheduler
-            scheduler = S(self.mop)
+            scheduler = S(self.managers)
             scheduler.prepare()
             # Extract job object
             job = scheduler._nodes[J0]
@@ -562,7 +574,7 @@ class LazySchedulerTestCase(unittest.TestCase):
 
         def start_scheduler(*, reset):
             # Prepare scheduler
-            scheduler = S(self.mop)
+            scheduler = S(self.managers)
             scheduler.prepare()
             # Extract job object
             job = scheduler._nodes[J0]
@@ -609,28 +621,28 @@ class LazySchedulerTestCase(unittest.TestCase):
             class S(DaxScheduler):
                 NODES = {}
 
-            S(self.mop)
+            S(self.managers)
 
         with self.assertRaises(AssertionError, msg='Scheduler without jobs did not raise'):
             class S(DaxScheduler):
                 NAME = 'test_scheduler'
 
-            S(self.mop)
+            S(self.managers)
 
         class S(DaxScheduler):
             NAME = 'test_scheduler'
             NODES = {}
 
         # Instantiate a well defined scheduler
-        self.assertIsInstance(S(self.mop), DaxScheduler)
+        self.assertIsInstance(S(self.managers), DaxScheduler)
 
     def test_scheduler_pipeline(self):
-        s = _Scheduler(self.mop)
+        s = _Scheduler(self.managers)
         s.prepare()
 
         self.arguments['Job pipeline'] = 'main'
         with self.assertRaises(ValueError, msg='Pipeline conflict did not raise'):
-            s = _Scheduler(get_managers(arguments=self.arguments))
+            s = _Scheduler(self.managers)
             s.prepare()
 
     def test_duplicate_nodes(self):
@@ -653,7 +665,7 @@ class LazySchedulerTestCase(unittest.TestCase):
 
         for S in [SchedulerA, SchedulerB, SchedulerC]:
             with self.subTest(cls=S.__name__):
-                s = S(self.mop)
+                s = S(self.managers)
                 self.assertLess(len(s._nodes), len(S.NODES), 'Number of nodes is expected to decrease')
                 self.assertEqual(len(s._nodes), len(set(S.NODES)), 'Number of nodes does not match expected number')
 
@@ -669,7 +681,7 @@ class LazySchedulerTestCase(unittest.TestCase):
 
         S.NODES.append(_JobA)
 
-        s = S(self.mop)
+        s = S(self.managers)
         with self.assertRaises(ValueError, msg='Node class name conflict did not raise'):
             s.prepare()
 
@@ -685,7 +697,7 @@ class LazySchedulerTestCase(unittest.TestCase):
 
         S.NODES.append(_JobA)
 
-        s = S(self.mop)
+        s = S(self.managers)
         with self.assertRaises(ValueError, msg='Node class name conflict did not raise'):
             s.prepare()
 
@@ -694,7 +706,7 @@ class LazySchedulerTestCase(unittest.TestCase):
             NODES = {_JobA}
 
         with self.assertRaises(KeyError, msg='Dependency not in node set did not raise'):
-            s = S(self.mop)
+            s = S(self.managers)
             try:
                 s.prepare()
             except KeyError as e:
@@ -709,7 +721,7 @@ class LazySchedulerTestCase(unittest.TestCase):
             NODES = {T}
 
         with self.assertRaises(KeyError, msg='Trigger node not in node set did not raise'):
-            s = S(self.mop)
+            s = S(self.managers)
             try:
                 s.prepare()
             except KeyError as e:
@@ -727,7 +739,7 @@ class LazySchedulerTestCase(unittest.TestCase):
             NODES = {JobA}
 
         with self.assertRaises(RuntimeError, msg='Non-DAG dependency graph did not raise'):
-            s = S(self.mop)
+            s = S(self.managers)
             s.prepare()
 
     def test_scheduler_root_jobs(self):
@@ -751,7 +763,7 @@ class LazySchedulerTestCase(unittest.TestCase):
             class S(_Scheduler):
                 NODES = jobs
 
-            s = S(self.mop)
+            s = S(self.managers)
             s.prepare()
 
             self.assertEqual(len(s._root_nodes), len(root_jobs), 'Did not found expected number of root jobs')
@@ -778,7 +790,7 @@ class LazySchedulerTestCase(unittest.TestCase):
                 NODES = jobs
                 ROOT_NODES = root_jobs
 
-            s = S(self.mop)
+            s = S(self.managers)
             s.prepare()
 
             self.assertEqual(len(s._root_nodes), len(root_jobs), 'Did not found expected number of root jobs')
@@ -805,7 +817,7 @@ class LazySchedulerTestCase(unittest.TestCase):
                 NODES = jobs
                 ROOT_NODES = {root_job}
 
-            s = S(self.mop)
+            s = S(self.managers)
             with self.assertRaises(KeyError, msg='Root job outside job set did not raise'):
                 try:
                     s.prepare()
@@ -818,7 +830,7 @@ class LazySchedulerTestCase(unittest.TestCase):
         class S(_Scheduler):
             NODES = {_JobC}
 
-        s = S(self.mop)
+        s = S(self.managers)
         with self.assertLogs(s.logger, logging.WARNING):
             s.prepare()
 
@@ -826,7 +838,7 @@ class LazySchedulerTestCase(unittest.TestCase):
         class S(_Scheduler):
             NODES = {_Job1, _Job2, _Job3, _Job4, _JobA, _JobB, _JobC}
 
-        s = S(self.mop)
+        s = S(self.managers)
         s.prepare()
 
         # Manually call init
@@ -893,7 +905,7 @@ class LazySchedulerTestCase(unittest.TestCase):
                     raise TerminationRequested
 
         self.arguments.update(self.FAST_WAVE_ARGUMENTS)
-        s = S(get_managers(arguments=self.arguments))
+        s = S(self.managers)
         s.prepare()
 
         # Run the scheduler
@@ -931,7 +943,7 @@ class LazySchedulerTestCase(unittest.TestCase):
                     raise TerminationRequested
 
         self.arguments.update(self.FAST_WAVE_ARGUMENTS)
-        s = S(get_managers(arguments=self.arguments))
+        s = S(self.managers)
         s.prepare()
 
         # Run the scheduler
@@ -978,11 +990,17 @@ class LazySchedulerTestCase(unittest.TestCase):
                     await controller.submit(*args, **kwargs)
 
         self.arguments.update(self.FAST_WAVE_ARGUMENTS)
-        s = S(get_managers(_DEVICE_DB, arguments=self.arguments))
+        managers = get_managers(_DEVICE_DB, arguments=self.arguments)
+        s = S(managers)
         s.prepare()
 
         # Run the scheduler
         s.run()
+
+        # Close devices
+        device_mgr, _, _, _ = managers
+        device_mgr.close_devices()
+
         # Return the scheduler
         return s
 
@@ -1061,7 +1079,7 @@ class LazySchedulerTestCase(unittest.TestCase):
         asyncio.run(self._test_create_trigger())
 
     async def _test_create_trigger(self):
-        s = _Scheduler(self.mop)
+        s = _Scheduler(self.managers)
 
         # Use a "stand-in" queue for testing
         request_queue = asyncio.Queue()
@@ -1141,7 +1159,7 @@ class LazySchedulerTestCase(unittest.TestCase):
     def test_create_trigger_bad(self):
         from dax.base.exceptions import BuildError
 
-        s = _Scheduler(self.mop)
+        s = _Scheduler(self.managers)
 
         class T0(Trigger):
             NODES = ['T0']
@@ -1199,7 +1217,7 @@ class LazySchedulerTestCase(unittest.TestCase):
                     raise TerminationRequested
 
         self.arguments.update(self.FAST_WAVE_ARGUMENTS)
-        s = S(get_managers(arguments=self.arguments))
+        s = S(self.managers)
         s.prepare()
 
         # Run the scheduler
@@ -1243,7 +1261,7 @@ class LazySchedulerTestCase(unittest.TestCase):
                     raise TerminationRequested
 
         self.arguments.update(self.FAST_WAVE_ARGUMENTS)
-        s = S(get_managers(arguments=self.arguments))
+        s = S(self.managers)
         s.prepare()
 
         # Run the scheduler

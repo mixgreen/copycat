@@ -45,7 +45,13 @@ class _TestService(dax.base.system.DaxService):
 class IntrospectTestCase(unittest.TestCase):
 
     def setUp(self) -> None:
-        self.sys = _TestSystem(get_managers())
+        self.managers = get_managers()
+        self.sys = _TestSystem(self.managers)
+
+    def tearDown(self) -> None:
+        # Close devices
+        device_mgr, _, _, _ = self.managers
+        device_mgr.close_devices()
 
     def test_component_graphviz(self):
         with temp_dir():

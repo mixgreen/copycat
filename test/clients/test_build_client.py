@@ -81,6 +81,15 @@ class BuildClientTestCase(unittest.TestCase):
     ]
     """List of custom client types (not subclasses of DaxClient)."""
 
+    def setUp(self) -> None:
+        self.managers = get_managers(enable_dax_sim(ddb=_DEVICE_DB, enable=True, logging_level=30,
+                                                    output='null', moninj_service=False))
+
+    def tearDown(self) -> None:
+        # Close devices
+        device_mgr, _, _, _ = self.managers
+        device_mgr.close_devices()
+
     def test_build_client(self) -> None:
         for client_type in self._CLIENTS:
             with self.subTest(client_type=client_type.__name__):
@@ -89,9 +98,7 @@ class BuildClientTestCase(unittest.TestCase):
                     pass
 
                 # Create client
-                manager = get_managers(
-                    enable_dax_sim(ddb=_device_db, enable=True, logging_level=30, output='null', moninj_service=False))
-                client = _InstantiatedClient(manager)
+                client = _InstantiatedClient(self.managers)
                 self.assertIsInstance(client, DaxClient)
 
                 # Get system
@@ -112,12 +119,10 @@ class BuildClientTestCase(unittest.TestCase):
                     pass
 
                 # Create client
-                manager = get_managers(
-                    enable_dax_sim(ddb=_device_db, enable=True, logging_level=30, output='null', moninj_service=False))
-                _InstantiatedClient(manager)
+                _InstantiatedClient(self.managers)
 
 
-_device_db = {
+_DEVICE_DB = {
     # Core device
     'core': {
         'type': 'local',

@@ -11,8 +11,11 @@ class ArtiqTestCase(unittest.TestCase):
 
     def test_get_managers(self):
         # Create an experiment object using the helper get_managers() function
-        self.assertIsInstance(artiq.experiment.EnvExperiment(dax.util.artiq.get_managers()),
-                              artiq.experiment.HasEnvironment)
+        managers = dax.util.artiq.get_managers()
+        self.assertIsInstance(artiq.experiment.EnvExperiment(managers), artiq.experiment.HasEnvironment)
+        # Close devices
+        device_mgr, _, _, _ = managers
+        device_mgr.close_devices()
 
     def test_get_managers_dataset_db(self):
         with dax.util.output.temp_dir():
@@ -25,8 +28,12 @@ class ArtiqTestCase(unittest.TestCase):
                 f.write(f'{{\n    "{key}": {value}\n}}')
 
             # Create environment
-            env = artiq.experiment.EnvExperiment(dax.util.artiq.get_managers(dataset_db=dataset_db))
+            managers = dax.util.artiq.get_managers(dataset_db=dataset_db)
+            env = artiq.experiment.EnvExperiment(managers)
             self.assertEqual(env.get_dataset(key), value, 'Retrieved dataset did not match earlier set value')
+            # Close devices
+            device_mgr, _, _, _ = managers
+            device_mgr.close_devices()
 
     def test_is_kernel(self):
         self.assertFalse(dax.util.artiq.is_kernel(self._undecorated_func),

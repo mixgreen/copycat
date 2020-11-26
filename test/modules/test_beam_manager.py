@@ -22,8 +22,14 @@ class GetBeam2TestCase(unittest.TestCase):
 
     def setUp(self) -> None:
         assert self.N > 0, 'Number of beams N should be > 0'
-        self.s = _TestSystem(get_managers(), num_beams=self.N)
+        self.managers = get_managers()
+        self.s = _TestSystem(self.managers, num_beams=self.N)
         self.bm: BeamManager = self.s.m
+
+    def tearDown(self) -> None:
+        # Close devices
+        device_mgr, _, _, _ = self.managers
+        device_mgr.close_devices()
 
     def test_num_beams_bounds(self):
         # Keep track of returned indices

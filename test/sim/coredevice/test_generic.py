@@ -21,8 +21,14 @@ class GenericTestCase(unittest.TestCase):
     }, enable=True, output='null', moninj_service=False)
 
     def setUp(self) -> None:
-        device_manager, _, _, _ = get_managers(device_db=self._DEVICE_DB)
-        self.generic = dax.sim.coredevice.generic.Generic(device_manager, _key='generic')
+        self.managers = get_managers(device_db=self._DEVICE_DB)
+        device_mgr, _, _, _ = self.managers
+        self.generic = dax.sim.coredevice.generic.Generic(device_mgr, _key='generic')
+
+    def tearDown(self) -> None:
+        # Close devices
+        device_mgr, _, _, _ = self.managers
+        device_mgr.close_devices()
 
     def test_direct_call(self):
         with self.assertRaises(TypeError, msg='Direct call on generic object did not raise'):

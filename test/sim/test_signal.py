@@ -22,10 +22,18 @@ _SIGNAL_TYPES = {bool, int, np.int32, np.int64, float, str, object}
 
 class NullSignalManagerTestCase(unittest.TestCase):
 
+    def setUp(self) -> None:
+        ddb = enable_dax_sim(_DEVICE_DB.copy(), enable=True, output='null', moninj_service=False)
+        self.managers = get_managers(ddb)
+
+    def tearDown(self) -> None:
+        # Close devices
+        device_mgr, _, _, _ = self.managers
+        device_mgr.close_devices()
+
     def test_signal_manager(self) -> None:
         # Create the system
-        ddb = enable_dax_sim(_DEVICE_DB.copy(), enable=True, output='null', moninj_service=False)
-        _TestSystem(get_managers(ddb))
+        _TestSystem(self.managers)
 
         # Verify the signal manager type
         sm = typing.cast(NullSignalManager, get_signal_manager())
@@ -34,55 +42,60 @@ class NullSignalManagerTestCase(unittest.TestCase):
 
 class VcdSignalManagerTestCase(unittest.TestCase):
 
+    def setUp(self) -> None:
+        self._temp_dir = temp_dir()
+        self._temp_dir.__enter__()
+
+        # Create the system
+        ddb = enable_dax_sim(_DEVICE_DB.copy(), enable=True, output='vcd', moninj_service=False)
+        self.managers = get_managers(ddb)
+        self.sys = _TestSystem(self.managers)
+
+        # Get the signal manager
+        self.sm: DaxSignalManager = typing.cast(VcdSignalManager, get_signal_manager())
+        self.assertIsInstance(self.sm, VcdSignalManager)
+
+    def tearDown(self) -> None:
+        # Close devices
+        device_mgr, _, _, _ = self.managers
+        device_mgr.close_devices()
+
+        self._temp_dir.__exit__(None, None, None)
+
     def test_signal_types(self):
         self.assertSetEqual(set(VcdSignalManager._CONVERT_TYPE), _SIGNAL_TYPES, 'Signal types did not match reference.')
 
     def test_signal_manager(self) -> None:
-        with temp_dir():
-            # Create the system
-            ddb = enable_dax_sim(_DEVICE_DB.copy(), enable=True, output='vcd', moninj_service=False)
-            _TestSystem(get_managers(ddb))
+        # Verify the signal manager type by verifying if the same signal managers is checked as in setUp()
+        self.assertIs(typing.cast(VcdSignalManager, get_signal_manager()), self.sm)
 
-            # Verify the signal manager type
-            sm = typing.cast(VcdSignalManager, get_signal_manager())
-            self.assertIsInstance(sm, VcdSignalManager)
-
-            # Manually close signal manager before leaving temp dir
-            sm.close()
-            sm.close()  # Close twice, should not raise an exception
+        # Manually close signal manager before leaving temp dir
+        self.sm.close()
+        self.sm.close()  # Close twice, should not raise an exception
 
     def test_registered_signals(self):
-        with temp_dir():
-            # Create the system
-            ddb = enable_dax_sim(_DEVICE_DB.copy(), enable=True, output='vcd', moninj_service=False)
-            sys = _TestSystem(get_managers(ddb))
+        signals = {
+            self.sys.ttl0: {'state', 'direction', 'sensitivity'},
+            self.sys.ttl1: {'state', 'direction', 'sensitivity'},
+            self.sys.ec: {'count'},
+            self.sys.ad9910.cpld: {'init', 'init_att'},
+            self.sys.ad9910: {'init', 'freq', 'phase', 'phase_mode', 'att', 'amp', 'sw'},
+            self.sys.ad9912: {'init', 'freq', 'phase', 'att', 'sw'},
+            self.sys.core: {'reset'},
+            self.sys.core_dma: {'record', 'play', 'play_name'},
+        }
 
-            # Verify the signal manager type
-            sm = typing.cast(VcdSignalManager, get_signal_manager())
-            self.assertIsInstance(sm, VcdSignalManager)
+        # Verify signals are registered
+        registered_signals = self.sm.get_registered_signals()
+        self.assertSetEqual(set(signals), set(registered_signals), 'Registered devices did not match')
+        for d, s in signals.items():
+            with self.subTest(device_type=type(d)):
+                if s:
+                    self.assertSetEqual({n for n, _, _ in registered_signals[d]}, s,
+                                        'Registered signals did not match')
 
-            signals = {
-                sys.ttl0: {'state', 'direction', 'sensitivity'},
-                sys.ttl1: {'state', 'direction', 'sensitivity'},
-                sys.ec: {'count'},
-                sys.ad9910.cpld: {'init', 'init_att'},
-                sys.ad9910: {'init', 'freq', 'phase', 'phase_mode', 'att', 'amp', 'sw'},
-                sys.ad9912: {'init', 'freq', 'phase', 'att', 'sw'},
-                sys.core: {'reset'},
-                sys.core_dma: {'record', 'play', 'play_name'},
-            }
-
-            # Verify signals are registered
-            registered_signals = sm.get_registered_signals()
-            self.assertSetEqual(set(signals), set(registered_signals), 'Registered devices did not match')
-            for d, s in signals.items():
-                with self.subTest(device_type=type(d)):
-                    if s:
-                        self.assertSetEqual({n for n, _, _ in registered_signals[d]}, s,
-                                            'Registered signals did not match')
-
-            # Manually close signal manager before leaving temp dir
-            sm.close()
+        # Manually close signal manager before leaving temp dir
+        self.sm.close()
 
 
 class VcdSignalManagerEventTestCase(unittest.TestCase):
@@ -93,13 +106,18 @@ class VcdSignalManagerEventTestCase(unittest.TestCase):
 
         # Create the system
         ddb = enable_dax_sim(_DEVICE_DB.copy(), enable=True, output='vcd', moninj_service=False)
-        self.sys = _TestSystem(get_managers(ddb))
+        self.managers = get_managers(ddb)
+        self.sys = _TestSystem(self.managers)
 
         # Get the signal manager
         self.sm: DaxSignalManager = typing.cast(VcdSignalManager, get_signal_manager())
         self.assertIsInstance(self.sm, VcdSignalManager)
 
     def tearDown(self) -> None:
+        # Close devices
+        device_mgr, _, _, _ = self.managers
+        device_mgr.close_devices()
+
         self._temp_dir.__exit__(None, None, None)
 
     def test_event(self):
@@ -134,14 +152,17 @@ class PeekSignalManagerTestCase(VcdSignalManagerEventTestCase):
     def setUp(self) -> None:
         # Create the system
         ddb = enable_dax_sim(_DEVICE_DB.copy(), enable=True, output='peek', moninj_service=False)
-        self.sys = _TestSystem(get_managers(ddb))
+        self.managers = get_managers(ddb)
+        self.sys = _TestSystem(self.managers)
 
         # Get the peek signal manager
         self.sm = typing.cast(PeekSignalManager, get_signal_manager())
         self.assertIsInstance(self.sm, PeekSignalManager)
 
     def tearDown(self) -> None:
-        pass
+        # Close devices
+        device_mgr, _, _, _ = self.managers
+        device_mgr.close_devices()
 
     def test_signal_types(self):
         self.assertSetEqual(set(self.sm._CONVERT_TYPE), _SIGNAL_TYPES, 'Signal types did not match reference.')

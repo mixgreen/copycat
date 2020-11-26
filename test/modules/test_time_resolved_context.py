@@ -21,9 +21,15 @@ class _TestSystem(DaxSystem):
 class TimeResolvedContextTestCase(unittest.TestCase):
 
     def setUp(self) -> None:
-        self.s = _TestSystem(get_managers())
+        self.managers = get_managers()
+        self.s = _TestSystem(self.managers)
         self.s.dax_init()
         self.t = self.s.time_resolved_context
+
+    def tearDown(self) -> None:
+        # Close devices
+        device_mgr, _, _, _ = self.managers
+        device_mgr.close_devices()
 
     def test_in_context(self):
         # Initially we are out of context
@@ -413,10 +419,15 @@ class TimeResolvedContextTestCase(unittest.TestCase):
 class TimeResolvedAnalyzerTestCase(unittest.TestCase):
 
     def setUp(self) -> None:
-        self.mop = get_managers()
-        self.s = _TestSystem(self.mop)
+        self.managers = get_managers()
+        self.s = _TestSystem(self.managers)
         self.s.dax_init()
         self.t = self.s.time_resolved_context
+
+    def tearDown(self) -> None:
+        # Close devices
+        device_mgr, _, _, _ = self.managers
+        device_mgr.close_devices()
 
     def test_analyzer_system(self):
         # The analyzer requests an output file which will trigger the creation of an experiment output dir
@@ -449,7 +460,7 @@ class TimeResolvedAnalyzerTestCase(unittest.TestCase):
         with temp_dir():
             # Write data to HDF5 file
             file_name = 'result.h5'
-            _, dataset_mgr, _, _ = self.mop
+            _, dataset_mgr, _, _ = self.managers
             with h5py.File(file_name, 'w') as f:
                 dataset_mgr.write_hdf5(f)
 
@@ -508,7 +519,7 @@ class TimeResolvedAnalyzerTestCase(unittest.TestCase):
         with temp_dir():
             # Write data to HDF5 file
             file_name = 'result.h5'
-            _, dataset_mgr, _, _ = self.mop
+            _, dataset_mgr, _, _ = self.managers
             with h5py.File(file_name, 'w') as f:
                 dataset_mgr.write_hdf5(f)
 

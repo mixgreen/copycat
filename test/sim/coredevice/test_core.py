@@ -19,23 +19,28 @@ class CoreTestCase(unittest.TestCase):
 
     def setUp(self) -> None:
         set_signal_manager(NullSignalManager())
+        self.managers = get_managers(enable_dax_sim(self._DEVICE_DB, enable=True, logging_level=logging.WARNING,
+                                                    moninj_service=False, output='null'))
+
+    def tearDown(self) -> None:
+        # Close devices
+        device_mgr, _, _, _ = self.managers
+        device_mgr.close_devices()
 
     def test_constructor_signature(self):
-        dmgr, _, _, _ = get_managers(
-            enable_dax_sim(self._DEVICE_DB, enable=True, logging_level=logging.WARNING,
-                           moninj_service=False, output='null'))
+        device_mgr, _, _, _ = self.managers
 
         # Make sure the signature is as expected
         with self.assertRaises(TypeError, msg='Core class constructor did not match expected signature'):
             # Not adding _key
-            dax.sim.coredevice.core.Core(dmgr=dmgr, ref_period=1e-9)
+            dax.sim.coredevice.core.Core(dmgr=device_mgr, ref_period=1e-9)
         with self.assertRaises(TypeError, msg='Core class constructor did not match expected signature'):
             # Not adding ref period
             # noinspection PyArgumentList
-            dax.sim.coredevice.core.Core(dmgr=dmgr, _key='core')
+            dax.sim.coredevice.core.Core(dmgr=device_mgr, _key='core')
 
         # Test with correct arguments
-        self.assertIsNotNone(dax.sim.coredevice.core.Core(dmgr=dmgr, ref_period=1e-9, _key='core'))
+        self.assertIsNotNone(dax.sim.coredevice.core.Core(dmgr=device_mgr, ref_period=1e-9, _key='core'))
 
 
 class BaseCoreTestCase(CoreTestCase):

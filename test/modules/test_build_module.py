@@ -35,6 +35,15 @@ class BuildModuleTestCase(unittest.TestCase):
     }
     """List of module types and kwargs."""
 
+    def setUp(self) -> None:
+        self.managers = get_managers(enable_dax_sim(ddb=_DEVICE_DB, enable=True, logging_level=30,
+                                                    output='null', moninj_service=False))
+
+    def tearDown(self) -> None:
+        # Close devices
+        device_mgr, _, _, _ = self.managers
+        device_mgr.close_devices()
+
     def test_build_module(self):
         for module_type, module_kwargs in self._MODULES.items():
             with self.subTest(module_type=module_type.__name__):
@@ -44,9 +53,7 @@ class BuildModuleTestCase(unittest.TestCase):
                         self.module = module_type(self, module_type.__name__, *args, **module_kwargs)
 
                 # Create system
-                manager = get_managers(enable_dax_sim(ddb=_device_db, enable=True, logging_level=30,
-                                                      output='null', moninj_service=False))
-                system = _WrappedTestSystem(manager, **module_kwargs)
+                system = _WrappedTestSystem(self.managers, **module_kwargs)
                 self.assertIsInstance(system, DaxSystem)
 
                 # Initialize system
@@ -63,7 +70,7 @@ class BuildModuleTestCase(unittest.TestCase):
                                                    f'kernel invariant, but this attribute does not exist')
 
 
-_device_db = {
+_DEVICE_DB = {
     # Core device
     'core': {
         'type': 'local',

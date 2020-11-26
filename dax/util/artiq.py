@@ -88,14 +88,25 @@ def is_host_only(func: typing.Any) -> bool:
     return False if meta is None else bool(meta.forbidden)
 
 
+# Managers tuple type
+__M_T = typing.Tuple[artiq.master.worker_db.DeviceManager, artiq.master.worker_db.DatasetManager,
+                     artiq.language.environment.ProcessArgumentManager, typing.Dict[str, typing.Any]]
+
+
 def get_managers(device_db: typing.Union[typing.Dict[str, typing.Any], str, None] = None, *,
                  dataset_db: typing.Optional[str] = None,
                  expid: typing.Optional[typing.Dict[str, typing.Any]] = None,
                  arguments: typing.Optional[typing.Dict[str, typing.Any]] = None,
-                 **kwargs: typing.Any) -> typing.Any:
+                 **kwargs: typing.Any) -> __M_T:
     """Returns an object that can function as a `managers_or_parent` for ARTIQ HasEnvironment.
 
     This function is primarily used for testing purposes.
+
+    We strongly recommend to close the devices in the device manager using `device_manager.close_devices()`
+    before the manager objects are discarded. This will free any used resources.
+    Devices can be closed multiple times without any side-effects.
+    Just in case the user does not manually close devices, a finalizer is attached to the device manager
+    object to ensure `close_devices()` is at least called once before the object is deleted.
 
     If a full ARTIQ environment is not required but only a core device driver is sufficient,
     please take a look at the `dax.sim.coredevice.core.BaseCore` class.
