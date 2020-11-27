@@ -9,7 +9,7 @@ from artiq.experiment import HasEnvironment
 
 import dax.util.artiq
 
-from test.environment import CI_ENABLED
+from test.environment import CI_ENABLED, TB_DISABLED
 
 __all__ = ['TestBenchCase']
 
@@ -149,6 +149,7 @@ if CI_ENABLED:
 
 
 @unittest.skipUnless(CI_ENABLED, 'Not in CI environment, skipping hardware test')
+@unittest.skipIf(TB_DISABLED, 'Hardware testbenches disabled, skipping hardware tests')
 @unittest.skipIf(_CORE_DEVICE is None, 'No core device available, skipping hardware test')
 class TestBenchCase(unittest.TestCase):
     """An extension of the `unittest.TestCase` class which facilitates device testing.

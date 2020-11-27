@@ -40,6 +40,7 @@ class _ContextExperiment(HasEnvironment):
                 pass
 
 
+@unittest.skip('WIP, skipping hardware tests')
 class ArtiqKernelTestCase(test.hw_testbench.TestBenchCase):
 
     def test_nested_context(self):
