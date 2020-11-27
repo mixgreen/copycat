@@ -8,7 +8,7 @@ from artiq.language.units import *
 
 from dax.sim.time import DaxTimeManager
 
-from test.environment import *
+from test.environment import CI_ENABLED
 
 _NUM_SAMPLES = 1000 if CI_ENABLED else 100
 

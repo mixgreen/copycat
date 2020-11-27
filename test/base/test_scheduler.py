@@ -19,7 +19,7 @@ from dax.util.artiq import get_managers
 import dax.base.system
 import dax.base.exceptions
 
-from test.environment import *
+from test.environment import CI_ENABLED
 
 _NUM_WAVES = 5 if CI_ENABLED else 1
 
@@ -1233,7 +1233,7 @@ class LazySchedulerTestCase(unittest.TestCase):
                 self.assertDictEqual(j.counter, ref_counter,
                                      'Job call pattern did not match expected pattern')
 
-    @unittest.skipUnless(CI_ENABLED, 'Skipping long test when not running in CI environment')
+    @unittest.skipUnless(CI_ENABLED, 'Not in CI environment, skipping long test')
     def test_scheduler_run_long(self):
         num_waves = 10
         wave_interval = 1.0

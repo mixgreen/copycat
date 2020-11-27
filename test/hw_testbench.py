@@ -1,20 +1,24 @@
 import unittest
 import typing
 import collections.abc
+import dataclasses
+import subprocess
 
 import artiq.master.worker_db
 from artiq.experiment import HasEnvironment
 
 import dax.util.artiq
 
-from test.environment import *
+from test.environment import CI_ENABLED
 
 __all__ = ['TestBenchCase']
+
+_DDB_T = typing.Dict[str, typing.Any]  # Type for a device DB
 
 _KC705_CORE_ADDR: str = '192.168.1.75'
 """IP address of the KC705."""
 
-_KC705_DEVICE_DB: typing.Dict[str, typing.Any] = {
+_KC705_DEVICE_DB: _DDB_T = {
     # Core devices
     'core': {
         'type': 'local',
@@ -117,7 +121,35 @@ _KC705_DEVICE_DB: typing.Dict[str, typing.Any] = {
 """Device DB of the KC705."""
 
 
-@unittest.skipUnless(CI_ENABLED, 'Skipping hardware tests when not running in CI environment')
+@dataclasses.dataclass(frozen=True)
+class _CoreDevice:
+    """Dataclass to hold core device information."""
+    address: str
+    device_db: _DDB_T
+
+
+_AVAILABLE_CORE_DEVICES: typing.List[_CoreDevice] = [
+    _CoreDevice(address=_KC705_CORE_ADDR, device_db=_KC705_DEVICE_DB),
+]
+"""A list of available core devices."""
+
+_CORE_DEVICE: typing.Optional[_CoreDevice] = None
+"""The core device to use for testing, or None if no core devices are available."""
+
+if CI_ENABLED:
+    for core_device in _AVAILABLE_CORE_DEVICES:
+        # Request the IP address of the core device
+        r = subprocess.run(['artiq_coremgmt', '-D', core_device.address, 'config', 'read', 'ip'],
+                           stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+
+        if r.returncode == 0 and r.stdout.strip() == core_device.address:
+            # Use this core device
+            _CORE_DEVICE = core_device
+            break
+
+
+@unittest.skipUnless(CI_ENABLED, 'Not in CI environment, skipping hardware test')
+@unittest.skipIf(_CORE_DEVICE is None, 'No core device available, skipping hardware test')
 class TestBenchCase(unittest.TestCase):
     """An extension of the `unittest.TestCase` class which facilitates device testing.
 
@@ -130,7 +162,8 @@ class TestBenchCase(unittest.TestCase):
 
     def setUp(self) -> None:
         """Set up the ARTIQ manager objects."""
-        self.__managers = dax.util.artiq.get_managers(device_db=_KC705_DEVICE_DB)
+        assert _CORE_DEVICE is not None, 'Can not set up testbench, no core device was set'
+        self.__managers = dax.util.artiq.get_managers(device_db=_CORE_DEVICE.device_db)
 
     def tearDown(self) -> None:
         """Close the ARTIQ managers to free resources."""
@@ -169,7 +202,8 @@ class TestBenchCase(unittest.TestCase):
             env = env_class(self.__managers, *build_args, **build_kwargs)
         except artiq.master.worker_db.DeviceError as e:
             # Skip test in case device errors (raising instead of calling `self.skipTest()` for better typing)
-            raise unittest.SkipTest(f'Test device not available: "{str(e)}"')
+            assert _CORE_DEVICE is not None
+            raise unittest.SkipTest(f'Core device at [{_CORE_DEVICE.address}] not available: "{str(e)}"')
         else:
             # Return the environment
             return env

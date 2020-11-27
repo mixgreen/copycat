@@ -5,7 +5,7 @@ import artiq.coredevice.ad53xx  # type: ignore
 
 import dax.sim.coredevice.ad53xx
 
-from test.environment import *
+from test.environment import CI_ENABLED
 
 _NUM_SAMPLES = 1000 if CI_ENABLED else 100
 
