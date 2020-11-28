@@ -1014,7 +1014,7 @@ class HistogramAnalyzer:
         # Plot
         fig, ax = plt.subplots()
         for y, label in zip(mean_counts, current_labels):
-            ax.errobar(x_values, y, yerr=stdev_counts, label=label, **kwargs)
+            ax.errorbar(x_values, y, yerr=stdev_counts, label=label, **kwargs)
 
         # Plot formatting
         ax.set_xlabel(x_label)
