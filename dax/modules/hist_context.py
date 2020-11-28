@@ -120,7 +120,7 @@ class HistogramContext(DaxModule):
         self._histogram_plot_key: str = self.HISTOGRAM_PLOT_KEY_FORMAT.format(base=base)
         self._probability_plot_key: str = self.PROBABILITY_PLOT_KEY_FORMAT.format(base=base)
         self._mean_count_plot_key: str = self.MEAN_COUNT_PLOT_KEY_FORMAT.format(base=base)
-        self._mean_count_plot_error_key : str = self.MEAN_COUNT_PLOT_ERROR_KEY_FORMAT.format(base=base)
+        self._mean_count_plot_error_key: str = self.MEAN_COUNT_PLOT_ERROR_KEY_FORMAT.format(base=base)
         # Generate applet plot group
         self._plot_group: str = self.PLOT_GROUP_FORMAT.format(base=base)
 
@@ -501,9 +501,7 @@ class HistogramContext(DaxModule):
         """Obtain all standard deviation counts recorded by this histogram context for a specific key.
 
         The data is formatted as a list of counts per channel.
-        So to access mean count N of channel C: `get_mean_counts()[C][N]`.
-
-        For binary measurements, the mean count returns a value in the range [0..1].
+        So to access standard deviation N of channel C: `get_stdev_counts()[C][N]`.
 
         :param dataset_key: Key of the dataset to obtain the mean counts of
         :return: All mean count data for the specified key
@@ -595,6 +593,8 @@ class HistogramAnalyzer:
                 {k: np.asarray(source.get_probabilities(k, state_detection_threshold)) for k in self.keys}
             self.mean_counts: typing.Dict[str, np.ndarray] = \
                 {k: np.asarray(source.get_mean_counts(k)) for k in self.keys}
+            self.stdev_counts: typing.Dict[str, np.ndarray] = \
+                {k: np.asarray(source.get_stdev_counts(k)) for k in self.keys}
             self.raw: typing.Dict[str, typing.Sequence[np.ndarray]] = \
                 {k: [np.asarray(r) for r in source.get_raw(k)] for k in self.keys}
 
@@ -621,6 +621,7 @@ class HistogramAnalyzer:
                 self.probabilities = {k: self.histograms_to_probabilities(h, state_detection_threshold)
                                       for k, h in self.histograms.items()}
             self.mean_counts = {k: self.histograms_to_mean_counts(h) for k, h in self.histograms.items()}
+            self.stdev_counts = {k: self.histograms_to_stdev_counts(h) for k, h in self.histograms.items()}
 
             try:
                 # Try to obtain raw data
@@ -704,7 +705,7 @@ class HistogramAnalyzer:
         :param counter: The counter object representing the histogram
         :return: The standard deviation of the histogram as a float
         """
-        average = sum(c * v for c, v in counter.items()) / sum(counter.values())
+        average = cls.histogram_to_mean_count(counter)
         squared_average = sum(c * c * v for c, v in counter.items()) / sum(counter.values())
         return np.sqrt(squared_average - average ** 2)
 
@@ -984,7 +985,7 @@ class HistogramAnalyzer:
 
         # Get the counts associated with the provided key
         mean_counts = [np.asarray(p) for p in self.mean_counts[key]]
-        # TODO : add stdev
+        stdev_counts = [np.asarray(p) for p in self.stdev_counts[key]]
 
         if not len(mean_counts):
             # No data to plot
@@ -999,6 +1000,7 @@ class HistogramAnalyzer:
             ind = x_values.argsort()
             x_values = x_values[ind]
             mean_counts = [p[ind] for p in mean_counts]
+            stdev_counts = [p[ind] for p in stdev_counts]
 
         # Current labels
         current_labels = [f'Plot {i}' for i in range(len(mean_counts))] if labels is None else labels
@@ -1012,7 +1014,7 @@ class HistogramAnalyzer:
         # Plot
         fig, ax = plt.subplots()
         for y, label in zip(mean_counts, current_labels):
-            ax.plot(x_values, y, label=label, **kwargs)
+            ax.errobar(x_values, y, yerr=stdev_counts, label=label, **kwargs)
 
         # Plot formatting
         ax.set_xlabel(x_label)
