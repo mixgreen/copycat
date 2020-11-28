@@ -48,6 +48,8 @@ class HistogramContext(DaxModule):
 
     MEAN_COUNT_PLOT_KEY_FORMAT: str = 'plot.{base}.histogram_context.mean_count'
     """Dataset name for plotting latest mean count graph."""
+    MEAN_COUNT_PLOT_ERROR_KEY_FORMAT: str = 'plot.{base}.histogram_context.stdev_count'
+    """Dataset name of statistic error (standard deviation) for plotting latest mean count graph."""
     MEAN_COUNT_PLOT_NAME: str = 'mean count'
     """Name of the mean count plot applet."""
 
@@ -118,6 +120,7 @@ class HistogramContext(DaxModule):
         self._histogram_plot_key: str = self.HISTOGRAM_PLOT_KEY_FORMAT.format(base=base)
         self._probability_plot_key: str = self.PROBABILITY_PLOT_KEY_FORMAT.format(base=base)
         self._mean_count_plot_key: str = self.MEAN_COUNT_PLOT_KEY_FORMAT.format(base=base)
+        self._mean_count_plot_error_key : str = self.MEAN_COUNT_PLOT_ERROR_KEY_FORMAT.format(base=base)
         # Generate applet plot group
         self._plot_group: str = self.PLOT_GROUP_FORMAT.format(base=base)
 
@@ -284,6 +287,10 @@ class HistogramContext(DaxModule):
             # Append result to mean count plotting dataset
             self.append_to_dataset(self._mean_count_plot_key, mean_counts)
 
+            # Calculate stdadard deviation per histogram
+            stdev_counts: typing.List[float] = [HistogramAnalyzer.histogram_to_stdev_count(h) for h in histograms]
+            self.append_to_dataset(self._mean_count_plot_error_key, stdev_counts)
+
         else:
             # Add empty element to the caches (keeps indexing consistent)
             self._raw_cache.setdefault(self._dataset_key, []).append([])
@@ -360,6 +367,7 @@ class HistogramContext(DaxModule):
         kwargs.setdefault('title', f'RID {self._scheduler.rid}')
         # Plot
         self._ccb.plot_xy_multi(self.MEAN_COUNT_PLOT_NAME, self._mean_count_plot_key, group=self._plot_group, **kwargs)
+        # TODO : use stdev count as error bar
 
     @rpc(flags={'async'})
     def clear_probability_plot(self):  # type: () -> None
@@ -378,6 +386,7 @@ class HistogramContext(DaxModule):
         """
         # Set the mean count dataset to an empty list
         self.set_dataset(self._mean_count_plot_key, [], broadcast=True, archive=False)
+        self.set_dataset(self._mean_count_plot_error_key, [], broadcast=True, archive=False)
 
     @rpc(flags={'async'})
     def disable_histogram_plot(self):  # type: () -> None
@@ -485,6 +494,21 @@ class HistogramContext(DaxModule):
         :return: All mean count data for the specified key
         """
         return [[HistogramAnalyzer.histogram_to_mean_count(h) for h in histograms]
+                for histograms in self.get_histograms(dataset_key)]
+
+    @host_only
+    def get_stdev_counts(self, dataset_key: typing.Optional[str] = None) -> typing.List[typing.List[float]]:
+        """Obtain all standard deviation counts recorded by this histogram context for a specific key.
+
+        The data is formatted as a list of counts per channel.
+        So to access mean count N of channel C: `get_mean_counts()[C][N]`.
+
+        For binary measurements, the mean count returns a value in the range [0..1].
+
+        :param dataset_key: Key of the dataset to obtain the mean counts of
+        :return: All mean count data for the specified key
+        """
+        return [[HistogramAnalyzer.histogram_to_stdev_count(h) for h in histograms]
                 for histograms in self.get_histograms(dataset_key)]
 
 
@@ -671,6 +695,31 @@ class HistogramAnalyzer:
         :return: Array of counts with the same shape as the input histograms
         """
         counts = [[cls.histogram_to_mean_count(h) for h in channel] for channel in histograms]
+        return np.asarray(counts)
+
+    @classmethod
+    def histogram_to_stdev_count(cls, counter: collections.Counter) -> float:
+        """Helper function to calculate the standard deviation of a histogram.
+
+        :param counter: The counter object representing the histogram
+        :return: The standard deviation of the histogram as a float
+        """
+        average = sum(c * v for c, v in counter.items()) / sum(counter.values())
+        squared_average = sum(c * c * v for c, v in counter.items()) / sum(counter.values())
+        return np.sqrt(squared_average - average ** 2)
+
+    @classmethod
+    def histograms_to_stdev_counts(cls,
+                                   histograms: typing.Sequence[typing.Sequence[collections.Counter]]) -> np.ndarray:
+        """Convert histograms to standard deviations.
+
+        Histograms are provided as a 2D array of Counter objects.
+        The first dimension is the channel, the second dimension is the sequence of counters.
+
+        :param histograms: The input histograms
+        :return: Array of standard deviations with the same shape as the input histograms
+        """
+        counts = [[cls.histogram_to_stdev_count(h) for h in channel] for channel in histograms]
         return np.asarray(counts)
 
     @staticmethod
@@ -935,6 +984,7 @@ class HistogramAnalyzer:
 
         # Get the counts associated with the provided key
         mean_counts = [np.asarray(p) for p in self.mean_counts[key]]
+        # TODO : add stdev
 
         if not len(mean_counts):
             # No data to plot
