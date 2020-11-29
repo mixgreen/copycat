@@ -3,13 +3,14 @@ import typing
 import collections.abc
 import dataclasses
 import subprocess
+import time
 
 import artiq.master.worker_db
 from artiq.experiment import HasEnvironment
 
 import dax.util.artiq
 
-from test.environment import CI_ENABLED, TB_DISABLED
+from test.environment import CI_ENABLED, TB_DISABLED, JOB_ID
 
 __all__ = ['TestBenchCase']
 
@@ -127,25 +128,48 @@ class _CoreDevice:
     address: str
     device_db: _DDB_T
 
+    def run_command(self, *args: str) -> subprocess.CompletedProcess:
+        """Run an ARTIQ core management command.
+
+        :param args: Additional arguments to append to the subprocess run command
+        :return: A `CompletedProcess` object
+        """
+        command: typing.List[str] = ['artiq_coremgmt', '-D', self.address]
+        command.extend(args)
+        return subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+
 
 _AVAILABLE_CORE_DEVICES: typing.List[_CoreDevice] = [
     _CoreDevice(address=_KC705_CORE_ADDR, device_db=_KC705_DEVICE_DB),
 ]
 """A list of available core devices."""
 
-_CORE_DEVICE: typing.Optional[_CoreDevice] = None
+
+def _get_core_device() -> typing.Optional[_CoreDevice]:
+    """Get the first available core device."""
+
+    if CI_ENABLED:
+        # Only find a core device if CI is enabled
+
+        for core_device in _AVAILABLE_CORE_DEVICES:
+            # Request the IP address of the core device
+            r = core_device.run_command('config', 'read', 'ip')
+
+            if r.returncode == 0 and r.stdout.strip() == core_device.address:
+                # Use this core device
+                return core_device
+
+    # No core device was available
+    return None
+
+
+_CORE_DEVICE: typing.Optional[_CoreDevice] = _get_core_device()
 """The core device to use for testing, or None if no core devices are available."""
 
-if CI_ENABLED:
-    for core_device in _AVAILABLE_CORE_DEVICES:
-        # Request the IP address of the core device
-        r = subprocess.run(['artiq_coremgmt', '-D', core_device.address, 'config', 'read', 'ip'],
-                           stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+del _get_core_device  # Remove one-time function
 
-        if r.returncode == 0 and r.stdout.strip() == core_device.address:
-            # Use this core device
-            _CORE_DEVICE = core_device
-            break
+_LOCK_KEY: str = 'dax_hw_tb_lock'
+"""Core device config key to lock the device for testing."""
 
 
 @unittest.skipUnless(CI_ENABLED, 'Not in CI environment, skipping hardware test')
@@ -160,6 +184,45 @@ class TestBenchCase(unittest.TestCase):
     """
 
     __E_T = typing.TypeVar('__E_T', bound=HasEnvironment)  # Type variable for environment
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        """Obtain a lock on the core device."""
+        assert _CORE_DEVICE is not None, 'Can not set up testbench, no core device was set'
+
+        # Read the lock status
+        r = _CORE_DEVICE.run_command('config', 'read', _LOCK_KEY)
+        if r.returncode != 0:
+            raise unittest.SkipTest(f'Could not obtain lock status of core device at [{_CORE_DEVICE.address}] '
+                                    f'(return code {r.returncode})')
+        elif r.stdout.strip().isdigit():
+            raise unittest.SkipTest(f'Core device at [{_CORE_DEVICE.address}] is locked by an other process')
+
+        # Lock the device
+        r = _CORE_DEVICE.run_command('config', 'write', '-s', _LOCK_KEY, JOB_ID)
+        if r.returncode != 0:
+            raise RuntimeError(f'Could not lock core device at [{_CORE_DEVICE.address}] (return code {r.returncode})')
+
+        # Confirm the lock was obtained successfully (required due to the lack of atomic locking)
+        time.sleep(3.0)  # Grace period
+        r = _CORE_DEVICE.run_command('config', 'read', _LOCK_KEY)
+        if r.returncode != 0:
+            raise RuntimeError(f'Could not confirm lock status of core device at [{_CORE_DEVICE.address}] '
+                               f'(return code {r.returncode})')
+        elif r.stdout.strip() != JOB_ID:
+            raise unittest.SkipTest(f'Core device at [{_CORE_DEVICE.address}] is locked by an other process '
+                                    f'(lock was overwritten)')
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        """Release the lock on the core device."""
+        assert _CORE_DEVICE is not None, 'Can not set up testbench, no core device was set'
+
+        # Release the lock
+        r = _CORE_DEVICE.run_command('config', 'remove', _LOCK_KEY)
+        if r.returncode != 0:
+            raise RuntimeError(f'Failed to release lock on core device at [{_CORE_DEVICE.address}]'
+                               f'(return code {r.returncode})')
 
     def setUp(self) -> None:
         """Set up the ARTIQ manager objects."""
