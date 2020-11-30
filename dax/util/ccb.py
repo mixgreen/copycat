@@ -112,7 +112,7 @@ class CcbTool:
         :param kwargs: Other optional arguments for the applet
         """
         # Assemble command
-        command = f'{self.DAX_APPLET}big_number {dataset}'
+        command = f'{self.DAX_APPLET}big_number "{dataset}"'
         command = _generate_command(command, digit_count=digit_count, update_delay=update_delay, **kwargs)
         # Create applet
         self.create_applet(name, command, group=group)
@@ -129,8 +129,11 @@ class CcbTool:
         :param group: Optional group of the applet
         :param kwargs: Other optional arguments for the applet
         """
+        if update_delay is None:
+            # Set update delay explicit for ARTIQ applets
+            update_delay = 0.1
         # Assemble command
-        command = f'{self.ARTIQ_APPLET}image {img}'
+        command = f'{self.ARTIQ_APPLET}image "{img}"'
         command = _generate_command(command, update_delay=update_delay, **kwargs)
         # Create applet
         self.create_applet(name, command, group=group)
@@ -170,7 +173,7 @@ class CcbTool:
         :param kwargs: Other optional arguments for the applet
         """
         # Assemble command
-        command = f'{self.DAX_APPLET}plot_xy {y}'
+        command = f'{self.DAX_APPLET}plot_xy "{y}"'
         command = _generate_command(command, x=x, error=error, fit=fit,
                                     v_lines=v_lines, h_lines=h_lines,
                                     sliding_window=sliding_window, title=title, crosshair=crosshair, last=last,
@@ -180,6 +183,7 @@ class CcbTool:
 
     def plot_xy_multi(self, name: str, y: str, *,
                       x: typing.Optional[str] = None,
+                      error: typing.Optional[str] = None,
                       v_lines: typing.Optional[str] = None,
                       h_lines: typing.Optional[str] = None,
                       index: typing.Optional[int] = None,
@@ -195,8 +199,9 @@ class CcbTool:
         """Create a plot XY applet with multiple plots.
 
         :param name: Name of the applet
-        :param y: Y-values dataset
+        :param y: Y-values dataset (multiple graphs)
         :param x: X-value dataset
+        :param error: Error dataset (multiple graphs)
         :param v_lines: Vertical lines dataset
         :param h_lines: Horizontal lines dataset
         :param index: The index of the results to plot (default plots all)
@@ -211,8 +216,8 @@ class CcbTool:
         :param kwargs: Other optional arguments for the applet
         """
         # Assemble command
-        command = f'{self.DAX_APPLET}plot_xy_multi {y}'
-        command = _generate_command(command, x=x, v_lines=v_lines, h_lines=h_lines, index=index,
+        command = f'{self.DAX_APPLET}plot_xy_multi "{y}"'
+        command = _generate_command(command, x=x, error=error, v_lines=v_lines, h_lines=h_lines, index=index,
                                     sliding_window=sliding_window, plot_names=plot_names, markers_only=markers_only,
                                     title=title, x_label=x_label, y_label=y_label, update_delay=update_delay, **kwargs)
         # Create applet
@@ -241,7 +246,7 @@ class CcbTool:
         :param kwargs: Other optional arguments for the applet
         """
         # Assemble command
-        command = f'{self.DAX_APPLET}plot_hist {y}'
+        command = f'{self.DAX_APPLET}plot_hist "{y}"'
         command = _generate_command(command, index=index, plot_names=plot_names, title=title,
                                     x_label=x_label, y_label=y_label,
                                     update_delay=update_delay, **kwargs)
@@ -264,8 +269,11 @@ class CcbTool:
         :param group: Optional group of the applet
         :param kwargs: Other optional arguments for the applet
         """
+        if update_delay is None:
+            # Set update delay explicit for ARTIQ applets
+            update_delay = 0.1
         # Assemble command
-        command = f'{self.ARTIQ_APPLET}plot_hist {y}'
+        command = f'{self.ARTIQ_APPLET}plot_hist "{y}"'
         command = _generate_command(command, x=x, title=title, update_delay=update_delay, **kwargs)
         # Create applet
         self.create_applet(name, command, group=group)
@@ -284,8 +292,11 @@ class CcbTool:
         :param group: Optional group of the applet
         :param kwargs: Other optional arguments for the applet
         """
+        if update_delay is None:
+            # Set update delay explicit for ARTIQ applets
+            update_delay = 0.1
         # Assemble command
-        command = f'{self.ARTIQ_APPLET}plot_xy_hist {xs} {histogram_bins} {histogram_counts}'
+        command = f'{self.ARTIQ_APPLET}plot_xy_hist "{xs}" "{histogram_bins}" "{histogram_counts}"'
         command = _generate_command(command, update_delay=update_delay, **kwargs)
         # Create applet
         self.create_applet(name, command, group=group)

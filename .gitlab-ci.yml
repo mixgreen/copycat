@@ -43,7 +43,7 @@ test_nix:
   script:
     # Run test commands
     - $NIX_CMD "python3 --version"
-    - $NIX_CMD "coverage --version; coverage run -m pytest -v"
+    - $NIX_CMD "coverage --version; coverage run -m pytest -v -rs"
     - $NIX_CMD "coverage report"
     - $NIX_CMD "mypy --version; mypy"
     - $NIX_CMD "flake8 --version; flake8"
@@ -56,7 +56,7 @@ test_conda:
     - conda install -y pytest pycodestyle mypy flake8
     # Run test commands
     - python3 --version
-    - pytest -v
+    - pytest -v -rs
     - mypy --version; mypy
     - flake8 --version; flake8
 

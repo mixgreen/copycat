@@ -24,5 +24,8 @@ in
                 ps.coverage
                 ps.flake8
             ]))
+            # Packages required for hardware testbenches
+            artiq-full.binutils-or1k
+            artiq-full.llvm-or1k
         ];
     }
