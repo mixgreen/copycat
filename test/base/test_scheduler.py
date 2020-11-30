@@ -1233,7 +1233,7 @@ class LazySchedulerTestCase(unittest.TestCase):
                 self.assertDictEqual(j.counter, ref_counter,
                                      'Job call pattern did not match expected pattern')
 
-    @unittest.skipUnless(CI_ENABLED, 'Not in CI environment, skipping long test')
+    @unittest.skipUnless(CI_ENABLED, 'Not in a CI environment, skipping long test')
     def test_scheduler_run_long(self):
         num_waves = 10
         wave_interval = 1.0

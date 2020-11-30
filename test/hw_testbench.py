@@ -10,7 +10,7 @@ from artiq.experiment import HasEnvironment
 
 import dax.util.artiq
 
-from test.environment import CI_ENABLED, TB_DISABLED, JOB_ID
+from test.environment import CI_ENABLED, NIX_ENV, TB_DISABLED, JOB_ID
 
 __all__ = ['TestBenchCase']
 
@@ -128,15 +128,16 @@ class _CoreDevice:
     address: str
     device_db: _DDB_T
 
-    def run_command(self, *args: str) -> subprocess.CompletedProcess:
+    def run_command(self, *args: str, **kwargs: typing.Any) -> subprocess.CompletedProcess:
         """Run an ARTIQ core management command.
 
         :param args: Additional arguments to append to the subprocess run command
+        :param kwargs: Keyword arguments for the subprocess run call
         :return: A `CompletedProcess` object
         """
         command: typing.List[str] = ['artiq_coremgmt', '-D', self.address]
         command.extend(args)
-        return subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+        return subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, **kwargs)
 
 
 _AVAILABLE_CORE_DEVICES: typing.List[_CoreDevice] = [
@@ -148,8 +149,8 @@ _AVAILABLE_CORE_DEVICES: typing.List[_CoreDevice] = [
 def _get_core_device() -> typing.Optional[_CoreDevice]:
     """Get the first available core device."""
 
-    if CI_ENABLED:
-        # Only find a core device if CI is enabled
+    if CI_ENABLED and NIX_ENV and not TB_DISABLED:
+        # Only find a core device if all conditions are met
 
         for core_device in _AVAILABLE_CORE_DEVICES:
             # Request the IP address of the core device
@@ -172,7 +173,8 @@ _LOCK_KEY: str = 'dax_hw_tb_lock'
 """Core device config key to lock the device for testing."""
 
 
-@unittest.skipUnless(CI_ENABLED, 'Not in CI environment, skipping hardware test')
+@unittest.skipUnless(CI_ENABLED, 'Not in a CI environment, skipping hardware test')
+@unittest.skipUnless(NIX_ENV, 'Not in a Nix environment, skipping hardware test')
 @unittest.skipIf(TB_DISABLED, 'Hardware testbenches disabled, skipping hardware tests')
 @unittest.skipIf(_CORE_DEVICE is None, 'No core device available, skipping hardware test')
 class TestBenchCase(unittest.TestCase):
@@ -203,7 +205,7 @@ class TestBenchCase(unittest.TestCase):
         if r.returncode != 0:
             raise RuntimeError(f'Could not lock core device at [{_CORE_DEVICE.address}] (return code {r.returncode})')
 
-        # Confirm the lock was obtained successfully (required due to the lack of atomic locking)
+        # Confirm the lock was obtained successfully (required due to the lack of an atomic read-and-lock action)
         time.sleep(3.0)  # Grace period
         r = _CORE_DEVICE.run_command('config', 'read', _LOCK_KEY)
         if r.returncode != 0:
