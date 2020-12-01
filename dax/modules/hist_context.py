@@ -5,6 +5,7 @@ import numpy as np
 import h5py  # type: ignore
 import natsort
 import os
+import math
 
 import matplotlib.pyplot as plt  # type: ignore
 import matplotlib.ticker  # type: ignore
@@ -48,6 +49,8 @@ class HistogramContext(DaxModule):
 
     MEAN_COUNT_PLOT_KEY_FORMAT: str = 'plot.{base}.histogram_context.mean_count'
     """Dataset name for plotting latest mean count graph."""
+    STDEV_COUNT_PLOT_KEY_FORMAT: str = 'plot.{base}.histogram_context.stdev_count'
+    """Dataset name for plotting standard deviation on latest mean count graph."""
     MEAN_COUNT_PLOT_NAME: str = 'mean count'
     """Name of the mean count plot applet."""
 
@@ -118,6 +121,7 @@ class HistogramContext(DaxModule):
         self._histogram_plot_key: str = self.HISTOGRAM_PLOT_KEY_FORMAT.format(base=base)
         self._probability_plot_key: str = self.PROBABILITY_PLOT_KEY_FORMAT.format(base=base)
         self._mean_count_plot_key: str = self.MEAN_COUNT_PLOT_KEY_FORMAT.format(base=base)
+        self._stdev_count_plot_key: str = self.STDEV_COUNT_PLOT_KEY_FORMAT.format(base=base)
         # Generate applet plot group
         self._plot_group: str = self.PLOT_GROUP_FORMAT.format(base=base)
 
@@ -279,10 +283,13 @@ class HistogramContext(DaxModule):
             # Append result to probability plotting dataset
             self.append_to_dataset(self._probability_plot_key, probabilities)
 
-            # Calculate average count per histogram
-            mean_counts: typing.List[float] = [HistogramAnalyzer.histogram_to_mean_count(h) for h in histograms]
-            # Append result to mean count plotting dataset
+            # Calculate count mean and standard deviation per histogram
+            mean_stdev_counts = (HistogramAnalyzer.histogram_to_mean_stdev_count(h) for h in histograms)
+            mean_counts, stdev_counts = list(zip(*mean_stdev_counts))  # Transpose data and unpack
+
+            # Append results to count mean and standard deviation plotting datasets
             self.append_to_dataset(self._mean_count_plot_key, mean_counts)
+            self.append_to_dataset(self._stdev_count_plot_key, stdev_counts)
 
         else:
             # Add empty element to the caches (keeps indexing consistent)
@@ -348,7 +355,7 @@ class HistogramContext(DaxModule):
 
     @rpc(flags={'async'})
     def plot_mean_count(self, **kwargs):  # type: (typing.Any) -> None
-        """Open the applet that shows a plot of average count per histogram.
+        """Open the applet that shows a plot of mean count per histogram.
 
         This function can only be called after the module is initialized.
 
@@ -359,7 +366,8 @@ class HistogramContext(DaxModule):
         kwargs.setdefault('y_label', 'Mean count')
         kwargs.setdefault('title', f'RID {self._scheduler.rid}')
         # Plot
-        self._ccb.plot_xy_multi(self.MEAN_COUNT_PLOT_NAME, self._mean_count_plot_key, group=self._plot_group, **kwargs)
+        self._ccb.plot_xy_multi(self.MEAN_COUNT_PLOT_NAME, self._mean_count_plot_key,
+                                error=self._stdev_count_plot_key, group=self._plot_group, **kwargs)
 
     @rpc(flags={'async'})
     def clear_probability_plot(self):  # type: () -> None
@@ -372,12 +380,13 @@ class HistogramContext(DaxModule):
 
     @rpc(flags={'async'})
     def clear_mean_count_plot(self):  # type: () -> None
-        """Clear the average count plot.
+        """Clear the mean count plot.
 
         This function can only be called after the module is initialized.
         """
-        # Set the mean count dataset to an empty list
+        # Set the mean/stdev count datasets to empty lists
         self.set_dataset(self._mean_count_plot_key, [], broadcast=True, archive=False)
+        self.set_dataset(self._stdev_count_plot_key, [], broadcast=True, archive=False)
 
     @rpc(flags={'async'})
     def disable_histogram_plot(self):  # type: () -> None
@@ -474,7 +483,7 @@ class HistogramContext(DaxModule):
 
     @host_only
     def get_mean_counts(self, dataset_key: typing.Optional[str] = None) -> typing.List[typing.List[float]]:
-        """Obtain all average counts recorded by this histogram context for a specific key.
+        """Obtain all mean counts recorded by this histogram context for a specific key.
 
         The data is formatted as a list of counts per channel.
         So to access mean count N of channel C: `get_mean_counts()[C][N]`.
@@ -485,6 +494,19 @@ class HistogramContext(DaxModule):
         :return: All mean count data for the specified key
         """
         return [[HistogramAnalyzer.histogram_to_mean_count(h) for h in histograms]
+                for histograms in self.get_histograms(dataset_key)]
+
+    @host_only
+    def get_stdev_counts(self, dataset_key: typing.Optional[str] = None) -> typing.List[typing.List[float]]:
+        """Obtain all standard deviations of counts recorded by this histogram context for a specific key.
+
+        The data is formatted as a list of standard deviations per channel.
+        So to access standard deviation N of channel C: `get_stdev_counts()[C][N]`.
+
+        :param dataset_key: Key of the dataset to obtain the mean counts of
+        :return: All mean count data for the specified key
+        """
+        return [[HistogramAnalyzer.histogram_to_stdev_count(h) for h in histograms]
                 for histograms in self.get_histograms(dataset_key)]
 
 
@@ -506,7 +528,8 @@ class HistogramAnalyzer:
     The probabilities are a mapped version of the :attr:`histograms` data.
 
     :attr:`mean_counts` is a dict which for each key contains a list of mean counts.
-    The probabilities are a mapped version of the :attr:`histograms` data.
+
+    :attr:`stdev_counts` is a dict which for each key contains a list of count standard deviations.
 
     :attr:`raw` is a 3-dimensional array with raw PMT data.
     *This attribute is only available if raw data was stored (DAX>0.4)*.
@@ -521,6 +544,10 @@ class HistogramAnalyzer:
     :func:`histogram_to_mean_count` converts a single histogram, formatted as a Counter object, to a mean count.
     :func:`histograms_to_mean_counts` maps a list of histograms per channel (2D array of Counter objects)
     to a list of mean counts per channel.
+    :func:`histogram_to_stdev_count` converts a single histogram, formatted as a Counter object,
+    to a count standard deviation.
+    :func:`histograms_to_stdev_counts` maps a list of histograms per channel (2D array of Counter objects)
+    to a list of count standard deviations per channel.
     :func:`counter_to_ndarray` and :func:`ndarray_to_counter` convert a single histogram
     stored as a Counter object to an array representation and vice versa.
     :func:`raw_to_states` converts raw data to sequences of integer states based on a given detection threshold.
@@ -536,6 +563,9 @@ class HistogramAnalyzer:
     """File name format for mean count plot files."""
     STATE_PROBABILITY_PLOT_FILE_FORMAT: str = '{key}_state_probability'
     """File name format for full state probability plot files."""
+
+    _MPL_DEFAULT_FIG_SIZE = plt.rcParams.get('figure.figsize')
+    """Default matplotlib figure size."""
 
     def __init__(self, source: typing.Union[DaxSystem, HistogramContext, str, h5py.File],
                  state_detection_threshold: typing.Optional[int] = None):
@@ -571,6 +601,8 @@ class HistogramAnalyzer:
                 {k: np.asarray(source.get_probabilities(k, state_detection_threshold)) for k in self.keys}
             self.mean_counts: typing.Dict[str, np.ndarray] = \
                 {k: np.asarray(source.get_mean_counts(k)) for k in self.keys}
+            self.stdev_counts: typing.Dict[str, np.ndarray] = \
+                {k: np.asarray(source.get_stdev_counts(k)) for k in self.keys}
             self.raw: typing.Dict[str, typing.Sequence[np.ndarray]] = \
                 {k: [np.asarray(r) for r in source.get_raw(k)] for k in self.keys}
 
@@ -597,6 +629,7 @@ class HistogramAnalyzer:
                 self.probabilities = {k: self.histograms_to_probabilities(h, state_detection_threshold)
                                       for k, h in self.histograms.items()}
             self.mean_counts = {k: self.histograms_to_mean_counts(h) for k, h in self.histograms.items()}
+            self.stdev_counts = {k: self.histograms_to_stdev_counts(h) for k, h in self.histograms.items()}
 
             try:
                 # Try to obtain raw data
@@ -652,17 +685,29 @@ class HistogramAnalyzer:
         return np.asarray(probabilities)
 
     @classmethod
-    def histogram_to_mean_count(cls, counter: collections.Counter) -> float:
-        """Helper function to calculate the average count of a histogram.
+    def _histogram_to_mean_count(cls, counter: collections.Counter) -> typing.Tuple[float, int]:
+        """Internal helper function to calculate the mean count of a histogram.
 
         :param counter: The counter object representing the histogram
-        :return: The average count as a float
+        :return: A tuple with the mean count as a float and the total number of samples as an int
         """
-        return sum(c * v for c, v in counter.items()) / sum(counter.values())
+        num_samples = sum(counter.values())
+        mean = sum(c * v for c, v in counter.items()) / num_samples
+        return mean, num_samples
+
+    @classmethod
+    def histogram_to_mean_count(cls, counter: collections.Counter) -> float:
+        """Helper function to calculate the mean count of a histogram.
+
+        :param counter: The counter object representing the histogram
+        :return: The mean count as a float
+        """
+        mean, _ = cls._histogram_to_mean_count(counter)
+        return mean
 
     @classmethod
     def histograms_to_mean_counts(cls, histograms: typing.Sequence[typing.Sequence[collections.Counter]]) -> np.ndarray:
-        """Convert histograms to average counts.
+        """Convert histograms to mean counts.
 
         Histograms are provided as a 2D array of Counter objects.
         The first dimension is the channel, the second dimension is the sequence of counters.
@@ -671,6 +716,44 @@ class HistogramAnalyzer:
         :return: Array of counts with the same shape as the input histograms
         """
         counts = [[cls.histogram_to_mean_count(h) for h in channel] for channel in histograms]
+        return np.asarray(counts)
+
+    @classmethod
+    def histogram_to_mean_stdev_count(cls, counter: collections.Counter) -> typing.Tuple[float, float]:
+        """Helper function to calculate the count mean and standard deviation of a histogram.
+
+        This helper function is more efficient than calculating mean and standard deviation separately.
+        It is mainly intended to be used for real-time data processing in :class:`HistogramContext`.
+
+        :param counter: The counter object representing the histogram
+        :return: The mean and standard deviation of the histogram as a tuple of floats
+        """
+        mean, num_samples = cls._histogram_to_mean_count(counter)
+        squared_mean = sum(c ** 2 * v for c, v in counter.items()) / num_samples
+        return mean, math.sqrt(squared_mean - mean ** 2)
+
+    @classmethod
+    def histogram_to_stdev_count(cls, counter: collections.Counter) -> float:
+        """Helper function to calculate the count standard deviation of a histogram.
+
+        :param counter: The counter object representing the histogram
+        :return: The standard deviation of the histogram as a float
+        """
+        _, stdev = cls.histogram_to_mean_stdev_count(counter)
+        return stdev
+
+    @classmethod
+    def histograms_to_stdev_counts(cls, histograms: typing.Sequence[typing.Sequence[collections.Counter]]) \
+            -> np.ndarray:
+        """Convert histograms to count standard deviations.
+
+        Histograms are provided as a 2D array of Counter objects.
+        The first dimension is the channel, the second dimension is the sequence of counters.
+
+        :param histograms: The input histograms
+        :return: Array of standard deviations with the same shape as the input histograms
+        """
+        counts = [[cls.histogram_to_stdev_count(h) for h in channel] for channel in histograms]
         return np.asarray(counts)
 
     @staticmethod
@@ -749,8 +832,9 @@ class HistogramAnalyzer:
                        x_label: typing.Optional[str] = 'Count',
                        y_label: typing.Optional[str] = 'Frequency',
                        labels: typing.Optional[typing.Sequence[str]] = None,
-                       width: float = 0.8,
+                       width: float = 1.0,
                        legend_loc: typing.Optional[typing.Union[str, typing.Tuple[float, float]]] = None,
+                       fig_size: typing.Optional[typing.Tuple[float, float]] = None,
                        ext: str = 'pdf',
                        **kwargs: typing.Any) -> None:
         """Plot the histograms for a given key.
@@ -759,8 +843,9 @@ class HistogramAnalyzer:
         :param x_label: X-axis label
         :param y_label: Y-axis label
         :param labels: List of plot labels
-        :param width: Total width of a bar
+        :param width: Total width of all bars
         :param legend_loc: Location of the legend
+        :param fig_size: The figure size
         :param ext: Output file extension
         :param kwargs: Keyword arguments for the plot function
         """
@@ -771,11 +856,16 @@ class HistogramAnalyzer:
         assert isinstance(width, float)
         assert isinstance(ext, str)
 
+        if fig_size is None:
+            # Make the default width of the figure wider
+            fig_w, fig_h = self._MPL_DEFAULT_FIG_SIZE
+            fig_size = (fig_w * 2, fig_h)
+
         # Get the histograms associated with the given key
         histograms = self.histograms[key]
 
         # Create figure
-        fig, ax = plt.subplots()
+        fig, ax = plt.subplots(figsize=fig_size)
 
         for index, h in enumerate(zip(*histograms)):
             # Obtain X and Y values (for all channels)
@@ -822,6 +912,7 @@ class HistogramAnalyzer:
                          y_label: typing.Optional[str] = 'State probability',
                          labels: typing.Optional[typing.Sequence[str]] = None,
                          legend_loc: typing.Optional[typing.Union[str, typing.Tuple[float, float]]] = None,
+                         fig_size: typing.Optional[typing.Tuple[float, float]] = None,
                          ext: str = 'pdf',
                          **kwargs: typing.Any) -> None:
         """Plot the individual state probability graph for a given key.
@@ -838,6 +929,7 @@ class HistogramAnalyzer:
         :param y_label: Y-axis label
         :param labels: List of plot labels
         :param legend_loc: Location of the legend
+        :param fig_size: The figure size
         :param ext: Output file extension
         :param kwargs: Keyword arguments for the plot function
         """
@@ -875,7 +967,7 @@ class HistogramAnalyzer:
         kwargs.setdefault('marker', 'o')
 
         # Plot
-        fig, ax = plt.subplots()
+        fig, ax = plt.subplots(figsize=fig_size)
         for y, label in zip(probabilities, current_labels):
             ax.plot(x_values, y, label=label, **kwargs)
 
@@ -910,6 +1002,7 @@ class HistogramAnalyzer:
                         y_label: typing.Optional[str] = 'Mean count',
                         labels: typing.Optional[typing.Sequence[str]] = None,
                         legend_loc: typing.Optional[typing.Union[str, typing.Tuple[float, float]]] = None,
+                        fig_size: typing.Optional[typing.Tuple[float, float]] = None,
                         ext: str = 'pdf',
                         **kwargs: typing.Any) -> None:
         """Plot the mean count graph for a given key.
@@ -923,6 +1016,7 @@ class HistogramAnalyzer:
         :param y_label: Y-axis label
         :param labels: List of plot labels
         :param legend_loc: Location of the legend
+        :param fig_size: The figure size
         :param ext: Output file extension
         :param kwargs: Keyword arguments for the plot function
         """
@@ -933,8 +1027,9 @@ class HistogramAnalyzer:
         assert isinstance(labels, collections.abc.Sequence) or labels is None
         assert isinstance(ext, str)
 
-        # Get the counts associated with the provided key
+        # Get the data associated with the provided key
         mean_counts = [np.asarray(p) for p in self.mean_counts[key]]
+        stdev_counts = [np.asarray(p) for p in self.stdev_counts[key]]
 
         if not len(mean_counts):
             # No data to plot
@@ -949,6 +1044,7 @@ class HistogramAnalyzer:
             ind = x_values.argsort()
             x_values = x_values[ind]
             mean_counts = [p[ind] for p in mean_counts]
+            stdev_counts = [p[ind] for p in stdev_counts]
 
         # Current labels
         current_labels = [f'Plot {i}' for i in range(len(mean_counts))] if labels is None else labels
@@ -960,9 +1056,9 @@ class HistogramAnalyzer:
         kwargs.setdefault('marker', 'o')
 
         # Plot
-        fig, ax = plt.subplots()
-        for y, label in zip(mean_counts, current_labels):
-            ax.plot(x_values, y, label=label, **kwargs)
+        fig, ax = plt.subplots(figsize=fig_size)
+        for y, stdev, label in zip(mean_counts, stdev_counts, current_labels):
+            ax.errorbar(x_values, y, yerr=stdev, label=label, **kwargs)
 
         # Plot formatting
         ax.set_xlabel(x_label)
@@ -992,6 +1088,7 @@ class HistogramAnalyzer:
                                y_label: typing.Optional[str] = '|State> probability',
                                labels: typing.Optional[typing.Sequence[str]] = None,
                                legend_loc: typing.Optional[typing.Union[str, typing.Tuple[float, float]]] = None,
+                               fig_size: typing.Optional[typing.Tuple[float, float]] = None,
                                ext: str = 'pdf',
                                **kwargs: typing.Any) -> None:
         """Plot the full state probability graph for a given key.
@@ -1008,6 +1105,7 @@ class HistogramAnalyzer:
         :param y_label: Y-axis label
         :param labels: List of plot labels
         :param legend_loc: Location of the legend
+        :param fig_size: The figure size
         :param ext: Output file extension
         :param kwargs: Keyword arguments for the plot function
         """
@@ -1053,7 +1151,7 @@ class HistogramAnalyzer:
         kwargs.setdefault('marker', 'o')
 
         # Plot
-        fig, ax = plt.subplots()
+        fig, ax = plt.subplots(figsize=fig_size)
         for y, label in zip(y_data, current_labels):
             ax.plot(x_values, y, label=label, **kwargs)
 
