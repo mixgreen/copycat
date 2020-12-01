@@ -564,6 +564,9 @@ class HistogramAnalyzer:
     STATE_PROBABILITY_PLOT_FILE_FORMAT: str = '{key}_state_probability'
     """File name format for full state probability plot files."""
 
+    _MPL_DEFAULT_FIG_SIZE = plt.rcParams.get('figure.figsize')
+    """Default matplotlib figure size."""
+
     def __init__(self, source: typing.Union[DaxSystem, HistogramContext, str, h5py.File],
                  state_detection_threshold: typing.Optional[int] = None):
         """Create a new histogram analyzer object.
@@ -829,8 +832,9 @@ class HistogramAnalyzer:
                        x_label: typing.Optional[str] = 'Count',
                        y_label: typing.Optional[str] = 'Frequency',
                        labels: typing.Optional[typing.Sequence[str]] = None,
-                       width: float = 0.8,
+                       width: float = 1.0,
                        legend_loc: typing.Optional[typing.Union[str, typing.Tuple[float, float]]] = None,
+                       fig_size: typing.Optional[typing.Tuple[float, float]] = None,
                        ext: str = 'pdf',
                        **kwargs: typing.Any) -> None:
         """Plot the histograms for a given key.
@@ -839,8 +843,9 @@ class HistogramAnalyzer:
         :param x_label: X-axis label
         :param y_label: Y-axis label
         :param labels: List of plot labels
-        :param width: Total width of a bar
+        :param width: Total width of all bars
         :param legend_loc: Location of the legend
+        :param fig_size: The figure size
         :param ext: Output file extension
         :param kwargs: Keyword arguments for the plot function
         """
@@ -851,11 +856,16 @@ class HistogramAnalyzer:
         assert isinstance(width, float)
         assert isinstance(ext, str)
 
+        if fig_size is None:
+            # Make the default width of the figure wider
+            fig_w, fig_h = self._MPL_DEFAULT_FIG_SIZE
+            fig_size = (fig_w * 2, fig_h)
+
         # Get the histograms associated with the given key
         histograms = self.histograms[key]
 
         # Create figure
-        fig, ax = plt.subplots()
+        fig, ax = plt.subplots(figsize=fig_size)
 
         for index, h in enumerate(zip(*histograms)):
             # Obtain X and Y values (for all channels)
@@ -902,6 +912,7 @@ class HistogramAnalyzer:
                          y_label: typing.Optional[str] = 'State probability',
                          labels: typing.Optional[typing.Sequence[str]] = None,
                          legend_loc: typing.Optional[typing.Union[str, typing.Tuple[float, float]]] = None,
+                         fig_size: typing.Optional[typing.Tuple[float, float]] = None,
                          ext: str = 'pdf',
                          **kwargs: typing.Any) -> None:
         """Plot the individual state probability graph for a given key.
@@ -918,6 +929,7 @@ class HistogramAnalyzer:
         :param y_label: Y-axis label
         :param labels: List of plot labels
         :param legend_loc: Location of the legend
+        :param fig_size: The figure size
         :param ext: Output file extension
         :param kwargs: Keyword arguments for the plot function
         """
@@ -955,7 +967,7 @@ class HistogramAnalyzer:
         kwargs.setdefault('marker', 'o')
 
         # Plot
-        fig, ax = plt.subplots()
+        fig, ax = plt.subplots(figsize=fig_size)
         for y, label in zip(probabilities, current_labels):
             ax.plot(x_values, y, label=label, **kwargs)
 
@@ -990,6 +1002,7 @@ class HistogramAnalyzer:
                         y_label: typing.Optional[str] = 'Mean count',
                         labels: typing.Optional[typing.Sequence[str]] = None,
                         legend_loc: typing.Optional[typing.Union[str, typing.Tuple[float, float]]] = None,
+                        fig_size: typing.Optional[typing.Tuple[float, float]] = None,
                         ext: str = 'pdf',
                         **kwargs: typing.Any) -> None:
         """Plot the mean count graph for a given key.
@@ -1003,6 +1016,7 @@ class HistogramAnalyzer:
         :param y_label: Y-axis label
         :param labels: List of plot labels
         :param legend_loc: Location of the legend
+        :param fig_size: The figure size
         :param ext: Output file extension
         :param kwargs: Keyword arguments for the plot function
         """
@@ -1042,7 +1056,7 @@ class HistogramAnalyzer:
         kwargs.setdefault('marker', 'o')
 
         # Plot
-        fig, ax = plt.subplots()
+        fig, ax = plt.subplots(figsize=fig_size)
         for y, stdev, label in zip(mean_counts, stdev_counts, current_labels):
             ax.errorbar(x_values, y, yerr=stdev, label=label, **kwargs)
 
@@ -1074,6 +1088,7 @@ class HistogramAnalyzer:
                                y_label: typing.Optional[str] = '|State> probability',
                                labels: typing.Optional[typing.Sequence[str]] = None,
                                legend_loc: typing.Optional[typing.Union[str, typing.Tuple[float, float]]] = None,
+                               fig_size: typing.Optional[typing.Tuple[float, float]] = None,
                                ext: str = 'pdf',
                                **kwargs: typing.Any) -> None:
         """Plot the full state probability graph for a given key.
@@ -1090,6 +1105,7 @@ class HistogramAnalyzer:
         :param y_label: Y-axis label
         :param labels: List of plot labels
         :param legend_loc: Location of the legend
+        :param fig_size: The figure size
         :param ext: Output file extension
         :param kwargs: Keyword arguments for the plot function
         """
@@ -1135,7 +1151,7 @@ class HistogramAnalyzer:
         kwargs.setdefault('marker', 'o')
 
         # Plot
-        fig, ax = plt.subplots()
+        fig, ax = plt.subplots(figsize=fig_size)
         for y, label in zip(y_data, current_labels):
             ax.plot(x_values, y, label=label, **kwargs)
 

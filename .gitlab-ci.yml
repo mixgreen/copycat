@@ -37,7 +37,7 @@ stages:
 test_nix:
   extends: .nix_env
   stage: test
-  coverage: '/^TOTAL.+?(\d+(\.\d+)?\%)$/'
+  coverage: '/^TOTAL.+?(\d+\.\d+\%)$/'
   variables:
     NIX_CMD: "nix-shell test/shell.nix --run"
   script:

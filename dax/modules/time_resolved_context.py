@@ -576,6 +576,7 @@ class TimeResolvedAnalyzer:
                    y_label: typing.Optional[str] = 'Count',
                    labels: typing.Optional[typing.Sequence[str]] = None,
                    legend_loc: typing.Optional[typing.Union[str, typing.Tuple[float, float]]] = None,
+                   fig_size: typing.Optional[typing.Tuple[float, float]] = None,
                    ext: str = 'pdf',
                    **kwargs: typing.Any) -> None:
         """Plot the traces for a given key.
@@ -585,6 +586,7 @@ class TimeResolvedAnalyzer:
         :param y_label: Y-axis label
         :param labels: List of plot labels
         :param legend_loc: Location of the legend
+        :param fig_size: The figure size
         :param ext: Output file extension
         :param kwargs: Keyword arguments for the plot function
         """
@@ -598,7 +600,7 @@ class TimeResolvedAnalyzer:
         traces = self.traces[key]
 
         # Create figure
-        fig, ax = plt.subplots()
+        fig, ax = plt.subplots(figsize=fig_size)
 
         for index, t in enumerate(traces):
             # Obtain raw data
