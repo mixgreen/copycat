@@ -472,7 +472,10 @@ class DaxScan(dax.base.system.DaxBase, abc.ABC):
 
         except TerminationRequested:
             # Scan was terminated
-            self.logger.warning('Scan was terminated by user request')
+            if self.is_infinite_scan:
+                self.logger.info('Infinite scan was terminated by user request')
+            else:
+                self.logger.warning('Scan was terminated by user request')
 
         else:
             # Call the host exit code
