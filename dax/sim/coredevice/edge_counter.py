@@ -2,10 +2,13 @@
 # mypy: disallow_incomplete_defs = False
 # mypy: check_untyped_defs = False
 
+from __future__ import annotations  # Postponed evaluation of annotations
+
 import typing
 import collections
 import enum
 import random
+import dataclasses
 import numpy as np
 
 from artiq.coredevice.edge_counter import CounterOverflow
@@ -18,13 +21,28 @@ from dax.sim.device import DaxSimDevice
 from dax.sim.signal import get_signal_manager
 
 
+class _EdgeType(enum.IntEnum):
+    """Enum class for the edge type."""
+    NONE = 0
+    RISING = 1
+    FALLING = 2
+    BOTH = 3
+
+    @classmethod
+    def from_bool(cls, *, rising: bool, falling: bool) -> _EdgeType:
+        assert isinstance(rising, bool), 'Rising flag must be of type bool'
+        assert isinstance(falling, bool), 'Falling flag must be of type bool'
+        return _EdgeType(cls.RISING * rising + cls.FALLING * falling)
+
+
+@dataclasses.dataclass(frozen=True)
+class _Config:
+    """Data class to store EdgeCounter gate configuration."""
+    edge_type: _EdgeType
+    timestamp: np.int64
+
+
 class EdgeCounter(DaxSimDevice):
-    class _EdgeType(enum.IntEnum):
-        """Enum class for the edge type."""
-        NONE = 0
-        RISING = 1
-        FALLING = 2
-        BOTH = 3
 
     def __init__(self, dmgr: typing.Any, input_freq: float = 0.0, input_stdev: float = 0.0,
                  seed: typing.Optional[int] = None, gateware_width: int = 31, **kwargs: typing.Any):
@@ -45,6 +63,8 @@ class EdgeCounter(DaxSimDevice):
 
         # Buffers to store counts
         self._count_buffer: typing.Deque[typing.Tuple[np.int64, int]] = collections.deque()
+        # Single buffer to match set_config() calls
+        self._prev_config: typing.Optional[_Config] = None
 
         # Register signals
         self._signal_manager = get_signal_manager()
@@ -59,7 +79,7 @@ class EdgeCounter(DaxSimDevice):
 
         # Decide event frequency
         event_freq = self._rng.normalvariate(self._input_freq, self._input_stdev)
-        if edge_type is self._EdgeType.BOTH:
+        if edge_type is _EdgeType.BOTH:
             # Multiply by 2 in case we detect both edges
             event_freq *= 2
 
@@ -80,17 +100,17 @@ class EdgeCounter(DaxSimDevice):
 
     @kernel
     def gate_rising_mu(self, duration_mu):
-        self._simulate_input_signal(duration_mu, self._EdgeType.RISING)
+        self._simulate_input_signal(duration_mu, _EdgeType.RISING)
         return now_mu()
 
     @kernel
     def gate_falling_mu(self, duration_mu):
-        self._simulate_input_signal(duration_mu, self._EdgeType.FALLING)
+        self._simulate_input_signal(duration_mu, _EdgeType.FALLING)
         return now_mu()
 
     @kernel
     def gate_both_mu(self, duration_mu):
-        self._simulate_input_signal(duration_mu, self._EdgeType.BOTH)
+        self._simulate_input_signal(duration_mu, _EdgeType.BOTH)
         return now_mu()
 
     @kernel
@@ -107,7 +127,31 @@ class EdgeCounter(DaxSimDevice):
 
     @kernel
     def set_config(self, count_rising: TBool, count_falling: TBool, send_count_event: TBool, reset_to_zero: TBool):
-        raise NotImplementedError
+        if self._prev_config is None:
+            if (send_count_event, reset_to_zero) == (False, True):
+                # Store this configuration to match it with the next call to this function
+                self._prev_config = _Config(
+                    edge_type=_EdgeType.from_bool(rising=count_rising, falling=count_falling),
+                    timestamp=now_mu()
+                )
+            else:
+                raise ValueError(f'Expected (send_count_event, reset_to_zero) == (False, True), '
+                                 f'instead got the invalid combination ({send_count_event}, {reset_to_zero})')
+        else:
+            if (count_rising, count_falling, send_count_event, reset_to_zero) == (False, False, True, False):
+                # Complete the gate operation
+                duration = now_mu() - self._prev_config.timestamp
+                at_mu(self._prev_config.timestamp)  # Rewind to start of gate operation
+                self._simulate_input_signal(duration, self._prev_config.edge_type)
+                # Clear previous configuration
+                self._prev_config = None
+            else:
+                if count_rising or count_falling:
+                    raise ValueError(f'Expected (count_rising, count_falling) == (False, False), '
+                                     f'instead got the invalid combination ({count_rising}, {count_falling})')
+                else:
+                    raise ValueError(f'Expected (send_count_event, reset_to_zero) == (True, False), '
+                                     f'instead got the invalid combination ({send_count_event}, {reset_to_zero})')
 
     @kernel
     def fetch_count(self) -> TInt32:

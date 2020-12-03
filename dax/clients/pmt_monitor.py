@@ -381,10 +381,12 @@ class MultiPmtMonitor(_PmtMonitorBase):
 
     @kernel
     def _detect(self):  # type: () -> None
-        # Perform detection
-        with parallel:
-            for p in self.pmt_array:
-                p.gate_rising(self.detection_window)
+        # Perform detection (using low-level control for maximum performance)
+        for p in self.pmt_array:
+            p.set_config(True, False, False, True)
+        delay(self.detection_window)
+        for p in self.pmt_array:
+            p.set_config(False, False, True, False)
 
     @kernel
     def _count(self):  # type: () -> None
