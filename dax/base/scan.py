@@ -9,7 +9,7 @@ import os
 import h5py  # type: ignore
 
 from artiq.experiment import *
-import artiq.coredevice.core  # type: ignore
+import artiq.coredevice.core
 
 import dax.base.system
 import dax.util.artiq

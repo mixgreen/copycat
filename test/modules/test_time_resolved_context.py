@@ -234,6 +234,33 @@ class TimeResolvedContextTestCase(unittest.TestCase):
             # Check buffer
             self.assertListEqual([], self.t._buffer_meta, 'Buffer was not cleared when entering new context')
 
+    def test_append_meta_mu(self):
+        data = [
+            (2000, 0, 0),
+            (2000, 1000, 0),
+            (3000, 2000, 10000),
+            (3000, 3000, 10000),
+            (4000, 0000, 20000),
+        ]
+        converted_data = [tuple(self.s.core.mu_to_seconds(e) for e in d) for d in data]
+
+        with self.t:
+            # Check buffer
+            self.assertListEqual([], self.t._buffer_meta, 'Buffer was not cleared when entering new context')
+            for d, ref in zip(data, converted_data):
+                self.t.append_meta_mu(*d)
+                self.assertEqual(ref, self.t._buffer_meta[-1], 'Append did not appended data to buffer')
+            # Check buffer
+            self.assertListEqual(converted_data, self.t._buffer_meta, 'Buffer did not contain expected data')
+
+            # Add data to prevent consistency errors
+            for _ in range(len(data)):
+                self.t.append_data([[]])
+
+        with self.t:
+            # Check buffer
+            self.assertListEqual([], self.t._buffer_meta, 'Buffer was not cleared when entering new context')
+
     def test_remove_meta(self):
         num_points = 5
 
@@ -255,11 +282,10 @@ class TimeResolvedContextTestCase(unittest.TestCase):
         bin_width = 1 * us
         bin_spacing = 1 * ns
         offset = 5 * ns
-        offset_mu = 10
         data = [[1, 2], [3, 4]]
 
         with self.t:
-            self.t.append(data, bin_width, bin_spacing, offset, offset_mu)
+            self.t.append(data, bin_width, bin_spacing, offset)
 
         # Check traces data format
         trace = self.t.get_traces()
@@ -270,7 +296,7 @@ class TimeResolvedContextTestCase(unittest.TestCase):
                         'Trace result did not match expected outcome')
         self.assertTrue((trace[0]['width'] == np.full(2, bin_width)).all(),
                         'Trace width did not match expected outcome')
-        r = np.arange(len(data)) * (bin_width + bin_spacing) + offset + self.s.core.mu_to_seconds(offset_mu)
+        r = np.arange(len(data)) * (bin_width + bin_spacing) + offset
         self.assertTrue(np.allclose(trace[0]['time'], r),
                         'Trace time did not match expected outcome')
 
@@ -278,19 +304,18 @@ class TimeResolvedContextTestCase(unittest.TestCase):
         bin_width = 1 * us
         bin_spacing = 1 * ns
         offset = 5 * ns
-        offset_mu = 10
         data = [[1, 2], [3, 4]]
         dataset_key = 'some_key'
 
         # Store in a specific dataset
         self.t.config_dataset(dataset_key)
         with self.t:
-            self.t.append(data, bin_width, bin_spacing, offset, offset_mu)
+            self.t.append(data, bin_width, bin_spacing, offset)
 
         # Store other data too in the default dataset
         self.t.config_dataset()
         with self.t:
-            self.t.append([[]], 0.0, 0.0, 0.0, 0)
+            self.t.append_mu([[]], 0, 0)
 
         # Check traces data format for our specific key
         trace = self.t.get_traces(dataset_key)
@@ -301,7 +326,7 @@ class TimeResolvedContextTestCase(unittest.TestCase):
                         'Trace result did not match expected outcome')
         self.assertTrue((trace[0]['width'] == np.full(2, bin_width)).all(),
                         'Trace width did not match expected outcome')
-        r = np.arange(len(data)) * (bin_width + bin_spacing) + offset + self.s.core.mu_to_seconds(offset_mu)
+        r = np.arange(len(data)) * (bin_width + bin_spacing) + offset
         self.assertTrue(np.allclose(trace[0]['time'], r),
                         'Trace time did not match expected outcome')
 
@@ -309,12 +334,11 @@ class TimeResolvedContextTestCase(unittest.TestCase):
         bin_width = 1 * us
         bin_spacing = 1 * ns
         offset = 5 * ns
-        offset_mu = 10
         data = [[1, 2], [3, 4]]
 
         # Store data
         with self.t:
-            self.t.append(data, bin_width, bin_spacing, offset, offset_mu)
+            self.t.append(data, bin_width, bin_spacing, offset)
 
         # Datasets
         result_key = self.t.DATASET_KEY_FORMAT.format(dataset_key=self.t.DEFAULT_DATASET_KEY, index=0, column='result')
@@ -326,7 +350,7 @@ class TimeResolvedContextTestCase(unittest.TestCase):
                         'Trace result did not match expected outcome')
         self.assertTrue((self.s.get_dataset(width_key) == np.full(2, bin_width)).all(),
                         'Trace width did not match expected outcome')
-        r = np.arange(len(data)) * (bin_width + bin_spacing) + offset + self.s.core.mu_to_seconds(offset_mu)
+        r = np.arange(len(data)) * (bin_width + bin_spacing) + offset
         self.assertTrue(np.allclose(self.s.get_dataset(time_key), r),
                         'Trace time did not match expected outcome')
 
@@ -365,9 +389,23 @@ class TimeResolvedContextTestCase(unittest.TestCase):
             ((0, 64, 2 * us, 1 * us), []),
         ]
 
-        for i, o in data:
+        for i, ref in data:
             with self.subTest(input=i):
-                self.assertEqual(self.t.partition_bins(*i), o, 'Partitioned output did not match reference')
+                self.assertEqual(self.t.partition_bins(*i), ref, 'Partitioned output did not match reference')
+
+    def test_partition_bins_mu(self):
+        data = [
+            ((50, 64, 2000, 1000), [(50, 0)]),
+            ((64, 64, 2000, 1000), [(64, 0)]),
+            ((100, 64, 2000, 1000), [(64, 0), (36, 64 * 3000)]),
+            ((128, 64, 2000, 1000), [(64, 0), (64, 64 * 3000)]),
+            ((129, 64, 2000, 1000), [(64, 0), (64, 64 * 3000), (1, 128 * 3000)]),
+            ((0, 64, 2000, 1000), []),
+        ]
+
+        for i, ref in data:
+            with self.subTest(input=i):
+                self.assertEqual(self.t.partition_bins_mu(*i), ref, 'Partitioned output did not match reference')
 
     def test_partition_bins_ceil(self):
         data = [
@@ -379,9 +417,24 @@ class TimeResolvedContextTestCase(unittest.TestCase):
             ((0, 64, 2 * us, 1 * us), []),
         ]
 
-        for i, o in data:
+        for i, ref in data:
             with self.subTest(input=i):
-                self.assertEqual(self.t.partition_bins(*i, ceil=True), o,
+                self.assertEqual(self.t.partition_bins(*i, ceil=True), ref,
+                                 'Partitioned output with ceil did not match reference')
+
+    def test_partition_bins_ceil_mu(self):
+        data = [
+            ((50, 64, 2000, 1000), [(64, 0)]),
+            ((64, 64, 2000, 1000), [(64, 0)]),
+            ((100, 64, 2000, 1000), [(64, 0), (64, 64 * 3000)]),
+            ((128, 64, 2000, 1000), [(64, 0), (64, 64 * 3000)]),
+            ((129, 64, 2000, 1000), [(64, 0), (64, 64 * 3000), (64, 128 * 3000)]),
+            ((0, 64, 2000, 1000), []),
+        ]
+
+        for i, ref in data:
+            with self.subTest(input=i):
+                self.assertEqual(self.t.partition_bins_mu(*i, ceil=True), ref,
                                  'Partitioned output with ceil did not match reference')
 
     def test_partition_window(self):
@@ -395,9 +448,24 @@ class TimeResolvedContextTestCase(unittest.TestCase):
             ((1 * ns, 64, 2 * us, 1 * us), [(1, 0 * us)]),
         ]
 
-        for i, o in data:
+        for i, ref in data:
             with self.subTest(input=i):
-                self.assertEqual(self.t.partition_window(*i), o, 'Partitioned output did not match reference')
+                self.assertEqual(self.t.partition_window(*i), ref, 'Partitioned output did not match reference')
+
+    def test_partition_window_mu(self):
+        data = [
+            ((50000 * 3, 64, 2000, 1000), [(50, 0)]),
+            ((64000 * 3, 64, 2000, 1000), [(64, 0)]),
+            ((100000 * 3, 64, 2000, 1000), [(64, 0), (36, 64 * 3000)]),
+            ((128000 * 3, 64, 2000, 1000), [(64, 0), (64, 64 * 3000)]),
+            ((129000 * 3, 64, 2000, 1000), [(64, 0), (64, 64 * 3000), (1, 128 * 3000)]),
+            ((0 * 3, 64, 2000, 1000), []),
+            ((1, 64, 2000, 1000), [(1, 0)]),
+        ]
+
+        for i, ref in data:
+            with self.subTest(input=i):
+                self.assertEqual(self.t.partition_window_mu(*i), ref, 'Partitioned output did not match reference')
 
     def test_partition_window_ceil(self):
         data = [
@@ -410,9 +478,25 @@ class TimeResolvedContextTestCase(unittest.TestCase):
             ((1 * ns, 64, 2 * us, 1 * us), [(64, 0 * us)]),
         ]
 
-        for i, o in data:
+        for i, ref in data:
             with self.subTest(input=i):
-                self.assertEqual(self.t.partition_window(*i, ceil=True), o,
+                self.assertEqual(self.t.partition_window(*i, ceil=True), ref,
+                                 'Partitioned output with ceil did not match reference')
+
+    def test_partition_window_ceil_mu(self):
+        data = [
+            ((50000 * 3, 64, 2000, 1000), [(64, 0)]),
+            ((64000 * 3, 64, 2000, 1000), [(64, 0)]),
+            ((100000 * 3, 64, 2000, 1000), [(64, 0), (64, 64 * 3000)]),
+            ((128000 * 3, 64, 2000, 1000), [(64, 0), (64, 64 * 3000)]),
+            ((129000 * 3, 64, 2000, 1000), [(64, 0), (64, 64 * 3000), (64, 128 * 3000)]),
+            ((0 * 3, 64, 2000, 1000), []),
+            ((1, 64, 2000, 1000), [(64, 0)]),
+        ]
+
+        for i, ref in data:
+            with self.subTest(input=i):
+                self.assertEqual(self.t.partition_window_mu(*i, ceil=True), ref,
                                  'Partitioned output with ceil did not match reference')
 
 
@@ -446,16 +530,15 @@ class TimeResolvedAnalyzerTestCase(unittest.TestCase):
         bin_width = 1 * us
         bin_spacing = 1 * ns
         offset = 5 * ns
-        offset_mu = 10
         data_0 = [[1, 2], [3, 4], [2, 6], [4, 5], [9, 9], [9, 7], [7, 8]]
         data_1 = [[16, 25, 56], [66, 84, 83], [45, 77, 96], [88, 63, 79], [62, 93, 49], [29, 25, 7], [6, 17, 80]]
 
         # Store data
         with self.t:
-            self.t.append(data_0, bin_width, bin_spacing, offset, offset_mu)
+            self.t.append(data_0, bin_width, bin_spacing, offset)
         self.t.config_dataset('foo')
         with self.t:
-            self.t.append(data_1, bin_width, bin_spacing, offset, offset_mu)
+            self.t.append(data_1, bin_width, bin_spacing, offset)
 
         with temp_dir():
             # Write data to HDF5 file
@@ -491,12 +574,11 @@ class TimeResolvedAnalyzerTestCase(unittest.TestCase):
         bin_width = 1 * us
         bin_spacing = 1 * ns
         offset = 5 * ns
-        offset_mu = 10
         data = [[16, 25, 56], [66, 84, 83], [45, 77, 96], [88, 63, 79]]
 
         # Store data
         with self.t:
-            self.t.append(data, bin_width, bin_spacing, offset, offset_mu)
+            self.t.append(data, bin_width, bin_spacing, offset)
 
         with temp_dir():
             # Make analyzer object
@@ -509,12 +591,11 @@ class TimeResolvedAnalyzerTestCase(unittest.TestCase):
         bin_width = 1 * us
         bin_spacing = 1 * ns
         offset = 5 * ns
-        offset_mu = 10
         data = [[16, 25, 56], [66, 84, 83], [45, 77, 96], [88, 63, 79]]
 
         # Store data
         with self.t:
-            self.t.append(data, bin_width, bin_spacing, offset, offset_mu)
+            self.t.append(data, bin_width, bin_spacing, offset)
 
         with temp_dir():
             # Write data to HDF5 file

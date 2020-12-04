@@ -10,7 +10,7 @@ from unittest.mock import MagicMock, call
 from artiq.experiment import HasEnvironment
 import artiq.coredevice.edge_counter
 import artiq.coredevice.ttl  # type: ignore
-import artiq.coredevice.core  # type: ignore
+import artiq.coredevice.core
 
 from dax.base.system import *
 import dax.base.system

@@ -882,9 +882,9 @@ class RtioLoopBenchmarkModule(RtioBenchmarkModule):
             raise RuntimeWarning(msg)
         else:
             # Convert values to times
-            t_zero = np.array([self.core.mu_to_seconds(t) for t in t_zero])  # type: ignore[union-attr]
-            t_rtio = np.array([self.core.mu_to_seconds(t) for t in t_rtio])  # type: ignore[union-attr]
-            t_return = np.array([self.core.mu_to_seconds(t) for t in t_return])  # type: ignore[union-attr]
+            t_zero = np.array([self.core.mu_to_seconds(t) for t in t_zero])  # type: ignore[union-attr,arg-type]
+            t_rtio = np.array([self.core.mu_to_seconds(t) for t in t_rtio])  # type: ignore[union-attr,arg-type]
+            t_return = np.array([self.core.mu_to_seconds(t) for t in t_return])  # type: ignore[union-attr,arg-type]
 
             # Process results directly (next experiment might need these values)
             rtio_rtio = (t_rtio - t_zero).mean()

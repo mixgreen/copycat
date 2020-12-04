@@ -17,7 +17,7 @@ from artiq import __version__ as _artiq_version
 import artiq.experiment
 import artiq.master.worker_db
 
-import artiq.coredevice.core  # type: ignore
+import artiq.coredevice.core
 import artiq.coredevice.dma  # type: ignore
 import artiq.coredevice.cache  # type: ignore
 

@@ -1,7 +1,7 @@
 import typing
 import abc
 
-import artiq.coredevice.core  # type: ignore
+import artiq.coredevice.core
 
 __all__ = ['DaxSimDevice']
 
@@ -24,8 +24,8 @@ class DaxSimDevice(abc.ABC):
 
         # Store device key
         self.__key: str = _key
-        # Store core device
-        self.__core: typing.Any = dmgr.get(core_device) if _core is None else _core
+        # Store core device (this will actually be a simulated core device, but we type it as an ARTIQ core device)
+        self.__core: artiq.coredevice.core.Core = dmgr.get(core_device) if _core is None else _core
 
         # Store leftover kwargs, potentially useful for debugging
         self.__kwargs: typing.Dict[str, typing.Any] = kwargs

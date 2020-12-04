@@ -28,6 +28,63 @@ class TimeResolvedContextError(RuntimeError):
     pass
 
 
+@typing.overload
+def _partition_bins(num_bins: int, max_partition_size: int,
+                    bin_width: np.int64, bin_spacing: np.int64,
+                    *, ceil: bool) -> typing.List[typing.Tuple[np.int32, np.int64]]:
+    ...
+
+
+@typing.overload
+def _partition_bins(num_bins: int, max_partition_size: int,
+                    bin_width: float, bin_spacing: float,
+                    *, ceil: bool) -> typing.List[typing.Tuple[np.int32, float]]:
+    ...
+
+
+def _partition_bins(num_bins: int, max_partition_size: int, bin_width, bin_spacing, *, ceil: bool):
+    """Generic helper function function for partitioning bins."""
+    assert isinstance(num_bins, (int, np.integer)), 'Number of bins must be an integer'
+    assert isinstance(max_partition_size, (int, np.integer)), 'Max partition size must be an integer'
+    assert isinstance(bin_width, (float, np.int64)), 'Bin width must be of type float or np.int64'
+    assert isinstance(bin_spacing, (float, np.int64)), 'Bin spacing must be of type float or np.int64'
+    assert isinstance(ceil, bool), 'Ceil flag must be of type bool'
+
+    # Check input values
+    if num_bins < 0:
+        raise ValueError('Number of bins must positive')
+    if max_partition_size <= 0:
+        raise ValueError('Maximum partition size must be greater than zero')
+    if bin_width < 0:
+        raise ValueError('Bin width can not be less than zero')
+    if bin_spacing < 0:
+        raise ValueError('Bin spacing can not be less than zero')
+    if bin_width == 0 and bin_spacing == 0:
+        raise ValueError('Bin width and bin spacing can not both be zero')
+
+    # Calculate the offset of a single whole partition
+    partition_offset = max_partition_size * (bin_width + bin_spacing)
+
+    # List of whole partitions (maximum number of bins)
+    partitions = [(np.int32(max_partition_size), i * partition_offset)
+                  for i in range(num_bins // max_partition_size)]
+
+    mod = num_bins % max_partition_size
+    if mod > 0:
+        # Add element with partial partition (less than the maximum number of bins if ceil is disabled)
+        partitions.append((np.int32(max_partition_size if ceil else mod), len(partitions) * partition_offset))
+
+    # Return the partitions
+    return partitions
+
+
+def _window_to_bins(window_size: typing.Union[np.int64, float],
+                    bin_width: typing.Union[np.int64, float],
+                    bin_spacing: typing.Union[np.int64, float]) -> int:
+    """Generic helper function for dividing a window into a number of bins."""
+    return int(math.ceil(window_size / (bin_width + bin_spacing)))
+
+
 class TimeResolvedContext(DaxModule):
     """Context class for managing storage of time-resolved detection output.
 
@@ -121,7 +178,7 @@ class TimeResolvedContext(DaxModule):
         """Partition a number of bins.
 
         This function returns a list of tuples that can be used at runtime for partitioning in a loop.
-        The format of each element is (current_num_bins, current_offset) which can be used accordingly.
+        The format of each element is (`current_num_bins`, `current_offset`) which can be used accordingly.
 
         This function returns the partition table as a list. Hence, it can only be called from the host.
 
@@ -132,36 +189,36 @@ class TimeResolvedContext(DaxModule):
         :param ceil: Round last window size up to a full window
         :return: A list with tuples that can be used for automatic partitioning at runtime
         """
-        assert isinstance(num_bins, (int, np.integer)), 'Number of bins must be an integer'
-        assert isinstance(max_partition_size, (int, np.integer)), 'Max partition size must be an integer'
         assert isinstance(bin_width, float), 'Bin width must be of type float'
         assert isinstance(bin_spacing, float), 'Bin spacing must be of type float'
-        assert isinstance(ceil, bool), 'Ceil flag must be of type bool'
-
-        # Check input values
-        if num_bins < 0:
-            raise ValueError('Number of bins must positive')
-        if max_partition_size <= 0:
-            raise ValueError('Maximum partition size must be greater than zero')
-        if bin_width < 0.0:
-            raise ValueError('Bin width can not be less than zero')
-        if bin_spacing < 0.0:
-            raise ValueError('Bin spacing can not be less than zero')
-
-        # Calculate the offset of a single whole partition
-        partition_offset: float = max_partition_size * (bin_width + bin_spacing)
-
-        # List of whole partitions (maximum number of bins)
-        partitions = [(np.int32(max_partition_size), i * partition_offset)
-                      for i in range(num_bins // max_partition_size)]
-
-        mod = num_bins % max_partition_size
-        if mod > 0:
-            # Add element with partial partition (less than the maximum number of bins if ceil is disabled)
-            partitions.append((np.int32(max_partition_size if ceil else mod), len(partitions) * partition_offset))
 
         # Return the partitions
-        return partitions
+        return _partition_bins(num_bins, max_partition_size, bin_width, bin_spacing, ceil=ceil)
+
+    @classmethod
+    @host_only
+    def partition_bins_mu(cls, num_bins: int, max_partition_size: int,
+                          bin_width: np.int64, bin_spacing: np.int64,
+                          *, ceil: bool = False) -> typing.List[typing.Tuple[np.int32, np.int64]]:
+        """Partition a number of bins.
+
+        This function returns a list of tuples that can be used at runtime for partitioning in a loop.
+        The format of each element is (`current_num_bins`, `current_offset_mu`) which can be used accordingly.
+
+        This function returns the partition table as a list. Hence, it can only be called from the host.
+
+        :param num_bins: The total number of bins desired
+        :param max_partition_size: The maximum number of bins in one partition
+        :param bin_width: The width of each bin in machine units
+        :param bin_spacing: The spacing between bins in machine units
+        :param ceil: Round last window size up to a full window
+        :return: A list with tuples that can be used for automatic partitioning at runtime
+        """
+        assert isinstance(bin_width, (int, np.integer)), 'Bin width must be an integer'
+        assert isinstance(bin_spacing, (int, np.integer)), 'Bin spacing must be an integer'
+
+        # Return the partitions
+        return _partition_bins(num_bins, max_partition_size, np.int64(bin_width), np.int64(bin_spacing), ceil=ceil)
 
     @classmethod
     @host_only
@@ -171,7 +228,7 @@ class TimeResolvedContext(DaxModule):
         """Partition a time window.
 
         This function returns a list of tuples that can be used at runtime for partitioning in a loop.
-        The format of each element is (current_num_bins, current_offset) which can be used accordingly.
+        The format of each element is (`current_num_bins`, `current_offset`) which can be used accordingly.
 
         This function returns the partition table as a list. Hence, it can only be called from the host.
 
@@ -182,25 +239,40 @@ class TimeResolvedContext(DaxModule):
         :param ceil: Round last window size up to a full window
         :return: A list with tuples that can be used for automatic partitioning at runtime
         """
-        assert isinstance(window_size, float), 'Window size must be of type float'
         assert isinstance(bin_width, float), 'Bin width must be of type float'
         assert isinstance(bin_spacing, float), 'Bin spacing must be of type float'
-        assert isinstance(ceil, bool), 'Ceil flag must be of type bool'
 
-        # Check input values
-        if window_size < 0.0:
-            raise ValueError('Window size must be positive')
-        if bin_width < 0.0:
-            raise ValueError('Bin width can not be less than zero')
-        if bin_spacing < 0.0:
-            raise ValueError('Bin spacing can not be less than zero')
-        if bin_width == 0.0 and bin_spacing == 0.0:
-            raise ValueError('Bin width and bin spacing can not both be zero')
+        # Divide window into a number of bins
+        num_bins: int = _window_to_bins(window_size, bin_width, bin_spacing)
+        # Return the partitions
+        return _partition_bins(num_bins, max_partition_size, bin_width, bin_spacing, ceil=ceil)
 
-        # Calculate the number of bins that fit in the window, rounding the value up
-        num_bins: int = int(math.ceil(window_size / (bin_width + bin_spacing)))
-        # Call partition bins
-        return cls.partition_bins(num_bins, max_partition_size, bin_width, bin_spacing, ceil=ceil)
+    @classmethod
+    @host_only
+    def partition_window_mu(cls, window_size: np.int64, max_partition_size: int,
+                            bin_width: np.int64, bin_spacing: np.int64,
+                            *, ceil: bool = False) -> typing.List[typing.Tuple[np.int32, np.int64]]:
+        """Partition a time window.
+
+        This function returns a list of tuples that can be used at runtime for partitioning in a loop.
+        The format of each element is (`current_num_bins`, `current_offset_mu`) which can be used accordingly.
+
+        This function returns the partition table as a list. Hence, it can only be called from the host.
+
+        :param window_size: The total window size in machine units
+        :param max_partition_size: The maximum number of bins in one partition
+        :param bin_width: The width of each bin in machine units
+        :param bin_spacing: The spacing between bins in machine units
+        :param ceil: Round last window size up to a full window
+        :return: A list with tuples that can be used for automatic partitioning at runtime
+        """
+        assert isinstance(bin_width, (int, np.integer)), 'Bin width must be an integer'
+        assert isinstance(bin_spacing, (int, np.integer)), 'Bin spacing must be an integer'
+
+        # Divide window into a number of bins
+        num_bins: int = _window_to_bins(window_size, bin_width, bin_spacing)
+        # Return the partitions
+        return _partition_bins(num_bins, max_partition_size, np.int64(bin_width), np.int64(bin_spacing), ceil=ceil)
 
     """Data handling functions"""
 
@@ -227,6 +299,21 @@ class TimeResolvedContext(DaxModule):
 
         # Append the given element to the buffer (using tuples for high performance)
         self._buffer_meta.append((bin_width, bin_spacing, offset))
+
+    @rpc(flags={'async'})
+    def append_meta_mu(self, bin_width, bin_spacing, offset=0):  # type: (np.int64, np.int64, np.int64) -> None
+        """Store metadata that matches the next call to :func:`append_data`.
+
+        This function is intended to be fast to allow high input data throughput.
+        No type checking is performed on the data.
+
+        :param bin_width: The width of the bins in machine units
+        :param bin_spacing: The spacing between the bins in machine units
+        :param offset: The known fixed offset of this trace in in machine units, used for partitioning
+        :raises TimeResolvedContextError: Raised if called out of context
+        """
+        self.append_meta(self.core.mu_to_seconds(bin_width), self.core.mu_to_seconds(bin_spacing),
+                         offset=self.core.mu_to_seconds(offset))
 
     @rpc(flags={'async'})
     def remove_meta(self):  # type: () -> None
@@ -257,6 +344,7 @@ class TimeResolvedContext(DaxModule):
         This function is intended to be fast to allow high input data throughput.
         No type checking is performed on the data.
 
+        The offset can be used for post-detection offset corrections and should be given in machine units.
         Note that corrections for delayed events should result in **negative offset**.
         The negative offset represents the fact that detection started before the event happened.
 
@@ -272,12 +360,13 @@ class TimeResolvedContext(DaxModule):
         self._buffer_data.append((data, self.core.mu_to_seconds(offset_mu)))  # Convert machine units to seconds
 
     @rpc(flags={'async'})
-    def append(self, data, bin_width, bin_spacing, offset=0.0,
-               offset_mu=0):  # type: (typing.Sequence[typing.Sequence[int]], float, float, float, np.int64) -> None
+    def append(self, data, bin_width, bin_spacing,
+               offset=0.0):  # type: (typing.Sequence[typing.Sequence[int]], float, float, float) -> None
         """Append metadata and PMT data (async RPC).
 
         This function calls :func:`append_meta` and :func:`append_data` in one call
         and can be used in case it is not required to separate the two subroutines.
+        The `offset` parameter is forwarded to :func:`append_meta`.
 
         This function is intended to be fast to allow high input data throughput.
         No type checking is performed on the data.
@@ -286,11 +375,31 @@ class TimeResolvedContext(DaxModule):
         :param bin_width: The width of the bins
         :param bin_spacing: The spacing between the bins
         :param offset: An offset to correct any shifts of events in seconds (defaults to no offset)
-        :param offset_mu: An offset to correct any shifts of events in machine units (defaults to no offset)
         :raises TimeResolvedContextError: Raised if called out of context
         """
         self.append_meta(bin_width, bin_spacing, offset=offset)
-        self.append_data(data, offset_mu=offset_mu)
+        self.append_data(data)
+
+    @rpc(flags={'async'})
+    def append_mu(self, data, bin_width, bin_spacing,
+                  offset=0):  # type: (typing.Sequence[typing.Sequence[int]], np.int64, np.int64, np.int64) -> None
+        """Append metadata and PMT data (async RPC).
+
+        This function calls :func:`append_meta_mu` and :func:`append_data` in one call
+        and can be used in case it is not required to separate the two subroutines.
+        The `offset` parameter is forwarded to :func:`append_meta_mu`. This function
+
+        This function is intended to be fast to allow high input data throughput.
+        No type checking is performed on the data.
+
+        :param data: A 2D list of ints representing the PMT counts of different ions
+        :param bin_width: The width of the bins in machine units
+        :param bin_spacing: The spacing between the bins in machine units
+        :param offset: An offset to correct any shifts of events in machine units (defaults to no offset)
+        :raises TimeResolvedContextError: Raised if called out of context
+        """
+        self.append_meta_mu(bin_width, bin_spacing, offset=offset)
+        self.append_data(data)
 
     @rpc(flags={'async'})
     def config_dataset(self, key=None, *args, **kwargs):  # type: (typing.Optional[str], typing.Any, typing.Any) -> None

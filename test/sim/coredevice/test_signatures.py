@@ -6,7 +6,7 @@ import artiq.coredevice.ad9910  # type: ignore
 import artiq.coredevice.ad9912  # type: ignore
 import artiq.coredevice.cache  # type: ignore
 import artiq.coredevice.comm_kernel
-import artiq.coredevice.core  # type: ignore
+import artiq.coredevice.core
 import artiq.coredevice.dma  # type: ignore
 import artiq.coredevice.edge_counter
 import artiq.coredevice.ttl  # type: ignore
