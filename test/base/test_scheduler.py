@@ -640,10 +640,18 @@ class LazySchedulerTestCase(unittest.TestCase):
         s = _Scheduler(self.managers)
         s.prepare()
 
-        self.arguments['Job pipeline'] = 'main'
-        with self.assertRaises(ValueError, msg='Pipeline conflict did not raise'):
-            s = _Scheduler(self.managers)
-            s.prepare()
+        arguments = self.arguments.copy()
+        arguments['Job pipeline'] = 'main'
+        managers = get_managers(arguments=arguments)
+
+        try:
+            with self.assertRaises(ValueError, msg='Pipeline conflict did not raise'):
+                s = _Scheduler(managers)
+                s.prepare()
+        finally:
+            # Close devices
+            device_mgr, _, _, _ = managers
+            device_mgr.close_devices()
 
     def test_duplicate_nodes(self):
         class SchedulerA(_Scheduler):

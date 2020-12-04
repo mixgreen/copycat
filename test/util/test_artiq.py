@@ -71,6 +71,48 @@ class ArtiqTestCase(unittest.TestCase):
         self.assertTrue(dax.util.artiq.is_host_only(self._host_only_func),
                         'Host only function not marked as a host only function')
 
+    def test_clone_managers(self):
+        managers = dax.util.artiq.get_managers()
+        device_mgr, dataset_mgr, argument_mgr, scheduler_defaults = managers
+        write_hdf5_fn = dataset_mgr.write_hdf5
+        cloned = dax.util.artiq.clone_managers(managers)
+
+        self.assertIs(device_mgr, cloned[0], 'Device manager was modified unintentionally')
+        self.assertIsNot(dataset_mgr, cloned[1], 'Dataset manager was not replaced')
+        self.assertIsNot(dataset_mgr.write_hdf5, write_hdf5_fn, 'write_hdf5() function was not replaced')
+        self.assertIsInstance(cloned[1], dax.util.artiq.ClonedDatasetManager)
+        self.assertIsNot(argument_mgr, cloned[2], 'Argument manager was not replaced')
+        self.assertIsNot(scheduler_defaults, cloned[3], 'Scheduler defaults were not replaced')
+
+    def test_clone_managers_name(self):
+        managers = dax.util.artiq.get_managers()
+        device_mgr, dataset_mgr, argument_mgr, scheduler_defaults = managers
+        name = 'foo'
+        cloned = dax.util.artiq.clone_managers(managers, name=name)
+
+        clone_dict = getattr(dataset_mgr, dax.util.artiq.ClonedDatasetManager._CLONE_DICT_KEY)
+        self.assertEqual(len(clone_dict), 1, 'Unexpected number of clones in dict')
+        registered_clone_key, registered_clone = clone_dict.popitem()
+        self.assertTrue(registered_clone_key.endswith(name), 'Dataset manager clone name could not be found')
+        self.assertIs(registered_clone, cloned[1])
+
+    def test_clone_managers_arguments(self):
+        managers = dax.util.artiq.get_managers()
+        device_mgr, dataset_mgr, argument_mgr, scheduler_defaults = managers
+
+        arguments = {'foo-bar': 1, 'bar-baz': 4, 'name': 'some_name'}
+        kwargs = {'foo': 4.4, 'bar': 'bar'}
+        ref = arguments.copy()  # Copy a reference for usage later
+
+        cloned = dax.util.artiq.clone_managers(managers, arguments=arguments, **kwargs)
+
+        # Check if we did not accidentally mutated the original arguments dict
+        self.assertDictEqual(ref, arguments, 'The original given arguments were mutated')
+
+        # Update reference to match expected outcome
+        ref.update(kwargs)
+        self.assertDictEqual(ref, cloned[2].unprocessed_arguments, 'Arguments were not passed correctly')
+
     """Functions used for tests"""
 
     def _undecorated_func(self):

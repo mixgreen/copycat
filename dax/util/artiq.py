@@ -119,13 +119,15 @@ def get_managers(device_db: typing.Union[typing.Dict[str, typing.Any], str, None
     :return: A dummy ARTIQ manager object: (`DeviceManager`, `DatasetManager`, `ProcessArgumentManager`, `dict`)
     """
 
-    # Set default values
     if arguments is None:
+        # Set default value
         arguments = {}
+    else:
+        assert isinstance(arguments, dict), 'Arguments must be of type dict'
+        arguments = arguments.copy()  # Copy arguments to make sure the dict is not mutated later
 
     assert isinstance(dataset_db, str) or dataset_db is None, 'Dataset DB must be a str or None'
     assert isinstance(expid, dict) or expid is None, 'Expid must be a dict or None'
-    assert isinstance(arguments, dict), 'Arguments must be of type dict'
 
     # Scheduler
     scheduler = artiq.frontend.artiq_run.DummyScheduler()
@@ -272,11 +274,12 @@ def clone_managers(managers: typing.Any, *,
     :return: A cloned ARTIQ manager object: (`DeviceManager`, `ClonedDatasetManager`, `ProcessArgumentManager`, `dict`)
     """
 
-    # Set default values
     if arguments is None:
+        # Set default value
         arguments = {}
-
-    assert isinstance(arguments, dict), 'Arguments must be of type dict'
+    else:
+        assert isinstance(arguments, dict), 'Arguments must be of type dict'
+        arguments = arguments.copy()  # Copy arguments to make sure the dict is not mutated later
 
     # Check the type of the passed managers
     if isinstance(managers, artiq.language.environment.HasEnvironment):
