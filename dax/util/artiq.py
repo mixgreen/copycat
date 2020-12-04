@@ -11,7 +11,7 @@ import artiq.master.databases
 import artiq.frontend.artiq_run  # type: ignore
 
 __all__ = ['is_kernel', 'is_portable', 'is_host_only',
-           'get_managers', 'ClonedDatasetManager', 'clone_managers']
+           'process_arguments', 'get_managers', 'ClonedDatasetManager', 'clone_managers']
 
 
 class _TemporaryDirectory(tempfile.TemporaryDirectory):  # type: ignore[type-arg]
@@ -88,6 +88,29 @@ def is_host_only(func: typing.Any) -> bool:
     return False if meta is None else bool(meta.forbidden)
 
 
+def _convert_argument(argument: typing.Any) -> typing.Any:
+    """Convert a single argument."""
+    if isinstance(argument, artiq.experiment.ScanObject):
+        return argument.describe()  # type: ignore[attr-defined]
+    else:
+        # No conversion required
+        return argument
+
+
+def process_arguments(arguments: typing.Dict[str, typing.Any]) -> typing.Dict[str, typing.Any]:
+    """Process a dict with raw arguments to make it compatible with the ARTIQ format.
+
+    The expid and the `ProcessArgumentManager` expect arguments in a PYON serializable format.
+    This function will make sure that complex objects (such as scan argument objects) are
+    converted to the correct format
+
+    :param arguments: Arguments to process as a dict
+    :return: The processed arguments
+    """
+    assert isinstance(arguments, dict), 'Arguments must be of type dict'
+    return {key: _convert_argument(arg) for key, arg in arguments.items()}
+
+
 # Managers tuple type
 __M_T = typing.Tuple[artiq.master.worker_db.DeviceManager, artiq.master.worker_db.DatasetManager,
                      artiq.language.environment.ProcessArgumentManager, typing.Dict[str, typing.Any]]
@@ -137,6 +160,7 @@ def get_managers(device_db: typing.Union[typing.Dict[str, typing.Any], str, None
         scheduler.expid.setdefault(k, v)
     # Merge and set arguments (updates any arguments in the expid)
     arguments.update(kwargs)
+    arguments = process_arguments(arguments)
     scheduler.expid.setdefault('arguments', {}).update(arguments)
 
     # Create a unique temp dir
@@ -301,6 +325,7 @@ def clone_managers(managers: typing.Any, *,
 
     # Merge keyword arguments into arguments dict
     arguments.update(kwargs)
+    arguments = process_arguments(arguments)
     # Create a new argument manager
     argument_mgr = artiq.language.environment.ProcessArgumentManager(arguments)
 

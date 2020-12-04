@@ -2,6 +2,7 @@ import unittest
 
 from artiq.language.core import rpc, portable, kernel, host_only
 import artiq.experiment
+import artiq.master.worker_db
 
 import dax.util.artiq
 import dax.util.output
@@ -70,6 +71,49 @@ class ArtiqTestCase(unittest.TestCase):
                          'Kernel function wrongly marked as a host only function')
         self.assertTrue(dax.util.artiq.is_host_only(self._host_only_func),
                         'Host only function not marked as a host only function')
+
+    def test_process_arguments(self):
+        arguments = {'foo': 1,
+                     'range': artiq.experiment.RangeScan(1, 10, 9),
+                     'center': artiq.experiment.CenterScan(1, 10, 9),
+                     'explicit': artiq.experiment.ExplicitScan([1, 10, 9]),
+                     'no': artiq.experiment.NoScan(10)}
+
+        processed_arguments = dax.util.artiq.process_arguments(arguments)
+        self.assertEqual(len(arguments), len(processed_arguments))
+        self.assertIsNot(arguments, processed_arguments)
+        for v in processed_arguments.values():
+            self.assertNotIsInstance(v, artiq.experiment.ScanObject)
+        self.assertDictEqual(processed_arguments, {k: v.describe() if isinstance(v, artiq.experiment.ScanObject) else v
+                                                   for k, v in arguments.items()})
+
+    def test_cloned_dataset_manager(self):
+        managers = dax.util.artiq.get_managers()
+        _, dataset_mgr, _, _ = managers
+
+        clone = dax.util.artiq.ClonedDatasetManager(dataset_mgr)
+        self.assertIs(clone.ddb, dataset_mgr.ddb)
+        self.assertIsInstance(clone, artiq.master.worker_db.DatasetManager)
+
+    def test_cloned_dataset_manager_non_recursive(self):
+        managers = dax.util.artiq.get_managers()
+        _, dataset_mgr, _, _ = managers
+
+        clone = dax.util.artiq.ClonedDatasetManager(dataset_mgr)
+        with self.assertRaises(TypeError, msg='Recursive clone did not raise'):
+            dax.util.artiq.ClonedDatasetManager(clone)
+
+    def test_cloned_dataset_manager_name(self):
+        managers = dax.util.artiq.get_managers()
+        _, dataset_mgr, _, _ = managers
+        name = 'foobar'
+
+        clone = dax.util.artiq.ClonedDatasetManager(dataset_mgr, name=name)
+        clone_dict = getattr(dataset_mgr, dax.util.artiq.ClonedDatasetManager._CLONE_DICT_KEY)
+        self.assertEqual(len(clone_dict), 1, 'Unexpected number of clones in dict')
+        registered_clone_key, registered_clone = clone_dict.popitem()
+        self.assertTrue(registered_clone_key.endswith(name), 'Dataset manager clone name could not be found')
+        self.assertIs(registered_clone, clone)
 
     def test_clone_managers(self):
         managers = dax.util.artiq.get_managers()

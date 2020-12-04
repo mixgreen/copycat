@@ -15,7 +15,7 @@ import artiq.frontend.artiq_run  # type: ignore
 
 from dax.base.scheduler import *
 import dax.base.scheduler
-from dax.util.artiq import get_managers
+from dax.util.artiq import get_managers, process_arguments
 import dax.base.system
 import dax.base.exceptions
 
@@ -471,48 +471,52 @@ class LazySchedulerTestCase(unittest.TestCase):
     def test_job_arguments(self):
         s = _Scheduler(self.managers)
 
+        original_arguments = {'foo': 1,
+                              'range': RangeScan(1, 10, 9),
+                              'center': CenterScan(1, 10, 9),
+                              'explicit': ExplicitScan([1, 10, 9]),
+                              'no': NoScan(10)}
+
         class J0(Job):
-            ARGUMENTS = {'foo': 1,
-                         'range': RangeScan(1, 10, 9),
-                         'center': CenterScan(1, 10, 9),
-                         'explicit': ExplicitScan([1, 10, 9]),
-                         'no': NoScan(10)}
+            ARGUMENTS = original_arguments.copy()
 
         j = J0(s)
-        arguments = j._process_arguments()
-        self.assertEqual(len(arguments), len(J0.ARGUMENTS))
-        for v in arguments.values():
-            self.assertNotIsInstance(v, ScanObject)
-        self.assertDictEqual(arguments,
-                             {k: v.describe() if isinstance(v, ScanObject) else v for k, v in J0.ARGUMENTS.items()})
+        arguments_ref = process_arguments(original_arguments)
+        self.assertDictEqual(arguments_ref, j._arguments)
+        self.assertDictEqual(original_arguments, J0.ARGUMENTS, 'Class arguments were mutated')
 
     def test_job_configurable_arguments(self):
         s = _Scheduler(self.managers)
 
+        original_arguments: typing.Dict[str, typing.Any] = {
+            'foo': 1,
+            'range': RangeScan(1, 10, 9),
+            'center': CenterScan(1, 10, 9),
+            'explicit': ExplicitScan([1, 10, 9]),
+            'no': NoScan(10)}
+        keyword_arguments: typing.Dict[str, typing.Any] = {
+            'bar': NumberValue(20),
+            'baz': Scannable(CenterScan(100, 50, 2)),
+            'foobar': Scannable(RangeScan(100, 300, 40)),
+        }
+
         class J0(Job):
-            ARGUMENTS = {'foo': 1,
-                         'range': RangeScan(1, 10, 9),
-                         'center': CenterScan(1, 10, 9),
-                         'explicit': ExplicitScan([1, 10, 9]),
-                         'no': NoScan(10)}
+            ARGUMENTS = original_arguments.copy()
 
             def build_job(self) -> None:
-                self.ARGUMENTS['bar'] = self.get_argument('bar', NumberValue(20))
-                self.ARGUMENTS['baz'] = self.get_argument('baz', Scannable(CenterScan(100, 50, 2)))
-                self.ARGUMENTS['foobar'] = self.get_argument('foobar', Scannable(RangeScan(100, 300, 40)))
+                for key, argument in keyword_arguments.items():
+                    self.ARGUMENTS[key] = self.get_argument(key, argument)
 
-        configurable_arguments = ['bar', 'baz', 'foobar']
         j = J0(s)
-        arguments = j._process_arguments()
-        self.assertEqual(len(arguments), len(J0.ARGUMENTS) + len(configurable_arguments))
-        for v in arguments.values():
-            self.assertNotIsInstance(v, ScanObject)
+        arguments_ref = original_arguments.copy()
+        arguments_ref.update({k: v.default() for k, v in keyword_arguments.items()})
+        arguments_ref = process_arguments(arguments_ref)
 
-        # Pop three configurable arguments before comparing
-        for k in configurable_arguments:
-            arguments.pop(k)
-        self.assertDictEqual(arguments,
-                             {k: v.describe() if isinstance(v, ScanObject) else v for k, v in J0.ARGUMENTS.items()})
+        self.assertDictEqual(arguments_ref, j._arguments)
+        self.assertEqual(len(j._arguments), len(original_arguments) + len(keyword_arguments))
+        self.assertDictEqual(original_arguments, J0.ARGUMENTS, 'Class arguments were mutated')
+        for v in j._arguments.values():
+            self.assertNotIsInstance(v, ScanObject)
 
     def test_job_reset(self):
         class J0(_Job):
