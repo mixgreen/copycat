@@ -391,7 +391,11 @@ class TimeResolvedContextTestCase(unittest.TestCase):
 
         for i, ref in data:
             with self.subTest(input=i):
-                self.assertEqual(self.t.partition_bins(*i), ref, 'Partitioned output did not match reference')
+                partitions = self.t.partition_bins(*i)
+                for n, o in partitions:
+                    self.assertIsInstance(n, np.int32, 'Unexpected num bins type')
+                    self.assertIsInstance(o, float, 'Unexpected offset type')
+                self.assertEqual(partitions, ref, 'Partitioned output did not match reference')
 
     def test_partition_bins_mu(self):
         data = [
@@ -405,7 +409,11 @@ class TimeResolvedContextTestCase(unittest.TestCase):
 
         for i, ref in data:
             with self.subTest(input=i):
-                self.assertEqual(self.t.partition_bins_mu(*i), ref, 'Partitioned output did not match reference')
+                partitions = self.t.partition_bins_mu(*i)
+                for n, o in partitions:
+                    self.assertIsInstance(n, np.int32, 'Unexpected num bins type')
+                    self.assertIsInstance(o, np.int64, 'Unexpected offset type')
+                self.assertEqual(partitions, ref, 'Partitioned output did not match reference')
 
     def test_partition_bins_ceil(self):
         data = [
@@ -419,8 +427,11 @@ class TimeResolvedContextTestCase(unittest.TestCase):
 
         for i, ref in data:
             with self.subTest(input=i):
-                self.assertEqual(self.t.partition_bins(*i, ceil=True), ref,
-                                 'Partitioned output with ceil did not match reference')
+                partitions = self.t.partition_bins(*i, ceil=True)
+                for n, o in partitions:
+                    self.assertIsInstance(n, np.int32, 'Unexpected num bins type')
+                    self.assertIsInstance(o, float, 'Unexpected offset type')
+                self.assertEqual(partitions, ref, 'Partitioned output with ceil did not match reference')
 
     def test_partition_bins_ceil_mu(self):
         data = [
@@ -434,8 +445,11 @@ class TimeResolvedContextTestCase(unittest.TestCase):
 
         for i, ref in data:
             with self.subTest(input=i):
-                self.assertEqual(self.t.partition_bins_mu(*i, ceil=True), ref,
-                                 'Partitioned output with ceil did not match reference')
+                partitions = self.t.partition_bins_mu(*i, ceil=True)
+                for n, o in partitions:
+                    self.assertIsInstance(n, np.int32, 'Unexpected num bins type')
+                    self.assertIsInstance(o, np.int64, 'Unexpected offset type')
+                self.assertEqual(partitions, ref, 'Partitioned output with ceil did not match reference')
 
     def test_partition_window(self):
         data = [
@@ -450,7 +464,11 @@ class TimeResolvedContextTestCase(unittest.TestCase):
 
         for i, ref in data:
             with self.subTest(input=i):
-                self.assertEqual(self.t.partition_window(*i), ref, 'Partitioned output did not match reference')
+                partitions = self.t.partition_window(*i)
+                for n, o in partitions:
+                    self.assertIsInstance(n, np.int32, 'Unexpected num bins type')
+                    self.assertIsInstance(o, float, 'Unexpected offset type')
+                self.assertEqual(partitions, ref, 'Partitioned output did not match reference')
 
     def test_partition_window_mu(self):
         data = [
@@ -465,7 +483,11 @@ class TimeResolvedContextTestCase(unittest.TestCase):
 
         for i, ref in data:
             with self.subTest(input=i):
-                self.assertEqual(self.t.partition_window_mu(*i), ref, 'Partitioned output did not match reference')
+                partitions = self.t.partition_window_mu(*i)
+                for n, o in partitions:
+                    self.assertIsInstance(n, np.int32, 'Unexpected num bins type')
+                    self.assertIsInstance(o, np.int64, 'Unexpected offset type')
+                self.assertEqual(partitions, ref, 'Partitioned output did not match reference')
 
     def test_partition_window_ceil(self):
         data = [
@@ -480,8 +502,11 @@ class TimeResolvedContextTestCase(unittest.TestCase):
 
         for i, ref in data:
             with self.subTest(input=i):
-                self.assertEqual(self.t.partition_window(*i, ceil=True), ref,
-                                 'Partitioned output with ceil did not match reference')
+                partitions = self.t.partition_window(*i, ceil=True)
+                for n, o in partitions:
+                    self.assertIsInstance(n, np.int32, 'Unexpected num bins type')
+                    self.assertIsInstance(o, float, 'Unexpected offset type')
+                self.assertEqual(partitions, ref, 'Partitioned output with ceil did not match reference')
 
     def test_partition_window_ceil_mu(self):
         data = [
@@ -496,8 +521,11 @@ class TimeResolvedContextTestCase(unittest.TestCase):
 
         for i, ref in data:
             with self.subTest(input=i):
-                self.assertEqual(self.t.partition_window_mu(*i, ceil=True), ref,
-                                 'Partitioned output with ceil did not match reference')
+                partitions = self.t.partition_window_mu(*i, ceil=True)
+                for n, o in partitions:
+                    self.assertIsInstance(n, np.int32, 'Unexpected num bins type')
+                    self.assertIsInstance(o, np.int64, 'Unexpected offset type')
+                self.assertEqual(partitions, ref, 'Partitioned output with ceil did not match reference')
 
 
 class TimeResolvedAnalyzerTestCase(unittest.TestCase):

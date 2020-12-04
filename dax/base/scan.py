@@ -225,7 +225,8 @@ class DaxScan(dax.base.system.DaxBase, abc.ABC):
         # Confirm we have a core attribute
         if not hasattr(self, 'core'):
             raise AttributeError('DaxScan could not find a "core" attribute')
-        self.core: artiq.coredevice.core.Core  # Type annotation for core attribute
+        if typing.TYPE_CHECKING:
+            self.core: artiq.coredevice.core.Core  # Type annotation for core attribute
 
         if self.INFINITE_SCAN_ARGUMENT:
             # Add an argument for infinite scan
