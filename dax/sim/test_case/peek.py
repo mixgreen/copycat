@@ -69,6 +69,7 @@ class PeekTestCase(unittest.TestCase):
         assert isinstance(build_args, collections.abc.Sequence), 'Build arguments must be a sequence'
         assert isinstance(build_kwargs, dict), 'Build keyword arguments must be a dict'
         assert all(isinstance(k, str) for k in build_kwargs), 'Keys of the build kwargs dict must be of type str'
+        assert isinstance(env_kwargs, dict), 'Environment keyword arguments must be a dict'
 
         # Set level of module logger
         _logger.setLevel(logging_level)
@@ -78,7 +79,10 @@ class PeekTestCase(unittest.TestCase):
                                                'class_name': env_class.__name__,
                                                'repo_rev': 'N/A'}
 
-        if not isinstance(device_db, dict):
+        if isinstance(device_db, dict):
+            # Copy the device DB to not mutate the given one
+            device_db = device_db.copy()
+        else:
             # Obtain device DB from file
             _logger.debug('Obtaining device DB from file')
             with warnings.catch_warnings():
@@ -93,8 +97,8 @@ class PeekTestCase(unittest.TestCase):
 
         # Construct environment, which will also construct a new signal manager
         _logger.debug('Constructing environment')
-        env_kwargs.update(kwargs)  # Merge arguments
-        env = env_class(get_managers(device_db, expid=expid, arguments=env_kwargs), *build_args, **build_kwargs)
+        env = env_class(get_managers(device_db, expid=expid, arguments=env_kwargs, **kwargs),
+                        *build_args, **build_kwargs)
 
         # Store the new signal manager
         _logger.debug('Retrieving peek signal manager')

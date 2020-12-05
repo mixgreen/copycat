@@ -47,24 +47,20 @@ class CcbTestCase(unittest.TestCase):
                         self.assertIn(f'"{v}"', cmd, 'Argument value not found in command')
 
     def test_ccb_tool(self):
-        from dax.util.ccb import get_ccb_tool
-        managers = get_managers()
-        ccb = get_ccb_tool(_TestSystem(managers))
+        with get_managers() as managers:
+            from dax.util.ccb import get_ccb_tool
+            ccb = get_ccb_tool(_TestSystem(managers))
 
-        # Just call methods to see if no errors occur
-        self.assertIsNone(ccb.big_number('name', 'key'))
-        self.assertIsNone(ccb.image('name', 'key'))
-        self.assertIsNone(ccb.plot_xy('name', 'key'))
-        self.assertIsNone(ccb.plot_xy_multi('name', 'key'))
-        self.assertIsNone(ccb.plot_hist('name', 'key'))
-        self.assertIsNone(ccb.plot_hist_artiq('name', 'key'))
-        self.assertIsNone(ccb.plot_xy_hist('name', 'key', 'key', 'key'))
-        self.assertIsNone(ccb.disable_applet('name'))
-        self.assertIsNone(ccb.disable_applet_group('group'))
-
-        # Close devices
-        device_mgr, _, _, _ = managers
-        device_mgr.close_devices()
+            # Just call methods to see if no errors occur
+            self.assertIsNone(ccb.big_number('name', 'key'))
+            self.assertIsNone(ccb.image('name', 'key'))
+            self.assertIsNone(ccb.plot_xy('name', 'key'))
+            self.assertIsNone(ccb.plot_xy_multi('name', 'key'))
+            self.assertIsNone(ccb.plot_hist('name', 'key'))
+            self.assertIsNone(ccb.plot_hist_artiq('name', 'key'))
+            self.assertIsNone(ccb.plot_xy_hist('name', 'key', 'key', 'key'))
+            self.assertIsNone(ccb.disable_applet('name'))
+            self.assertIsNone(ccb.disable_applet_group('group'))
 
 
 if __name__ == '__main__':

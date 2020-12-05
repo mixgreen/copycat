@@ -212,9 +212,8 @@ class Scan1TestCase(unittest.TestCase):
         self.scan = self.SCAN_CLASS(self.managers)
 
     def tearDown(self) -> None:
-        # Close devices
-        device_mgr, _, _, _ = self.managers
-        device_mgr.close_devices()
+        # Close managers
+        self.managers.close()
 
     def test_is_infinite(self):
         self.assertFalse(self.scan.is_infinite_scan, 'Scan reported incorrectly it was infinite')
@@ -265,9 +264,8 @@ class Scan1TestCase(unittest.TestCase):
         with temp_dir():
             # Write data to HDF5 file
             file_name = 'result.h5'
-            _, dataset_mgr, _, _ = self.managers
             with h5py.File(file_name, 'w') as f:
-                dataset_mgr.write_hdf5(f)
+                self.managers.dataset_mgr.write_hdf5(f)
 
             # Read HDF5 file with scan reader
             r = DaxScanReader(file_name)
@@ -299,9 +297,8 @@ class BuildScanTestCase(unittest.TestCase):
         self.managers = get_managers()
 
     def tearDown(self) -> None:
-        # Close devices
-        device_mgr, _, _, _ = self.managers
-        device_mgr.close_devices()
+        # Close managers
+        self.managers.close()
 
     def test_raise_duplicate_scan_key(self):
         class MockScan(_MockScanCallback):
@@ -438,9 +435,8 @@ class EmptyScanTestCase(unittest.TestCase):
         self.scan = _MockScanEmpty(self.managers)
 
     def tearDown(self) -> None:
-        # Close devices
-        device_mgr, _, _, _ = self.managers
-        device_mgr.close_devices()
+        # Close managers
+        self.managers.close()
 
     def test_function_calls(self):
         # Verify counters (object is an empty dict)
@@ -497,9 +493,8 @@ class ScanTerminateTestCase(unittest.TestCase):
         self.scan = _MockScanTerminate(self.managers)
 
     def tearDown(self) -> None:
-        # Close devices
-        device_mgr, _, _, _ = self.managers
-        device_mgr.close_devices()
+        # Close managers
+        self.managers.close()
 
     def test_call_counters(self):
         # Run the scan
@@ -525,9 +520,8 @@ class ScanStopTestCase(unittest.TestCase):
         self.scan = _MockScanStop(self.managers)
 
     def tearDown(self) -> None:
-        # Close devices
-        device_mgr, _, _, _ = self.managers
-        device_mgr.close_devices()
+        # Close managers
+        self.managers.close()
 
     def test_call_counters(self):
         # Run the scan
@@ -554,9 +548,8 @@ class InfiniteScanTestCase(unittest.TestCase):
         self.scan: _MockScan1 = self.SCAN_CLASS(self.managers)
 
     def tearDown(self) -> None:
-        # Close devices
-        device_mgr, _, _, _ = self.managers
-        device_mgr.close_devices()
+        # Close managers
+        self.managers.close()
 
     def test_is_infinite(self):
         self.assertTrue(self.scan.is_infinite_scan, 'Scan reported incorrectly it was not infinite')
@@ -588,9 +581,8 @@ class DisableIndexScanTestCase(unittest.TestCase):
         self.managers = get_managers()
 
     def tearDown(self) -> None:
-        # Close devices
-        device_mgr, _, _, _ = self.managers
-        device_mgr.close_devices()
+        # Close managers
+        self.managers.close()
 
     def test_scan_length(self):
         # Create scan objects

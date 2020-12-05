@@ -27,9 +27,8 @@ class GetBeam2TestCase(unittest.TestCase):
         self.bm: BeamManager = self.s.m
 
     def tearDown(self) -> None:
-        # Close devices
-        device_mgr, _, _, _ = self.managers
-        device_mgr.close_devices()
+        # Close managers
+        self.managers.close()
 
     def test_num_beams_bounds(self):
         # Keep track of returned indices

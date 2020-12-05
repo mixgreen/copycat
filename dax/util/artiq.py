@@ -111,35 +111,56 @@ def process_arguments(arguments: typing.Dict[str, typing.Any]) -> typing.Dict[st
     return {key: _convert_argument(arg) for key, arg in arguments.items()}
 
 
-# Managers tuple type
-__M_T = typing.Tuple[artiq.master.worker_db.DeviceManager, artiq.master.worker_db.DatasetManager,
-                     artiq.language.environment.ProcessArgumentManager, typing.Dict[str, typing.Any]]
+class _ManagersTuple(typing.NamedTuple):
+    """A named tuple of ARTIQ manager objects.
+
+    This named tuple extends the functionality of a bare tuple.
+    """
+    device_mgr: artiq.master.worker_db.DeviceManager
+    dataset_mgr: artiq.master.worker_db.DatasetManager
+    argument_mgr: artiq.language.environment.ProcessArgumentManager
+    scheduler_defaults: typing.Dict[str, typing.Any]
+
+    def close(self) -> None:
+        # Close devices
+        self.device_mgr.close_devices()
+
+    def __enter__(self) -> _ManagersTuple:
+        return self
+
+    def __exit__(self, exc_type: typing.Any, exc_val: typing.Any, exc_tb: typing.Any) -> None:
+        # Close at exit
+        self.close()
 
 
 def get_managers(device_db: typing.Union[typing.Dict[str, typing.Any], str, None] = None, *,
                  dataset_db: typing.Optional[str] = None,
                  expid: typing.Optional[typing.Dict[str, typing.Any]] = None,
                  arguments: typing.Optional[typing.Dict[str, typing.Any]] = None,
-                 **kwargs: typing.Any) -> __M_T:
-    """Returns an object that can function as a `managers_or_parent` for ARTIQ `HasEnvironment`.
+                 **kwargs: typing.Any) -> _ManagersTuple:
+    """Returns a tuple of ARTIQ manager objects that can be used to construct an ARTIQ `HasEnvironment` object.
 
     This function is primarily used for testing purposes.
 
-    We strongly recommend to close the devices in the device manager using `device_manager.close_devices()`
-    before the manager objects are discarded. This will free any used resources.
-    Devices can be closed multiple times without any side-effects.
-    Just in case the user does not manually close devices, a finalizer is attached to the device manager
-    object to ensure `close_devices()` is at least called once before the object is deleted.
+    The returned tuple is an extended named tuple object that is backwards compatible.
+    The attributes can be accessed by name and the tuple object can also be used as a context manager.
+
+    We strongly recommend to close the managers before they are discarded. This will free any used resources.
+    **The best way to guarantee the managers are closed is to use the returned tuple as a context manager.**
+    Alternatively, users can call the `close()` method of the tuple or close managers manually.
+    Managers can be closed multiple times without any side-effects.
+    Just in case the user does not manually close managers, finalizers attached to specific managers
+    will close any occupied resources before object destruction.
 
     If a full ARTIQ environment is not required but only a core device driver is sufficient,
-    please take a look at the `dax.sim.coredevice.core.BaseCore` class.
+    please take a look at :class:`dax.sim.coredevice.core.BaseCore`.
 
     :param device_db: A device DB as dict or a file name
     :param dataset_db: A dataset DB as a file name
     :param expid: Dict for the scheduler expid attribute
     :param arguments: Arguments for the ProcessArgumentManager object
     :param kwargs: Arguments for the ProcessArgumentManager object (updates `arguments`)
-    :return: A dummy ARTIQ manager object: (`DeviceManager`, `DatasetManager`, `ProcessArgumentManager`, `dict`)
+    :return: A tuple of ARTIQ manager objects: (`DeviceManager`, `DatasetManager`, `ProcessArgumentManager`, `dict`)
     """
 
     if arguments is None:
@@ -147,7 +168,8 @@ def get_managers(device_db: typing.Union[typing.Dict[str, typing.Any], str, None
         arguments = {}
     else:
         assert isinstance(arguments, dict), 'Arguments must be of type dict'
-        arguments = arguments.copy()  # Copy arguments to make sure the dict is not mutated later
+        assert all(isinstance(k, str) for k in arguments), 'Keys of the arguments dict must be of type str'
+        arguments = arguments.copy()  # Copy arguments to make sure the dict is not mutated
 
     assert isinstance(dataset_db, str) or dataset_db is None, 'Dataset DB must be a str or None'
     assert isinstance(expid, dict) or expid is None, 'Expid must be a dict or None'
@@ -155,7 +177,7 @@ def get_managers(device_db: typing.Union[typing.Dict[str, typing.Any], str, None
     # Scheduler
     scheduler = artiq.frontend.artiq_run.DummyScheduler()
     # Construct expid of scheduler and add default values
-    scheduler.expid = {} if expid is None else expid
+    scheduler.expid = {} if expid is None else expid.copy()
     for k, v in _EXPID_DEFAULTS.items():
         scheduler.expid.setdefault(k, v)
     # Merge and set arguments (updates any arguments in the expid)
@@ -197,9 +219,8 @@ def get_managers(device_db: typing.Union[typing.Dict[str, typing.Any], str, None
     # Argument manager
     argument_mgr = artiq.language.environment.ProcessArgumentManager(arguments)
 
-    # Return a tuple that is accepted as managers_or_parent
-    # DeviceManager, DatasetManager, ProcessArgumentManager, scheduler defaults
-    return device_mgr, dataset_mgr, argument_mgr, {}
+    # Return an extended tuple object
+    return _ManagersTuple(device_mgr, dataset_mgr, argument_mgr, {})
 
 
 class ClonedDatasetManager(artiq.master.worker_db.DatasetManager):
@@ -274,7 +295,7 @@ class ClonedDatasetManager(artiq.master.worker_db.DatasetManager):
 def clone_managers(managers: typing.Any, *,
                    name: typing.Optional[str] = None,
                    arguments: typing.Optional[typing.Dict[str, typing.Any]] = None,
-                   **kwargs: typing.Any) -> __M_T:
+                   **kwargs: typing.Any) -> _ManagersTuple:
     """Clone a given tuple of ARTIQ manager objects to use for a sub-experiment.
 
     Sub-experiments (i.e. `children` in ARTIQ terminology) can share ARTIQ manager objects with their parent
@@ -303,7 +324,7 @@ def clone_managers(managers: typing.Any, *,
         arguments = {}
     else:
         assert isinstance(arguments, dict), 'Arguments must be of type dict'
-        arguments = arguments.copy()  # Copy arguments to make sure the dict is not mutated later
+        arguments = arguments.copy()  # Copy arguments to make sure the dict is not mutated
 
     # Check the type of the passed managers
     if isinstance(managers, artiq.language.environment.HasEnvironment):
@@ -330,4 +351,4 @@ def clone_managers(managers: typing.Any, *,
     argument_mgr = artiq.language.environment.ProcessArgumentManager(arguments)
 
     # Return the new managers consisting of existing, cloned, and new objects
-    return device_mgr, ClonedDatasetManager(dataset_mgr, name=name), argument_mgr, {}
+    return _ManagersTuple(device_mgr, ClonedDatasetManager(dataset_mgr, name=name), argument_mgr, {})

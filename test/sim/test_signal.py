@@ -27,9 +27,8 @@ class NullSignalManagerTestCase(unittest.TestCase):
         self.managers = get_managers(ddb)
 
     def tearDown(self) -> None:
-        # Close devices
-        device_mgr, _, _, _ = self.managers
-        device_mgr.close_devices()
+        # Close managers
+        self.managers.close()
 
     def test_signal_manager(self) -> None:
         # Create the system
@@ -56,9 +55,8 @@ class VcdSignalManagerTestCase(unittest.TestCase):
         self.assertIsInstance(self.sm, VcdSignalManager)
 
     def tearDown(self) -> None:
-        # Close devices
-        device_mgr, _, _, _ = self.managers
-        device_mgr.close_devices()
+        # Close managers
+        self.managers.close()
 
         self._temp_dir.__exit__(None, None, None)
 
@@ -114,9 +112,8 @@ class VcdSignalManagerEventTestCase(unittest.TestCase):
         self.assertIsInstance(self.sm, VcdSignalManager)
 
     def tearDown(self) -> None:
-        # Close devices
-        device_mgr, _, _, _ = self.managers
-        device_mgr.close_devices()
+        # Close managers
+        self.managers.close()
 
         self._temp_dir.__exit__(None, None, None)
 
@@ -160,9 +157,8 @@ class PeekSignalManagerTestCase(VcdSignalManagerEventTestCase):
         self.assertIsInstance(self.sm, PeekSignalManager)
 
     def tearDown(self) -> None:
-        # Close devices
-        device_mgr, _, _, _ = self.managers
-        device_mgr.close_devices()
+        # Close managers
+        self.managers.close()
 
     def test_signal_types(self):
         self.assertSetEqual(set(self.sm._CONVERT_TYPE), _SIGNAL_TYPES, 'Signal types did not match reference.')

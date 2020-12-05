@@ -39,45 +39,34 @@ class ExperimentsTestCase(unittest.TestCase):
                 self.assertTrue(issubclass(exp, Experiment), 'Experiment class is not a subclass of ARTIQ Experiment')
                 self.assertTrue(issubclass(exp, HasEnvironment),
                                 'Experiment class is not a subclass of ARTIQ HasEnvironment')
-                # Build the experiment
-                managers = dax.util.artiq.get_managers(arguments=arguments)
-                exp(managers)
 
-                # Close devices
-                device_mgr, _, _, _ = managers
-                device_mgr.close_devices()
+                with dax.util.artiq.get_managers(arguments=arguments) as managers:
+                    # Build the experiment
+                    exp(managers)
 
     def test_run_barrier(self):
-        # Create experiment
-        managers = dax.util.artiq.get_managers()
-        exp = dax.util.experiments.Barrier(managers)
-        # Replace scheduler with mock scheduler
-        exp._scheduler = unittest.mock.NonCallableMock(**{'check_pause.return_value': True})
+        with dax.util.artiq.get_managers() as managers:
+            # Create experiment
+            exp = dax.util.experiments.Barrier(managers)
+            # Replace scheduler with mock scheduler
+            exp._scheduler = unittest.mock.NonCallableMock(**{'check_pause.return_value': True})
 
-        # Run experiment
-        exp.prepare()
-        exp.run()
-        exp.analyze()
+            # Run experiment
+            exp.prepare()
+            exp.run()
+            exp.analyze()
 
-        # Check calls
-        self.assertListEqual(exp._scheduler.method_calls, [unittest.mock.call.check_pause()])
-
-        # Close devices
-        device_mgr, _, _, _ = managers
-        device_mgr.close_devices()
+            # Check calls
+            self.assertListEqual(exp._scheduler.method_calls, [unittest.mock.call.check_pause()])
 
     def test_submit_barrier(self):
-        # Create experiment
-        managers = dax.util.artiq.get_managers()
-        exp = _SubmitBarrierExperiment(managers)
-        exp.run()
+        with dax.util.artiq.get_managers() as managers:
+            # Create experiment
+            exp = _SubmitBarrierExperiment(managers)
+            exp.run()
 
-        # Verify if scheduler was called correctly
-        self.assertEqual(exp.scheduler.submit.call_count, 1, 'Scheduler was not called')
-
-        # Close devices
-        device_mgr, _, _, _ = managers
-        device_mgr.close_devices()
+            # Verify if scheduler was called correctly
+            self.assertEqual(exp.scheduler.submit.call_count, 1, 'Scheduler was not called')
 
     def test_run_set_dataset(self):
         arguments = [
@@ -101,26 +90,22 @@ class ExperimentsTestCase(unittest.TestCase):
 
         for args in arguments:
             with self.subTest(arguments=args):
-                # Create experiment
-                managers = dax.util.artiq.get_managers(arguments=args)
-                exp = dax.util.experiments.SetDataset(managers)
+                with dax.util.artiq.get_managers(arguments=args) as managers:
+                    # Create experiment
+                    exp = dax.util.experiments.SetDataset(managers)
 
-                # Run experiment
-                exp.prepare()
-                exp.run()
-                exp.analyze()
+                    # Run experiment
+                    exp.prepare()
+                    exp.run()
+                    exp.analyze()
 
-                # Verify value
-                g = {'np': np}
-                g.update(dax.util.experiments.SetDataset._UNITS)
-                ref_value = eval(args['Value'], g, {})
-                value = exp.get_dataset(args['Key'])
-                if isinstance(value, np.ndarray):
-                    self.assertTrue(np.array_equal(value, ref_value),
-                                    'Obtained dataset does not match written dataset (type: ndarray)')
-                else:
-                    self.assertEqual(value, ref_value, 'Obtained dataset does not match written dataset')
-
-                # Close devices
-                device_mgr, _, _, _ = managers
-                device_mgr.close_devices()
+                    # Verify value
+                    g = {'np': np}
+                    g.update(dax.util.experiments.SetDataset._UNITS)
+                    ref_value = eval(args['Value'], g, {})
+                    value = exp.get_dataset(args['Key'])
+                    if isinstance(value, np.ndarray):
+                        self.assertTrue(np.array_equal(value, ref_value),
+                                        'Obtained dataset does not match written dataset (type: ndarray)')
+                    else:
+                        self.assertEqual(value, ref_value, 'Obtained dataset does not match written dataset')
