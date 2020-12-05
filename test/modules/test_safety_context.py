@@ -49,9 +49,8 @@ class _GenericSafetyContextTestCase(unittest.TestCase):
         self.context = self.s.context
 
     def tearDown(self) -> None:
-        # Close devices
-        device_mgr, _, _, _ = self.managers
-        device_mgr.close_devices()
+        # Close managers
+        self.managers.close()
 
     def test_exit_mismatch(self):
         if self.SYSTEM_TYPE.EXIT_ERROR:

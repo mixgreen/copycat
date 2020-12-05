@@ -22,7 +22,7 @@ class CoreCache(DaxSimDevice):
         super(CoreCache, self).__init__(dmgr, **kwargs)
 
         # Cache
-        self._cache: typing.Dict[str, CoreCache.__V_T] = {} if cache is None else cache
+        self._cache: typing.Dict[str, CoreCache.__V_T] = {} if cache is None else cache.copy()
 
     @kernel
     def get(self, key: str) -> __V_T:

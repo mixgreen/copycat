@@ -49,9 +49,8 @@ class IntrospectTestCase(unittest.TestCase):
         self.sys = _TestSystem(self.managers)
 
     def tearDown(self) -> None:
-        # Close devices
-        device_mgr, _, _, _ = self.managers
-        device_mgr.close_devices()
+        # Close managers
+        self.managers.close()
 
     def test_component_graphviz(self):
         with temp_dir():

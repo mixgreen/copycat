@@ -43,38 +43,30 @@ class GTKWaveTestCase(unittest.TestCase):
         with temp_dir():
             ddb = enable_dax_sim(ddb=_DEVICE_DB.copy(), enable=True, output='vcd', moninj_service=False)
 
-            managers = get_managers(ddb)
-            system = _TestSystem(managers)
-            self.assertTrue(system.dax_sim_enabled)
+            with get_managers(ddb) as managers:
+                system = _TestSystem(managers)
+                self.assertTrue(system.dax_sim_enabled)
 
-            # Create GTKWave save generator object, which immediately writes the waves file
-            GTKWSaveGenerator(system)
+                # Create GTKWave save generator object, which immediately writes the waves file
+                GTKWSaveGenerator(system)
 
-            # Manually close signal manager before leaving temp dir
-            get_signal_manager().close()
-
-            # Close devices
-            device_mgr, _, _, _ = managers
-            device_mgr.close_devices()
+                # Manually close signal manager before leaving temp dir
+                get_signal_manager().close()
 
     def test_gtk_wave_save_generator_invalid_signal_manager(self):
         with temp_dir():
             ddb = enable_dax_sim(ddb=_DEVICE_DB.copy(), enable=True, output='null', moninj_service=False)
 
-            managers = get_managers(ddb)
-            system = _TestSystem(managers)
-            self.assertTrue(system.dax_sim_enabled)
+            with get_managers(ddb) as managers:
+                system = _TestSystem(managers)
+                self.assertTrue(system.dax_sim_enabled)
 
-            with self.assertRaises(RuntimeError, msg='Not using VCD signal manager did not raise'):
-                # Create GTKWave save generator object, which immediately writes the waves file
-                GTKWSaveGenerator(system)
+                with self.assertRaises(RuntimeError, msg='Not using VCD signal manager did not raise'):
+                    # Create GTKWave save generator object, which immediately writes the waves file
+                    GTKWSaveGenerator(system)
 
-            # Manually close signal manager before leaving temp dir
-            get_signal_manager().close()
-
-            # Close devices
-            device_mgr, _, _, _ = managers
-            device_mgr.close_devices()
+                # Manually close signal manager before leaving temp dir
+                get_signal_manager().close()
 
 
 if __name__ == '__main__':

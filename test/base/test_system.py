@@ -128,9 +128,8 @@ class DaxHelpersTestCase(unittest.TestCase):
         self.managers = get_managers(_DEVICE_DB)
 
     def tearDown(self) -> None:
-        # Close devices
-        device_mgr, _, _, _ = self.managers
-        device_mgr.close_devices()
+        # Close managers
+        self.managers.close()
 
     def test_valid_name(self):
         for n in ['foo', '_0foo', '_', '0', '_foo', 'FOO_', '0_foo']:
@@ -224,9 +223,8 @@ class DaxNameRegistryTestCase(unittest.TestCase):
         self.managers = get_managers(_DEVICE_DB)
 
     def tearDown(self) -> None:
-        # Close devices
-        device_mgr, _, _, _ = self.managers
-        device_mgr.close_devices()
+        # Close managers
+        self.managers.close()
 
     def test_module(self):
         # Test system
@@ -391,9 +389,8 @@ class DaxDataStoreInfluxDbTestCase(unittest.TestCase):
         self.ds = self.MockDataStore(callback, self.s, type(self.s))
 
     def tearDown(self) -> None:
-        # Close devices
-        device_mgr, _, _, _ = self.managers
-        device_mgr.close_devices()
+        # Close managers
+        self.managers.close()
 
     def test_make_point(self):
         # Data to test against
@@ -769,9 +766,8 @@ class DaxBaseTestCase(unittest.TestCase):
         self.managers = get_managers()
 
     def tearDown(self) -> None:
-        # Close devices
-        device_mgr, _, _, _ = self.managers
-        device_mgr.close_devices()
+        # Close managers
+        self.managers.close()
 
     def test_abstract_class(self):
         with self.assertRaises(TypeError, msg='Abstract class instantiation did not raise'):
@@ -797,9 +793,8 @@ class DaxHasKeyTestCase(unittest.TestCase):
         self.managers = get_managers()
 
     def tearDown(self) -> None:
-        # Close devices
-        device_mgr, _, _, _ = self.managers
-        device_mgr.close_devices()
+        # Close managers
+        self.managers.close()
 
     def test_constructor(self):
         with self.assertRaises(ValueError, msg='key not ending in name did not raise'):
@@ -866,9 +861,8 @@ class DaxHasSystemTestCase(unittest.TestCase):
         self.managers = get_managers()
 
     def tearDown(self) -> None:
-        # Close devices
-        device_mgr, _, _, _ = self.managers
-        device_mgr.close_devices()
+        # Close managers
+        self.managers.close()
 
     def test_core_attributes(self):
         class HasSystemBase(dax.base.system.DaxHasSystem):
@@ -947,9 +941,8 @@ class DaxModuleBaseTestCase(unittest.TestCase):
         self.managers = get_managers(_DEVICE_DB)
 
     def tearDown(self) -> None:
-        # Close devices
-        device_mgr, _, _, _ = self.managers
-        device_mgr.close_devices()
+        # Close managers
+        self.managers.close()
 
     def test_system_build(self):
         # A system that does not call super() in build()
@@ -1444,9 +1437,8 @@ class DaxSystemTestCase(unittest.TestCase):
             self.InitTestModule(self.system, 'module_{}'.format(i), i, self)
 
     def tearDown(self) -> None:
-        # Close devices
-        device_mgr, _, _, _ = self.managers
-        device_mgr.close_devices()
+        # Close managers
+        self.managers.close()
 
     def test_dax_init(self):
         # Call DAX init
@@ -1500,9 +1492,8 @@ class DaxServiceTestCase(unittest.TestCase):
         self.managers = get_managers(_DEVICE_DB)
 
     def tearDown(self) -> None:
-        # Close devices
-        device_mgr, _, _, _ = self.managers
-        device_mgr.close_devices()
+        # Close managers
+        self.managers.close()
 
     def test_init(self):
         s = _TestSystem(self.managers)
@@ -1552,9 +1543,8 @@ class DaxClientTestCase(unittest.TestCase):
         self.managers = get_managers(_DEVICE_DB)
 
     def tearDown(self) -> None:
-        # Close devices
-        device_mgr, _, _, _ = self.managers
-        device_mgr.close_devices()
+        # Close managers
+        self.managers.close()
 
     def test_not_decorated(self):
         class Client(DaxClient):

@@ -40,9 +40,8 @@ class BuildModuleTestCase(unittest.TestCase):
                                                     output='null', moninj_service=False))
 
     def tearDown(self) -> None:
-        # Close devices
-        device_mgr, _, _, _ = self.managers
-        device_mgr.close_devices()
+        # Close managers
+        self.managers.close()
 
     def test_build_module(self):
         for module_type, module_kwargs in self._MODULES.items():

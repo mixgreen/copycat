@@ -233,8 +233,7 @@ class TestBenchCase(unittest.TestCase):
 
     def tearDown(self) -> None:
         """Close the ARTIQ managers to free resources."""
-        device_mgr, _, _, _ = self.__managers
-        device_mgr.close_devices()
+        self.__managers.close()
 
     def construct_env(self, env_class: typing.Type[__E_T], *,
                       build_args: typing.Sequence[typing.Any] = (),
@@ -251,9 +250,13 @@ class TestBenchCase(unittest.TestCase):
         :return: The constructed ARTIQ environment object
         """
 
-        # Set default values
         if build_kwargs is None:
+            # Set default value
             build_kwargs = {}
+        else:
+            assert isinstance(build_kwargs, dict), 'Build keyword arguments must be of type dict'
+            assert all(isinstance(k, str) for k in build_kwargs), 'Keys of the build kwargs dict must be of type str'
+            build_kwargs = build_kwargs.copy()  # Copy arguments to make sure the dict is not mutated
 
         assert issubclass(env_class, HasEnvironment), 'The environment class must be a subclass of HasEnvironment'
         assert isinstance(build_args, collections.abc.Sequence), 'Build arguments must be a sequence'

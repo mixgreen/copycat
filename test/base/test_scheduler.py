@@ -15,7 +15,7 @@ import artiq.frontend.artiq_run  # type: ignore
 
 from dax.base.scheduler import *
 import dax.base.scheduler
-from dax.util.artiq import get_managers
+from dax.util.artiq import get_managers, process_arguments
 import dax.base.system
 import dax.base.exceptions
 
@@ -312,16 +312,12 @@ class SchedulerClientTestCase(unittest.TestCase):
             'arguments': {'_key': 'dax_scheduler'}  # Add key argument which is normally added by DAX.sim
         }
 
-        managers = get_managers(device_db, Node=_JobB.get_name())
-        # noinspection PyArgumentList
-        c = Client(managers)
-        c.prepare()
-        with self.assertRaises(AttributeError, msg='Dummy device did not raise expected error'):
-            c.run()
-
-        # Close devices
-        device_mgr, _, _, _ = managers
-        device_mgr.close_devices()
+        with get_managers(device_db, Node=_JobB.get_name()) as managers:
+            # noinspection PyArgumentList
+            c = Client(managers)
+            c.prepare()
+            with self.assertRaises(AttributeError, msg='Dummy device did not raise expected error'):
+                c.run()
 
 
 class LazySchedulerTestCase(unittest.TestCase):
@@ -341,9 +337,8 @@ class LazySchedulerTestCase(unittest.TestCase):
         self.managers = get_managers(arguments=self.arguments)
 
     def tearDown(self) -> None:
-        # Close devices
-        device_mgr, _, _, _ = self.managers
-        device_mgr.close_devices()
+        # Close managers
+        self.managers.close()
 
     def test_create_job(self):
         s = _Scheduler(self.managers)
@@ -471,48 +466,52 @@ class LazySchedulerTestCase(unittest.TestCase):
     def test_job_arguments(self):
         s = _Scheduler(self.managers)
 
+        original_arguments = {'foo': 1,
+                              'range': RangeScan(1, 10, 9),
+                              'center': CenterScan(1, 10, 9),
+                              'explicit': ExplicitScan([1, 10, 9]),
+                              'no': NoScan(10)}
+
         class J0(Job):
-            ARGUMENTS = {'foo': 1,
-                         'range': RangeScan(1, 10, 9),
-                         'center': CenterScan(1, 10, 9),
-                         'explicit': ExplicitScan([1, 10, 9]),
-                         'no': NoScan(10)}
+            ARGUMENTS = original_arguments.copy()
 
         j = J0(s)
-        arguments = j._process_arguments()
-        self.assertEqual(len(arguments), len(J0.ARGUMENTS))
-        for v in arguments.values():
-            self.assertNotIsInstance(v, ScanObject)
-        self.assertDictEqual(arguments,
-                             {k: v.describe() if isinstance(v, ScanObject) else v for k, v in J0.ARGUMENTS.items()})
+        arguments_ref = process_arguments(original_arguments)
+        self.assertDictEqual(arguments_ref, j._arguments)
+        self.assertDictEqual(original_arguments, J0.ARGUMENTS, 'Class arguments were mutated')
 
     def test_job_configurable_arguments(self):
         s = _Scheduler(self.managers)
 
+        original_arguments: typing.Dict[str, typing.Any] = {
+            'foo': 1,
+            'range': RangeScan(1, 10, 9),
+            'center': CenterScan(1, 10, 9),
+            'explicit': ExplicitScan([1, 10, 9]),
+            'no': NoScan(10)}
+        keyword_arguments: typing.Dict[str, typing.Any] = {
+            'bar': NumberValue(20),
+            'baz': Scannable(CenterScan(100, 50, 2)),
+            'foobar': Scannable(RangeScan(100, 300, 40)),
+        }
+
         class J0(Job):
-            ARGUMENTS = {'foo': 1,
-                         'range': RangeScan(1, 10, 9),
-                         'center': CenterScan(1, 10, 9),
-                         'explicit': ExplicitScan([1, 10, 9]),
-                         'no': NoScan(10)}
+            ARGUMENTS = original_arguments.copy()
 
             def build_job(self) -> None:
-                self.ARGUMENTS['bar'] = self.get_argument('bar', NumberValue(20))
-                self.ARGUMENTS['baz'] = self.get_argument('baz', Scannable(CenterScan(100, 50, 2)))
-                self.ARGUMENTS['foobar'] = self.get_argument('foobar', Scannable(RangeScan(100, 300, 40)))
+                for key, argument in keyword_arguments.items():
+                    self.ARGUMENTS[key] = self.get_argument(key, argument)
 
-        configurable_arguments = ['bar', 'baz', 'foobar']
         j = J0(s)
-        arguments = j._process_arguments()
-        self.assertEqual(len(arguments), len(J0.ARGUMENTS) + len(configurable_arguments))
-        for v in arguments.values():
-            self.assertNotIsInstance(v, ScanObject)
+        arguments_ref = original_arguments.copy()
+        arguments_ref.update({k: v.default() for k, v in keyword_arguments.items()})
+        arguments_ref = process_arguments(arguments_ref)
 
-        # Pop three configurable arguments before comparing
-        for k in configurable_arguments:
-            arguments.pop(k)
-        self.assertDictEqual(arguments,
-                             {k: v.describe() if isinstance(v, ScanObject) else v for k, v in J0.ARGUMENTS.items()})
+        self.assertDictEqual(arguments_ref, j._arguments)
+        self.assertEqual(len(j._arguments), len(original_arguments) + len(keyword_arguments))
+        self.assertDictEqual(original_arguments, J0.ARGUMENTS, 'Class arguments were mutated')
+        for v in j._arguments.values():
+            self.assertNotIsInstance(v, ScanObject)
 
     def test_job_reset(self):
         class J0(_Job):
@@ -641,9 +640,11 @@ class LazySchedulerTestCase(unittest.TestCase):
         s.prepare()
 
         self.arguments['Job pipeline'] = 'main'
-        with self.assertRaises(ValueError, msg='Pipeline conflict did not raise'):
-            s = _Scheduler(self.managers)
-            s.prepare()
+
+        with get_managers(arguments=self.arguments) as managers:
+            with self.assertRaises(ValueError, msg='Pipeline conflict did not raise'):
+                s = _Scheduler(managers)
+                s.prepare()
 
     def test_duplicate_nodes(self):
         class SchedulerA(_Scheduler):
@@ -905,14 +906,16 @@ class LazySchedulerTestCase(unittest.TestCase):
                     raise TerminationRequested
 
         self.arguments.update(self.FAST_WAVE_ARGUMENTS)
-        s = S(self.managers)
-        s.prepare()
 
-        # Run the scheduler
-        s.run()
-        self.assertEqual(s.testing_handled_requests, 0, 'Unexpected number of requests handled')
-        self.assertEqual(s.testing_request_queue_qsize, 0, 'Request queue was not empty')
-        self._check_scheduler_run(s)
+        with get_managers(arguments=self.arguments) as managers:
+            s = S(managers)
+            s.prepare()
+
+            # Run the scheduler
+            s.run()
+            self.assertEqual(s.testing_handled_requests, 0, 'Unexpected number of requests handled')
+            self.assertEqual(s.testing_request_queue_qsize, 0, 'Request queue was not empty')
+            self._check_scheduler_run(s)
 
     def _check_scheduler_run(self, scheduler):
         for j in scheduler._graph:
@@ -943,14 +946,16 @@ class LazySchedulerTestCase(unittest.TestCase):
                     raise TerminationRequested
 
         self.arguments.update(self.FAST_WAVE_ARGUMENTS)
-        s = S(self.managers)
-        s.prepare()
 
-        # Run the scheduler
-        s.run()
-        self.assertEqual(s.testing_handled_requests, 0, 'Unexpected number of requests handled')
-        self.assertEqual(s.testing_request_queue_qsize, 0, 'Request queue was not empty')
-        self._check_scheduler_run_depth(s)
+        with get_managers(arguments=self.arguments) as managers:
+            s = S(managers)
+            s.prepare()
+
+            # Run the scheduler
+            s.run()
+            self.assertEqual(s.testing_handled_requests, 0, 'Unexpected number of requests handled')
+            self.assertEqual(s.testing_request_queue_qsize, 0, 'Request queue was not empty')
+            self._check_scheduler_run_depth(s)
 
     def _check_scheduler_run_depth(self, scheduler):
         for j in scheduler._graph:
@@ -990,16 +995,13 @@ class LazySchedulerTestCase(unittest.TestCase):
                     await controller.submit(*args, **kwargs)
 
         self.arguments.update(self.FAST_WAVE_ARGUMENTS)
-        managers = get_managers(_DEVICE_DB, arguments=self.arguments)
-        s = S(managers)
-        s.prepare()
 
-        # Run the scheduler
-        s.run()
+        with get_managers(_DEVICE_DB, arguments=self.arguments) as managers:
+            s = S(managers)
+            s.prepare()
 
-        # Close devices
-        device_mgr, _, _, _ = managers
-        device_mgr.close_devices()
+            # Run the scheduler
+            s.run()
 
         # Return the scheduler
         return s
@@ -1217,21 +1219,23 @@ class LazySchedulerTestCase(unittest.TestCase):
                     raise TerminationRequested
 
         self.arguments.update(self.FAST_WAVE_ARGUMENTS)
-        s = S(self.managers)
-        s.prepare()
 
-        # Run the scheduler
-        s.run()
+        with get_managers(arguments=self.arguments) as managers:
+            s = S(managers)
+            s.prepare()
 
-        for j in s._graph:
-            with self.subTest(job=j.get_name()):
-                if isinstance(j, J0):
-                    ref_counter = {'init': 1, 'visit': _NUM_WAVES + num_submits,
-                                   'submit': num_submits, 'schedule': num_submits}
-                else:
-                    self.fail('Unexpected job type encountered')
-                self.assertDictEqual(j.counter, ref_counter,
-                                     'Job call pattern did not match expected pattern')
+            # Run the scheduler
+            s.run()
+
+            for j in s._graph:
+                with self.subTest(job=j.get_name()):
+                    if isinstance(j, J0):
+                        ref_counter = {'init': 1, 'visit': _NUM_WAVES + num_submits,
+                                       'submit': num_submits, 'schedule': num_submits}
+                    else:
+                        self.fail('Unexpected job type encountered')
+                    self.assertDictEqual(j.counter, ref_counter,
+                                         'Job call pattern did not match expected pattern')
 
     @unittest.skipUnless(CI_ENABLED, 'Not in a CI environment, skipping long test')
     def test_scheduler_run_long(self):
@@ -1261,32 +1265,34 @@ class LazySchedulerTestCase(unittest.TestCase):
                     raise TerminationRequested
 
         self.arguments.update(self.FAST_WAVE_ARGUMENTS)
-        s = S(self.managers)
-        s.prepare()
 
-        # Run the scheduler
-        s.run()
+        with get_managers(arguments=self.arguments) as managers:
+            s = S(managers)
+            s.prepare()
 
-        for n in s._graph:
-            with self.subTest(job=n.get_name()):
-                if isinstance(n, T0):
-                    ref_counter = {'init': 1, 'visit': num_waves + num_submits,
-                                   'submit': num_submits, 'schedule': num_submits}
-                elif isinstance(n, J0):
-                    ref_counter = {'init': 1, 'visit': num_waves + num_submits,
-                                   'submit': num_submits, 'schedule': num_submits}
-                elif isinstance(n, J1):
-                    if self.REVERSE_WAVE:
-                        ref_counter = {'init': 1, 'visit': num_waves}
-                    elif self.POLICY is Policy.LAZY:
-                        ref_counter = {'init': 1, 'visit': num_waves + num_submits}
-                    else:
+            # Run the scheduler
+            s.run()
+
+            for n in s._graph:
+                with self.subTest(job=n.get_name()):
+                    if isinstance(n, T0):
                         ref_counter = {'init': 1, 'visit': num_waves + num_submits,
                                        'submit': num_submits, 'schedule': num_submits}
-                else:
-                    self.fail('Unexpected job type encountered')
-                self.assertDictEqual(n.counter, ref_counter,
-                                     'Node call pattern did not match expected pattern')
+                    elif isinstance(n, J0):
+                        ref_counter = {'init': 1, 'visit': num_waves + num_submits,
+                                       'submit': num_submits, 'schedule': num_submits}
+                    elif isinstance(n, J1):
+                        if self.REVERSE_WAVE:
+                            ref_counter = {'init': 1, 'visit': num_waves}
+                        elif self.POLICY is Policy.LAZY:
+                            ref_counter = {'init': 1, 'visit': num_waves + num_submits}
+                        else:
+                            ref_counter = {'init': 1, 'visit': num_waves + num_submits,
+                                           'submit': num_submits, 'schedule': num_submits}
+                    else:
+                        self.fail('Unexpected job type encountered')
+                    self.assertDictEqual(n.counter, ref_counter,
+                                         'Node call pattern did not match expected pattern')
 
 
 class LazySchedulerReversedTestCase(LazySchedulerTestCase):

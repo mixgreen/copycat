@@ -25,13 +25,11 @@ class CoreCacheTestCase(unittest.TestCase):
 
     def setUp(self) -> None:
         self.managers = get_managers(device_db=self._DEVICE_DB)
-        device_mgr, _, _, _ = self.managers
-        self.cache = dax.sim.coredevice.cache.CoreCache(device_mgr, cache=self._CACHE, _key='core_cache')
+        self.cache = dax.sim.coredevice.cache.CoreCache(self.managers.device_mgr, cache=self._CACHE, _key='core_cache')
 
     def tearDown(self) -> None:
-        # Close devices
-        device_mgr, _, _, _ = self.managers
-        device_mgr.close_devices()
+        # Close managers
+        self.managers.close()
 
     def test_cache(self):
         data = {

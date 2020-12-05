@@ -20,6 +20,7 @@ import sipyco.pc_rpc  # type: ignore
 
 import dax.base.system
 import dax.util.output
+import dax.util.artiq
 
 __all__ = ['NodeAction', 'Policy', 'Job', 'Trigger', 'DaxScheduler', 'dax_scheduler_client']
 
@@ -453,7 +454,7 @@ class Job(Node):
         # Build this job
         self.build_job()
         # Process the arguments
-        self._arguments = self._process_arguments()
+        self._arguments: typing.Dict[str, typing.Any] = dax.util.artiq.process_arguments(self.ARGUMENTS)
 
         if self.FILE is not None and not self.REPOSITORY:
             # Expand file
@@ -559,20 +560,6 @@ class Job(Node):
             # Attributes not consistent, raise an exception
             raise ValueError(f'The FILE and CLASS_NAME attributes of job "{self.get_name()}" '
                              f'should both be None or not None')
-
-    def _process_arguments(self) -> typing.Dict[str, typing.Any]:
-        """Process and return the arguments of this job.
-
-        :return: The processed arguments, ready to be used in the expid
-        """
-
-        def process(argument: typing.Any) -> typing.Any:
-            if isinstance(argument, artiq.experiment.ScanObject):
-                return argument.describe()  # type: ignore[attr-defined]
-            else:
-                return argument
-
-        return {key: process(arg) for key, arg in self.ARGUMENTS.items()}
 
 
 class Trigger(Node):

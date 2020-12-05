@@ -55,9 +55,8 @@ class HistogramContextTestCase(unittest.TestCase):
         self.h = self.s.hist_context
 
     def tearDown(self) -> None:
-        # Close devices
-        device_mgr, _, _, _ = self.managers
-        device_mgr.close_devices()
+        # Close managers
+        self.managers.close()
 
     def test_in_context(self):
         # Initially we are out of context
@@ -402,9 +401,8 @@ class HistogramAnalyzerTestCase(unittest.TestCase):
         self.h = self.s.hist_context
 
     def tearDown(self) -> None:
-        # Close devices
-        device_mgr, _, _, _ = self.managers
-        device_mgr.close_devices()
+        # Close managers
+        self.managers.close()
 
     def test_histogram_analyzer_system(self):
         # The histogram analyzer requests an output file which will trigger the creation of an experiment output dir
@@ -573,9 +571,8 @@ class HistogramAnalyzerTestCase(unittest.TestCase):
         with temp_dir():
             # Write data to HDF5 file
             file_name = 'result.h5'
-            _, dataset_mgr, _, _ = self.managers
             with h5py.File(file_name, 'w') as f:
-                dataset_mgr.write_hdf5(f)
+                self.managers.dataset_mgr.write_hdf5(f)
 
             # Read file with HistogramAnalyzer
             a = HistogramAnalyzer(file_name, self.s.detection.get_state_detection_threshold())
@@ -592,7 +589,7 @@ class HistogramAnalyzerTestCase(unittest.TestCase):
                 for v, w in zip(a.stdev_counts[k], self.h.get_stdev_counts(k)):
                     self.assertListEqual(list(v), w, 'Stdev counts did not match')
                 for v, w in zip(a.raw[k], self.h.get_raw(k)):
-                    self.assertListEqual(v.tolist(), w, 'Raw counts did not match')
+                    self.assertListEqual(v.tolist(), list(w), 'Raw counts did not match')
 
             # Compare to analyzer from object source
             b = HistogramAnalyzer(self.s, self.s.detection.get_state_detection_threshold())
@@ -615,9 +612,8 @@ class HistogramAnalyzerTestCase(unittest.TestCase):
         with temp_dir():
             # Write data to HDF5 file
             file_name = 'result.h5'
-            _, dataset_mgr, _, _ = self.managers
             with h5py.File(file_name, 'w') as f:
-                dataset_mgr.write_hdf5(f)
+                self.managers.dataset_mgr.write_hdf5(f)
 
             # Read file with HistogramAnalyzer
             a = HistogramAnalyzer(file_name, self.s.detection.get_state_detection_threshold())
@@ -669,9 +665,8 @@ class HistogramAnalyzerTestCase(unittest.TestCase):
         with temp_dir():
             # Write data to HDF5 file
             file_name = 'result.h5'
-            _, dataset_mgr, _, _ = self.managers
             with h5py.File(file_name, 'w') as f:
-                dataset_mgr.write_hdf5(f)
+                self.managers.dataset_mgr.write_hdf5(f)
 
             # Make analyzer object
             a = HistogramAnalyzer(file_name, self.s.detection.get_state_detection_threshold())
