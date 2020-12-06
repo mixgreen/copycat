@@ -238,15 +238,22 @@ class ClonedDatasetManager(artiq.master.worker_db.DatasetManager):
 
     _CLONE_DICT_KEY: str = '_dataset_mgr_clones_'
     """The attribute key of the clone dictionary attached to the existing ARTIQ dataset manager."""
-    _CLONE_KEY_FORMAT: str = 'clone_{index}'
+    _CLONE_KEY_FORMAT: str = 'sub_experiment/{index}'
     """The key format for cloned datasets, which is used for the HDF5 group name."""
 
     def __init__(self, dataset_mgr: artiq.master.worker_db.DatasetManager, *,
                  name: typing.Optional[str] = None):
         """Create a clone of an existing ARTIQ dataset manager.
 
+        The `name` parameter must be unique and is formatted with an `index` parameter.
+        The `index` parameter starts at `0` and is incremented for every new clone
+        created from the existing ARTIQ dataset manager.
+
+        The `name` is directly used as the HDF5 group name and `/` can therefore be
+        used to create sub-groups.
+
         :param dataset_mgr: The existing ARTIQ dataset manager
-        :param name: Optional name for this clone, which will be used in the HDF5 group name
+        :param name: Optional name for this clone, which will be used for the HDF5 group name
         """
         assert isinstance(dataset_mgr, artiq.master.worker_db.DatasetManager)
         assert isinstance(name, str) or name is None, 'Name must be of type str or None'
@@ -264,10 +271,10 @@ class ClonedDatasetManager(artiq.master.worker_db.DatasetManager):
 
         # Extract the dict with clones from the dataset manager
         clones: typing.Dict[str, ClonedDatasetManager] = getattr(dataset_mgr, self._CLONE_DICT_KEY)
-        # Generate the key for this clone
-        key: str = self._CLONE_KEY_FORMAT.format(index=len(clones))
-        if name is not None:
-            key = f'{key}_{name}'
+        # Generate the key for this clone and check if it is unique
+        key: str = (self._CLONE_KEY_FORMAT if name is None else name).format(index=len(clones))
+        if key in clones:
+            raise LookupError(f'Key "{key}" is already in use')
         # Register this clone
         clones[key] = self
 

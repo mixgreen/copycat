@@ -568,13 +568,16 @@ class HistogramAnalyzer:
     """Default matplotlib figure size."""
 
     def __init__(self, source: typing.Union[DaxSystem, HistogramContext, str, h5py.File],
-                 state_detection_threshold: typing.Optional[int] = None):
+                 state_detection_threshold: typing.Optional[int] = None, *,
+                 hdf5_group: typing.Optional[str] = None):
         """Create a new histogram analyzer object.
 
         :param source: The source of the histogram data
         :param state_detection_threshold: The state detection threshold used to calculate state probabilities
+        :param hdf5_group: HDF5 group containing the data, defaults to root of the HDF5 file
         """
         assert isinstance(state_detection_threshold, int) or state_detection_threshold is None
+        assert isinstance(hdf5_group, str) or hdf5_group is None
 
         # Input conversion
         if isinstance(source, DaxSystem):
@@ -610,8 +613,10 @@ class HistogramAnalyzer:
             self._file_name_generator = get_file_name_generator(source.get_device('scheduler'))
 
         elif isinstance(source, h5py.File):
+            # Construct HDF5 group name
+            path = [] if hdf5_group is None else [hdf5_group]
+            group_name = '/'.join(path + ['datasets', HistogramContext.HISTOGRAM_DATASET_GROUP])
             # Verify format of HDF5 file
-            group_name = 'datasets/' + HistogramContext.HISTOGRAM_DATASET_GROUP
             if group_name not in source:
                 raise KeyError('The HDF5 file does not contain histogram data')
 

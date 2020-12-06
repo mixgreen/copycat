@@ -637,11 +637,14 @@ class TimeResolvedAnalyzer:
     PLOT_FILE_FORMAT: str = '{key}_{index}'
     """File name format for plot files."""
 
-    def __init__(self, source: typing.Union[DaxSystem, TimeResolvedContext, str, h5py.File]):
+    def __init__(self, source: typing.Union[DaxSystem, TimeResolvedContext, str, h5py.File], *,
+                 hdf5_group: typing.Optional[str] = None):
         """Create a new time resolved analyzer object.
 
         :param source: The source of the trace data
+        :param hdf5_group: HDF5 group containing the data, defaults to root of the HDF5 file
         """
+        assert isinstance(hdf5_group, str) or hdf5_group is None
 
         # Input conversion
         if isinstance(source, DaxSystem):
@@ -660,8 +663,10 @@ class TimeResolvedAnalyzer:
             self._file_name_generator = get_file_name_generator(source.get_device('scheduler'))
 
         elif isinstance(source, h5py.File):
+            # Construct HDF5 group name
+            path = [] if hdf5_group is None else [hdf5_group]
+            group_name = '/'.join(path + ['datasets', TimeResolvedContext.DATASET_GROUP])
             # Verify format of HDF5 file
-            group_name = 'datasets/' + TimeResolvedContext.DATASET_GROUP
             if group_name not in source:
                 raise KeyError('The HDF5 file does not contain time resolved data')
 

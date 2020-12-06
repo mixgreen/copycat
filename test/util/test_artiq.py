@@ -14,11 +14,15 @@ class ArtiqTestCase(unittest.TestCase):
         # Create an experiment object using the helper get_managers() function
         with dax.util.artiq.get_managers() as managers:
             self.assertIsInstance(artiq.experiment.EnvExperiment(managers), artiq.experiment.HasEnvironment)
+            self.assertIsInstance(managers, tuple)
+
+            num_managers = 4
+            self.assertEqual(len(managers), num_managers)
 
             # Test unpacking
             _, _, _, _ = managers
             # Test indexing
-            for i in range(4):
+            for i in range(num_managers):
                 _ = managers[i]
 
     def test_get_managers_dataset_db(self):
@@ -107,8 +111,28 @@ class ArtiqTestCase(unittest.TestCase):
             clone_dict = getattr(managers.dataset_mgr, dax.util.artiq.ClonedDatasetManager._CLONE_DICT_KEY)
             self.assertEqual(len(clone_dict), 1, 'Unexpected number of clones in dict')
             registered_clone_key, registered_clone = clone_dict.popitem()
-            self.assertTrue(registered_clone_key.endswith(name), 'Dataset manager clone name could not be found')
+            self.assertEqual(registered_clone_key, name, 'Dataset manager clone name was not passed correctly')
             self.assertIs(registered_clone, clone)
+
+    def test_cloned_dataset_manager_name_index(self):
+        with dax.util.artiq.get_managers() as managers:
+            name = 'foobar_{index}'
+
+            clone = dax.util.artiq.ClonedDatasetManager(managers.dataset_mgr, name=name)
+            clone_dict = getattr(managers.dataset_mgr, dax.util.artiq.ClonedDatasetManager._CLONE_DICT_KEY)
+            self.assertEqual(len(clone_dict), 1, 'Unexpected number of clones in dict')
+            registered_clone_key, registered_clone = clone_dict.popitem()
+            self.assertEqual(registered_clone_key, name.format(index=0),
+                             'Dataset manager clone name was not passed correctly')
+            self.assertIs(registered_clone, clone)
+
+    def test_cloned_dataset_manager_unique_name(self):
+        with dax.util.artiq.get_managers() as managers:
+            name = 'foobar'
+
+            dax.util.artiq.ClonedDatasetManager(managers.dataset_mgr, name=name)
+            with self.assertRaises(LookupError, msg='Non-unique name did not raise'):
+                dax.util.artiq.ClonedDatasetManager(managers.dataset_mgr, name=name)
 
     def test_clone_managers(self):
         with dax.util.artiq.get_managers() as managers:
@@ -131,7 +155,7 @@ class ArtiqTestCase(unittest.TestCase):
             clone_dict = getattr(managers.dataset_mgr, dax.util.artiq.ClonedDatasetManager._CLONE_DICT_KEY)
             self.assertEqual(len(clone_dict), 1, 'Unexpected number of clones in dict')
             registered_clone_key, registered_clone = clone_dict.popitem()
-            self.assertTrue(registered_clone_key.endswith(name), 'Dataset manager clone name could not be found')
+            self.assertEqual(registered_clone_key, name, 'Dataset manager clone name was not passed correctly')
             self.assertIs(registered_clone, cloned[1])
 
     def test_clone_managers_arguments(self):

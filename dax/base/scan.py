@@ -588,11 +588,14 @@ class DaxScanReader:
     as the cartesian product of all scannables.
     """
 
-    def __init__(self, source: typing.Union[DaxScan, str, h5py.File]):
+    def __init__(self, source: typing.Union[DaxScan, str, h5py.File], *,
+                 hdf5_group: typing.Optional[str] = None):
         """Create a new DAX scan reader object.
 
         :param source: The source of the scan data
+        :param hdf5_group: HDF5 group containing the data, defaults to root of the HDF5 file
         """
+        assert isinstance(hdf5_group, str) or hdf5_group is None
 
         # Input conversion
         if isinstance(source, str):
@@ -606,8 +609,10 @@ class DaxScanReader:
             self.keys: typing.List[str] = list(self.scannables.keys())
 
         elif isinstance(source, h5py.File):
+            # Construct HDF5 group name
+            path = [] if hdf5_group is None else [hdf5_group]
+            group_name = '/'.join(path + ['datasets', DaxScan.SCAN_GROUP])
             # Verify format of HDF5 file
-            group_name = 'datasets/' + DaxScan.SCAN_GROUP
             if group_name not in source:
                 raise KeyError('The HDF5 file does not contain scanning data')
 
