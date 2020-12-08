@@ -195,7 +195,7 @@ class TTLInOut(TTLOut):
         val = np.int32(self._rng.random() < self._input_prob)
         self._sample_buffer.append(val)
         self._signal_manager.event(self._state, val)  # Sample value at current time
-        self._signal_manager.event(self._state, 'x', offset=1)  # Return to X 1 machine unit after sample
+        self._signal_manager.event(self._state, 'z', offset=1)  # Return to 'Z' 1 machine unit after sample
 
     @kernel
     def sample_get(self):
