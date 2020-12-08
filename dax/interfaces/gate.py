@@ -14,14 +14,14 @@ __all__ = ['GateInterface']
 class GateInterface(DaxInterface, abc.ABC):
     """The gate interface exposes a set of quantum gates.
 
-    When this interface is implemented :attr:`pi` needs to be marked kernel invariant.
+    When this interface is implemented, :attr:`pi` needs to be marked kernel invariant.
 
     Gates that are not implemented should raise a :attr:`NotImplementedError`.
     """
 
-    # TODO: future candidate functions: cnot, cz, xx
-    # TODO: candidate operations: prep_0, m_z (probably for a different interface)
-    # TODO: add sqrt and inverse rotations?
+    # TODO: candidate gates: cnot, cz, xx
+    # TODO: candidate operations (probably in a separate interface): prep_0, m_z
+    # TODO: add machine unit variations for gates? (including pi_mu and conversion functions)
 
     @property
     def pi(self) -> float:
@@ -70,6 +70,54 @@ class GateInterface(DaxInterface, abc.ABC):
     @abc.abstractmethod
     def h(self, qubit: TInt32):
         """Hadamard.
+
+        :param qubit: Target qubit
+        """
+        pass
+
+    @abc.abstractmethod
+    def sqrt_x(self, qubit: TInt32):
+        """sqrt(X).
+
+        :param qubit: Target qubit
+        """
+        pass
+
+    @abc.abstractmethod
+    def sqrt_x_dag(self, qubit: TInt32):
+        """sqrt(X) dagger.
+
+        :param qubit: Target qubit
+        """
+        pass
+
+    @abc.abstractmethod
+    def sqrt_y(self, qubit: TInt32):
+        """sqrt(Y).
+
+        :param qubit: Target qubit
+        """
+        pass
+
+    @abc.abstractmethod
+    def sqrt_y_dag(self, qubit: TInt32):
+        """sqrt(Y) dagger.
+
+        :param qubit: Target qubit
+        """
+        pass
+
+    @abc.abstractmethod
+    def sqrt_z(self, qubit: TInt32):
+        """sqrt(Z).
+
+        :param qubit: Target qubit
+        """
+        pass
+
+    @abc.abstractmethod
+    def sqrt_z_dag(self, qubit: TInt32):
+        """sqrt(Z) dagger.
 
         :param qubit: Target qubit
         """
