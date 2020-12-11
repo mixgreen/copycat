@@ -44,6 +44,9 @@ class _PmtMonitorBase(DaxClient, EnvExperiment, abc.ABC):
         assert self.MAX_BUFFER_SIZE > 0, 'Maximum buffer size must be greater than zero'
         assert self.DEFAULT_BUFFER_SIZE <= self.MAX_BUFFER_SIZE, 'Default buffer size greater than the max buffer size'
         assert is_kernel(self.device_setup), 'device_setup() must be a kernel function'
+        assert is_kernel(self.device_cleanup), 'device_cleanup() must be a kernel function'
+        assert not is_kernel(self.host_setup), 'host_setup() can not be a kernel function'
+        assert not is_kernel(self.host_cleanup), 'host_cleanup() can not be a kernel function'
         assert is_kernel(self._detect)
         assert is_kernel(self._count)
 
@@ -186,6 +189,8 @@ class _PmtMonitorBase(DaxClient, EnvExperiment, abc.ABC):
                 # Monitor
                 self.logger.debug('Start monitoring')
                 self.monitor()
+                # Host cleanup
+                self.host_cleanup()
 
                 # To pause, close communications and call the pause function
                 self.logger.debug('Pausing')
@@ -234,6 +239,8 @@ class _PmtMonitorBase(DaxClient, EnvExperiment, abc.ABC):
         finally:
             # Drop buffered data by resetting core
             self.core.reset()
+            # Device cleanup
+            self.device_cleanup()
 
     @abc.abstractmethod
     def _detect(self) -> None:
@@ -259,6 +266,15 @@ class _PmtMonitorBase(DaxClient, EnvExperiment, abc.ABC):
         """
         # Reset the core
         self.core.reset()
+
+    @kernel
+    def device_cleanup(self):  # type: () -> None
+        """Cleanup on the core device, called before pausing and exiting."""
+        pass
+
+    def host_cleanup(self) -> None:
+        """Cleanup on the host, called before pausing and exiting."""
+        pass
 
     def get_pmt_array(self) -> typing.List[artiq.coredevice.edge_counter.EdgeCounter]:
         """Get the PMT array from the system.

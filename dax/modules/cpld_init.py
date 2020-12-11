@@ -50,11 +50,11 @@ class CpldInitModule(DaxModule):
                                     f'before this module was created: {", ".join(devices)}')
 
         # List of CPLD device keys
-        cpld_device_keys = [k for k, v in self.registry.device_db.items()
-                            if isinstance(v, dict) and v.get('class') == 'CPLD']
+        self.keys = [k for k, v in self.registry.device_db.items()
+                     if isinstance(v, dict) and v.get('class') == 'CPLD']
 
         # CPLD array
-        self.cpld = [self.get_device(key, artiq.coredevice.urukul.CPLD) for key in cpld_device_keys]
+        self.cpld = [self.get_device(key, artiq.coredevice.urukul.CPLD) for key in self.keys]
         self.update_kernel_invariants('cpld')
         self.logger.debug(f'Number of CPLD devices: {len(self.cpld)}')
 
