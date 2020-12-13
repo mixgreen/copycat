@@ -19,9 +19,9 @@ pytest, mypy, and flake8 need to be installed separately.
 Tests can be executed by using the following commands:
 
 ```shell
-pytest
-mypy
-flake8
+$ pytest
+$ mypy
+$ flake8
 ```
 
 ## Merging
