@@ -215,10 +215,10 @@ class DaxHasKey(DaxBase, abc.ABC):
 
         :param keys: The keys to append to the system key
         :return: The system key with provided keys appended
-        :raises ValueError: Raised if the key has an invalid format
+        :raises ValueError: Raised if any key has an invalid format
         """
 
-        assert all(isinstance(k, str) for k in keys), 'Keys must be strings'
+        assert all(isinstance(k, str) for k in keys), 'Keys must be of type str'
 
         # Check if the given keys are valid
         for k in keys:

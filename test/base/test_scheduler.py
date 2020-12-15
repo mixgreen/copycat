@@ -714,6 +714,21 @@ class LazySchedulerTestCase(unittest.TestCase):
                 self.assertIn(f'"{_JobB.get_name()}"', str(e), 'Job name not correctly displayed in error message')
                 raise
 
+    def test_contains(self):
+        scheduler_nodes = {_Job4, _Job3, _JobB, _JobC}
+        all_nodes = {_Job1, _Job2, _Job3, _Job4, _JobA, _JobB, _JobC}
+
+        class S(_Scheduler):
+            NODES = scheduler_nodes
+
+        s = S(self.managers)
+        s.prepare()
+
+        for n in all_nodes:
+            with self.subTest(node=n.get_name()):
+                self.assertEqual(n in s, n in scheduler_nodes)
+                self.assertEqual(n.get_name() in s, n in scheduler_nodes)
+
     def test_trigger_nodes(self):
         class T(_Trigger):
             NODES = [_JobA]
@@ -989,7 +1004,7 @@ class LazySchedulerTestCase(unittest.TestCase):
                 # Construct a separate controller with the same queue
                 # This is required because we can not use get_device() to obtain the controller
                 # Because the server and the client are running on the same thread, the situation deadlocks
-                controller = _SchedulerController(request_queue)
+                controller = _SchedulerController(self, request_queue)
                 for args, kwargs in requests:
                     kwargs.setdefault('block', False)
                     await controller.submit(*args, **kwargs)
@@ -1075,6 +1090,56 @@ class LazySchedulerTestCase(unittest.TestCase):
         self.assertEqual(s.testing_handled_requests, len(requests), 'Unexpected number of requests handled')
         self.assertEqual(s.testing_request_queue_qsize, 0, 'Request queue was not empty')
         self._check_scheduler_controller1(s)
+
+    def test_scheduler_controller_foreign_key(self):
+        test_data = [
+            ('_Job1', ('foo',)),
+            ('_Job2', ('foo',)),
+            ('_Job3', ('foo',)),
+            ('_Job4', ('foo',)),
+            ('_JobA', ('foo',)),
+            ('_JobB', ('foo',)),
+            ('_JobC', ('foo',)),
+            ('bar', ('baz',)),
+            ('foo', ('bar', 'baz')),
+            ('Job1', ('bar', 'baz')),
+            ('S', ('foo',)),
+            ('_Scheduler', ('foo',)),
+        ]
+
+        class S(_Scheduler):
+            NODES = {_Job1, _Job2, _Job3, _Job4, _JobA, _JobB, _JobC}
+            CONTROLLER = 'dax_scheduler'
+
+            def wave(self, **kwargs) -> None:
+                raise TerminationRequested
+
+            # noinspection PyMethodParameters
+            async def controller_callback(self_, request_queue) -> None:
+                # noinspection PyProtectedMember
+                from dax.base.scheduler import _SchedulerController
+                # Construct a separate controller with the same queue
+                # This is required because we can not use get_device() to obtain the controller
+                # Because the server and the client are running on the same thread, the situation deadlocks
+                controller = _SchedulerController(self_, request_queue)
+                valid_keys = {n.get_name() for n in self_.NODES}
+                for node, keys in test_data:
+                    if node in valid_keys:
+                        foreign_key = controller.get_foreign_key(node, *keys)
+                        ref_key = dax.base.system._KEY_SEPARATOR.join([self_.NAME, node, *keys])
+                        self.assertEqual(foreign_key, ref_key)
+                    else:
+                        with self.assertRaises(KeyError, msg='Node not in scheduling graph did not raise'):
+                            controller.get_foreign_key(node, *keys)
+
+        self.arguments.update(self.FAST_WAVE_ARGUMENTS)
+
+        with get_managers(_DEVICE_DB, arguments=self.arguments) as managers:
+            s = S(managers)
+            s.prepare()
+
+            # Run the scheduler and the tests
+            s.run()
 
     def test_create_trigger(self):
         # asyncio entry point

@@ -639,8 +639,9 @@ class Trigger(Node):
 class _SchedulerController:
     """Scheduler controller class, which exposes an external interface to the DAX scheduler."""
 
-    def __init__(self, request_queue: __RQ_T):
-        # Store a reference to the request queue
+    def __init__(self, scheduler: DaxScheduler, request_queue: __RQ_T):
+        # Store a reference to the scheduler and the request queue
+        self._scheduler: DaxScheduler = scheduler
         self._request_queue: __RQ_T = request_queue
 
     async def submit(self, *nodes: str,
@@ -672,6 +673,25 @@ class _SchedulerController:
         if block:
             # Wait until all requests are handled
             await self._request_queue.join()
+
+    def get_foreign_key(self, node: str, *keys: str) -> str:
+        """Obtain a system key of a foreign node.
+
+        :param node: The node name as a string (case sensitive)
+        :param keys: The keys to append to the system key of the foreign node
+        :returns: The foreign system key as a string
+        :raises KeyError: Raised if the node is not in the scheduling graph
+        :raises ValueError: Raised if any key has an invalid format
+        """
+        assert isinstance(node, str), 'Node must be of type str'
+        assert all(isinstance(key, str) for key in keys), 'Keys must be of type str'
+
+        if node in self._scheduler:
+            # Return the foreign system key
+            return self._scheduler.get_system_key(node, *keys)
+        else:
+            # Node is not in the scheduling graph
+            raise KeyError(f'Node "{node}" is not in the scheduling graph')
 
 
 class DaxScheduler(dax.base.system.DaxHasKey, abc.ABC):
@@ -880,7 +900,7 @@ class DaxScheduler(dax.base.system.DaxHasKey, abc.ABC):
         """Coroutine for running the scheduler and the controller."""
 
         # Create the controller and the server objects
-        controller = _SchedulerController(request_queue)
+        controller = _SchedulerController(self, request_queue)
         server = sipyco.pc_rpc.Server({'DaxSchedulerController': controller},
                                       description=f'DaxScheduler controller: {self.get_identifier()}')
 
@@ -1243,6 +1263,14 @@ class DaxScheduler(dax.base.system.DaxHasKey, abc.ABC):
 
         # Return the controller details of interest
         return host, port
+
+    def __contains__(self, item: typing.Union[str, typing.Type[Node]]) -> bool:
+        """True if the given node (name or class) is in the graph of this scheduler.
+
+        :param item: The node to test for membership (node name or node class)
+        :returns: True if the given node is in the graph of this scheduler
+        """
+        return item in self._node_name_map or item in self._nodes
 
     @classmethod
     def check_attributes(cls) -> None:
