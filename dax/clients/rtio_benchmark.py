@@ -35,7 +35,7 @@ class RtioBenchmarkEventThroughput(DaxClient, EnvExperiment):
             raise ValueError(msg)
 
         # Create scan object
-        self.period_scan = np.arange(self.period_min, self.period_max, self.period_step, dtype=float)
+        self.period_scan = np.arange(self.period_min, self.period_max, self.period_step, dtype=np.float_)
         self.period_scan *= ns
         self.update_kernel_invariants('period_scan')
 
@@ -117,7 +117,7 @@ class RtioBenchmarkDmaThroughput(DaxClient, EnvExperiment):
             raise ValueError(msg)
 
         # Create scan object
-        self.period_scan = np.arange(self.period_min, self.period_max, self.period_step, dtype=float)
+        self.period_scan = np.arange(self.period_min, self.period_max, self.period_step, dtype=np.float_)
         self.period_scan *= ns
         self.update_kernel_invariants('period_scan')
 

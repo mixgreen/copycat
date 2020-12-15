@@ -377,7 +377,7 @@ class BuildScanTestCase(unittest.TestCase):
             np.array([], dtype=np.int32),
             np.empty(4, dtype=np.int32),
             np.empty(4, dtype=np.int64),
-            np.empty(4, dtype=np.float),
+            np.empty(4, dtype=np.float_),
             np.asarray(['foo', 'bar']),
         ]
         counter = itertools.count()

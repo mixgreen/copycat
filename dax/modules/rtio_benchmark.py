@@ -151,7 +151,7 @@ class RtioBenchmarkModule(DaxModule):
     def benchmark_event_throughput(self, period_scan: typing.Union[typing.List[float], np.ndarray],
                                    num_samples: int, num_events: int, no_underflow_cutoff: int) -> None:
         # Convert types of arguments
-        period_scan = np.asarray(period_scan, dtype=float)
+        period_scan = np.asarray(period_scan, dtype=np.float_)
         num_samples = np.int32(num_samples)
         num_events = np.int32(num_events)
         no_underflow_cutoff = np.int32(no_underflow_cutoff)
@@ -415,7 +415,7 @@ class RtioBenchmarkModule(DaxModule):
     def benchmark_dma_throughput(self, period_scan: typing.Union[typing.List[float], np.ndarray],
                                  num_samples: int, num_events: int, no_underflow_cutoff: int) -> None:
         # Convert types of arguments
-        period_scan = np.asarray(period_scan, dtype=float)
+        period_scan = np.asarray(period_scan, dtype=np.float_)
         num_samples = np.int32(num_samples)
         num_events = np.int32(num_events)
         no_underflow_cutoff = np.int32(no_underflow_cutoff)

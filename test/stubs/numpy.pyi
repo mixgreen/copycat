@@ -31,12 +31,14 @@ class inexact(number):
     ...
 
 
-# int32 and int64 have the same type properties as a Python int
+# int32, int64, and int_ have the same type properties as a Python int
 int32 = int
 int64 = int
+int_ = int
 
-# floating has the same type properties as a Python float
+# floating and float_ have the same type properties as a Python float
 floating = float
+float_ = float
 
 # bool as the same type properties as a Python bool
 bool_ = bool
@@ -44,7 +46,7 @@ bool_ = bool
 # Type variables used for array creation functions
 __N_T = typing.Union[int, float, int32, int64]
 __A_T = typing.TypeVar('__A_T', int, float, int32, int64)
-__SHAPE_T = typing.Union[int, typing.Tuple[int]]
+__SHAPE_T = typing.Union[int, typing.Tuple[int, ...]]
 
 
 # noinspection PyPep8Naming

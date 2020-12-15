@@ -506,8 +506,8 @@ class TimeResolvedContext(DaxModule):
                       for data in zip(*(b for b, _ in self._buffer_data))]
             result: typing.List[np.ndarray[float]] = [np.concatenate([d for _, d in channel]) for channel in buffer]
             # Width and time are only calculated once since we assume all data is homogeneous
-            width = np.concatenate([np.full(len(d), w, dtype=float) for (w, _, _), d in buffer[0]])
-            time = np.concatenate([np.arange(len(d), dtype=float) * (w + s) + (o + o_correction)
+            width = np.concatenate([np.full(len(d), w, dtype=np.float_) for (w, _, _), d in buffer[0]])
+            time = np.concatenate([np.arange(len(d), dtype=np.float_) * (w + s) + (o + o_correction)
                                    for ((w, s, o), d), (_, o_correction) in zip(buffer[0], self._buffer_data)])
 
             # Format results in a trace dict for easier access

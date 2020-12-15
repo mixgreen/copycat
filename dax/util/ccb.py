@@ -206,7 +206,7 @@ class CcbTool:
         :param h_lines: Horizontal lines dataset
         :param index: The index of the results to plot (default plots all)
         :param sliding_window: Set size of the sliding window, or `None` to disable
-        :param plot_names: Base name of the plots in the legend (numbered automatically)
+        :param plot_names: Base names of the plots (numbered automatically, formatting with `{index}` possible)
         :param markers_only: Only plot markers and no lines between them
         :param title: Graph title
         :param x_label: X-axis label
@@ -237,7 +237,7 @@ class CcbTool:
         :param name: Name of the applet
         :param y: Histogram dataset
         :param index: The index of the results to plot (default plots all)
-        :param plot_names: Base name of the plots in the legend (numbered automatically)
+        :param plot_names: Base names of the plots (numbered automatically, formatting with `{index}` possible)
         :param title: Graph title
         :param x_label: X-axis label
         :param y_label: Y-axis label
