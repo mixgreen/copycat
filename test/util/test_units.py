@@ -19,6 +19,7 @@ class UnitsTestCase(unittest.TestCase):
         self.assertEqual(time_to_str(np.int32(10), precision=2), '10.00 s')
         self.assertEqual(time_to_str(np.int64(10), precision=2), '10.00 s')
         self.assertEqual(time_to_str(np.float(.64 * us), threshold=600.0, precision=0), '640 ns')
+        self.assertEqual(time_to_str(np.float_(.64 * us), threshold=600.0, precision=0), '640 ns')
 
     def test_freq_to_str(self):
         from dax.util.units import freq_to_str
@@ -30,6 +31,7 @@ class UnitsTestCase(unittest.TestCase):
         self.assertEqual(freq_to_str(np.int32(10 * Hz), precision=3), '10.000 Hz')  # GHz overflows 32 bit value
         self.assertEqual(freq_to_str(np.int64(10 * GHz), precision=3), '10.000 GHz')
         self.assertEqual(freq_to_str(np.float(0.010 * GHz), precision=0), '10 MHz')
+        self.assertEqual(freq_to_str(np.float_(0.010 * GHz), precision=0), '10 MHz')
 
     def test_volt_to_str(self):
         from dax.util.units import volt_to_str

@@ -102,6 +102,7 @@ class PeekTestCaseTestCase(dax.sim.test_case.PeekTestCase):
             (99.2, 99.2),
             (-99.2, -99.2),
             (np.float(3), 3),
+            (np.float_(3), 3),
         ]
 
         # Device and scope
@@ -125,7 +126,7 @@ class PeekTestCaseTestCase(dax.sim.test_case.PeekTestCase):
         test_data = {
             self.sys.ttl0: ('state', [0, 1, 'z', 'Z', True, False, np.int32(0), np.int64(1)]),  # bool
             self.sys.ec: ('count', [0, 1, 'x', 'X', True, False, 99, -34, np.int32(655), np.int64(7)]),  # int
-            self.sys.ad9912: ('freq', [1.7, -8.2, 7.7, np.float(300)]),  # float
+            self.sys.ad9912: ('freq', [1.7, -8.2, float(7.7), np.float(300), np.float_(200)]),  # float
         }
 
         for scope, (signal, values) in test_data.items():
@@ -180,6 +181,7 @@ class PeekTestCaseTestCase(dax.sim.test_case.PeekTestCase):
             99.2,
             -99.2,
             np.float(3),
+            np.float_(4),
         ]
 
         # Device and scope

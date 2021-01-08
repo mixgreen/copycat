@@ -558,6 +558,7 @@ class DaxDataStoreInfluxDbTestCase(unittest.TestCase):
             ('k', np.int32(3)),
             ('k', np.int64(99999999)),
             ('k', np.float(4)),
+            ('k', np.float_(5)),
         ]
 
         for count, (k, v) in enumerate(test_data, 1):
@@ -574,8 +575,13 @@ class DaxDataStoreInfluxDbTestCase(unittest.TestCase):
         # Data to test against
         test_data = [
             ('k', 3, 5),
+            ('k', True, 5),
             ('k', 44, 23),
-            ('k', 'np.float(4)', -99),  # Negative indices are valid, though this is not specifically intended behavior
+            ('k', 44.4, 3),
+            ('k', np.int32(4), 3),
+            ('k', np.int64(4), 3),
+            ('k', np.float_(44.4), 3),
+            ('k', 'foo', -99),  # Negative indices are valid, though this is not specifically intended behavior
         ]
 
         for count, (k, v, i) in enumerate(test_data, 1):
@@ -613,7 +619,9 @@ class DaxDataStoreInfluxDbTestCase(unittest.TestCase):
             ('k', 4, 1.1),  # Wrong index type
             ('k', 4, 1.0),  # Wrong index type
             ('k', 4, 4.0),  # Wrong index type
-            ('k', 'np.float(4)', ((4, 5), (6, 7))),  # Multi-dimensional slicing not supported by influx
+            ('k', 4, np.float(4)),  # Wrong index type
+            ('k', 4, np.float_(4)),  # Wrong index type
+            ('k', 'foo', ((4, 5), (6, 7))),  # Multi-dimensional slicing not supported by influx
         ]
 
         for k, v, i in test_data:
