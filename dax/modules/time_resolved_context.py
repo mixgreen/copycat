@@ -615,6 +615,7 @@ class TimeResolvedContext(DaxModule):
 
         :param dataset_key: Key of the dataset to obtain the trace of
         :return: All trace data for the specified key
+        :raises KeyError: Raised if no data is available for the given dataset key
         """
         return self._cache[self._default_dataset_key if dataset_key is None else dataset_key]
 

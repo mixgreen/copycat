@@ -54,6 +54,11 @@ class HistogramContext(DaxModule):
     MEAN_COUNT_PLOT_NAME: str = 'mean count'
     """Name of the mean count plot applet."""
 
+    STATE_PROBABILITY_PLOT_KEY_FORMAT: str = 'plot.{base}.histogram_context.state_probability'
+    """Dataset name for plotting latest full state probability graph."""
+    STATE_PROBABILITY_PLOT_NAME: str = 'state_probability'
+    """Name of the full state probability plot applet."""
+
     PLOT_GROUP_FORMAT: str = '{base}.histogram_context'
     """Group to which the plot applets belong."""
 
@@ -122,6 +127,7 @@ class HistogramContext(DaxModule):
         self._probability_plot_key: str = self.PROBABILITY_PLOT_KEY_FORMAT.format(base=base)
         self._mean_count_plot_key: str = self.MEAN_COUNT_PLOT_KEY_FORMAT.format(base=base)
         self._stdev_count_plot_key: str = self.STDEV_COUNT_PLOT_KEY_FORMAT.format(base=base)
+        self._state_probability_plot_key: str = self.STATE_PROBABILITY_PLOT_KEY_FORMAT.format(base=base)
         # Generate applet plot group
         self._plot_group: str = self.PLOT_GROUP_FORMAT.format(base=base)
 
@@ -314,7 +320,8 @@ class HistogramContext(DaxModule):
             # Use default state_detection_threshold if not set
             state_detection_threshold = self._state_detection_threshold
 
-        return HistogramAnalyzer.histogram_to_probability(histogram, state_detection_threshold)
+        return HistogramAnalyzer.histogram_to_probability(
+            histogram, state_detection_threshold=state_detection_threshold)
 
     """Applet plotting functions"""
 
@@ -346,7 +353,7 @@ class HistogramContext(DaxModule):
         :param kwargs: Extra keyword arguments for the plot
         """
 
-        # Set default label
+        # Set defaults
         kwargs.setdefault('y_label', 'State probability')
         kwargs.setdefault('title', f'RID {self._scheduler.rid}')
         # Plot
@@ -362,12 +369,50 @@ class HistogramContext(DaxModule):
         :param kwargs: Extra keyword arguments for the plot
         """
 
-        # Set default label
+        # Set defaults
         kwargs.setdefault('y_label', 'Mean count')
         kwargs.setdefault('title', f'RID {self._scheduler.rid}')
         # Plot
         self._ccb.plot_xy_multi(self.MEAN_COUNT_PLOT_NAME, self._mean_count_plot_key,
                                 error=self._stdev_count_plot_key, group=self._plot_group, **kwargs)
+
+    @rpc(flags={'async'})
+    def plot_state_probability(self, dataset_key=None,
+                               **kwargs):  # type: (typing.Optional[str], typing.Any) -> None
+        """Open the applet that shows the full state probability graph.
+
+        **This function can only be called after all data was obtained.**
+        Plotting state probabilities does not scale well and therefore we do not support real-time plotting.
+        Instead, the contents of the graph are computed once when calling this function.
+        If this function is called before data is available, an error will be logged but no exception is raised.
+
+        Note that this function computes and redraws the plot for each call.
+        Therefore, this function should preferably be called only once after the experiment finished.
+
+        :param dataset_key: Key of the dataset to plot
+        :param kwargs: Extra keyword arguments for the plot
+        """
+
+        try:
+            # Obtain raw data
+            raw = self.get_raw(dataset_key)
+        except KeyError:
+            # No data available (yet)
+            self.logger.error(f'No data available, state probability can only be plotted after all data was obtained')
+        else:
+            # Transform and broadcast data
+            state_probabilities = HistogramAnalyzer.raw_to_flat_state_probabilities(
+                raw, state_detection_threshold=self._state_detection_threshold)
+            self.set_dataset(self._state_probability_plot_key, state_probabilities,
+                             broadcast=True, archive=False)
+
+            # Set defaults
+            kwargs.setdefault('y_label', '|State> probability')
+            kwargs.setdefault('title', f'RID {self._scheduler.rid}')
+            kwargs.setdefault('plot_names', '|{index}>')
+            # Plot
+            self._ccb.plot_xy_multi(self.STATE_PROBABILITY_PLOT_NAME, self._state_probability_plot_key,
+                                    group=self._plot_group, **kwargs)
 
     @rpc(flags={'async'})
     def clear_probability_plot(self):  # type: () -> None
@@ -413,6 +458,14 @@ class HistogramContext(DaxModule):
         self._ccb.disable_applet(self.MEAN_COUNT_PLOT_NAME, self._plot_group)
 
     @rpc(flags={'async'})
+    def disable_state_probability_plot(self):  # type: () -> None
+        """Close the full state probability plot.
+
+        This function can only be called after the module is initialized.
+        """
+        self._ccb.disable_applet(self.STATE_PROBABILITY_PLOT_NAME, self._plot_group)
+
+    @rpc(flags={'async'})
     def disable_all_plots(self):  # type: () -> None
         """Close all histogram context plots.
 
@@ -444,6 +497,7 @@ class HistogramContext(DaxModule):
 
         :param dataset_key: Key of the dataset to obtain the raw data of
         :return: All raw data for the specified key
+        :raises KeyError: Raised if no data is available for the given dataset key
         """
         return self._raw_cache[self._default_dataset_key if dataset_key is None else dataset_key][:]
 
@@ -459,6 +513,7 @@ class HistogramContext(DaxModule):
 
         :param dataset_key: Key of the dataset to obtain the histograms of
         :return: All histogram data for the specified key
+        :raises KeyError: Raised if no data is available for the given dataset key
         """
         return list(zip(*self._histogram_cache[self._default_dataset_key if dataset_key is None else dataset_key]))
 
@@ -477,6 +532,7 @@ class HistogramContext(DaxModule):
         :param dataset_key: Key of the dataset to obtain the probabilities of
         :param state_detection_threshold: State detection threshold used to calculate the probabilities
         :return: All probability data for the specified key
+        :raises KeyError: Raised if no data is available for the given dataset key
         """
         return [[self._histogram_to_probability(h, state_detection_threshold) for h in histograms]
                 for histograms in self.get_histograms(dataset_key)]
@@ -492,6 +548,7 @@ class HistogramContext(DaxModule):
 
         :param dataset_key: Key of the dataset to obtain the mean counts of
         :return: All mean count data for the specified key
+        :raises KeyError: Raised if no data is available for the given dataset key
         """
         return [[HistogramAnalyzer.histogram_to_mean_count(h) for h in histograms]
                 for histograms in self.get_histograms(dataset_key)]
@@ -505,6 +562,7 @@ class HistogramContext(DaxModule):
 
         :param dataset_key: Key of the dataset to obtain the mean counts of
         :return: All mean count data for the specified key
+        :raises KeyError: Raised if no data is available for the given dataset key
         """
         return [[HistogramAnalyzer.histogram_to_stdev_count(h) for h in histograms]
                 for histograms in self.get_histograms(dataset_key)]
@@ -780,6 +838,22 @@ class HistogramAnalyzer:
         return collections.Counter({i: v for i, v in enumerate(histogram) if v > 0})
 
     @classmethod
+    def _vector_to_int(cls, vector: typing.Sequence[int], state_detection_threshold: int) -> int:
+        """Convert a vector of raw counts to an integer state."""
+
+        # Accumulated result
+        acc: int = 0
+
+        for count in reversed(vector):
+            # Shift accumulator
+            acc <<= 1
+            # Add bit
+            acc |= count > state_detection_threshold
+
+        # Return the accumulated result
+        return acc
+
+    @classmethod
     def raw_to_states(cls, raw: typing.Sequence[typing.Sequence[typing.Sequence[int]]],
                       state_detection_threshold: int) -> typing.List[typing.List[int]]:
         """Convert raw data to integer states.
@@ -790,23 +864,19 @@ class HistogramAnalyzer:
         """
         assert isinstance(state_detection_threshold, int), 'State detection threshold must be of type int'
 
-        def vector_to_int(vector: typing.Sequence[int]) -> int:
-            """Convert a vector of raw counts to an integer state."""
-
-            # Accumulated result
-            acc = 0
-
-            for count in reversed(vector):
-                # Shift accumulator
-                acc <<= 1
-                # Add bit
-                acc |= count > state_detection_threshold
-
-            # Return the accumulated result
-            return acc
-
         # Return the converted result
-        return [[vector_to_int(point) for point in histogram] for histogram in raw]
+        return [[cls._vector_to_int(point, state_detection_threshold) for point in histogram] for histogram in raw]
+
+    @classmethod
+    def _states_to_probabilities(cls, states: typing.Sequence[int]) -> typing.Dict[int, float]:
+        """Convert a sequence of integer states to a dictionary with state probabilities."""
+
+        # Reduce using a counter
+        counter = collections.Counter(states)
+        # Calculate the total number of measured states
+        total = sum(counter.values())
+        # Convert counts to state probabilities
+        return {k: v / total for k, v in counter.items()}
 
     @classmethod
     def raw_to_state_probabilities(cls, raw: typing.Sequence[typing.Sequence[typing.Sequence[int]]],
@@ -815,21 +885,36 @@ class HistogramAnalyzer:
 
         :param raw: The raw data to process
         :param state_detection_threshold: The state detection threshold to use
-        :return: A list of dictionaries where each dictionary contains integer states and their probability
+        :return: A list of sparse dictionaries where each dictionary contains integer states and their probability
         """
 
-        def states_to_probabilities(states: typing.Sequence[int]) -> typing.Dict[int, float]:
-            """Convert a sequence of integer states to a dictionary with state probabilities."""
-
-            # Reduce using a counter
-            counter = collections.Counter(states)
-            # Calculate the total number of measured states
-            total = sum(counter.values())
-            # Convert counts to state probabilities
-            return {k: v / total for k, v in counter.items()}
-
         # Return the converted result
-        return [states_to_probabilities(states) for states in cls.raw_to_states(raw, state_detection_threshold)]
+        return [cls._states_to_probabilities(states) for states in cls.raw_to_states(raw, state_detection_threshold)]
+
+    @classmethod
+    def raw_to_flat_state_probabilities(cls, raw: typing.Sequence[typing.Sequence[typing.Sequence[int]]],
+                                        state_detection_threshold: int) -> typing.List[typing.List[float]]:
+        """Convert raw data into flattened full state probabilities.
+
+        :param raw: The raw data to process
+        :param state_detection_threshold: The state detection threshold to use
+        :return: A 2-dimensional list containing full state probability data (iteration, integer state)
+        """
+
+        # Get the state probabilities as dicts
+        state_probabilities = cls.raw_to_state_probabilities(raw, state_detection_threshold=state_detection_threshold)
+
+        try:
+            # Obtain the number of bits and states (assumes there is at least one measurement)
+            num_bits = len(raw[0][0])
+        except IndexError:
+            # No data, return empty list
+            return []
+        else:
+            # Calculate the number of states
+            num_states = 2 ** num_bits
+            # Flatten data and return result
+            return [[p.get(i, 0.0) for i in range(num_states)] for p in state_probabilities]
 
     """Plotting functions"""
 
@@ -1121,30 +1206,31 @@ class HistogramAnalyzer:
         assert isinstance(labels, collections.abc.Sequence) or labels is None
         assert isinstance(ext, str)
 
-        # Get the probabilities associated with the provided key (assumes raw data and threshold are available)
-        probabilities = self.raw_to_state_probabilities(self.raw[key],
-                                                        state_detection_threshold=self.state_detection_threshold)
+        # Get the state probabilities associated with the provided key (assumes raw data and threshold are available)
+        state_probabilities = np.asarray(self.raw_to_flat_state_probabilities(
+            self.raw[key], state_detection_threshold=self.state_detection_threshold))
 
-        if not len(probabilities) or not probabilities[0]:
+        if not state_probabilities.size:
             # No data to plot
             return
 
         # Obtain the number of bits and states (assumes there is at least one measurement)
         num_bits = len(self.raw[key][0][0])
-        num_states = 2 ** num_bits
+        num_states = state_probabilities.shape[1]
+        assert 2 ** num_bits == num_states, 'Data transformation error, array sizes do not align'
 
         if x_values is None:
             # Generate generic X values
-            x_values = np.arange(len(probabilities))
+            x_values = np.arange(len(state_probabilities))
         else:
             # Sort data based on the given x values
             x_values = np.asarray(x_values)
             ind = x_values.argsort()
             x_values = x_values[ind]
-            probabilities = [probabilities[i] for i in ind]
+            state_probabilities = state_probabilities[ind]
 
-        # Transform data
-        y_data = [[p.get(i, 0) for p in probabilities] for i in range(num_states)]
+        # Transpose data for plotting
+        y_data = state_probabilities.transpose()
 
         # Current labels
         current_labels = [f'|{i:0{num_bits}b}>' for i in range(num_states)] if labels is None else labels

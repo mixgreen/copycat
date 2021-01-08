@@ -373,11 +373,13 @@ class HistogramContextTestCase(unittest.TestCase):
         self.h.plot_histogram()
         self.h.plot_probability()
         self.h.plot_mean_count()
+        self.h.plot_state_probability()
         self.h.clear_probability_plot()
         self.h.clear_mean_count_plot()
         self.h.disable_histogram_plot()
         self.h.disable_probability_plot()
         self.h.disable_mean_count_plot()
+        self.h.disable_state_probability_plot()
         self.h.disable_all_plots()
 
     def test_kernel_invariants(self):
@@ -487,39 +489,69 @@ class HistogramAnalyzerTestCase(unittest.TestCase):
         reference = [[4.0, 7.0, 1.5], [1.5, 2, 4]]
 
         result = HistogramAnalyzer.histograms_to_mean_counts(data)
-
         for ref, res in zip(reference, result):
             self.assertListEqual(ref, list(res), 'Histograms did not converted correctly to mean counts')
 
     def test_raw_to_states(self):
+        num_bits = 3
+        num_states = num_bits ** 2
+        threshold = 2
+
         raw = [
             [[1, 2, 0], [5, 5, 5], [6, 7, 0], ],
             [[6, 7, 0], [1, 2, 0], [5, 5, 5], ],
         ]
-        threshold = 2
+        assert all(all(all(u < num_states for u in t) for t in s) for s in raw)
 
         # Calculate reference using the string conversion method
         ref = [[int(''.join('1' if p > threshold else '0' for p in reversed(points)), base=2)
                 for points in hist] for hist in raw]
 
         result = HistogramAnalyzer.raw_to_states(raw, threshold)
-
         self.assertListEqual(result, ref, 'States did not matched reference')
 
     def test_raw_to_state_probabilities(self):
+        num_bits = 3
+        num_states = num_bits ** 2
+        threshold = 2
+
         raw = [
             [[1, 2, 0], [5, 5, 5], [5, 5, 5], [6, 7, 0], ],
             [[6, 7, 0], [1, 2, 0], [1, 2, 0], [5, 5, 5], ],
         ]
-        threshold = 2
+        assert all(all(all(u < num_states for u in t) for t in s) for s in raw)
         ref = [
             {0b000: 0.25, 0b111: 0.5, 0b011: 0.25},
             {0b011: 0.25, 0b000: 0.5, 0b111: 0.25},
         ]
+        assert all(all(v < num_states for v in r.values()) for r in ref)
 
         result = HistogramAnalyzer.raw_to_state_probabilities(raw, threshold)
-
         self.assertListEqual(result, ref, 'State probabilities did not matched reference')
+
+    def test_raw_to_flat_state_probabilities(self):
+        num_bits = 3
+        num_states = 2 ** num_bits
+        threshold = 2
+
+        raw = [
+            [[1, 2, 0], [5, 5, 5], [5, 5, 5], [6, 7, 0], ],
+            [[6, 7, 0], [1, 2, 0], [1, 2, 0], [5, 5, 5], ],
+        ]
+        assert all(all(all(u < num_states for u in t) for t in s) for s in raw)
+
+        ref_sparse = [
+            {0b000: 0.25, 0b111: 0.5, 0b011: 0.25},
+            {0b011: 0.25, 0b000: 0.5, 0b111: 0.25},
+        ]
+        assert all(all(v < num_states for v in r.values()) for r in ref_sparse)
+
+        # Flatten sparse reference
+        ref = [[r.get(i, 0.0) for i in range(num_states)] for r in ref_sparse]
+
+        result = HistogramAnalyzer.raw_to_flat_state_probabilities(raw, threshold)
+        for a, b in zip(result, ref):
+            self.assertListEqual(a, b, 'Flat state probabilities did not matched reference')
 
     def _setup_test_hdf5_data(self, *, keep_raw=True):
         # Add data to the archive

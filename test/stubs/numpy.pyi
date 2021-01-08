@@ -46,14 +46,15 @@ bool_ = bool
 # Type variables used for array creation functions
 __N_T = typing.Union[int, float, int32, int64]
 __A_T = typing.TypeVar('__A_T', int, float, int32, int64)
-__SHAPE_T = typing.Union[int, typing.Tuple[int, ...]]
+__SHAPE_TUPLE_T = typing.Tuple[int, ...]
+__SHAPE_T = typing.Union[int, __SHAPE_TUPLE_T]
 
 
 # noinspection PyPep8Naming
 class ndarray(collections.abc.Sequence, typing.Generic[__A_T]):
 
     # noinspection PyMissingConstructor
-    def __init__(self, shape: typing.Tuple[int], dtype: type = ..., buffer: typing.Any = ..., offset: int = ...,
+    def __init__(self, shape: __SHAPE_TUPLE_T, dtype: type = ..., buffer: typing.Any = ..., offset: int = ...,
                  strides: typing.Optional[typing.Tuple[int]] = ..., order: typing.Optional[str] = ...):
         ...
 
@@ -102,7 +103,7 @@ class ndarray(collections.abc.Sequence, typing.Generic[__A_T]):
         ...
 
     @property
-    def shape(self) -> typing.Tuple[int]:
+    def shape(self) -> typing.Tuple[int, ...]:
         ...
 
     @property
@@ -117,8 +118,11 @@ class ndarray(collections.abc.Sequence, typing.Generic[__A_T]):
                 order: typing.Union[None, str, typing.Sequence[str]] = ...):
         ...
 
-    def mean(self, axis: typing.Optional[__SHAPE_T] = ..., dtype: typing.Optional[type] = ...,
+    def mean(self, axis: typing.Union[None, int, typing.Tuple[int, ...]] = ..., dtype: typing.Optional[type] = ...,
              out: typing.Optional['ndarray'] = ..., keepdims: bool = ...):
+        ...
+
+    def transpose(self, *axes: typing.Union[typing.Tuple[int, ...], int]) -> ndarray:
         ...
 
     @typing.overload
