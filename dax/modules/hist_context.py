@@ -398,7 +398,7 @@ class HistogramContext(DaxModule):
             raw = self.get_raw(dataset_key)
         except KeyError:
             # No data available (yet)
-            self.logger.error(f'No data available, state probability can only be plotted after all data was obtained')
+            self.logger.error('No data available, state probability can only be plotted after all data is obtained')
         else:
             # Transform and broadcast data
             state_probabilities = HistogramAnalyzer.raw_to_flat_state_probabilities(
