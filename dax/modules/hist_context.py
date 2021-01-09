@@ -711,6 +711,22 @@ class HistogramAnalyzer:
     """Helper functions"""
 
     @classmethod
+    def histogram_to_one_count(cls, counter: collections.Counter, state_detection_threshold: int) -> int:
+        """Helper function to count the number of one measurements in a histogram.
+
+        This function works correct for both binary measurements and detection counts.
+        For detection counts, counts *greater than* the state detection threshold are considered to be in state one.
+
+        :param counter: The counter object representing the histogram
+        :param state_detection_threshold: The state detection threshold to use
+        :return: The number of one measurements
+        """
+        assert isinstance(state_detection_threshold, int), 'State detection threshold must be of type int'
+
+        # Count the number of one measurements, works both for binary measurements and detection counts
+        return sum(f for c, f in counter.items() if c is True or c > state_detection_threshold)
+
+    @classmethod
     def histogram_to_probability(cls, counter: collections.Counter, state_detection_threshold: int) -> float:
         """Helper function to convert a histogram to an individual state probability.
 
@@ -720,11 +736,9 @@ class HistogramAnalyzer:
         :param state_detection_threshold: The state detection threshold to use
         :return: The state probability as a float
         """
-        assert isinstance(state_detection_threshold, int), 'State detection threshold must be of type int'
-
-        # One measurements (recognizes binary measurements and counts)
-        one = sum(f for c, f in counter.items() if c is True or c > state_detection_threshold)
-        # Total measurements
+        # Obtain number of one measurements
+        one = cls.histogram_to_one_count(counter, state_detection_threshold=state_detection_threshold)
+        # Total number of measurements
         total = sum(counter.values())
         # Return probability
         return one / total
@@ -741,15 +755,17 @@ class HistogramAnalyzer:
         :param state_detection_threshold: The detection threshold
         :return: Array of probabilities with the same shape as the input histograms
         """
-        assert isinstance(state_detection_threshold, int), 'State detection threshold must be of type int'
-
-        probabilities = [[cls.histogram_to_probability(h, state_detection_threshold) for h in channel]
-                         for channel in histograms]
+        # Calculate the probabilities
+        probabilities = [
+            [cls.histogram_to_probability(h, state_detection_threshold=state_detection_threshold) for h in channel]
+            for channel in histograms
+        ]
+        # Return the probabilities as an ndarray
         return np.asarray(probabilities)
 
     @classmethod
     def _histogram_to_mean_count(cls, counter: collections.Counter) -> typing.Tuple[float, int]:
-        """Internal helper function to calculate the mean count of a histogram.
+        """Helper function to calculate the mean count of a histogram.
 
         :param counter: The counter object representing the histogram
         :return: A tuple with the mean count as a float and the total number of samples as an int
@@ -873,8 +889,8 @@ class HistogramAnalyzer:
 
         # Reduce using a counter
         counter = collections.Counter(states)
-        # Calculate the total number of measured states
-        total = sum(counter.values())
+        # The total number of measured states
+        total = len(states)
         # Convert counts to state probabilities
         return {k: v / total for k, v in counter.items()}
 

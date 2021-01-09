@@ -450,6 +450,24 @@ class HistogramAnalyzerTestCase(unittest.TestCase):
         n = HistogramAnalyzer.ndarray_to_counter(a)
         self.assertEqual(n, c, 'ndarray did not convert correctly to Counter')
 
+    def test_histogram_to_one_count(self):
+        data = [
+            (collections.Counter([3]), 0),
+            (collections.Counter([5]), 1),
+            (collections.Counter([1]), 0),
+            (collections.Counter([4]), 1),
+            (collections.Counter([0, 4]), 1),
+            (collections.Counter([False, True]), 1),
+            # Mixing bool and int counts is not expected to happen, but it should work fine
+            (collections.Counter([False, True, 0, 4]), 2),
+        ]
+        threshold = 3
+
+        for d, r in data:
+            with self.subTest(histogram=d):
+                self.assertEqual(HistogramAnalyzer.histogram_to_one_count(d, threshold), r,
+                                 'Histogram to one count incorrect')
+
     def test_histogram_to_probability(self):
         data = [(collections.Counter([3]), 0.0),
                 (collections.Counter([5]), 1.0),
