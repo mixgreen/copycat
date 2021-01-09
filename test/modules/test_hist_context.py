@@ -3,6 +3,7 @@ import unittest
 import collections
 import numpy as np
 import h5py  # type: ignore
+import logging
 
 import artiq.coredevice
 
@@ -369,6 +370,25 @@ class HistogramContextTestCase(unittest.TestCase):
         self.assertSetEqual(set(keys), set(self.h.get_keys()))
 
     def test_applets(self):
+        with self.assertLogs(self.h.logger, logging.ERROR):
+            # Expect error log because there is no data
+            self.h.plot_state_probability()
+
+        # Add data to the archive
+        num_histograms = 4
+        data = [
+            [4, 1, 0],
+            [5, 2, 0],
+            [6, 3, 0],
+            [7, 4, 0],
+        ]
+
+        # Store data
+        for _ in range(num_histograms):
+            with self.h:
+                for d in data:
+                    self.h.append(d)
+
         # In simulation we can only call these functions, but nothing will happen
         self.h.plot_histogram()
         self.h.plot_probability()
