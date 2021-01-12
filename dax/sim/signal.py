@@ -91,7 +91,7 @@ class DaxSignalManager(abc.ABC, typing.Generic[_S_T]):
                        offset: typing.Optional[np.int64] = None) -> np.int64:
         """Return the timestamp of an event."""
         if time is None:
-            time = artiq.language.core.now_mu()
+            time = artiq.language.core.now_mu()  # noqa: ATQ101
         if offset is not None:
             time += offset
         return time
@@ -379,7 +379,7 @@ class PeekSignalManager(DaxSignalManager[_PS_T]):
 
         if time is None:
             # Use the default time if none was provided
-            time = artiq.language.core.now_mu()
+            time = artiq.language.core.now_mu()  # noqa: ATQ101
 
         # Return the last value before or at the given time stamp traversing the event list backwards
         value = next((v for t, v in sorted(events.items(), reverse=True) if t <= time), SignalNotSet)

@@ -126,16 +126,16 @@ class TTLInOut(TTLOut):
 
         if edge_type is self._EdgeType.RISING:
             # Store odd half of the event times in the event buffer
-            self._edge_buffer.extend(timestamps[1::2] + now_mu())
+            self._edge_buffer.extend(timestamps[1::2] + now_mu())  # noqa: ATQ101
         elif edge_type is self._EdgeType.FALLING:
             # Store even half of the event times in the event buffer
-            self._edge_buffer.extend(timestamps[::2] + now_mu())
+            self._edge_buffer.extend(timestamps[::2] + now_mu())  # noqa: ATQ101
         elif edge_type is self._EdgeType.BOTH:
             # Store all event times in the event buffer
-            self._edge_buffer.extend(timestamps + now_mu())
+            self._edge_buffer.extend(timestamps + now_mu())  # noqa: ATQ101
 
         # Move the cursor
-        delay_mu(duration)
+        delay_mu(duration)  # noqa: ATQ101
 
         # Return to Z after all signals were inserted
         self._signal_manager.event(self._state, 'z')

@@ -30,7 +30,7 @@ class _ContextExperiment(HasEnvironment):
 
     @kernel
     def multiple_item_context(self):
-        with self.context_a, self.context_b:
+        with self.context_a, self.context_b:  # noqa: ATQ901
             pass
 
     @kernel

@@ -127,7 +127,7 @@ class AD9910(DaxSimDevice):
             if phase_mode == PHASE_MODE_TRACKING and ref_time_mu < 0:
                 ref_time_mu = 0
             if ref_time_mu >= 0:
-                dt = np.int32(now_mu()) - np.int32(ref_time_mu)
+                dt = np.int32(now_mu()) - np.int32(ref_time_mu)  # noqa: ATQ101
                 pow_ += dt * ftw * self.sysclk_per_mu >> 16
         return pow_
 

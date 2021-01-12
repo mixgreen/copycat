@@ -4,9 +4,9 @@ import abc
 import typing
 import numpy as np
 
+import artiq.language.core
+import artiq.coredevice.exceptions
 from artiq.language.units import *  # noqa: F401
-from artiq.language.core import now_mu, set_watchdog_factory
-from artiq.coredevice.exceptions import WatchdogExpired
 
 __all__ = ['DaxTimeManager']
 
@@ -68,11 +68,11 @@ class _Watchdog:
         """Let the watchdog check if it has timed out.
 
         :param now_mu_: The current time
-        :raises WatchdogExpired: If the watchdog expired
+        :raises artiq.coredevice.exceptions.WatchdogExpired: Raised if the watchdog expires
         """
         if now_mu_ > self._timeout_mu:
             # Raise exception if watchdog timed out
-            raise WatchdogExpired(f'Watchdog expired at time {self._timeout_mu}')
+            raise artiq.coredevice.exceptions.WatchdogExpired(f'Watchdog expired at time {self._timeout_mu}')
 
     def __enter__(self) -> None:
         if self._used:
@@ -83,7 +83,7 @@ class _Watchdog:
             self._used = True
 
         # Update the timeout with the current time, which will give us the absolute timeout
-        self._timeout_mu += now_mu()
+        self._timeout_mu += artiq.language.core.now_mu()  # noqa: ATQ101
 
         # Add this watchdog to the list such that it can be monitored
         self._watchdogs.add(self)
@@ -111,7 +111,7 @@ class DaxTimeManager:
         self._watchdogs: typing.Set[_Watchdog] = set()
 
         # Set the watchdog factory
-        set_watchdog_factory(self._watchdog_factory)
+        artiq.language.core.set_watchdog_factory(self._watchdog_factory)
 
     """Helper functions"""
 

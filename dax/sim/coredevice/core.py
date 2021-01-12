@@ -77,8 +77,9 @@ class BaseCore(DaxSimDevice):
 
     def run(self, function: typing.Any,
             args: typing.Tuple[typing.Any, ...], kwargs: typing.Dict[str, typing.Any]) -> typing.Any:
-        # Call the kernel function
-        with sequential:  # Every function is called in a sequential context for correct parallel behavior
+        # Every function is called in a sequential context for correct parallel behavior
+        with sequential:  # noqa: ATQ102
+            # Call the kernel function
             result = function.artiq_embedded.function(*args, **kwargs)
 
         # Return the result
@@ -93,39 +94,39 @@ class BaseCore(DaxSimDevice):
         raise NotImplementedError('Base core does not implement the compile function')
 
     @portable
-    def seconds_to_mu(self, seconds: float) -> np.int64:
+    def seconds_to_mu(self, seconds):  # type: (float) -> np.int64
         # Convert seconds to machine units using the reference period
         return np.int64(seconds // self.ref_period)  # floor div, same as in ARTIQ Core
 
     @portable
-    def mu_to_seconds(self, mu: np.int64) -> float:
+    def mu_to_seconds(self, mu):  # type: (np.int64) -> float
         # Convert machine units to seconds using the reference period
         return mu * self.ref_period
 
     @kernel
-    def wait_until_mu(self, cursor_mu: np.int64) -> None:
+    def wait_until_mu(self, cursor_mu):  # type: (np.int64) -> None
         # Move time to given cursor position if that time is in the future
         if cursor_mu > now_mu():
             at_mu(cursor_mu)
 
     @kernel
-    def get_rtio_counter_mu(self) -> np.int64:
+    def get_rtio_counter_mu(self):  # type: () -> np.int64
         # In simulation there is no difference between the RTIO counter and the cursor
         return now_mu()
 
     # noinspection PyUnusedLocal
     @kernel
-    def get_rtio_destination_status(self, destination: np.int32) -> bool:
+    def get_rtio_destination_status(self, destination):  # type: (np.int32) -> bool
         # Status is always ready
         return True
 
     @kernel
-    def reset(self) -> None:
+    def reset(self):  # type: () -> None
         # Move cursor
         delay_mu(self.RESET_TIME_MU)
 
     @kernel
-    def break_realtime(self) -> None:
+    def break_realtime(self):  # type: () -> None
         # Move cursor
         delay_mu(self.RESET_TIME_MU)
 
@@ -190,7 +191,7 @@ class Core(BaseCore):
         # Register the function call
         self._func_counter[kernel_func] += 1
         # Track current time
-        t_start: np.int64 = now_mu()
+        t_start: np.int64 = now_mu()  # noqa: ATQ101
 
         # Call the kernel function while increasing the level
         self._level += 1
@@ -198,7 +199,7 @@ class Core(BaseCore):
         self._level -= 1
 
         # Accumulate the time spend in this function call
-        self._func_time[kernel_func] += now_mu() - t_start
+        self._func_time[kernel_func] += now_mu() - t_start  # noqa: ATQ101
 
         if self._level == 0:
             # Flush signal manager if we are about to leave the kernel context
@@ -234,7 +235,7 @@ class Core(BaseCore):
         raise NotImplementedError('Simulated core does not implement the compile function')
 
     @kernel
-    def reset(self) -> None:
+    def reset(self):  # type: () -> None
         # Reset signal to 1
         self._signal_manager.event(self._reset_signal, 1)
 

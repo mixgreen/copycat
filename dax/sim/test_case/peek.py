@@ -149,7 +149,7 @@ class PeekTestCase(unittest.TestCase):
 
         if msg is None:
             # Set default error message
-            msg = f'at {now_mu()} mu'
+            msg = f'at {now_mu()} mu'  # noqa: ATQ101
 
         # Assert if values are not equal
         self.assertEqual(value, peek, msg=msg)

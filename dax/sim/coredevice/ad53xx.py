@@ -123,8 +123,8 @@ class AD53xx(DaxSimDevice):
         offset_err = voltage_to_mu(vzs, self.offset_dacs, self.vref)
         gain_err = voltage_to_mu(vfs, self.offset_dacs, self.vref) - (offset_err + 0xffff)
 
-        assert offset_err <= 0
-        assert gain_err >= 0
+        assert offset_err <= 0  # noqa: ATQ401
+        assert gain_err >= 0  # noqa: ATQ401
 
         self.core.break_realtime()
         self.write_offset_mu(channel, 0x8000 - offset_err)

@@ -22,7 +22,7 @@ in
                 ps.mypy
                 ps.pycodestyle
                 ps.coverage
-                ps.flake8
+                artiq-full.flake8-artiq
             ]))
             # Packages required for hardware testbenches
             artiq-full.binutils-or1k

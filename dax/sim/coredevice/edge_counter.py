@@ -90,13 +90,13 @@ class EdgeCounter(DaxSimDevice):
         self._signal_manager.event(self._count, num_events)
 
         # Move the cursor
-        delay_mu(duration)
+        delay_mu(duration)  # noqa: ATQ101
 
         # Return to Z at the end of the window
         self._signal_manager.event(self._count, 'z')
 
         # Store number of events and the ending timestamp in count buffer
-        self._count_buffer.append((now_mu(), num_events))
+        self._count_buffer.append((now_mu(), num_events))  # noqa: ATQ101
 
     @kernel
     def gate_rising_mu(self, duration_mu):

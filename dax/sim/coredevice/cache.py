@@ -25,17 +25,19 @@ class CoreCache(DaxSimDevice):
         self._cache: typing.Dict[str, CoreCache.__V_T] = {} if cache is None else cache.copy()
 
     @kernel
-    def get(self, key: str) -> __V_T:
-        assert isinstance(key, str), 'Key must be of type str'
+    def get(self, key):  # type: (str) -> __V_T
+        assert isinstance(key, str), 'Key must be of type str'  # noqa: ATQ401
+
         # Return value
-        # get() mimics the fact that an empty cache key is not mutable and first has to be set using put()
+        # NOTE: `get()` mimics the fact that an empty cache key is not mutable and first has to be set using `put()`
         return self._cache.get(key, [])
 
     @kernel
-    def put(self, key: str, value: __V_T) -> None:
-        assert isinstance(key, str), 'Key must be of type str'
-        assert isinstance(value, list), 'Value must be of type list'
-        assert all(isinstance(e, (int, np.integer)) for e in value), 'List value elements must be of type int'
+    def put(self, key, value):  # type: (str, __V_T) -> None
+        assert isinstance(key, str), 'Key must be of type str'  # noqa: ATQ401
+        assert isinstance(value, list), 'Value must be of type list'  # noqa: ATQ401
+        assert all(isinstance(e, (int, np.integer)) for e in value), 'List elements must be of type int'  # noqa: ATQ401
+
         # NOTE: we can not check if the value was extracted earlier in the same kernel
         if value:
             # Store value

@@ -40,14 +40,14 @@ class _DMARecordContext:
         return self._duration
 
     @kernel
-    def __enter__(self) -> None:
+    def __enter__(self):  # type: () -> None
         # Save current time
         self._duration = now_mu()
         # Set record signal
         self._signal_manager.event(self._record_signal, self.name)
 
     @kernel
-    def __exit__(self, type_: typing.Any, value: typing.Any, traceback: typing.Any) -> None:
+    def __exit__(self, type_, value, traceback):  # type: (typing.Any, typing.Any, typing.Any) -> None
         # Store duration
         self._duration = now_mu() - self.duration
         # Reset record signal
@@ -92,8 +92,8 @@ class CoreDMA(DaxSimDevice):
         self._dma_play_name: typing.Any = self._signal_manager.register(self, 'play_name', str)
 
     @kernel
-    def record(self, name: str) -> _DMARecordContext:
-        assert isinstance(name, str), 'DMA trace name must be of type str'
+    def record(self, name):  # type: (str) -> _DMARecordContext
+        assert isinstance(name, str), 'DMA trace name must be of type str'  # noqa: ATQ401
 
         # Increment epoch
         self._epoch += 1
@@ -106,8 +106,8 @@ class CoreDMA(DaxSimDevice):
         return recorder
 
     @kernel
-    def erase(self, name: str) -> None:
-        assert isinstance(name, str), 'DMA trace name must be of type str'
+    def erase(self, name):  # type: (str) -> None
+        assert isinstance(name, str), 'DMA trace name must be of type str'  # noqa: ATQ401
 
         if name not in self._dma_traces:
             raise KeyError(f'DMA trace "{name}" does not exist, can not be erased')
@@ -117,8 +117,8 @@ class CoreDMA(DaxSimDevice):
         self._epoch += 1
 
     @kernel
-    def playback(self, name: str) -> None:
-        assert isinstance(name, str), 'DMA trace name must be of type str'
+    def playback(self, name):  # type: (str) -> None
+        assert isinstance(name, str), 'DMA trace name must be of type str'  # noqa: ATQ401
 
         # Get handle
         if name not in self._dma_traces:
@@ -128,8 +128,8 @@ class CoreDMA(DaxSimDevice):
         self._playback_recording(self._dma_traces[name])
 
     @kernel
-    def get_handle(self, name: str) -> _DMAHandle:
-        assert isinstance(name, str), 'DMA trace name must be of type str'
+    def get_handle(self, name):  # type: (str) -> _DMAHandle
+        assert isinstance(name, str), 'DMA trace name must be of type str'  # noqa: ATQ401
 
         if name not in self._dma_traces:
             raise KeyError(f'DMA trace "{name}" does not exist, can not obtain handle')
@@ -138,8 +138,8 @@ class CoreDMA(DaxSimDevice):
         return _DMAHandle(self._dma_traces[name], self._epoch)
 
     @kernel
-    def playback_handle(self, handle: _DMAHandle) -> None:
-        assert isinstance(handle, _DMAHandle), 'DMA handle has an incorrect type'
+    def playback_handle(self, handle):  # type: (_DMAHandle) -> None
+        assert isinstance(handle, _DMAHandle), 'DMA handle has an incorrect type'  # noqa: ATQ401
 
         # Verify handle
         if self._epoch != handle.epoch:
@@ -157,7 +157,7 @@ class CoreDMA(DaxSimDevice):
         self._signal_manager.event(self._dma_play_name, recording.name)  # Represents the duration of the event
 
         # Forward time by the duration of the DMA trace
-        delay_mu(recording.duration)
+        delay_mu(recording.duration)  # noqa: ATQ101
 
         # Record ending of DMA trace (shows up as Z in the graphical interface)
         self._signal_manager.event(self._dma_play_name, None)
