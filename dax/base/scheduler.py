@@ -24,6 +24,15 @@ import dax.util.artiq
 
 __all__ = ['NodeAction', 'Policy', 'Job', 'Trigger', 'DaxScheduler', 'dax_scheduler_client']
 
+_unit_to_seconds: typing.Dict[str, float] = {
+    's': 1.0,
+    'm': 60.0,
+    'h': 3600.0,
+    'd': 86400.0,
+    'w': 604800.0,
+}
+"""Dict to map a string time unit to seconds."""
+
 
 def _str_to_time(string: str) -> float:
     """Convert a string to a time in seconds.
@@ -46,20 +55,11 @@ def _str_to_time(string: str) -> float:
     """
     assert isinstance(string, str), 'Input must be of type str'
 
-    # Dict with available units
-    units: typing.Dict[str, float] = {
-        's': 1.0,
-        'm': 60.0,
-        'h': 3600.0,
-        'd': 86400.0,
-        'w': 604800.0,
-    }
-
     if string:
         try:
             # Get the value and the unit
             value = float(string[:-1])
-            unit = units[string[-1]]
+            unit = _unit_to_seconds[string[-1]]
             # Return the product
             return value * unit
         except KeyError:
@@ -200,6 +200,7 @@ class _Request:
     reverse: typing.Optional[bool]
     priority: typing.Optional[int]
     depth: int
+    start_depth: int
 
 
 if typing.TYPE_CHECKING:
@@ -574,6 +575,7 @@ class Trigger(Node):
     - :attr:`REVERSE`: The reverse wave flag of this trigger (defaults to the schedulers reverse wave flag)
     - :attr:`PRIORITY`: The job priority of this trigger (defaults to the schedulers job priority)
     - :attr:`DEPTH`: Maximum recursion depth (`-1` for infinite recursion depth, which is the default)
+    - :attr:`START_DEPTH`: Depth to start submitting nodes (`0` to start at the root nodes, which is the default)
     - :attr:`Node.INTERVAL`: The trigger interval
     - :attr:`Node.DEPENDENCIES`: A collection of node classes on which this trigger depends
     """
@@ -590,6 +592,8 @@ class Trigger(Node):
     """The job priority of this trigger."""
     DEPTH: int = -1
     """Maximum recursion depth (`-1` for infinite recursion depth)."""
+    START_DEPTH: int = 0
+    """Depth to start submitting nodes (`0` to start at the root nodes)."""
 
     def build(self) -> None:  # type: ignore
         # Check nodes, action, policy, and reverse flag
@@ -600,6 +604,7 @@ class Trigger(Node):
         assert isinstance(self.REVERSE, bool) or self.REVERSE is None, 'Reverse must be of type bool or None'
         assert isinstance(self.PRIORITY, int) or self.PRIORITY is None, 'Priority must be of type int or None'
         assert isinstance(self.DEPTH, int), 'Depth must be of type int'
+        assert isinstance(self.START_DEPTH, int), 'Start depth must be of type int'
 
         # Assemble the collection of node names
         self._nodes: typing.Set[str] = {node.get_name() for node in self.NODES}
@@ -624,7 +629,8 @@ class Trigger(Node):
                                                 policy=str(self.POLICY) if self.POLICY is not None else None,
                                                 reverse=self.REVERSE,
                                                 priority=self.PRIORITY,
-                                                depth=self.DEPTH))
+                                                depth=self.DEPTH,
+                                                start_depth=self.START_DEPTH))
         self.logger.info('Submitted trigger')
 
     def cancel(self) -> None:
@@ -636,10 +642,17 @@ class Trigger(Node):
         return len(self.NODES) == 0
 
 
-class _SchedulerController:
-    """Scheduler controller class, which exposes an external interface to the DAX scheduler."""
+class SchedulerController:
+    """Scheduler controller class, which exposes an external interface to a running DAX scheduler."""
 
     def __init__(self, scheduler: DaxScheduler, request_queue: __RQ_T):
+        """Create a new scheduler controller.
+
+        :param scheduler: The scheduler that spawned this controller
+        :param request_queue: The request queue
+        """
+        assert isinstance(scheduler, DaxScheduler), 'Scheduler must be of type DaxScheduler'
+
         # Store a reference to the scheduler and the request queue
         self._scheduler: DaxScheduler = scheduler
         self._request_queue: __RQ_T = request_queue
@@ -650,6 +663,7 @@ class _SchedulerController:
                      reverse: typing.Optional[bool] = None,
                      priority: typing.Optional[int] = None,
                      depth: int = -1,
+                     start_depth: int = 0,
                      block: bool = True) -> None:
         """Submit a request to the scheduler.
 
@@ -659,16 +673,18 @@ class _SchedulerController:
         :param reverse: The reverse wave flag (defaults to the schedulers reverse wave flag)
         :param priority: The job priority of this trigger (defaults to the schedulers job priority)
         :param depth: Maximum recursion depth (`-1` for infinite recursion depth, which is the default)
+        :param start_depth: Depth to start submitting nodes (`0` to start at the root nodes, which is the default)
         :param block: Block until the request was handled
         """
 
-        # Put this request in the queue without checking any of the inputs
+        # Put this request in the queue (inputs are not checked in this async function)
         self._request_queue.put_nowait(_Request(nodes=nodes,
                                                 action=action,
                                                 policy=policy,
                                                 reverse=reverse,
                                                 priority=priority,
-                                                depth=depth))
+                                                depth=depth,
+                                                start_depth=start_depth))
 
         if block:
             # Wait until all requests are handled
@@ -900,7 +916,7 @@ class DaxScheduler(dax.base.system.DaxHasKey, abc.ABC):
         """Coroutine for running the scheduler and the controller."""
 
         # Create the controller and the server objects
-        controller = _SchedulerController(self, request_queue)
+        controller = SchedulerController(self, request_queue)
         server = sipyco.pc_rpc.Server({'DaxSchedulerController': controller},
                                       description=f'DaxScheduler controller: {self.get_identifier()}')
 
@@ -1011,10 +1027,12 @@ class DaxScheduler(dax.base.system.DaxHasKey, abc.ABC):
             reverse: bool = self._reverse if request.reverse is None else request.reverse
             priority: int = self._job_priority if request.priority is None else request.priority
             depth: int = request.depth
+            start_depth: int = request.start_depth
             # Verify unchecked fields
             assert isinstance(reverse, bool), 'Reverse flag must be of type bool'
             assert isinstance(priority, int), 'Priority must be of type int'
             assert isinstance(depth, int), 'Depth must be of type int'
+            assert isinstance(start_depth, int), 'Start depth must be of type int'
         except (KeyError, AssertionError):
             # Log the error
             self.logger.exception(f'Dropping invalid request: {request}')
@@ -1029,7 +1047,8 @@ class DaxScheduler(dax.base.system.DaxHasKey, abc.ABC):
                       policy=policy,
                       reverse=reverse,
                       priority=priority,
-                      depth=depth)
+                      depth=depth,
+                      start_depth=start_depth)
 
     def wave(self, *, wave: float,
              root_nodes: typing.Collection[Node],
@@ -1037,7 +1056,8 @@ class DaxScheduler(dax.base.system.DaxHasKey, abc.ABC):
              policy: Policy,
              reverse: bool,
              priority: int,
-             depth: int = -1) -> None:
+             depth: int = -1,
+             start_depth: int = 0) -> None:
         """Run a wave over the graph.
 
         :param wave: The wave identifier
@@ -1047,6 +1067,7 @@ class DaxScheduler(dax.base.system.DaxHasKey, abc.ABC):
         :param reverse: The reverse wave flag
         :param priority: Submit priority
         :param depth: Maximum recursion depth (`-1` for infinite recursion depth)
+        :param start_depth: Depth to start submitting nodes (`0` to start at the root nodes)
         """
         assert isinstance(wave, float), 'Wave must be of type float'
         assert isinstance(root_nodes, collections.abc.Collection), 'Root nodes must be a collection'
@@ -1056,6 +1077,7 @@ class DaxScheduler(dax.base.system.DaxHasKey, abc.ABC):
         assert isinstance(reverse, bool), 'Reverse flag must be of type bool'
         assert isinstance(priority, int), 'Priority must be of type int'
         assert isinstance(depth, int), 'Depth must be of type int'
+        assert isinstance(start_depth, int), 'Start depth must be of type int'
 
         # Select the correct graph for this wave
         graph: nx.DiGraph[Node] = self._graph_reversed if reverse else self._graph
@@ -1073,35 +1095,42 @@ class DaxScheduler(dax.base.system.DaxHasKey, abc.ABC):
                 node.submit(wave=wave, priority=priority)
                 submitted.add(node)
 
-        def recurse(node: Node, action: NodeAction, current_depth: int) -> None:
+        def recurse(node: Node, action: NodeAction, current_depth: int, current_start_depth: int) -> None:
             """Process nodes recursively.
 
             :param node: The current node to process
             :param action: The action provided by the previous node
             :param current_depth: Current remaining recursion depth
+            :param current_start_depth: Current remaining start depth
             """
 
-            # Visit the current node
-            current_action = node.visit(wave=wave)
-            # Get the new action based on the policy
-            new_action = policy.action(action, current_action)
+            if current_start_depth <= 0:
+                # Visit the current node and get the new action based on the policy
+                new_action: NodeAction = policy.action(action, node.visit(wave=wave))
+                # See if the node is submittable
+                submittable: bool = new_action.submittable()
+            else:
+                # Pass the provided action
+                new_action = action
+                # This node is not submittable
+                submittable = False
 
-            if reverse and new_action.submittable():
+            if submittable and reverse:
                 # Submit this node before recursion
                 submit(node)
 
             if current_depth != 0:
                 # Recurse over successors
                 for successor in graph.successors(node):
-                    recurse(successor, new_action, current_depth - 1)
+                    recurse(successor, new_action, current_depth - 1, current_start_depth - 1)
 
-            if not reverse and new_action.submittable():
+            if submittable and not reverse:
                 # Submit this node after recursion
                 submit(node)
 
         for root_node in root_nodes:
             # Recurse over all root nodes using the root action
-            recurse(root_node, root_action, depth)
+            recurse(root_node, root_action, depth, start_depth)
 
         if submitted:
             # Log submitted nodes
@@ -1347,12 +1376,16 @@ class _DaxSchedulerClient(dax.base.system.DaxBase, artiq.experiment.Experiment):
         self._depth: int = self.get_argument('Depth',
                                              artiq.experiment.NumberValue(-1, min=-1, step=1, ndecimals=0),
                                              tooltip='Maximum recursion depth (`-1` for infinite recursion depth)')
+        self._start_depth: int = self.get_argument('Start depth',
+                                                   artiq.experiment.NumberValue(0, min=0, step=1, ndecimals=0),
+                                                   tooltip='Depth to start submitting nodes '
+                                                           '(`0` to start at the root nodes)')
         self._block: bool = self.get_argument('Block',
                                               artiq.experiment.BooleanValue(True),
                                               tooltip='Block until the request was handled')
 
         # Get the DAX scheduler controller
-        self._dax_scheduler: _SchedulerController = self.get_device(self.CONTROLLER_KEY)
+        self._dax_scheduler: SchedulerController = self.get_device(self.CONTROLLER_KEY)
         # Get the ARTIQ scheduler
         self._scheduler = self.get_device('scheduler')
 
@@ -1371,6 +1404,7 @@ class _DaxSchedulerClient(dax.base.system.DaxBase, artiq.experiment.Experiment):
                                    reverse=self._REVERSE_DICT[self._reverse],
                                    priority=self._priority,
                                    depth=self._depth,
+                                   start_depth=self._start_depth,
                                    block=self._block)
 
     def get_identifier(self) -> str:
