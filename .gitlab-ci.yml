@@ -53,7 +53,7 @@ test_conda:
   stage: test
   script:
     # Install packages required for testing
-    - conda install -y pytest pycodestyle mypy flake8
+    - conda install -y pytest pycodestyle mypy flake8-artiq
     # Run test commands
     - python3 --version
     - pytest -v -rs
