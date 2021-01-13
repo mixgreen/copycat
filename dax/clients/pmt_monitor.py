@@ -84,8 +84,9 @@ class _PmtMonitorBase(DaxClient, EnvExperiment, abc.ABC):
                                                              '(requires applet restart)')
         self.update_kernel_invariants('detection_window', 'buffer_size')
 
-        # Add custom arguments here
-        self._add_custom_arguments()
+        # Add extra arguments
+        self._add_arguments_internal()
+        self.add_arguments()
 
         # Dataset related arguments
         self.reset_data: bool = self.get_argument('Reset data',
@@ -116,8 +117,11 @@ class _PmtMonitorBase(DaxClient, EnvExperiment, abc.ABC):
                                                          group='Applet',
                                                          tooltip='Close applet when experiment is terminated')
 
-    def _add_custom_arguments(self) -> None:
-        """Add custom arguments."""
+    def _add_arguments_internal(self) -> None:
+        """Add custom arguments.
+
+        **For internal usage only**. See also :func:`add_arguments`.
+        """
         pass
 
     @abc.abstractmethod
@@ -254,6 +258,10 @@ class _PmtMonitorBase(DaxClient, EnvExperiment, abc.ABC):
 
     """Customization functions"""
 
+    def add_arguments(self) -> None:
+        """Add custom arguments during the build phase."""
+        pass
+
     def host_setup(self) -> None:
         """Preparation on the host, called once at entry and after a pause."""
         pass
@@ -304,7 +312,7 @@ class PmtMonitor(_PmtMonitorBase):
     _BIG_NUMBER: str = 'Big number'
     """Key for big number applet type."""
 
-    def _add_custom_arguments(self) -> None:
+    def _add_arguments_internal(self) -> None:
         assert self.NUM_DIGITS_BIG_NUMBER >= 0, 'Number of digits must be zero or greater'
 
         # Dict with available applet types
@@ -365,7 +373,7 @@ class MultiPmtMonitor(_PmtMonitorBase):
     TITLES: typing.Sequence[typing.Optional[str]] = []
     """A sequence of applet titles when using separate applets."""
 
-    def _add_custom_arguments(self) -> None:
+    def _add_arguments_internal(self) -> None:
         assert isinstance(self.TITLES, collections.abc.Sequence), 'Separate titles must be a sequence'
         assert not self.TITLES or len(self.TITLES) == len(self.pmt_array), \
             'The sequence of applet titles must be empty or have the same length as the PMT array'
