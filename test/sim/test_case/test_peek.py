@@ -308,6 +308,7 @@ _DEVICE_DB = {
         "class": "AD9910",
         "arguments": {
             "pll_en": 0,
+            "chip_select": 6,
             "cpld_device": "cpld10",
         }
     },

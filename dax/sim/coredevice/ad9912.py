@@ -14,7 +14,7 @@ from dax.sim.signal import get_signal_manager
 
 class AD9912(DaxSimDevice):
 
-    def __init__(self, dmgr, cpld_device, chip_select=None, sw_device=None, pll_n=10, **kwargs):
+    def __init__(self, dmgr, chip_select, cpld_device, sw_device=None, pll_n=10, **kwargs):
         # Call super
         super(AD9912, self).__init__(dmgr, **kwargs)
 
@@ -24,11 +24,11 @@ class AD9912(DaxSimDevice):
         self._freq = self._signal_manager.register(self, 'freq', float)
         self._phase = self._signal_manager.register(self, 'phase', float)
         self._att = self._signal_manager.register(self, 'att', float)
-        self._sw = self._signal_manager.register(self, 'sw', bool, size=1)
 
         # CPLD device
         self.cpld = dmgr.get(cpld_device)
         # Chip select
+        assert 4 <= chip_select <= 7
         self.chip_select = chip_select
         # Switch device
         if sw_device:
@@ -88,4 +88,4 @@ class AD9912(DaxSimDevice):
 
     @kernel
     def cfg_sw(self, state):
-        self._signal_manager.event(self._sw, state)
+        self.cpld.cfg_sw(self.chip_select - 4, state)

@@ -22,13 +22,15 @@ _PHASE_MODE_DICT = {m: f'{m:02b}' for m in [PHASE_MODE_CONTINUOUS, PHASE_MODE_AB
 
 class AD9910(DaxSimDevice):
 
-    def __init__(self, dmgr, cpld_device, chip_select=None, sw_device=None, pll_n=40, pll_en=1, **kwargs):
+    def __init__(self, dmgr, chip_select, cpld_device, sw_device=None,
+                 pll_n=40, pll_cp=7, pll_vco=5, pll_en=1, **kwargs):
         # Call super
         super(AD9910, self).__init__(dmgr, **kwargs)
 
         # CPLD device
         self.cpld = dmgr.get(cpld_device)
         # Chip select
+        assert 4 <= chip_select <= 7
         self.chip_select = chip_select
         # Switch device
         if sw_device:
@@ -36,14 +38,26 @@ class AD9910(DaxSimDevice):
 
         # Store attributes (from ARTIQ code)
         clk = self.cpld.refclk / [4, 1, 2, 4][self.cpld.clk_div]
+        self.pll_en = pll_en
+        self.pll_n = pll_n
+        self.pll_vco = pll_vco
+        self.pll_cp = pll_cp
         if pll_en:
             sysclk = clk * pll_n
             assert clk <= 60e6
+            assert 12 <= pll_n <= 127
+            assert 0 <= pll_vco <= 5
+            vco_min, vco_max = [(370, 510), (420, 590), (500, 700),
+                                (600, 880), (700, 950), (820, 1150)][pll_vco]
+            assert vco_min <= sysclk / 1e6 <= vco_max
+            assert 0 <= pll_cp <= 7
         else:
             sysclk = clk
         assert sysclk <= 1e9
         self.ftw_per_hz = (1 << 32) / sysclk
         self.sysclk_per_mu = int(round(float(sysclk * self.core.ref_period)))
+        self.sysclk = sysclk
+
         self.phase_mode = PHASE_MODE_CONTINUOUS
 
         # Register signals
@@ -55,7 +69,6 @@ class AD9910(DaxSimDevice):
                                                          init=_PHASE_MODE_DICT[self.phase_mode])
         self._att = self._signal_manager.register(self, 'att', float)
         self._amp = self._signal_manager.register(self, 'amp', float)
-        self._sw = self._signal_manager.register(self, 'sw', bool, size=1)
 
     @kernel
     def set_phase_mode(self, phase_mode):
@@ -230,7 +243,7 @@ class AD9910(DaxSimDevice):
 
     @kernel
     def cfg_sw(self, state):
-        self._signal_manager.event(self._sw, state)
+        self.cpld.cfg_sw(self.chip_select - 4, state)
 
     @kernel
     def set_sync(self, in_delay, window):

@@ -575,7 +575,7 @@ class Trigger(Node):
     - :attr:`REVERSE`: The reverse wave flag of this trigger (defaults to the schedulers reverse wave flag)
     - :attr:`PRIORITY`: The job priority of this trigger (defaults to the schedulers job priority)
     - :attr:`DEPTH`: Maximum recursion depth (`-1` for infinite recursion depth, which is the default)
-    - :attr:`START_DEPTH`: Depth to start submitting nodes (`0` to start at the root nodes, which is the default)
+    - :attr:`START_DEPTH`: Depth to start visiting nodes (`0` to start at the root nodes, which is the default)
     - :attr:`Node.INTERVAL`: The trigger interval
     - :attr:`Node.DEPENDENCIES`: A collection of node classes on which this trigger depends
     """
@@ -593,7 +593,7 @@ class Trigger(Node):
     DEPTH: int = -1
     """Maximum recursion depth (`-1` for infinite recursion depth)."""
     START_DEPTH: int = 0
-    """Depth to start submitting nodes (`0` to start at the root nodes)."""
+    """Depth to start visiting nodes (`0` to start at the root nodes)."""
 
     def build(self) -> None:  # type: ignore
         # Check nodes, action, policy, and reverse flag
@@ -673,7 +673,7 @@ class SchedulerController:
         :param reverse: The reverse wave flag (defaults to the schedulers reverse wave flag)
         :param priority: The job priority of this trigger (defaults to the schedulers job priority)
         :param depth: Maximum recursion depth (`-1` for infinite recursion depth, which is the default)
-        :param start_depth: Depth to start submitting nodes (`0` to start at the root nodes, which is the default)
+        :param start_depth: Depth to start visiting nodes (`0` to start at the root nodes, which is the default)
         :param block: Block until the request was handled
         """
 
@@ -1067,7 +1067,7 @@ class DaxScheduler(dax.base.system.DaxHasKey, abc.ABC):
         :param reverse: The reverse wave flag
         :param priority: Submit priority
         :param depth: Maximum recursion depth (`-1` for infinite recursion depth)
-        :param start_depth: Depth to start submitting nodes (`0` to start at the root nodes)
+        :param start_depth: Depth to start visiting nodes (`0` to start at the root nodes)
         """
         assert isinstance(wave, float), 'Wave must be of type float'
         assert isinstance(root_nodes, collections.abc.Collection), 'Root nodes must be a collection'
@@ -1378,7 +1378,7 @@ class _DaxSchedulerClient(dax.base.system.DaxBase, artiq.experiment.Experiment):
                                              tooltip='Maximum recursion depth (`-1` for infinite recursion depth)')
         self._start_depth: int = self.get_argument('Start depth',
                                                    artiq.experiment.NumberValue(0, min=0, step=1, ndecimals=0),
-                                                   tooltip='Depth to start submitting nodes '
+                                                   tooltip='Depth to start visiting nodes '
                                                            '(`0` to start at the root nodes)')
         self._block: bool = self.get_argument('Block',
                                               artiq.experiment.BooleanValue(True),

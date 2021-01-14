@@ -8,6 +8,8 @@ import artiq.coredevice.ttl  # type: ignore
 import artiq.coredevice.edge_counter
 import artiq.coredevice.ad9910  # type: ignore
 import artiq.coredevice.ad9912  # type: ignore
+import artiq.coredevice.ad53xx  # type: ignore
+import artiq.coredevice.zotino  # type: ignore
 
 from dax.experiment import DaxSystem
 from dax.sim import enable_dax_sim
@@ -73,14 +75,18 @@ class VcdSignalManagerTestCase(unittest.TestCase):
 
     def test_registered_signals(self):
         signals = {
+            self.sys.core: {'reset'},
+            self.sys.core_dma: {'record', 'play', 'play_name'},
             self.sys.ttl0: {'state', 'direction', 'sensitivity'},
             self.sys.ttl1: {'state', 'direction', 'sensitivity'},
             self.sys.ec: {'count'},
-            self.sys.ad9910.cpld: {'init', 'init_att'},
-            self.sys.ad9910: {'init', 'freq', 'phase', 'phase_mode', 'att', 'amp', 'sw'},
-            self.sys.ad9912: {'init', 'freq', 'phase', 'att', 'sw'},
-            self.sys.core: {'reset'},
-            self.sys.core_dma: {'record', 'play', 'play_name'},
+            self.sys.ad9910.cpld: {'init', 'init_att', 'sw'},
+            self.sys.ad9910: {'init', 'freq', 'phase', 'phase_mode', 'att', 'amp'},
+            self.sys.ad9912: {'init', 'freq', 'phase', 'att'},
+            self.sys.ad53xx: {'init'} | {f'v_out_{i}' for i in range(32)} | {f'v_offset_{i}' for i in range(32)} | {
+                f'gain_mu_{i}' for i in range(32)},
+            self.sys.zotino: {'init', 'led'} | {f'v_out_{i}' for i in range(32)} | {
+                f'v_offset_{i}' for i in range(32)} | {f'gain_mu_{i}' for i in range(32)},
         }
 
         # Verify signals are registered
@@ -343,11 +349,13 @@ class _TestSystem(DaxSystem):
         self.ttl0 = self.get_device('ttl0', artiq.coredevice.ttl.TTLInOut)
         self.ttl1 = self.get_device('ttl1', artiq.coredevice.ttl.TTLInOut)
         self.ttl_list = [self.ttl0, self.ttl1]
-
         self.ec = self.get_device('ec', artiq.coredevice.edge_counter.EdgeCounter)
 
         self.ad9910 = self.get_device('ad9910', artiq.coredevice.ad9910.AD9910)
         self.ad9912 = self.get_device('ad9912', artiq.coredevice.ad9912.AD9912)
+
+        self.ad53xx = self.get_device('ad53xx', artiq.coredevice.ad53xx.AD53xx)
+        self.zotino = self.get_device('zotino', artiq.coredevice.zotino.Zotino)
 
 
 # Device DB
@@ -370,7 +378,7 @@ _DEVICE_DB = {
         'class': 'CoreDMA'
     },
 
-    # Generic TTL
+    # TTL and edge counter
     'ttl0': {
         'type': 'local',
         'module': 'artiq.coredevice.ttl',
@@ -389,6 +397,8 @@ _DEVICE_DB = {
         'class': 'EdgeCounter',
         'arguments': {},
     },
+
+    # Urukul CPLD and DDS devices
     "cpld": {
         "type": "local",
         "module": "artiq.coredevice.urukul",
@@ -421,6 +431,20 @@ _DEVICE_DB = {
             "chip_select": 5,
             "cpld_device": "cpld",
         }
+    },
+
+    # Multi-channel DAC
+    "ad53xx": {
+        "type": "local",
+        "module": "artiq.coredevice.ad53xx",
+        "class": "AD53xx",
+        "arguments": {}
+    },
+    "zotino": {
+        "type": "local",
+        "module": "artiq.coredevice.zotino",
+        "class": "Zotino",
+        "arguments": {}
     },
 }
 

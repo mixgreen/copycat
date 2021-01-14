@@ -14,7 +14,7 @@ from dax.sim.signal import get_signal_manager
 class CPLD(DaxSimDevice):
     """Minimal implementation of CPLD to initialize AD99xx devices correctly."""
 
-    def __init__(self, dmgr, clk_div=0, refclk=125e6, att=0x00000000, **kwargs):
+    def __init__(self, dmgr, clk_div=0, rf_sw=0, refclk=125e6, att=0x00000000, **kwargs):
         # Call super
         super(CPLD, self).__init__(dmgr, **kwargs)
 
@@ -28,6 +28,10 @@ class CPLD(DaxSimDevice):
         self._signal_manager = get_signal_manager()
         self._init = self._signal_manager.register(self, 'init', bool, size=1)
         self._init_att = self._signal_manager.register(self, 'init_att', bool, size=1)
+        self._sw = self._signal_manager.register(self, 'sw', bool, size=4)
+
+        # Internal registers
+        self._sw_reg = f'{rf_sw & 0xF:04b}'
 
     @kernel
     def cfg_write(self, cfg):
@@ -51,11 +55,14 @@ class CPLD(DaxSimDevice):
 
     @kernel
     def cfg_sw(self, channel, on):
-        raise NotImplementedError
+        assert 0 <= channel < 4, 'Channel out of range'  # noqa: ATQ401
+        self._sw_reg[channel] = '1' if on else '0'
+        self._signal_manager.event(self._sw, self._sw_reg)
 
     @kernel
     def cfg_switches(self, state):
-        raise NotImplementedError
+        self._sw_reg = f'{state & 0xF:04b}'
+        self._signal_manager.event(self._sw, self._sw_reg)
 
     @kernel
     def set_att_mu(self, channel, att):
