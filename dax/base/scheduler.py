@@ -695,7 +695,7 @@ class SchedulerController:
 
         :param node: The node name as a string (case sensitive)
         :param keys: The keys to append to the system key of the foreign node
-        :returns: The foreign system key as a string
+        :return: The foreign system key as a string
         :raises KeyError: Raised if the node is not in the scheduling graph
         :raises ValueError: Raised if any key has an invalid format
         """
@@ -1297,7 +1297,7 @@ class DaxScheduler(dax.base.system.DaxHasKey, abc.ABC):
         """True if the given node (name or class) is in the graph of this scheduler.
 
         :param item: The node to test for membership (node name or node class)
-        :returns: True if the given node is in the graph of this scheduler
+        :return: True if the given node is in the graph of this scheduler
         """
         return item in self._node_name_map or item in self._nodes
 

@@ -51,6 +51,7 @@ def enable_dax_sim(ddb: typing.Dict[str, typing.Any], *,
      - `config_module`, the module of the simulation configuration class (defaults to DAX.sim config module)
      - `config_class`, the class of the simulation configuration object (defaults to DAX.sim config class)
      - `core_device`, the name of the core device (defaults to `'core'`)
+     - `localhost`, the address to use to refer to localhost (defaults to IPv6 address `'::1'`)
 
     If supported by a specific simulated device driver, extra simulation-specific arguments
     can be added by adding a `sim_args` dict to the device entry in the device DB.
@@ -108,8 +109,15 @@ def enable_dax_sim(ddb: typing.Dict[str, typing.Any], *,
             # Convert the device DB
             _logger.debug('Converting device DB')
 
-            # Obtain the core device name
+            # Obtain configuration
             core_device: str = config.get('dax.sim', 'core_device', fallback='core')
+            localhost: str = config.get('dax.sim', 'localhost', fallback='::1')
+
+            # Check core device in the device DB
+            if core_device not in ddb:
+                raise KeyError(f'Core device key "{core_device}" not found in the device DB')
+            if not isinstance(ddb[core_device], dict):
+                raise ValueError(f'Core device key "{core_device}" can not be an alias')
 
             try:
                 # Set with port numbers used by controllers
@@ -119,6 +127,7 @@ def enable_dax_sim(ddb: typing.Dict[str, typing.Any], *,
                     # Mutate every entry in-place
                     _mutate_ddb_entry(k, v,
                                       core_device=core_device,
+                                      localhost=localhost,
                                       coredevice_packages=coredevice_packages,
                                       used_ports=used_ports)
             except Exception as e:
@@ -160,6 +169,7 @@ def enable_dax_sim(ddb: typing.Dict[str, typing.Any], *,
 
 def _mutate_ddb_entry(key: str, value: typing.Any, *,
                       core_device: str,
+                      localhost: str,
                       coredevice_packages: typing.List[str],
                       used_ports: typing.Set[int]) -> typing.Any:
     """Mutate a device DB entry to use it for simulation."""
@@ -174,9 +184,10 @@ def _mutate_ddb_entry(key: str, value: typing.Any, *,
 
         # Mutate entry
         if type_ == 'local':
-            _mutate_local(key, value, core_device=core_device, coredevice_packages=coredevice_packages)
+            _mutate_local(key, value,
+                          localhost=localhost, core_device=core_device, coredevice_packages=coredevice_packages)
         elif type_ == 'controller':
-            _mutate_controller(key, value, used_ports=used_ports)
+            _mutate_controller(key, value, localhost=localhost, used_ports=used_ports)
         else:
             _logger.debug(f'Skipped entry "{key}" with unknown type "{type_}"')
     else:
@@ -188,7 +199,7 @@ def _mutate_ddb_entry(key: str, value: typing.Any, *,
 
 
 def _mutate_local(key: str, value: typing.Dict[str, typing.Any], *,
-                  core_device: str, coredevice_packages: typing.List[str]) -> None:
+                  localhost: str, core_device: str, coredevice_packages: typing.List[str]) -> None:
     """Mutate a device DB local entry to use it for simulation."""
 
     # Update the module of the current device to a simulation-capable coredevice driver
@@ -210,7 +221,7 @@ def _mutate_local(key: str, value: typing.Dict[str, typing.Any], *,
         # Set the host of the core device to localhost
         if 'host' not in arguments:
             raise KeyError(f'No host argument present for core device "{key}"')
-        arguments['host'] = '::1'
+        arguments['host'] = localhost
 
     # Debug message
     _logger.debug(f'Converted local device "{key}" to class "{value["module"]}.{value["class"]}"')
@@ -257,6 +268,7 @@ def _update_module(key: str, value: typing.Dict[str, typing.Any], *,
 
 
 def _mutate_controller(key: str, value: typing.Dict[str, typing.Any], *,
+                       localhost: str,
                        used_ports: typing.Set[int]) -> None:
     """Mutate a device DB controller entry to use it for simulation."""
 
@@ -282,7 +294,7 @@ def _mutate_controller(key: str, value: typing.Dict[str, typing.Any], *,
     # Set controller to run on localhost
     if 'host' not in value:
         raise KeyError(f'No host field present for controller "{key}"')
-    value['host'] = '::1'
+    value['host'] = localhost
     _logger.debug(f'Controller "{key}" set to run host {value["host"]}')
 
     # Check that there are no port conflicts and add port to used_ports
