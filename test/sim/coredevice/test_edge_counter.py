@@ -99,6 +99,18 @@ class EdgeCounterTestCase(dax.sim.test_case.PeekTestCase):
             self.assertEqual(now_mu(), ref_time + duration)
             self.assertEqual(self.env.ec.fetch_count(), int(self.env.core.mu_to_seconds(duration) * _INPUT_FREQ * 2))
 
+    def test_fetch_timestamped_count(self):
+        for _ in range(_NUM_SAMPLES):
+            duration = random.randrange(1000000, 1000000000)
+            self.env.ec.gate_rising_mu(duration)
+
+            t, c = self.env.ec.fetch_timestamped_count()
+            self.assertEqual(t, now_mu())
+            self.assertEqual(c, int(self.env.core.mu_to_seconds(duration) * _INPUT_FREQ))
+
+            t, _ = self.env.ec.fetch_timestamped_count()
+            self.assertEqual(t, -1)
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -18,7 +18,7 @@ from dax.sim.signal import get_signal_manager
 
 class TTLOut(DaxSimDevice):
 
-    def __init__(self, dmgr, **kwargs):
+    def __init__(self, dmgr: typing.Any, **kwargs: typing.Any):
         # Call super
         super(TTLOut, self).__init__(dmgr, **kwargs)
 
@@ -62,8 +62,10 @@ class TTLInOut(TTLOut):
         FALLING = 2
         BOTH = 3
 
-    def __init__(self, dmgr, input_freq=0.0, input_prob=0.5, seed=None, **kwargs):
+    def __init__(self, dmgr: typing.Any, input_freq: float = 0.0, input_stdev: float = 0.0, input_prob: float = 0.5,
+                 seed: typing.Optional[int] = None, **kwargs: typing.Any):
         assert isinstance(input_freq, float) and input_freq >= 0.0, 'Input frequency must be a positive float'
+        assert isinstance(input_stdev, float) and input_stdev >= 0.0, 'Input stdev must be a non-negative float'
         assert isinstance(input_prob, float), 'Input probability must be a float'
         assert 0.0 <= input_prob <= 1.0, 'Input probability must be between 0.0 and 1.0'
 
@@ -71,8 +73,9 @@ class TTLInOut(TTLOut):
         super(TTLInOut, self).__init__(dmgr, **kwargs)
 
         # Store simulation settings
-        self._input_freq = input_freq
-        self._input_prob = input_prob
+        self._input_freq: float = input_freq
+        self._input_stdev: float = input_stdev
+        self._input_prob: float = input_prob
 
         # Random number generator for generating values
         self._rng = random.Random(seed)
@@ -108,9 +111,12 @@ class TTLInOut(TTLOut):
     def _simulate_input_signal(self, duration: np.int64, edge_type: _EdgeType) -> None:
         """Simulate input signal for a given duration."""
 
-        # Calculate the number of events we expect to observe based on duration and frequency
+        # Decide event frequency
         # Multiply by 2 to simulate a full duty cycle (rising and falling edge)
-        num_events = int(self.core.mu_to_seconds(duration) * self._input_freq * 2)
+        event_freq = self._rng.normalvariate(self._input_freq, self._input_stdev) * 2
+
+        # Calculate the number of events we expect to observe based on duration and frequency
+        num_events = int(self.core.mu_to_seconds(duration) * event_freq)
 
         # Generate relative timestamps for these events in machine units
         timestamps = np.asarray(self._rng.sample(range(duration), num_events), dtype=np.int64)
