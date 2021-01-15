@@ -151,7 +151,7 @@ class PeekTestCase(unittest.TestCase):
             if type_ is not float:
                 raise TypeError(f'Provided `places` parameter while signal "{scope.key}.{signal}" is not of type float')
             if not isinstance(value, (float, int, np.integer)):
-                raise TypeError(f'When `places` is used, the value to compare against must be of type float or int')
+                raise TypeError('When `places` is used, the value to compare against must be of type float or int')
 
         # Match with special values
         if any(value in s and peek in s for s in [{'x', 'X', SignalNotSet}, {'z', 'Z'}]):  # type: ignore[operator]
