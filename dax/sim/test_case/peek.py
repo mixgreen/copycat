@@ -3,6 +3,7 @@ import logging
 import typing
 import collections.abc
 import warnings
+import numpy as np
 
 from artiq.experiment import HasEnvironment, now_mu
 from artiq.master.databases import device_db_from_file
@@ -122,15 +123,21 @@ class PeekTestCase(unittest.TestCase):
         # Return the value
         return value
 
-    def expect(self, scope: typing.Any, signal: str, value: typing.Any, msg: typing.Optional[str] = None) -> None:
+    def expect(self, scope: typing.Any, signal: str, value: typing.Any, msg: typing.Optional[str] = None, *,
+               places: typing.Optional[int] = None) -> None:
         """Test if a signal holds a given value at the current time.
 
         If the signal does not match the value, the test will fail.
+
+        The parameter `places` can be used for testing float type signals for almost equality.
+        Note that when the `places` parameter is not given, float type signals are tested for exact equality.
 
         :param scope: The scope (device) of the signal
         :param signal: The name of the signal
         :param value: The expected value
         :param msg: Message to show when this assertion fails
+        :param places: Test for equality up to the given number of decimal places (only for signals of type `float`)
+        :raises TypeError: Raised if the signal type can not be tested or if invalid parameter combinations are used
         """
         # Get the value and the type
         peek, type_ = self.__signal_manager.peek_and_type(typing.cast(DaxSimDevice, scope), signal)
@@ -139,9 +146,15 @@ class PeekTestCase(unittest.TestCase):
         if type_ not in {bool, int, float}:
             # Raise if the signal has an unsupported
             raise TypeError(f'Signal "{scope.key}.{signal}" of type "{type_}" can not be tested')
+        if places is not None:
+            # Verify that both the signal and the given value are of type float
+            if type_ is not float:
+                raise TypeError(f'Provided `places` parameter while signal "{scope.key}.{signal}" is not of type float')
+            if not isinstance(value, (float, int, np.integer)):
+                raise TypeError(f'When `places` is used, the value to compare against must be of type float or int')
 
         # Match with special values
-        if any(value in s and peek in s for s in [{'x', 'X', SignalNotSet}, {'z', 'Z'}]):  # type: ignore
+        if any(value in s and peek in s for s in [{'x', 'X', SignalNotSet}, {'z', 'Z'}]):  # type: ignore[operator]
             return  # We have a match on a special value
         # Special conversion for vector matching
         if type_ is bool and isinstance(value, str):
@@ -151,5 +164,9 @@ class PeekTestCase(unittest.TestCase):
             # Set default error message
             msg = f'at {now_mu()} mu'  # noqa: ATQ101
 
-        # Assert if values are not equal
-        self.assertEqual(value, peek, msg=msg)
+        if places is None:
+            # Assert if values are equal
+            self.assertEqual(value, peek, msg=msg)
+        else:
+            # Assert if values are almost equal
+            self.assertAlmostEqual(value, peek, places=places, msg=msg)  # type: ignore[arg-type]

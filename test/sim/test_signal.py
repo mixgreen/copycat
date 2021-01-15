@@ -74,19 +74,19 @@ class VcdSignalManagerTestCase(unittest.TestCase):
         self.sm.close()  # Close twice, should not raise an exception
 
     def test_registered_signals(self):
+        ad53xx_signals = {'init'} | {f'v_out_{i}' for i in range(32)} | {f'v_offset_{i}' for i in range(32)} | {
+            f'gain_{i}' for i in range(32)}
         signals = {
             self.sys.core: {'reset'},
             self.sys.core_dma: {'record', 'play', 'play_name'},
             self.sys.ttl0: {'state', 'direction', 'sensitivity'},
             self.sys.ttl1: {'state', 'direction', 'sensitivity'},
             self.sys.ec: {'count'},
-            self.sys.ad9910.cpld: {'init', 'init_att', 'sw'},
-            self.sys.ad9910: {'init', 'freq', 'phase', 'phase_mode', 'att', 'amp'},
-            self.sys.ad9912: {'init', 'freq', 'phase', 'att'},
-            self.sys.ad53xx: {'init'} | {f'v_out_{i}' for i in range(32)} | {f'v_offset_{i}' for i in range(32)} | {
-                f'gain_mu_{i}' for i in range(32)},
-            self.sys.zotino: {'init', 'led'} | {f'v_out_{i}' for i in range(32)} | {
-                f'v_offset_{i}' for i in range(32)} | {f'gain_mu_{i}' for i in range(32)},
+            self.sys.ad9910.cpld: {'init', 'init_att', 'sw'} | {f'att_{i}' for i in range(4)},
+            self.sys.ad9910: {'init', 'freq', 'phase', 'phase_mode', 'amp'},
+            self.sys.ad9912: {'init', 'freq', 'phase'},
+            self.sys.ad53xx: ad53xx_signals,
+            self.sys.zotino: ad53xx_signals | {'led'},
         }
 
         # Verify signals are registered

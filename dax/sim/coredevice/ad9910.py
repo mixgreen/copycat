@@ -65,18 +65,13 @@ class AD9910(DaxSimDevice):
         self._init = self._signal_manager.register(self, 'init', bool, size=1)
         self._freq = self._signal_manager.register(self, 'freq', float)
         self._phase = self._signal_manager.register(self, 'phase', float)
-        self._phase_mode = self._signal_manager.register(self, 'phase_mode', bool, size=2,
-                                                         init=_PHASE_MODE_DICT[self.phase_mode])
-        self._att = self._signal_manager.register(self, 'att', float)
+        self._phase_mode = self._signal_manager.register(self, 'phase_mode', bool, size=2)
         self._amp = self._signal_manager.register(self, 'amp', float)
 
     @kernel
     def set_phase_mode(self, phase_mode):
         # From ARTIQ code
         self.phase_mode = phase_mode
-
-        # Update signal
-        self._signal_manager.event(self._phase_mode, _PHASE_MODE_DICT[self.phase_mode])
 
     @kernel
     def write32(self, addr, data):
@@ -132,6 +127,8 @@ class AD9910(DaxSimDevice):
         self.set(self.ftw_to_frequency(ftw), self.pow_to_turns(pow_), self.asf_to_amplitude(asf),
                  phase_mode, ref_time_mu, profile)
         # Returns pow
+        if phase_mode == _PHASE_MODE_DEFAULT:
+            phase_mode = self.phase_mode
         return self._get_pow(ftw, pow_, phase_mode, ref_time_mu)
 
     def _get_pow(self, ftw, pow_, phase_mode, ref_time_mu):
@@ -140,7 +137,7 @@ class AD9910(DaxSimDevice):
             if phase_mode == PHASE_MODE_TRACKING and ref_time_mu < 0:
                 ref_time_mu = 0
             if ref_time_mu >= 0:
-                dt = np.int32(now_mu()) - np.int32(ref_time_mu)  # noqa: ATQ101
+                dt = np.int32(now_mu()) - np.int32(ref_time_mu)
                 pow_ += dt * ftw * self.sysclk_per_mu >> 16
         return pow_
 
@@ -179,11 +176,11 @@ class AD9910(DaxSimDevice):
 
     @portable(flags={"fast-math"})
     def amplitude_to_asf(self, amplitude):
-        return np.int32(round(float(amplitude * 0x3ffe)))
+        return np.int32(round(float(amplitude * 0x3fff)))  # 0x3ffe in the ARTIQ driver
 
     @portable(flags={"fast-math"})
     def asf_to_amplitude(self, asf):
-        return asf / float(0x3ffe)
+        return asf / float(0x3fff)  # 0x3ffe in the ARTIQ driver
 
     @portable(flags={"fast-math"})
     def frequency_to_ram(self, frequency, ram):
@@ -203,15 +200,18 @@ class AD9910(DaxSimDevice):
 
     @kernel
     def set_frequency(self, frequency):
-        self._signal_manager.event(self._freq, frequency)
+        assert 0 * MHz <= frequency <= 400 * MHz, 'Frequency out of range'
+        self._signal_manager.event(self._freq, float(frequency))
 
     @kernel
     def set_amplitude(self, amplitude):
-        self._signal_manager.event(self._amp, amplitude)
+        assert 0.0 <= amplitude <= 1.0, 'Amplitude out of range'
+        self._signal_manager.event(self._amp, float(amplitude))
 
     @kernel
     def set_phase(self, turns):
-        self._signal_manager.event(self._phase, turns)
+        assert 0.0 <= turns < 1.0, 'Phase out of range'
+        self._signal_manager.event(self._phase, float(turns))
 
     @kernel
     def set(self, frequency, phase=0.0, amplitude=1.0,
@@ -227,6 +227,8 @@ class AD9910(DaxSimDevice):
         self.set_frequency(frequency)
         self.set_phase(phase)
         self.set_amplitude(amplitude)
+        # Update phase mode
+        self._signal_manager.event(self._phase_mode, _PHASE_MODE_DICT[self.phase_mode])
 
         # Returns pow
         return self.pow_to_turns(self._get_pow(
@@ -234,12 +236,11 @@ class AD9910(DaxSimDevice):
 
     @kernel
     def set_att_mu(self, att):
-        att = (255 - att) / 8  # Inverted att to att_mu
-        self.set_att(att)
+        self.cpld.set_att_mu(self.chip_select - 4, att)
 
     @kernel
     def set_att(self, att):
-        self._signal_manager.event(self._att, att)
+        self.cpld.set_att(self.chip_select - 4, att)
 
     @kernel
     def cfg_sw(self, state):

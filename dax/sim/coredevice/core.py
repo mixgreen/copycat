@@ -78,7 +78,7 @@ class BaseCore(DaxSimDevice):
     def run(self, function: typing.Any,
             args: typing.Tuple[typing.Any, ...], kwargs: typing.Dict[str, typing.Any]) -> typing.Any:
         # Every function is called in a sequential context for correct parallel behavior
-        with sequential:  # noqa: ATQ102
+        with sequential:
             # Call the kernel function
             result = function.artiq_embedded.function(*args, **kwargs)
 
@@ -191,7 +191,7 @@ class Core(BaseCore):
         # Register the function call
         self._func_counter[kernel_func] += 1
         # Track current time
-        t_start: np.int64 = now_mu()  # noqa: ATQ101
+        t_start: np.int64 = now_mu()
 
         # Call the kernel function while increasing the level
         self._level += 1
@@ -199,7 +199,7 @@ class Core(BaseCore):
         self._level -= 1
 
         # Accumulate the time spend in this function call
-        self._func_time[kernel_func] += now_mu() - t_start  # noqa: ATQ101
+        self._func_time[kernel_func] += now_mu() - t_start
 
         if self._level == 0:
             # Flush signal manager if we are about to leave the kernel context

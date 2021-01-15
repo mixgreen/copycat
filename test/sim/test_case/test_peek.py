@@ -82,7 +82,7 @@ class PeekTestCaseTestCase(dax.sim.test_case.PeekTestCase):
         sm = get_signal_manager()
 
         # Test starting values
-        self.expect(scope, signal_name, '00')
+        self.expect(scope, signal_name, 'x')
 
         for val, ref in test_data:
             with self.subTest(value=val, reference=ref):
@@ -106,7 +106,7 @@ class PeekTestCaseTestCase(dax.sim.test_case.PeekTestCase):
         ]
 
         # Device and scope
-        scope = self.sys.ad9912
+        scope = self.sys.ttl_clk  # This driver has no checks on its set() function
         signal = 'freq'
 
         # Test starting values
@@ -119,8 +119,64 @@ class PeekTestCaseTestCase(dax.sim.test_case.PeekTestCase):
                 scope.set(val)
                 # Test value
                 self.expect(scope, signal, ref)
+                self.expect(scope, signal, ref, places=7)
                 delay(1 * us)
                 self.expect(scope, signal, ref)
+                self.expect(scope, signal, ref, places=7)
+
+    def test_expect_float_places(self):
+        test_data = [
+            (99.2004, 99.2, 3),
+            (-99.2004, -99.2, 3),
+            (np.float(99.2004), 99.2, 3),
+            (99.2004, np.float(99.2), 3),
+            (np.float(99.2004), np.float(99.2), 3),
+            (99.0004, 99, 3),
+            (99.0004, np.int32(99), 3),
+            (99.0004, np.int64(99), 3),
+            (np.float(99.0004), np.int32(99), 3),
+            (99.00000004, 99, 7),
+        ]
+
+        # Device and scope
+        scope = self.sys.ttl_clk  # This driver has no checks on its set() function
+        signal = 'freq'
+
+        # Test starting values
+        self.expect(scope, signal, SignalNotSet)
+
+        for val, ref, places in test_data:
+            with self.subTest(value=val, reference=ref, places=places):
+                # Set new value
+                delay(1 * us)
+                scope.set(val)
+                # Test value
+                self.expect(scope, signal, ref, places=places)
+                delay(1 * us)
+                self.expect(scope, signal, ref, places=places)
+                # Make the test fail
+                with self.assertRaises(self.failureException, msg='expect() did not fail on almost equality'):
+                    self.expect(scope, signal, ref, places=places + 1)
+
+    def test_expect_float_places_value_type_error(self):
+        # Device and scope
+        scope = self.sys.ttl_clk
+        signal = 'freq'
+
+        for v in [SignalNotSet, 'x', 'z', True, False]:
+            with self.assertRaises(TypeError, msg='Non-numerical value did not raise'):
+                self.expect(scope, signal, v, places=1)
+
+    def test_expect_float_places_signal_type_error(self):
+        # Device and scope
+        signals = [
+            (self.sys.ttl0, 'state'),  # bool
+            (self.sys.ec, 'count'),  # int
+        ]
+
+        for scope, signal in signals:
+            with self.assertRaises(TypeError, msg='Non-float signal type did not raise'):
+                self.expect(scope, signal, 0, places=1)
 
     def test_expect_assertion(self):
         test_data = {
@@ -185,7 +241,7 @@ class PeekTestCaseTestCase(dax.sim.test_case.PeekTestCase):
         ]
 
         # Device and scope
-        scope = self.sys.ad9912
+        scope = self.sys.ttl_clk  # This driver has no checks on its set() function
         signal = 'freq'
 
         # Test starting values
@@ -224,8 +280,8 @@ class _TestSystem(DaxSystem):
         self.ttl0 = self.get_device('ttl0', artiq.coredevice.ttl.TTLInOut)
         self.ttl1 = self.get_device('ttl1', artiq.coredevice.ttl.TTLInOut)
         self.ttls = [self.ttl0, self.ttl1]
-
         self.ec = self.get_device('ec', artiq.coredevice.edge_counter.EdgeCounter)
+        self.ttl_clk = self.get_device('ttl_clk', artiq.coredevice.ttl.TTLInOut)
 
         self.ad9910 = self.get_device('ad9910', artiq.coredevice.ad9910.AD9910)
         self.ad9912 = self.get_device('ad9912', artiq.coredevice.ad9912.AD9912)
@@ -251,18 +307,18 @@ _DEVICE_DB = {
         'class': 'CoreDMA'
     },
 
-    # Generic TTL
+    # TTL devices
     'ttl0': {
         'type': 'local',
         'module': 'artiq.coredevice.ttl',
         'class': 'TTLInOut',
-        'arguments': {'channel': 0},
+        'arguments': {},
     },
     'ttl1': {
         'type': 'local',
         'module': 'artiq.coredevice.ttl',
         'class': 'TTLInOut',
-        'arguments': {'channel': 1},
+        'arguments': {},
     },
     'ec': {
         'type': 'local',
@@ -270,6 +326,14 @@ _DEVICE_DB = {
         'class': 'EdgeCounter',
         'arguments': {},
     },
+    'ttl_clk': {
+        'type': 'local',
+        'module': 'artiq.coredevice.ttl',
+        'class': 'TTLClockGen',
+        'arguments': {},
+    },
+
+    # CPLD and DDS devices
     "cpld": {
         "type": "local",
         "module": "artiq.coredevice.urukul",

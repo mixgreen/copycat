@@ -23,7 +23,6 @@ class AD9912(DaxSimDevice):
         self._init = self._signal_manager.register(self, 'init', bool, size=1)
         self._freq = self._signal_manager.register(self, 'freq', float)
         self._phase = self._signal_manager.register(self, 'phase', float)
-        self._att = self._signal_manager.register(self, 'att', float)
 
         # CPLD device
         self.cpld = dmgr.get(cpld_device)
@@ -54,16 +53,15 @@ class AD9912(DaxSimDevice):
         delay(1 * ms)
         self._signal_manager.event(self._init, 1)
 
-    # noinspection PyUnusedLocal
     @kernel
     def set_att_mu(self, att):
-        att = (255 - att) / 8  # Inverted att to att_mu
-        self.set_att(att)
+        self.cpld.set_att_mu(self.chip_select - 4, att)
 
     @kernel
     def set_att(self, att):
-        self._signal_manager.event(self._att, att)
+        self.cpld.set_att(self.chip_select - 4, att)
 
+    # noinspection PyShadowingBuiltins
     @kernel
     def set_mu(self, ftw, pow):
         phase = pow / (1 << 14)  # Inverted turns_to_pow()
@@ -83,8 +81,10 @@ class AD9912(DaxSimDevice):
 
     @kernel
     def set(self, frequency, phase=0.0):
-        self._signal_manager.event(self._freq, frequency)
-        self._signal_manager.event(self._phase, phase)
+        assert 0 * MHz <= frequency <= 400 * MHz, 'Frequency out of range'
+        assert 0.0 <= phase < 1.0, 'Phase out of range'
+        self._signal_manager.event(self._freq, float(frequency))
+        self._signal_manager.event(self._phase, float(phase))
 
     @kernel
     def cfg_sw(self, state):

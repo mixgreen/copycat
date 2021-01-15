@@ -126,16 +126,16 @@ class TTLInOut(TTLOut):
 
         if edge_type is self._EdgeType.RISING:
             # Store odd half of the event times in the event buffer
-            self._edge_buffer.extend(timestamps[1::2] + now_mu())  # noqa: ATQ101
+            self._edge_buffer.extend(timestamps[1::2] + now_mu())
         elif edge_type is self._EdgeType.FALLING:
             # Store even half of the event times in the event buffer
-            self._edge_buffer.extend(timestamps[::2] + now_mu())  # noqa: ATQ101
+            self._edge_buffer.extend(timestamps[::2] + now_mu())
         elif edge_type is self._EdgeType.BOTH:
             # Store all event times in the event buffer
-            self._edge_buffer.extend(timestamps + now_mu())  # noqa: ATQ101
+            self._edge_buffer.extend(timestamps + now_mu())
 
         # Move the cursor
-        delay_mu(duration)  # noqa: ATQ101
+        delay_mu(duration)
 
         # Return to Z after all signals were inserted
         self._signal_manager.event(self._state, 'z')
@@ -250,8 +250,8 @@ class TTLClockGen(DaxSimDevice):
 
     @kernel
     def set(self, frequency):
-        self._signal_manager.event(self._freq, frequency)
+        self._signal_manager.event(self._freq, float(frequency))
 
     @kernel
     def stop(self):
-        self.set(0)
+        self.set(0.0)

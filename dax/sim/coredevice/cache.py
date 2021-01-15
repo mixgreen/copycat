@@ -26,7 +26,7 @@ class CoreCache(DaxSimDevice):
 
     @kernel
     def get(self, key):  # type: (str) -> __V_T
-        assert isinstance(key, str), 'Key must be of type str'  # noqa: ATQ401
+        assert isinstance(key, str), 'Key must be of type str'
 
         # Return value
         # NOTE: `get()` mimics the fact that an empty cache key is not mutable and first has to be set using `put()`
@@ -34,9 +34,9 @@ class CoreCache(DaxSimDevice):
 
     @kernel
     def put(self, key, value):  # type: (str, __V_T) -> None
-        assert isinstance(key, str), 'Key must be of type str'  # noqa: ATQ401
-        assert isinstance(value, list), 'Value must be of type list'  # noqa: ATQ401
-        assert all(isinstance(e, (int, np.integer)) for e in value), 'List elements must be of type int'  # noqa: ATQ401
+        assert isinstance(key, str), 'Key must be of type str'
+        assert isinstance(value, list), 'Value must be of type list'
+        assert all(isinstance(e, (int, np.integer)) for e in value), 'List elements must be of type int'
 
         # NOTE: we can not check if the value was extracted earlier in the same kernel
         if value:

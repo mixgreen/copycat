@@ -11,6 +11,18 @@ from dax.sim.device import DaxSimDevice
 from dax.sim.signal import get_signal_manager
 
 
+def _mu_to_att(att_mu):
+    return (255 - (att_mu & 0xFF)) / 8
+
+
+def _att_to_mu(att):
+    return int(255 - np.int32(round(att * 8)))
+
+
+def _state_to_sw_reg(state):
+    return ['1' if (state >> i) & 0x1 else '0' for i in range(4)]
+
+
 class CPLD(DaxSimDevice):
     """Minimal implementation of CPLD to initialize AD99xx devices correctly."""
 
@@ -28,10 +40,12 @@ class CPLD(DaxSimDevice):
         self._signal_manager = get_signal_manager()
         self._init = self._signal_manager.register(self, 'init', bool, size=1)
         self._init_att = self._signal_manager.register(self, 'init_att', bool, size=1)
+        self._att = [self._signal_manager.register(self, f'att_{i}', float) for i in range(4)]
         self._sw = self._signal_manager.register(self, 'sw', bool, size=4)
 
         # Internal registers
-        self._sw_reg = f'{rf_sw & 0xF:04b}'
+        self._att_reg = [_mu_to_att(att >> (i * 8)) for i in range(4)]
+        self._sw_reg = _state_to_sw_reg(rf_sw)
 
     @kernel
     def cfg_write(self, cfg):
@@ -55,30 +69,51 @@ class CPLD(DaxSimDevice):
 
     @kernel
     def cfg_sw(self, channel, on):
-        assert 0 <= channel < 4, 'Channel out of range'  # noqa: ATQ401
+        assert 0 <= channel < 4, 'Channel out of range'
         self._sw_reg[channel] = '1' if on else '0'
-        self._signal_manager.event(self._sw, self._sw_reg)
+        self._update_switches()
 
     @kernel
     def cfg_switches(self, state):
-        self._sw_reg = f'{state & 0xF:04b}'
-        self._signal_manager.event(self._sw, self._sw_reg)
+        self._sw_reg = _state_to_sw_reg(state)
+        self._update_switches()
+
+    def _update_switches(self):
+        self._signal_manager.event(self._sw, ''.join(reversed(self._sw_reg)))
 
     @kernel
     def set_att_mu(self, channel, att):
-        raise NotImplementedError
+        assert 0 <= channel < 4, 'Channel out of range'
+        assert 0 <= att <= 255, 'Attenuation mu out of range'
+        a = self.att_reg & ~(0xff << (channel * 8))
+        a |= att << (channel * 8)
+        self.set_all_att_mu(a)
 
     @kernel
     def set_all_att_mu(self, att_reg):
-        raise NotImplementedError
+        self.att_reg = att_reg
+        self._att_reg = [_mu_to_att(att_reg >> (i * 8)) for i in range(4)]
+        self._update_att()
 
     @kernel
     def set_att(self, channel, att):
-        raise NotImplementedError
+        assert 0 <= channel < 4, 'Channel out of range'
+        # Update register
+        a = self.att_reg & ~(0xff << (channel * 8))
+        a |= _att_to_mu(att) << (channel * 8)
+        self.att_reg = a
+        # Handle signals
+        self._att_reg[channel] = float(att)
+        self._update_att()
+
+    def _update_att(self):
+        for s, a in zip(self._att, self._att_reg):
+            assert 0 * dB <= a <= (255 / 8) * dB, 'Attenuation out of range'
+            self._signal_manager.event(s, a)
 
     @kernel
     def get_att_mu(self):
-        # Does not return the actual value, but the default value
+        # Returns the value in the register instead of the device value
         delay(10 * us)  # Delay from ARTIQ code
         self._signal_manager.event(self._init_att, 1)
         return self.att_reg

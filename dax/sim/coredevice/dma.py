@@ -93,7 +93,7 @@ class CoreDMA(DaxSimDevice):
 
     @kernel
     def record(self, name):  # type: (str) -> _DMARecordContext
-        assert isinstance(name, str), 'DMA trace name must be of type str'  # noqa: ATQ401
+        assert isinstance(name, str), 'DMA trace name must be of type str'
 
         # Increment epoch
         self._epoch += 1
@@ -107,7 +107,7 @@ class CoreDMA(DaxSimDevice):
 
     @kernel
     def erase(self, name):  # type: (str) -> None
-        assert isinstance(name, str), 'DMA trace name must be of type str'  # noqa: ATQ401
+        assert isinstance(name, str), 'DMA trace name must be of type str'
 
         if name not in self._dma_traces:
             raise KeyError(f'DMA trace "{name}" does not exist, can not be erased')
@@ -118,7 +118,7 @@ class CoreDMA(DaxSimDevice):
 
     @kernel
     def playback(self, name):  # type: (str) -> None
-        assert isinstance(name, str), 'DMA trace name must be of type str'  # noqa: ATQ401
+        assert isinstance(name, str), 'DMA trace name must be of type str'
 
         # Get handle
         if name not in self._dma_traces:
@@ -129,7 +129,7 @@ class CoreDMA(DaxSimDevice):
 
     @kernel
     def get_handle(self, name):  # type: (str) -> _DMAHandle
-        assert isinstance(name, str), 'DMA trace name must be of type str'  # noqa: ATQ401
+        assert isinstance(name, str), 'DMA trace name must be of type str'
 
         if name not in self._dma_traces:
             raise KeyError(f'DMA trace "{name}" does not exist, can not obtain handle')
@@ -139,7 +139,7 @@ class CoreDMA(DaxSimDevice):
 
     @kernel
     def playback_handle(self, handle):  # type: (_DMAHandle) -> None
-        assert isinstance(handle, _DMAHandle), 'DMA handle has an incorrect type'  # noqa: ATQ401
+        assert isinstance(handle, _DMAHandle), 'DMA handle has an incorrect type'
 
         # Verify handle
         if self._epoch != handle.epoch:
@@ -157,7 +157,7 @@ class CoreDMA(DaxSimDevice):
         self._signal_manager.event(self._dma_play_name, recording.name)  # Represents the duration of the event
 
         # Forward time by the duration of the DMA trace
-        delay_mu(recording.duration)  # noqa: ATQ101
+        delay_mu(recording.duration)
 
         # Record ending of DMA trace (shows up as Z in the graphical interface)
         self._signal_manager.event(self._dma_play_name, None)
