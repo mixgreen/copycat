@@ -465,7 +465,7 @@ class DaxDataStoreInfluxDbTestCase(unittest.TestCase):
         # Callback function
         def callback(*args, **kwargs):
             # This code is supposed to be unreachable
-            self.fail('Bad type resulted in unwanted write (set) {} {}'.format(args, kwargs))
+            self.fail(f'Bad type resulted in unwanted write (set) {args} {kwargs}')
 
         # Replace callback function with a specific one for testing bad types
         self.ds.callback = callback
@@ -535,7 +535,7 @@ class DaxDataStoreInfluxDbTestCase(unittest.TestCase):
         # Callback function
         def callback(*args, **kwargs):
             # This code is supposed to be unreachable
-            self.fail('Bad sequence resulted in unwanted write {} {}'.format(args, kwargs))
+            self.fail(f'Bad sequence resulted in unwanted write {args} {kwargs}')
 
         # Replace callback function with a specific one for testing bad types
         self.ds.callback = callback
@@ -671,7 +671,7 @@ class DaxDataStoreInfluxDbTestCase(unittest.TestCase):
         # Callback function
         def callback(*args, **kwargs):
             # This code is supposed to be unreachable
-            self.fail('Bad type resulted in unwanted write (append) {} {}'.format(args, kwargs))
+            self.fail(f'Bad type resulted in unwanted write (append) {args} {kwargs}')
 
         # Key
         key = 'k'
@@ -699,7 +699,7 @@ class DaxDataStoreInfluxDbTestCase(unittest.TestCase):
         # Callback function
         def callback(*args, **kwargs):
             # This code is supposed to be unreachable
-            self.fail('Not-cached sequence append resulted in unexpected write {} {}'.format(args, kwargs))
+            self.fail(f'Not-cached sequence append resulted in unexpected write {args} {kwargs}')
 
         # Replace callback function with a specific one for testing bad types
         self.ds.callback = callback
@@ -746,7 +746,7 @@ class DaxDataStoreInfluxDbTestCase(unittest.TestCase):
         # Callback function
         def callback(*args, **kwargs):
             # This code is supposed to be unreachable
-            self.fail('Set empty list resulted in unexpected write {} {}'.format(args, kwargs))
+            self.fail(f'Set empty list resulted in unexpected write {args} {kwargs}')
 
         # Replace callback function with a specific one for testing bad types
         self.ds.callback = callback
@@ -1442,7 +1442,7 @@ class DaxSystemTestCase(unittest.TestCase):
         self.managers = get_managers(_DEVICE_DB)
         self.system = self.InitTestSystem(self.managers, self)
         for i in range(self.num_modules):
-            self.InitTestModule(self.system, 'module_{}'.format(i), i, self)
+            self.InitTestModule(self.system, f'module_{i}', i, self)
 
     def tearDown(self) -> None:
         # Close managers

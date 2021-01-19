@@ -18,8 +18,8 @@ _GENERIC_DEVICE: typing.Dict[str, str] = {
 }
 """The properties of a generic device."""
 
-_SIMULATION_ARG: str = '--simulation'
-"""The simulation argument/option for controllers as proposed by the ARTIQ manual."""
+_SIMULATION_ARGS: typing.List[str] = ['--simulation', '--no-localhost-bind']
+"""The simulation options/arguments to add to controllers."""
 
 _CONFIG_FILES: typing.List[str] = ['setup.cfg', '.dax']
 """Configuration file locations in reverse order of priority."""
@@ -273,19 +273,21 @@ def _mutate_controller(key: str, value: typing.Dict[str, typing.Any], *,
     """Mutate a device DB controller entry to use it for simulation."""
 
     # Get the command of this controller
-    command = value.get('command')
+    command: typing.Any = value.get('command')
 
     if command is None:
         # No command was set
         _logger.debug(f'No command found for controller "{key}"')
     elif isinstance(command, str):
-        # Check if the controller was already set to simulation mode
-        if _SIMULATION_ARG not in command:
-            # Simulation argument not found, append it
-            value['command'] = f'{command} {_SIMULATION_ARG}'
-            _logger.debug(f'Added simulation argument to command for controller "{key}"')
+        # See which simulation arguments are not present
+        args: typing.List[str] = [a for a in _SIMULATION_ARGS if a not in command]
+        if args:
+            # Add simulation arguments
+            sim_args: str = ' '.join(args)
+            value['command'] = f'{command} {sim_args}'
+            _logger.debug(f'Added simulation argument(s) "{sim_args}" to command for controller "{key}"')
         else:
-            # Debug message
+            # No simulation arguments added
             _logger.debug(f'Controller "{key}" was not modified')
     else:
         # Command was not of type str

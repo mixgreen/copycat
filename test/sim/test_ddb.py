@@ -3,6 +3,7 @@ import logging
 import copy
 import textwrap
 
+import dax.sim.ddb
 from dax.sim.ddb import enable_dax_sim, DAX_SIM_CONFIG_KEY
 from dax.util.output import temp_dir
 
@@ -156,10 +157,12 @@ class DdbTestCase(unittest.TestCase):
             if type_ == 'local':
                 module = v['module']
                 self.assertTrue(module.startswith('dax.sim.coredevice.') or module == 'dax.sim.config',
-                                'Device module was not correctly updated: {}'.format(module))
+                                f'Device module was not correctly updated: {module}')
             elif type_ == 'controller':
-                self.assertTrue('--simulation' in v['command'], 'Controller command was not correctly updated')
                 self.assertTrue(v['host'] == localhost, 'Controller host was not correctly updated')
+                command = v['command']
+                for arg in dax.sim.ddb._SIMULATION_ARGS:
+                    self.assertIn(arg, command, 'Controller command arguments were not correctly updated')
             else:
                 self.fail('Internal exception, this statement should not have been reached')
 
