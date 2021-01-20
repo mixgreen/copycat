@@ -213,8 +213,8 @@ class _Scheduler(DaxScheduler):
             # Test ended, catch exception and mark this experiment as terminated using the dummy scheduler
             self._scheduler.terminate_this_experiment()
 
-    def _plot_graph(self) -> None:
-        # Skip plotting graph, prevents output and call to the renderer
+    def _render_graph(self) -> None:
+        # Skip render graph, prevents output and call to the renderer
         pass
 
 

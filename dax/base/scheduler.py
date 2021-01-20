@@ -857,7 +857,8 @@ class DaxScheduler(dax.base.system.DaxHasKey, abc.ABC):
                                                      group='Dependency graph')
         self._view_graph: bool = self.get_argument('View graph',
                                                    artiq.experiment.BooleanValue(False),
-                                                   tooltip='View the dependency graph at startup',
+                                                   tooltip='View the dependency graph at startup '
+                                                           '(graph is viewed on the ARTIQ master only)',
                                                    group='Dependency graph')
 
         # Call super and forward arguments, for compatibility with other libraries
@@ -890,8 +891,8 @@ class DaxScheduler(dax.base.system.DaxHasKey, abc.ABC):
         # Process the graph
         self._process_graph()
 
-        # Plot the dependency graph
-        self._plot_graph()
+        # Render the dependency graph
+        self._render_graph()
         # Terminate other instances of this scheduler
         self._terminate_running_instances()
 
@@ -1197,8 +1198,8 @@ class DaxScheduler(dax.base.system.DaxHasKey, abc.ABC):
         # Log the root nodes
         self.logger.debug(f'Root nodes: {", ".join(sorted(node.get_name() for node in self._root_nodes))}')
 
-    def _plot_graph(self) -> None:
-        """Plot the dependency graph."""
+    def _render_graph(self) -> None:
+        """Render the dependency graph."""
 
         # Create a directed graph object
         plot = graphviz.Digraph(name=self.NAME, directory=str(dax.util.output.get_base_path(self._scheduler)))

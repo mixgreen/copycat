@@ -8,7 +8,7 @@ __all__ = ['temp_dir', 'get_base_path', 'get_file_name_generator', 'dummy_file_n
 
 
 @contextlib.contextmanager
-def temp_dir() -> typing.Generator[None, None, None]:
+def temp_dir() -> typing.Generator[str, None, None]:
     """Context manager to temporally change current working directory to a unique temp directory.
 
     Mainly used for testing.
@@ -22,7 +22,7 @@ def temp_dir() -> typing.Generator[None, None, None]:
         # Change the directory
         os.chdir(tmp_dir)
         try:
-            yield
+            yield tmp_dir
         finally:
             # Return to the original directory
             os.chdir(orig_dir)
