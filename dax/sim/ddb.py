@@ -297,7 +297,7 @@ def _mutate_controller(key: str, value: typing.Dict[str, typing.Any], *,
     if 'host' not in value:
         raise KeyError(f'No host field present for controller "{key}"')
     value['host'] = localhost
-    _logger.debug(f'Controller "{key}" set to run host {value["host"]}')
+    _logger.debug(f'Controller "{key}" configured to run on host {value["host"]}')
 
     # Check that there are no port conflicts and add port to used_ports
     if isinstance(value['port'], int):

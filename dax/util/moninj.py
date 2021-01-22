@@ -11,10 +11,10 @@ not implemented as an ARTIQ controller.
 import logging
 import asyncio
 
+__all__ = ['MonInjDummyService', 'MonInjBindError']
+
 _logger: logging.Logger = logging.getLogger('MonInjDummyService')
 """The logger for this file."""
-
-__all__ = ['MonInjDummyService', 'MonInjBindError']
 
 
 class MonInjBindError(OSError):
@@ -35,6 +35,8 @@ class MonInjDummyService:
 
     ARTIQ_HELLO: bytes = b"ARTIQ moninj\n"
     """Hello message from ARTIQ dashboard."""
+    DEFAULT_PORT: int = 1383
+    """The default port used by the MonInj dummy service."""
 
     def __init__(self, host: str, port: int, auto_close: int = 0):
         """Instantiate a new MonInj dummy service.
@@ -134,8 +136,10 @@ if __name__ == '__main__':
 
     # Parse arguments
     parser = argparse.ArgumentParser(description='Start MonInj dummy service')
-    parser.add_argument('--host', default='::1', type=str, help='The host to bind to')
-    parser.add_argument('--port', default=1383, type=int, help='The port to bind to')
+    parser.add_argument('--host', '--bind', default='', type=str,
+                        help='The host to bind to (all interfaces by default)')
+    parser.add_argument('--port', default=MonInjDummyService.DEFAULT_PORT, type=int,
+                        help=f'The port to bind to (port {MonInjDummyService.DEFAULT_PORT} by default)')
     parser.add_argument('-q', '--quiet', default=0, action='count', help='Decrease verbosity')
     parser.add_argument('-v', '--verbose', default=0, action='count', help='Increase verbosity')
     parser.add_argument('--auto-close', default=0, type=int,
