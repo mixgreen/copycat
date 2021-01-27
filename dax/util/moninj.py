@@ -156,3 +156,5 @@ if __name__ == '__main__':
     except MonInjBindError:
         # Could not bind, exit silently
         _logger.info('Could not bind to address (service might already be running)')
+    except KeyboardInterrupt:
+        _logger.info('Program terminated by user')
