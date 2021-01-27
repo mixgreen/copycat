@@ -1,3 +1,5 @@
+# mypy: no_warn_unused_ignores
+
 import logging
 import typing
 import time
