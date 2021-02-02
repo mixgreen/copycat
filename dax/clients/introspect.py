@@ -1,3 +1,5 @@
+import typing
+
 from dax.experiment import *
 from dax.util.introspect import GraphvizBase, ComponentGraphviz, RelationGraphviz
 
@@ -20,32 +22,51 @@ class Introspect(DaxClient, EnvExperiment):
 
     def build(self) -> None:  # type: ignore
         # Add arguments
-        self._graph_arg = self.get_argument('Graph', EnumerationValue(list(self.GRAPHS), default='All'))
+        self._graph_types = self.get_argument('Graph', EnumerationValue(list(self.GRAPHS), default='All'))
         self._view = self.get_argument('View result', BooleanValue(True))
 
-        # Graph config
-        self._module_edge_k: float = self.get_argument('Module edge K',
-                                                       NumberValue(GraphvizBase.MODULE_EDGE_K, min=0.0),
-                                                       group='Graph configuration',
-                                                       tooltip='Module edge spring constant')
-        self._system_edge_len: float = self.get_argument('System edge len',
-                                                         NumberValue(GraphvizBase.SYSTEM_EDGE_LEN, min=0.0),
-                                                         group='Graph configuration',
-                                                         tooltip='System edge preferred length in inches')
-        self._cluster_edge_len: float = self.get_argument('Cluster edge len',
-                                                          NumberValue(GraphvizBase.CLUSTER_EDGE_LEN, min=0.0),
-                                                          group='Graph configuration',
-                                                          tooltip='Cluster edge preferred length in inches')
+        # Graph arguments
+        graph_args: typing.Dict[str, typing.Dict[str, typing.Any]] = {
+            'module_edge_k': {
+                'key': 'Module edge K',
+                'processor': NumberValue(GraphvizBase.MODULE_EDGE_K, min=0.0),
+                'tooltip': 'Module edge spring constant',
+            },
+            'module_edge_len': {
+                'key': 'Module edge len',
+                'processor': NumberValue(GraphvizBase.MODULE_EDGE_LEN, min=0.0),
+                'tooltip': 'Module edge preferred length in inches',
+            },
+            'system_edge_len': {
+                'key': 'System edge len',
+                'processor': NumberValue(GraphvizBase.SYSTEM_EDGE_LEN, min=0.0),
+                'tooltip': 'System edge preferred length in inches',
+            },
+            'service_edge_k': {
+                'key': 'Service edge K',
+                'processor': NumberValue(GraphvizBase.SERVICE_EDGE_K, min=0.0),
+                'tooltip': 'Service edge spring constant',
+            },
+            'service_edge_len': {
+                'key': 'Service edge len',
+                'processor': NumberValue(GraphvizBase.SERVICE_EDGE_LEN, min=0.0),
+                'tooltip': 'Service edge preferred length in inches',
+            },
+            'cluster_edge_len': {
+                'key': 'Cluster edge len',
+                'processor': NumberValue(GraphvizBase.CLUSTER_EDGE_LEN, min=0.0),
+                'tooltip': 'Cluster edge preferred length in inches',
+            },
+        }
+        self._graph_args: typing.Dict[str, float] = {
+            k: self.get_argument(group='Graph configuration', **v) for k, v in graph_args.items()
+        }
 
     def prepare(self):
         # Get the system
         system = self.registry.find_module(DaxSystem)
         # Create the graph objects
-        self._graphs = [g(system,
-                          module_edge_k=self._module_edge_k,
-                          system_edge_len=self._system_edge_len,
-                          cluster_edge_len=self._cluster_edge_len)
-                        for g in self.GRAPHS[self._graph_arg]]
+        self._graphs = [g(system, **self._graph_args) for g in self.GRAPHS[self._graph_types]]
 
     def run(self):
         pass

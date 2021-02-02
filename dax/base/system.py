@@ -963,12 +963,12 @@ class DaxClient(DaxHasSystem, abc.ABC):
     This decorator creates a factory function that allows users to provide their system
     to be used with this experiment template.
 
-    Normally, a client would implement the :func:`prepare`, :func:`run`, and :func:`analyze`
-    functions to define execution flow.
+    Normally, a client would inherit from the ARTIQ `Experiment` class and implement the
+    :func:`prepare`, :func:`run`, and :func:`analyze` functions to define an execution flow.
     Additionally, a :func:`build` function can be implemented to provide a user interface
     for configuring the client.
 
-    Note that the :func:`build` function does not need to call super().
+    Note that the :func:`build` function does not need to call `super()`.
     The decorator will make sure all classes are build in the correct order.
     """
 

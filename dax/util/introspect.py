@@ -25,37 +25,54 @@ class GraphvizBase(graphviz.Digraph):
 
     MODULE_EDGE_K: float = 0.8
     """The default module edge spring constant."""
+    MODULE_EDGE_LEN: float = 0.3
+    """The default module edge length in inch."""
     SYSTEM_EDGE_LEN: float = 1.5
     """The default system edge length in inch."""
+
+    SERVICE_EDGE_K: float = 0.7
+    """The default service edge spring constant."""
+    SERVICE_EDGE_LEN: float = 0.7
+    """The default service edge length in inch."""
+
     CLUSTER_EDGE_LEN: float = 2.5
     """The default cluster edge length in inch."""
 
     def __init__(self, *,
                  module_edge_k: float = MODULE_EDGE_K,
+                 module_edge_len: float = MODULE_EDGE_LEN,
                  system_edge_len: float = SYSTEM_EDGE_LEN,
+                 service_edge_k: float = SERVICE_EDGE_K,
+                 service_edge_len: float = SERVICE_EDGE_LEN,
                  cluster_edge_len: float = CLUSTER_EDGE_LEN,
                  **kwargs: typing.Any):
         """Create a new Graphviz base class with the given parameters.
 
         :param module_edge_k: Module edge spring constant
+        :param module_edge_len: Module edge preferred length in inch
         :param system_edge_len: System edge preferred length in inch
+        :param service_edge_k: Service edge spring constant
+        :param service_edge_len: Service edge preferred length in inch
         :param cluster_edge_len: Cluster edge preferred length in inch
         :param kwargs: Keyword arguments for the Graphviz parent class
         """
         assert isinstance(module_edge_k, float), 'Module edge K must be of type float'
+        assert isinstance(module_edge_len, float), 'Module edge len must be of type float'
         assert isinstance(system_edge_len, float), 'System edge len must be of type float'
+        assert isinstance(service_edge_k, float), 'Service edge K must be of type float'
+        assert isinstance(service_edge_len, float), 'Service edge len must be of type float'
         assert isinstance(cluster_edge_len, float), 'Cluster edge len must be of type float'
 
         self._module_node_attr: GraphvizBase.__A_T = {'color': 'blue'}
         """Node attributes for modules."""
-        self._module_edge_attr: GraphvizBase.__A_T = {'K': str(module_edge_k)}
+        self._module_edge_attr: GraphvizBase.__A_T = {'K': str(module_edge_k), 'len': str(module_edge_len)}
         """Edge attributes for modules."""
         self._system_edge_attr: GraphvizBase.__A_T = {'len': str(system_edge_len)}
         """Edge attributes for the system."""
 
         self._service_node_attr: GraphvizBase.__A_T = {'color': 'red'}
         """Node attributes for services."""
-        self._service_edge_attr: GraphvizBase.__A_T = {}
+        self._service_edge_attr: GraphvizBase.__A_T = {'K': str(service_edge_k), 'len': str(service_edge_len)}
         """Edge attributes for services."""
 
         self._cluster_edge_attr: GraphvizBase.__A_T = {'len': str(cluster_edge_len)}
