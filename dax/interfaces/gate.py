@@ -16,11 +16,11 @@ class GateInterface(DaxInterface, abc.ABC):
 
     When this interface is implemented, :attr:`pi` needs to be marked kernel invariant.
 
+    Normally, all gate methods are expected to be kernels.
     Gates that are not implemented should raise a :attr:`NotImplementedError`.
     """
 
     # TODO: candidate gates: cnot, cz, xx
-    # TODO: candidate operations (probably in a separate interface): prep_0, m_z
     # TODO: add machine unit variations for gates? (including pi_mu and conversion functions)
 
     @property
