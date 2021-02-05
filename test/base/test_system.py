@@ -7,7 +7,7 @@ import collections.abc
 import typing
 from unittest.mock import MagicMock, call
 
-from artiq.experiment import HasEnvironment
+from artiq.experiment import HasEnvironment, Experiment
 import artiq.coredevice.edge_counter
 import artiq.coredevice.ttl  # type: ignore
 import artiq.coredevice.core
@@ -1555,7 +1555,7 @@ class DaxClientTestCase(unittest.TestCase):
         self.managers.close()
 
     def test_not_decorated(self):
-        class Client(DaxClient):
+        class Client(DaxClient, Experiment):
             def run(self) -> None:
                 pass
 
@@ -1563,9 +1563,17 @@ class DaxClientTestCase(unittest.TestCase):
             # noinspection PyTypeChecker
             Client(self.managers)
 
+    def test_not_experiment(self):
+        class Client(DaxClient):
+            def run(self) -> None:
+                pass
+
+        with self.assertRaises(TypeError, msg='Decorated client class does not inherit from Experiment'):
+            dax_client_factory(Client)
+
     def test_load_super(self):
         @dax_client_factory
-        class Client(DaxClient):
+        class Client(DaxClient, Experiment):
             def init(self) -> None:
                 self.is_initialized = True
 
@@ -1585,7 +1593,7 @@ class DaxClientTestCase(unittest.TestCase):
 
     def test_disable_dax_init(self):
         @dax_client_factory
-        class Client(DaxClient):
+        class Client(DaxClient, Experiment):
             DAX_INIT = False
 
             def init(self) -> None:

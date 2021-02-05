@@ -104,17 +104,19 @@ class OperationInterface(GateInterface, abc.ABC):
         pass
 
 
-def validate_operation_interface(interface: OperationInterface, num_qubits: int) -> None:
+def validate_operation_interface(interface: OperationInterface, *, num_qubits: typing.Optional[int] = None) -> None:
     """Validate an operation interface object.
 
     :param interface: The operation interface object
-    :param num_qubits: The number of qubits in the system
+    :param num_qubits: The exact number of qubits in the system (optional)
     :raise AssertionError: Raised if validation failed
     """
+    assert isinstance(interface, OperationInterface), 'The provided interface is not of type OperationInterface'
+    assert isinstance(num_qubits, int) or num_qubits is None, 'Num qubits must be of type int or None'
 
     # Validate properties
     properties: typing.Dict[str, typing.Callable[[typing.Any], bool]] = {
-        'num_qubits': lambda p: isinstance(p, np.int32) and p == num_qubits,
+        'num_qubits': lambda p: isinstance(p, np.int32) and (p == num_qubits or num_qubits is None),
     }
     assert all(fn(getattr(interface, p, None)) for p, fn in properties.items()), \
         'Not all properties return the correct types'

@@ -99,6 +99,7 @@ class BuildClientTestCase(unittest.TestCase):
                 # Create client
                 client = _InstantiatedClient(self.managers)
                 self.assertIsInstance(client, DaxClient)
+                self.assertIsInstance(client, Experiment)
 
                 # Get system
                 system = client.registry.find_module(DaxSystem)
@@ -118,7 +119,8 @@ class BuildClientTestCase(unittest.TestCase):
                     pass
 
                 # Create client
-                _InstantiatedClient(self.managers)
+                client = _InstantiatedClient(self.managers)
+                self.assertIsInstance(client, Experiment)
 
 
 _DEVICE_DB = {

@@ -15,7 +15,7 @@ from dax.util.units import time_to_str
 __all__ = ['PmtMonitor', 'MultiPmtMonitor']
 
 
-class _PmtMonitorBase(DaxClient, EnvExperiment, abc.ABC):
+class _PmtMonitorBase(DaxClient, Experiment, abc.ABC):
     """Base PMT monitor class."""
 
     APPLET_GROUP: str

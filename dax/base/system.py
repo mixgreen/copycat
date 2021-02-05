@@ -3,7 +3,6 @@ from __future__ import annotations  # Postponed evaluation of annotations
 import abc
 import logging
 import itertools
-import functools
 import re
 import natsort
 import typing
@@ -963,10 +962,10 @@ class DaxClient(DaxHasSystem, abc.ABC):
     This decorator creates a factory function that allows users to provide their system
     to be used with this experiment template.
 
-    Normally, a client would inherit from the ARTIQ `Experiment` class and implement the
-    :func:`prepare`, :func:`run`, and :func:`analyze` functions to define an execution flow.
-    Additionally, a :func:`build` function can be implemented to provide a user interface
-    for configuring the client.
+    Normally, a concrete client would inherit from the ARTIQ :class:`Experiment` or :class:`EnvExperiment`
+    class and implement the :func:`prepare`, :func:`run`, and :func:`analyze` functions to
+    define an execution flow. Additionally, a :func:`build` function can be implemented to
+    provide a user interface for configuring the client.
 
     Note that the :func:`build` function does not need to call `super()`.
     The decorator will make sure all classes are build in the correct order.
@@ -979,7 +978,7 @@ class DaxClient(DaxHasSystem, abc.ABC):
                  *args: typing.Any, **kwargs: typing.Any):
         """Construct the DAX client object.
 
-        :param managers_or_parent: Manager or parent of this module
+        :param managers_or_parent: Manager or parent of this client
         :param args: Positional arguments forwarded to the :func:`build` function
         :param kwargs: Keyword arguments forwarded to the :func:`build` function
         """
@@ -1002,10 +1001,6 @@ class DaxClient(DaxHasSystem, abc.ABC):
         pass
 
     def post_init(self) -> None:
-        pass
-
-    @abc.abstractmethod
-    def run(self) -> None:
         pass
 
 
@@ -1739,10 +1734,12 @@ def dax_client_factory(c: typing.Type[__DCF_C_T]) -> typing.Callable[[typing.Typ
     :return: A factory for the client class that allows the client to be matched with a system
     """
 
-    assert isinstance(c, type), 'The decorated object must be a class'
-    assert issubclass(c, DaxClient), 'The decorated class must be a subclass of DaxClient'
+    assert isinstance(c, type), 'The decorated object must be a type'
+    if not issubclass(c, DaxClient):
+        raise TypeError('The decorated class must be a subclass of DaxClient')
+    if not issubclass(c, artiq.experiment.Experiment):
+        raise TypeError('The decorated class must be a subclass of Experiment')
 
-    @functools.wraps(c, assigned=('__module__', '__name__', '__qualname__'))
     def wrapper(system_type: typing.Type[__DCF_S_T],
                 *system_args: typing.Any, **system_kwargs: typing.Any) -> typing.Type[__DCF_C_T]:
         """Create a new DAX client class.
@@ -1762,7 +1759,7 @@ def dax_client_factory(c: typing.Type[__DCF_C_T]) -> typing.Callable[[typing.Typ
             raise TypeError('System type must be a subclass of DaxSystem')
 
         class WrapperClass(c):  # type: ignore[valid-type,misc]
-            """The wrapper class that finalizes the client class.
+            """The wrapper class that fuses the client class with the given system.
 
             The wrapper class extends the client class by constructing the system
             first and loading the client class afterwards using the system as the parent.

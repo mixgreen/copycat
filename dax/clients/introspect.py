@@ -7,7 +7,7 @@ __all__ = ['Introspect']
 
 
 @dax_client_factory
-class Introspect(DaxClient, EnvExperiment):
+class Introspect(DaxClient, Experiment):
     """System introspection tool."""
 
     DAX_INIT: bool = False

@@ -5,7 +5,7 @@ __all__ = ['GTKWaveSaveGenerator']
 
 
 @dax_client_factory
-class GTKWaveSaveGenerator(DaxClient, EnvExperiment):
+class GTKWaveSaveGenerator(DaxClient, Experiment):
     """GTKWave save file generator."""
 
     DAX_INIT: bool = False

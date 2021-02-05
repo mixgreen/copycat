@@ -16,7 +16,7 @@ __all__ = ['SystemBenchmarkDaxInit', 'SystemBenchmarkDaxInitProfile', 'SystemBen
 
 
 @dax_client_factory
-class SystemBenchmarkDaxInit(DaxClient, EnvExperiment):
+class SystemBenchmarkDaxInit(DaxClient, Experiment):
     """DAX system initialization benchmark."""
 
     DAX_INIT: bool = False
@@ -75,7 +75,7 @@ class SystemBenchmarkDaxInit(DaxClient, EnvExperiment):
 
 
 @dax_client_factory
-class SystemBenchmarkDaxInitProfile(DaxClient, EnvExperiment):
+class SystemBenchmarkDaxInitProfile(DaxClient, Experiment):
     """DAX system initialization profiler."""
 
     DAX_INIT: bool = False
@@ -146,6 +146,9 @@ class _SystemBenchmarkBuildProfile(EnvExperiment):
                                             tooltip='Remove leading path information from file names in txt output')
 
     def prepare(self) -> None:
+        # Call super
+        super(_SystemBenchmarkBuildProfile, self).prepare()
+
         # Create the profile object
         self.profile = cProfile.Profile()
 
