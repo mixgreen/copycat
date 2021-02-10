@@ -748,7 +748,7 @@ class DaxSystem(DaxModuleBase):
         """
 
         # Validate this system class
-        _is_valid_system_class(type(self))
+        _validate_system_class(type(self))
 
         # Call super, add names, add a new registry
         super(DaxSystem, self).__init__(managers_or_parent, *args,
@@ -892,8 +892,8 @@ class DaxSystem(DaxModuleBase):
         pass
 
 
-def _is_valid_system_class(system_class: typing.Type[DaxSystem]) -> None:
-    """Validate if this system class is correctly implemented."""
+def _validate_system_class(system_class: typing.Type[DaxSystem]) -> None:
+    """Check if this system class is correctly implemented."""
 
     # Check if system ID was overridden
     assert hasattr(system_class, 'SYS_ID'), 'Every DAX system class must override the SYS_ID class attribute'
@@ -973,6 +973,8 @@ class DaxClient(DaxHasSystem, abc.ABC):
 
     DAX_INIT: bool = True
     """Flag if dax_init() should run for this client."""
+    MANAGERS_KWARG: typing.Optional[str] = None
+    """Pass the ARTIQ managers as a keyword argument to the `build()` function."""
 
     def __init__(self, managers_or_parent: DaxSystem,
                  *args: typing.Any, **kwargs: typing.Any):
@@ -983,6 +985,8 @@ class DaxClient(DaxHasSystem, abc.ABC):
         :param kwargs: Keyword arguments forwarded to the :func:`build` function
         """
         assert isinstance(self.DAX_INIT, bool), 'The DAX_INIT flag must be of type bool'
+        assert self.MANAGERS_KWARG is None or isinstance(self.MANAGERS_KWARG, str), \
+            'MANAGERS_KWARG must be of type str or None'
 
         # Check if the decorator was used
         if not isinstance(managers_or_parent, DaxSystem):
@@ -1498,7 +1502,7 @@ class DaxDataStoreInfluxDb(DaxDataStore):
             'The environment parameter must be of type HasEnvironment'
         assert issubclass(system_class, DaxSystem), 'The system class must be a subclass of DaxSystem'
         assert isinstance(system_class.DAX_INFLUX_DB_KEY, str), 'The DAX Influx DB key must be of type str'
-        _is_valid_system_class(system_class)
+        _validate_system_class(system_class)
 
         # Call super
         super(DaxDataStoreInfluxDb, self).__init__()
@@ -1769,6 +1773,11 @@ def dax_client_factory(c: typing.Type[__DCF_C_T]) -> typing.Callable[[typing.Typ
                          *args: typing.Any, **kwargs: typing.Any):
                 # Create the system
                 self.__system: DaxSystem = system_type(managers_or_parent, *system_args, **system_kwargs)
+
+                if self.MANAGERS_KWARG is not None:
+                    # Pass ARTIQ managers as a keyword argument
+                    assert isinstance(self.MANAGERS_KWARG, str), 'MANAGERS_KWARG must be of type str or None'
+                    kwargs[self.MANAGERS_KWARG] = managers_or_parent
                 # Call constructor of the client class and give it the system as parent
                 super(WrapperClass, self).__init__(self.__system, *args, **kwargs)
 

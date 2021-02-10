@@ -36,12 +36,7 @@ class _TestSystem(dax.base.system.DaxSystem, test.interfaces.test_operation.Oper
     SYS_VER = 0
 
 
-class _MinimalTestProgram(dax.base.program.DaxProgram, artiq.experiment.Experiment):
-    def run(self):
-        pass  # Run needs to be implemented
-
-
-class _TestProgram(_MinimalTestProgram):
+class _TestProgram(dax.base.program.DaxProgram, artiq.experiment.Experiment):
     def build(self, *args, **kwargs) -> None:
         super(_TestProgram, self).build(*args, **kwargs)
         self.did_prepare = False
@@ -74,20 +69,46 @@ class DaxProgramTestCase(unittest.TestCase):
         self.managers.close()
 
     def test_link(self):
-        # Create the factory
-        factory = dax.base.system.dax_client_factory(_TestProgram)
-        # Link system to program
-        linked_program_class = factory(_TestSystem)
-        # Instantiate program
-        return linked_program_class(self.managers)
+        # Create system
+        system = _TestSystem(self.managers)
+        # Dynamically link system to the program
+        program = _TestProgram(system, core=system.core, interface=system)
+        # Basic checks
+        self.assertIsInstance(program, dax.base.program.DaxProgram)
+        self.assertIs(program.core, system.core)
+        self.assertIs(program.q, system)
+        self.assertSetEqual(program.kernel_invariants, {'q', 'core'})
+        self.assertIn(_TestProgram.__name__, program.get_identifier())
+        dax.interfaces.operation.validate_operation_interface(program.q)
+
+    def test_isolated_link(self):
+        # Create isolated managers
+        isolated = dax.util.artiq.isolate_managers(self.managers)
+        # Create system
+        system = _TestSystem(self.managers)
+        # Dynamically link system to the program in an isolated fashion
+        program = _TestProgram(isolated, core=system.core, interface=system)
+        # Basic checks
+        self.assertIsInstance(program, dax.base.program.DaxProgram)
+        self.assertIs(program.core, system.core)
+        self.assertIs(program.q, system)
+        self.assertSetEqual(program.kernel_invariants, {'q', 'core'})
+        self.assertIn(_TestProgram.__name__, program.get_identifier())
+        dax.interfaces.operation.validate_operation_interface(program.q)
+
+        # Return program for other tests
+        return program
 
     def test_run(self):
-        program = self.test_link()
+        program = self.test_isolated_link()
         # Run the program
+        self.assertFalse(program.did_prepare)
         program.prepare()
         self.assertTrue(program.did_prepare)
+        self.assertFalse(program.did_run)
         program.run()
         self.assertTrue(program.did_run)
+        self.assertFalse(program.did_analyze)
         program.analyze()
         self.assertTrue(program.did_analyze)
 

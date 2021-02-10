@@ -12,7 +12,7 @@ import asyncio
 import json
 import hashlib
 import dataclasses
-import os
+import os.path
 
 import artiq.experiment
 import artiq.master.worker_db

@@ -13,7 +13,7 @@ class Introspect(DaxClient, Experiment):
     DAX_INIT: bool = False
     """Disable DAX init."""
 
-    GRAPHS = {
+    GRAPHS: typing.Dict[str, typing.List[type]] = {
         'All': [ComponentGraphviz, RelationGraphviz],
         'Component graph': [ComponentGraphviz],
         'Relation graph': [RelationGraphviz],
@@ -62,16 +62,16 @@ class Introspect(DaxClient, Experiment):
             k: self.get_argument(group='Graph configuration', **v) for k, v in graph_args.items()
         }
 
-    def prepare(self):
+    def prepare(self) -> None:
         # Get the system
         system = self.registry.find_module(DaxSystem)
         # Create the graph objects
         self._graphs = [g(system, **self._graph_args) for g in self.GRAPHS[self._graph_types]]
 
-    def run(self):
+    def run(self) -> None:
         pass
 
-    def analyze(self):
+    def analyze(self) -> None:
         # Render all graphs
         for g in self._graphs:
             g.render(view=self._view)

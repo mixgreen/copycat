@@ -11,11 +11,11 @@ class GTKWaveSaveGenerator(DaxClient, Experiment):
     DAX_INIT: bool = False
     """Disable DAX init."""
 
-    def prepare(self):
+    def prepare(self) -> None:
         # Get the system
         system = self.registry.find_module(DaxSystem)
         # Create the GTKWave save generator util
         dax.util.gtkwave.GTKWSaveGenerator(system)
 
-    def run(self):
+    def run(self) -> None:
         pass

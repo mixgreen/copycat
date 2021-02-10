@@ -5,7 +5,7 @@ import re
 import numpy as np
 import collections
 import collections.abc
-import os
+import os.path
 import h5py  # type: ignore
 
 from artiq.experiment import *

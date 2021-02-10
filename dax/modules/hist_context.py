@@ -4,7 +4,7 @@ import collections.abc
 import numpy as np
 import h5py  # type: ignore
 import natsort
-import os
+import os.path
 import math
 
 import matplotlib.pyplot as plt  # type: ignore

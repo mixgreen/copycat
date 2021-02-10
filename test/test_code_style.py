@@ -2,6 +2,7 @@ import unittest
 import io
 import contextlib
 import os
+import os.path
 
 
 class TestCodeStyle(unittest.TestCase):
