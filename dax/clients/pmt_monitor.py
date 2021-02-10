@@ -138,7 +138,7 @@ class _PmtMonitorBase(DaxClient, Experiment, abc.ABC):
             raise ValueError('Detection window must be greater than zero')
 
         # Convert the detection delay to machine units
-        # The lowest number of machine units required to separate two events is `core.ref_multiplier`
+        # The lowest number of machine units required to separate two events is ``core.ref_multiplier``
         # Without event separation, the core device fuses consecutive detection windows to one
         self.detection_delay_mu: np.int64 = np.int64(max(self.core.seconds_to_mu(self.detection_delay),
                                                          self.core.ref_multiplier))
@@ -289,7 +289,7 @@ class _PmtMonitorBase(DaxClient, Experiment, abc.ABC):
 
         By default, search for a detection interface and request the PMT array.
 
-        :return: A list with `EdgeCounter` objects
+        :return: A list with :class:`EdgeCounter` objects
         """
         # Obtain the detection interface
         detection = self.registry.find_interface(DetectionInterface)  # type: ignore[misc]

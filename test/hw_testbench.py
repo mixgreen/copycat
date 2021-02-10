@@ -133,7 +133,7 @@ class _CoreDevice:
 
         :param args: Additional arguments to append to the subprocess run command
         :param kwargs: Keyword arguments for the subprocess run call
-        :return: A `CompletedProcess` object
+        :return: A :class:`CompletedProcess` object
         """
         command: typing.List[str] = ['artiq_coremgmt', '-D', self.address]
         command.extend(args)
@@ -178,7 +178,7 @@ _LOCK_KEY: str = 'dax_hw_tb_lock'
 @unittest.skipIf(TB_DISABLED, 'Hardware testbenches disabled, skipping hardware tests')
 @unittest.skipIf(_CORE_DEVICE is None, 'No core device available, skipping hardware test')
 class TestBenchCase(unittest.TestCase):
-    """An extension of the `unittest.TestCase` class which facilitates device testing.
+    """An extension of the :class:`unittest.TestCase` class which facilitates device testing.
 
     Users can inherit from this class to create their own device/hardware test cases.
     It has predefined :func:`setUp` and :func:`tearDown` functions for resource handling.
@@ -246,7 +246,7 @@ class TestBenchCase(unittest.TestCase):
         :param env_class: The environment class to construct
         :param build_args: Positional arguments passed to the build function of the environment
         :param build_kwargs: Keyword arguments passed to the build function of the environment
-        :param kwargs: Keyword arguments passed to the build function of the environment (updates `build_kwargs`)
+        :param kwargs: Keyword arguments passed to the build function of the environment (updates ``build_kwargs``)
         :return: The constructed ARTIQ environment object
         """
 
@@ -270,7 +270,7 @@ class TestBenchCase(unittest.TestCase):
             # Construct environment
             env = env_class(self.__managers, *build_args, **build_kwargs)
         except artiq.master.worker_db.DeviceError as e:
-            # Skip test in case device errors (raising instead of calling `self.skipTest()` for better typing)
+            # Skip test in case device errors (raising instead of calling ``self.skipTest()`` for better typing)
             assert _CORE_DEVICE is not None
             raise unittest.SkipTest(f'Core device at [{_CORE_DEVICE.address}] not available: "{str(e)}"')
         else:

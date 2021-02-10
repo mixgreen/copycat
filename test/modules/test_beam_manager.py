@@ -15,7 +15,7 @@ class _TestSystem(DaxSystem):
 
 
 class GetBeam2TestCase(unittest.TestCase):
-    """This test class should cover all potential cases and outcomes of the `get_beam()` function."""
+    """This test class should cover all potential cases and outcomes of the :func:`get_beam()` function."""
 
     # Number of beams
     N = 2

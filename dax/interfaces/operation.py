@@ -16,19 +16,19 @@ __all__ = ['OperationInterface', 'validate_operation_interface']
 
 
 class OperationInterface(GateInterface, abc.ABC):
-    """The operation interface exposes a set of quantum operations and functions to obtain measurement results.
+    """The operation interface exposes a set of quantum operations and functions to handle measurement results.
 
     When this interface is implemented, :attr:`pi` and :attr:`num_qubits` need to be marked kernel invariant.
 
-    Normally, all operation methods are expected to be kernels unless mentioned otherwise.
-    Operations that are not implemented should raise a :attr:`NotImplementedError`.
+    Normally, all operation methods are expected to be kernel functions unless mentioned otherwise.
+    Operations that are not implemented should raise a :class:`NotImplementedError`.
     """
 
     """Operations"""
 
     @abc.abstractmethod
     def prep_0_all(self):
-        """Prepare all qubits to the |0> state."""
+        """Prepare all qubits to the ``|0>`` state."""
         pass
 
     @abc.abstractmethod
@@ -66,6 +66,8 @@ class OperationInterface(GateInterface, abc.ABC):
 
         This function can be used after one or more measurement operations were scheduled on each target qubit.
         The execution of this function will block until all measurement results are available.
+
+        :param qubits: A list of target qubits
         """
         pass
 
@@ -104,11 +106,12 @@ class OperationInterface(GateInterface, abc.ABC):
         pass
 
 
-def validate_operation_interface(interface: OperationInterface, *, num_qubits: typing.Optional[int] = None) -> None:
+def validate_operation_interface(interface: OperationInterface, *, num_qubits: typing.Optional[int] = None) -> bool:
     """Validate an operation interface object.
 
     :param interface: The operation interface object
     :param num_qubits: The exact number of qubits in the system (optional)
+    :return: :const:`True`, to allow usage of this function in an ``assert`` statement
     :raise AssertionError: Raised if validation failed
     """
     assert isinstance(interface, OperationInterface), 'The provided interface is not of type OperationInterface'
@@ -136,3 +139,6 @@ def validate_operation_interface(interface: OperationInterface, *, num_qubits: t
                                   if not n.startswith('_') and n not in host_only_fn}
     assert all(dax.util.artiq.is_kernel(getattr(interface, fn, None)) for fn in kernel_fn), \
         'Not all kernel functions are decorated correctly'
+
+    # Return True
+    return True

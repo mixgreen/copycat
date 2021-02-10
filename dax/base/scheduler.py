@@ -40,13 +40,13 @@ def _str_to_time(string: str) -> float:
     This function converts simple time strings with a number and a character to a time in seconds.
     The available units are:
 
-    - `'s'` for seconds
-    - `'m'` for minutes
-    - `'h'` for hours
-    - `'d'` for days
-    - `'w'` for weeks
+    - ``'s'`` for seconds
+    - ``'m'`` for minutes
+    - ``'h'`` for hours
+    - ``'d'`` for days
+    - ``'w'`` for weeks
 
-    Examples of valid strings are `'10 s'`, `'-2m'`, `'8h'`, and `'2.5 w'`.
+    Examples of valid strings are ``'10 s'``, ``'-2m'``, ``'8h'``, and ``'2.5 w'``.
     An empty string will return zero.
 
     :param string: The string
@@ -406,7 +406,7 @@ class Job(Node):
     """
 
     FILE: typing.Optional[str] = None
-    """File containing the experiment (by default relative from the `repository` directory, see :attr:`REPOSITORY`)."""
+    """File containing the experiment (by default relative from the repository directory, see :attr:`REPOSITORY`)."""
     REPOSITORY: bool = True
     """True if the given file is in the experiment repository."""
     CLASS_NAME: typing.Optional[str] = None
@@ -574,8 +574,8 @@ class Trigger(Node):
     - :attr:`POLICY`: The scheduling policy of this trigger (defaults to the schedulers policy)
     - :attr:`REVERSE`: The reverse wave flag of this trigger (defaults to the schedulers reverse wave flag)
     - :attr:`PRIORITY`: The job priority of this trigger (defaults to the schedulers job priority)
-    - :attr:`DEPTH`: Maximum recursion depth (`-1` for infinite recursion depth, which is the default)
-    - :attr:`START_DEPTH`: Depth to start visiting nodes (`0` to start at the root nodes, which is the default)
+    - :attr:`DEPTH`: Maximum recursion depth (:const:`-1` for infinite recursion depth, which is the default)
+    - :attr:`START_DEPTH`: Depth to start visiting nodes (:const:`0` to start at the root nodes, which is the default)
     - :attr:`Node.INTERVAL`: The trigger interval
     - :attr:`Node.DEPENDENCIES`: A collection of node classes on which this trigger depends
     """
@@ -591,9 +591,9 @@ class Trigger(Node):
     PRIORITY: typing.Optional[int] = None
     """The job priority of this trigger."""
     DEPTH: int = -1
-    """Maximum recursion depth (`-1` for infinite recursion depth)."""
+    """Maximum recursion depth (:const:`-1` for infinite recursion depth)."""
     START_DEPTH: int = 0
-    """Depth to start visiting nodes (`0` to start at the root nodes)."""
+    """Depth to start visiting nodes (:const:`0` to start at the root nodes)."""
 
     def build(self) -> None:  # type: ignore
         # Check nodes, action, policy, and reverse flag
@@ -672,8 +672,8 @@ class SchedulerController:
         :param policy: The scheduling policy as a string (defaults to the schedulers policy)
         :param reverse: The reverse wave flag (defaults to the schedulers reverse wave flag)
         :param priority: The job priority of this trigger (defaults to the schedulers job priority)
-        :param depth: Maximum recursion depth (`-1` for infinite recursion depth, which is the default)
-        :param start_depth: Depth to start visiting nodes (`0` to start at the root nodes, which is the default)
+        :param depth: Maximum recursion depth (:const:`-1` for infinite recursion depth, which is the default)
+        :param start_depth: Depth to start visiting nodes (:const:`0` to start at the root nodes, which is the default)
         :param block: Block until the request was handled
         """
 
@@ -1067,8 +1067,8 @@ class DaxScheduler(dax.base.system.DaxHasKey, abc.ABC):
         :param policy: The policy for this wave
         :param reverse: The reverse wave flag
         :param priority: Submit priority
-        :param depth: Maximum recursion depth (`-1` for infinite recursion depth)
-        :param start_depth: Depth to start visiting nodes (`0` to start at the root nodes)
+        :param depth: Maximum recursion depth (:const:`-1` for infinite recursion depth)
+        :param start_depth: Depth to start visiting nodes (:const:`0` to start at the root nodes)
         """
         assert isinstance(wave, float), 'Wave must be of type float'
         assert isinstance(root_nodes, collections.abc.Collection), 'Root nodes must be a collection'

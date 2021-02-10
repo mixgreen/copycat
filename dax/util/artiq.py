@@ -15,7 +15,7 @@ __all__ = ['is_kernel', 'is_portable', 'is_host_only',
 
 
 class _TemporaryDirectory(tempfile.TemporaryDirectory):  # type: ignore[type-arg]
-    """Custom `TemporaryDirectory` class."""
+    """Custom :class:`TemporaryDirectory` class."""
 
     _refs: typing.List[_TemporaryDirectory] = []
     """List of references to instances of this class."""
@@ -52,7 +52,7 @@ _DEVICE_DB: typing.Dict[str, typing.Any] = {
 
 
 def is_kernel(func: typing.Any) -> bool:
-    """Helper function to detect if a function is an ARTIQ kernel (`@kernel`) or not.
+    """Helper function to detect if a function is an ARTIQ kernel (``@kernel``) or not.
 
     :param func: The function of interest
     :return: True if the given function is a kernel
@@ -62,7 +62,7 @@ def is_kernel(func: typing.Any) -> bool:
 
 
 def is_portable(func: typing.Any) -> bool:
-    """Helper function to detect if a function is an ARTIQ portable function (`@portable`) or not.
+    """Helper function to detect if a function is an ARTIQ portable function (``@portable``) or not.
 
     :param func: The function of interest
     :return: True if the given function is a portable function
@@ -72,7 +72,7 @@ def is_portable(func: typing.Any) -> bool:
 
 
 def is_host_only(func: typing.Any) -> bool:
-    """Helper function to detect if a function is marked as host only (`@host_only`) or not.
+    """Helper function to detect if a function is marked as host only (``@host_only``) or not.
 
     :param func: The function of interest
     :return: True if the given function is host only
@@ -93,7 +93,7 @@ def _convert_argument(argument: typing.Any) -> typing.Any:
 def process_arguments(arguments: typing.Dict[str, typing.Any]) -> typing.Dict[str, typing.Any]:
     """Process a dict with raw arguments to make it compatible with the ARTIQ format.
 
-    The expid and the `ProcessArgumentManager` expect arguments in a PYON serializable format.
+    The expid and the :class:`ProcessArgumentManager` expect arguments in a PYON serializable format.
     This function will make sure that complex objects (such as scan argument objects) are
     converted to the correct format
 
@@ -131,7 +131,7 @@ def get_managers(device_db: typing.Union[typing.Dict[str, typing.Any], str, None
                  expid: typing.Optional[typing.Dict[str, typing.Any]] = None,
                  arguments: typing.Optional[typing.Dict[str, typing.Any]] = None,
                  **kwargs: typing.Any) -> _ManagersTuple:
-    """Returns a tuple of ARTIQ manager objects that can be used to construct an ARTIQ `HasEnvironment` object.
+    """Returns a tuple of ARTIQ manager objects that can be used to construct an ARTIQ :class:`HasEnvironment` object.
 
     This function is primarily used for testing purposes.
 
@@ -140,7 +140,7 @@ def get_managers(device_db: typing.Union[typing.Dict[str, typing.Any], str, None
 
     We strongly recommend to close the managers before they are discarded. This will free any used resources.
     **The best way to guarantee the managers are closed is to use the returned tuple as a context manager.**
-    Alternatively, users can call the `close()` method of the tuple or close managers manually.
+    Alternatively, users can call the :func:`close` method of the tuple or close managers manually.
     Managers can be closed multiple times without any side-effects.
     Just in case the user does not manually close managers, finalizers attached to specific managers
     will close any occupied resources before object destruction.
@@ -152,8 +152,8 @@ def get_managers(device_db: typing.Union[typing.Dict[str, typing.Any], str, None
     :param dataset_db: A dataset DB as a file name
     :param expid: Dict for the scheduler expid attribute
     :param arguments: Arguments for the ProcessArgumentManager object
-    :param kwargs: Arguments for the ProcessArgumentManager object (updates `arguments`)
-    :return: A tuple of ARTIQ manager objects: (`DeviceManager`, `DatasetManager`, `ProcessArgumentManager`, `dict`)
+    :param kwargs: Arguments for the ProcessArgumentManager object (updates ``arguments``)
+    :return: A tuple of ARTIQ manager objects: ``(DeviceManager, DatasetManager, ProcessArgumentManager, dict)``
     """
 
     if arguments is None:
@@ -246,11 +246,11 @@ class ClonedDatasetManager(artiq.master.worker_db.DatasetManager):
                  dataset_db: typing.Any = None):
         """Create a clone of an existing ARTIQ dataset manager.
 
-        The `name` parameter must be unique and is formatted with an `index` parameter.
-        The `index` parameter starts at `0` and is incremented for every new clone
+        The name parameter must be unique and is formatted with an index parameter.
+        The index parameter starts at :const:`0` and is incremented for every new clone
         created from the existing ARTIQ dataset manager.
 
-        The `name` is directly used as the HDF5 group name and `/` can therefore be
+        The ``name`` is directly used as the HDF5 group name and ``'/'`` can therefore be
         used to create sub-groups.
 
         :param dataset_mgr: The existing ARTIQ dataset manager
@@ -307,7 +307,7 @@ def clone_managers(managers: typing.Any, *,
                    **kwargs: typing.Any) -> _ManagersTuple:
     """Clone a given tuple of ARTIQ manager objects to use for a sub-experiment.
 
-    Sub-experiments (i.e. `children` in ARTIQ terminology) can share ARTIQ manager objects with their parent
+    Sub-experiments (i.e. ``children`` in ARTIQ terminology) can share ARTIQ manager objects with their parent
     by passing the parent experiment object. In this case, the same dataset manager and argument manager
     are shared, which can be undesired for certain situations (e.g. dataset aliasing or argument aliasing).
     This function allows you to clone ARTIQ manager objects which will decouple the dataset manager,
@@ -325,8 +325,8 @@ def clone_managers(managers: typing.Any, *,
     :param managers: The tuple with ARTIQ manager objects
     :param name: Optional name for cloned dataset manager, which will be used in the HDF5 group name
     :param arguments: Arguments for the ProcessArgumentManager object
-    :param kwargs: Arguments for the ProcessArgumentManager object (updates `arguments`)
-    :return: A cloned ARTIQ manager object: `(DeviceManager, ClonedDatasetManager, ProcessArgumentManager, dict)`
+    :param kwargs: Arguments for the ProcessArgumentManager object (updates ``arguments``)
+    :return: A cloned ARTIQ manager object: ``(DeviceManager, ClonedDatasetManager, ProcessArgumentManager, dict)``
     """
 
     if arguments is None:
@@ -386,7 +386,7 @@ def isolate_managers(managers: typing.Any, *,
 
     :param managers: The tuple with ARTIQ manager objects
     :param name: Optional name for cloned dataset manager, which will be used in the HDF5 group name
-    :return: Isolated ARTIQ managers: `(DeviceManager, ClonedDatasetManager, ProcessArgumentManager, dict)`
+    :return: Isolated ARTIQ managers: ``(DeviceManager, ClonedDatasetManager, ProcessArgumentManager, dict)``
     """
 
     # Check the type of the passed managers

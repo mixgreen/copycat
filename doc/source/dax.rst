@@ -11,7 +11,15 @@ dax.experiment
     :undoc-members:
     :show-inheritance:
 
-The system base components can be found in the :ref:`dax.base.system`.
+.. _dax.program:
+
+dax.program
+-----------
+
+.. automodule:: dax.program
+    :members:
+    :undoc-members:
+    :show-inheritance:
 
 .. _dax.scan:
 
@@ -23,8 +31,6 @@ dax.scan
     :undoc-members:
     :show-inheritance:
 
-The scan base components can be found in the :ref:`dax.base.scan`.
-
 .. _dax.scheduler:
 
 dax.scheduler
@@ -34,8 +40,6 @@ dax.scheduler
     :members:
     :undoc-members:
     :show-inheritance:
-
-The scan base components can be found in the :ref:`dax.base.scheduler`.
 
 Subpackages
 -----------

@@ -47,7 +47,7 @@ class DaxSimDevice(abc.ABC):
         return self.__key
 
     def core_reset(self) -> None:
-        """Called when `core.reset()` is used.
+        """Called when ``core.reset()`` is used.
 
         By default this function does nothing.
         Mainly intended for clearing buffers of devices.

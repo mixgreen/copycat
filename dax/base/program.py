@@ -21,10 +21,10 @@ class DaxProgram(dax.base.system.DaxBase, abc.ABC):
     A DAX program is designed like a regular ARTIQ experiment and has access to the following additional attributes:
 
     - :attr:`core`, is already populated with the core device driver
-    - :attr:`q`, gate-level access to the quantum domain (see :class:`dax.interface.operation.OperationInterface`)
-      **(note: this attribute should only be used in the :func:`run` and :func:`analyze` functions)**
+    - :attr:`q`, gate-level access to the quantum domain (see :class:`dax.interfaces.operation.OperationInterface`)
+      (note: this attribute should only be used in the :func:`run` and :func:`analyze` functions)
     - :attr:`logger`, program logger (see also :class:`dax.base.system.DaxBase`)
-      **(note: should not be used in kernels)**
+      (note: should not be used in kernels)
 
     The ARTIQ environment of a DAX program is partially decoupled from the environment that hosts the DAX system.
     The device DB is empty, arguments are not passed to/from the DAX system, and datasets are isolated.
@@ -47,7 +47,7 @@ class DaxProgram(dax.base.system.DaxBase, abc.ABC):
         # Call super
         super(DaxProgram, self).__init__(managers_or_parent, *args, **kwargs)
 
-        # Store attributes after `build()`
+        # Store attributes after ``build()``
         self.__core: artiq.coredevice.core.Core = core
         self.__q: dax.interfaces.operation.OperationInterface = interface
         # Update kernel invariants

@@ -98,9 +98,9 @@ class OperationInstance(dax.interfaces.operation.OperationInterface):
 class OperationInterfaceTestCase(unittest.TestCase):
     def test_correct_interface(self):
         interface = OperationInstance()
-        self.assertIsNone(
+        self.assertTrue(
             dax.interfaces.operation.validate_operation_interface(interface, num_qubits=OperationInstance.NUM_QUBITS))
-        self.assertIsNone(dax.interfaces.operation.validate_operation_interface(interface))
+        self.assertTrue(dax.interfaces.operation.validate_operation_interface(interface))
 
     def _validate_functions(self, fn_names):
         for fn in fn_names:

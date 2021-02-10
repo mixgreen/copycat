@@ -311,7 +311,7 @@ class DaxHasKey(DaxBase, abc.ABC):
         """Returns the contents of a system dataset.
 
         If the key is present, its value will be returned.
-        If the key is not present and no default is provided, a `KeyError` will be raised.
+        If the key is not present and no default is provided, a :class:`KeyError` will be raised.
         If the key is not present and a default is provided, the default value will
         be written to the dataset and the same value will be returned.
 
@@ -803,7 +803,7 @@ class DaxSystem(DaxModuleBase):
         return self.__sim_enabled
 
     def build(self, *args: typing.Any, **kwargs: typing.Any) -> None:
-        """Override this method to build your DAX system. (Do not forget to call `super.build()` first!)
+        """Override this method to build your DAX system. (Do not forget to call ``super.build()`` first!)
 
         :param args: Positional arguments forwarded to the super class
         :param kwargs: Keyword arguments forwarded to the super class
@@ -967,14 +967,14 @@ class DaxClient(DaxHasSystem, abc.ABC):
     define an execution flow. Additionally, a :func:`build` function can be implemented to
     provide a user interface for configuring the client.
 
-    Note that the :func:`build` function does not need to call `super()`.
+    Note that the :func:`build` function does not need to call ``super()``.
     The decorator will make sure all classes are build in the correct order.
     """
 
     DAX_INIT: bool = True
     """Flag if dax_init() should run for this client."""
     MANAGERS_KWARG: typing.Optional[str] = None
-    """Pass the ARTIQ managers as a keyword argument to the `build()` function."""
+    """Pass the ARTIQ managers as a keyword argument to the :func:`build()` function."""
 
     def __init__(self, managers_or_parent: DaxSystem,
                  *args: typing.Any, **kwargs: typing.Any):
@@ -1043,7 +1043,7 @@ class DaxNameRegistry:
     def device_db(self) -> typing.Mapping[str, typing.Any]:
         """Return the current device DB.
 
-        Requesting the device DB using `HasEnvironment.get_device_db()` is slow as it
+        Requesting the device DB using ``HasEnvironment.get_device_db()`` is slow as it
         connects to the ARTIQ master to obtain the database.
         The registry caches the device DB and by using this property the number
         of calls to the ARTIQ master can be minimized.
@@ -1381,7 +1381,7 @@ class DaxNameRegistry:
         """Find a unique interface that matches the requested type.
 
         Note: mypy type checker does not handle pure abstract base classes correctly.
-        A `# type: ignore[misc]` annotation on the line using this function is probably
+        A ``# type: ignore[misc]`` annotation on the line using this function is probably
         required to pass type checking.
 
         :param type_: The type of the interface
@@ -1408,7 +1408,7 @@ class DaxNameRegistry:
         """Search for interfaces that match the requested type and return results as a dict.
 
         Note: mypy type checker does not handle pure abstract base classes correctly.
-        A `# type: ignore[misc]` annotation on the line using this function is probably
+        A ``# type: ignore[misc]`` annotation on the line using this function is probably
         required to pass type checking.
 
         :param type_: The type of the interfaces
@@ -1754,7 +1754,7 @@ def dax_client_factory(c: typing.Type[__DCF_C_T]) -> typing.Callable[[typing.Typ
         :param system_args: Positional arguments forwarded to the systems :func:`build` function
         :param system_kwargs: Keyword arguments forwarded to the systems :func:`build` function
         :return: A fusion of the client and system class
-        :raises TypeError: Raised if the provided `system_type` parameter is not a subclass of `DaxSystem`
+        :raises TypeError: Raised if the provided ``system_type`` parameter is not a subclass of :class:`DaxSystem`
         """
 
         # Check the system type

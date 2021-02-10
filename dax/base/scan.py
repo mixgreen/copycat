@@ -62,7 +62,7 @@ class _ScanProductGenerator:
                  enable_index: bool = True):
         """Create a new scan product generator.
 
-        The `enable_index` parameter dan be used to disable index objects,
+        The ``enable_index`` parameter can be used to disable index objects,
         potentially reducing the memory footprint of the scan.
 
         :param scans: A list of tuples with the key and values of the scan
@@ -136,14 +136,14 @@ class DaxScan(dax.base.system.DaxBase, abc.ABC):
     An infinite scan can be stopped by using the :func:`stop_scan` function or by using
     the "Terminate experiment" button in the dashboard.
     It is possible to disable the infinite scan argument for an experiment by setting the
-    :attr:`INFINITE_SCAN_ARGUMENT` class attribute to `False`.
+    :attr:`INFINITE_SCAN_ARGUMENT` class attribute to :const:`False`.
     The default setting of the infinite scan argument can be modified by setting the
     :attr:`INFINITE_SCAN_DEFAULT` class attribute.
 
     The :func:`run_point` function has access to a point and an index argument.
     Users can disable the index argument to reduce the memory footprint of the experiment.
-    The :attr:`ENABLE_SCAN_INDEX` attribute can be used to configure this behavior (default: `True`).
-    When the index is disabled, the passed `index` argument will be empty.
+    The :attr:`ENABLE_SCAN_INDEX` attribute can be used to configure this behavior (default: :const:`True`).
+    When the index is disabled, the passed index argument will be empty.
 
     In case scanning is performed in a kernel, users are responsible for setting
     up the right devices to actually run a kernel.
@@ -181,7 +181,7 @@ class DaxScan(dax.base.system.DaxBase, abc.ABC):
         """Build the scan object using the :func:`build_scan` function.
 
         Normally users would build their scan object by overriding the :func:`build_scan` function.
-        In specific cases where this function might be overridden, do not forget to call `super.build()`.
+        In specific cases where this function might be overridden, do not forget to call ``super.build()``.
 
         :param args: Positional arguments forwarded to the superclass
         :param kwargs: Keyword arguments forwarded to the superclass (includes args and kwargs for :func:`build_scan`)
@@ -271,13 +271,13 @@ class DaxScan(dax.base.system.DaxBase, abc.ABC):
         Note that scans can be reordered using the :func:`set_scan_order` function.
         The order in the ARTIQ dashboard will not change, but the product will be generated differently.
 
-        Scannables are normal ARTIQ `Scannable` objects and will appear in the user interface.
+        Scannables are normal ARTIQ :class:`Scannable` objects and will appear in the user interface.
 
         This function can only be called in the :func:`build_scan` function.
 
         :param key: Unique key of the scan, used to obtain the value later
         :param name: The name of the argument
-        :param scannable: An ARTIQ `Scannable` object
+        :param scannable: An ARTIQ :class:`Scannable` object
         :param group: The argument group name
         :param tooltip: The shown tooltip
         """
@@ -556,7 +556,7 @@ class DaxScan(dax.base.system.DaxBase, abc.ABC):
     def device_cleanup(self):  # type: () -> None
         """4. Cleanup on the core device, called once after scanning and before a pause.
 
-        In case the device cleanup function is a kernel, it is good to add a `self.core.break_realtime()`
+        In case the device cleanup function is a kernel, it is good to add a ``self.core.break_realtime()``
         at the start of this function to make sure operations can execute in case of an
         underflow exception.
         """

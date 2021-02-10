@@ -194,7 +194,7 @@ def SystemBenchmarkBuildProfile(
     :param system_args: Positional arguments forwarded to the systems :func:`build` function
     :param system_kwargs: Keyword arguments forwarded to the systems :func:`build` function
     :return: A build profile class for the given system type
-    :raises TypeError: Raised if the provided `system_type` parameter is not a subclass of `DaxSystem`
+    :raises TypeError: Raised if the provided ``system_type`` parameter is not a subclass of :class:`DaxSystem`
     """
 
     # Check the system type

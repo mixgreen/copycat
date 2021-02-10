@@ -7,15 +7,15 @@ __all__ = ['list_to_int32', 'list_to_int64']
 
 @portable
 def list_to_int32(measurements: TList(TInt32)) -> TInt32:  # type: ignore
-    """Convert a list of measurement results to an int32.
+    """Convert a list of measurement results to an ``int32``.
 
-    **Note that the 32th element of the list can flip the sign due to the usage of a signed int32**.
+    **Note that the 32th element of the list can flip the sign due to the usage of a signed data type**.
     Element 0 in the list is the LSB.
-    Measurements are of type int32 and interpreted as boolean values.
+    Measurements are of type ``int32`` and are interpreted as boolean values.
     If the list contains more than 32 elements, only the first 32 elements will be considered.
 
     :param measurements: List of measurements
-    :return: An int32 that packs measurements in binary form
+    :return: An ``int32`` that packs measurements in binary form (``int32`` NumPy type on host)
     """
     # Initialize result and mask
     r = np.int32(0)
@@ -32,15 +32,15 @@ def list_to_int32(measurements: TList(TInt32)) -> TInt32:  # type: ignore
 
 @portable
 def list_to_int64(measurements: TList(TInt32)) -> TInt64:  # type: ignore
-    """Convert a list of measurement results to an int64.
+    """Convert a list of measurement results to an ``int64``.
 
-    **Note that the 64th element of the list can flip the sign due to the usage of a signed int64**.
+    **Note that the 64th element of the list can flip the sign due to the usage of a signed data type**.
     Element 0 in the list is the LSB.
-    Measurements are of type int32 and interpreted as boolean values.
+    Measurements are of type ``int32`` and are interpreted as boolean values.
     If the list contains more than 64 elements, only the first 64 elements will be considered.
 
     :param measurements: List of measurements
-    :return: An int64 that packs measurements in binary form
+    :return: An ``int64`` that packs measurements in binary form (``int64`` NumPy type on host)
     """
     # Initialize result and mask
     r = np.int64(0)

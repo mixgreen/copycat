@@ -20,11 +20,11 @@ _logger: logging.Logger = logging.getLogger(__name__)
 
 
 class PeekTestCase(unittest.TestCase):
-    """An extension of the `unittest.TestCase` class with functions for peek-testing.
+    """An extension of the :class:`unittest.TestCase` class with functions for peek-testing.
 
     Users can inherit from this class to create their own test cases,
     similar as someone would make test cases for normal software.
-    This class behaves like a normal `unittest.TestCase` class but has a few extra functions
+    This class behaves like a normal :class:`unittest.TestCase` class but has a few extra functions
     that are useful for peek-testing of a simulated ARTIQ environment.
     Users are allowed to combine regular unittest constructs with peek-testing features.
     """
@@ -54,7 +54,7 @@ class PeekTestCase(unittest.TestCase):
         :param build_args: Positional arguments passed to the build function of the environment
         :param build_kwargs: Keyword arguments passed to the build function of the environment
         :param env_kwargs: Keyword arguments passed to the argument parser of the environment
-        :param kwargs: Keyword arguments passed to the argument parser of the environment (updates `env_kwargs`)
+        :param kwargs: Keyword arguments passed to the argument parser of the environment (updates ``env_kwargs``)
         :return: The constructed ARTIQ environment object
         """
 
@@ -129,14 +129,14 @@ class PeekTestCase(unittest.TestCase):
 
         If the signal does not match the value, the test will fail.
 
-        The parameter `places` can be used for testing float type signals for almost equality.
-        Note that when the `places` parameter is not given, float type signals are tested for exact equality.
+        The parameter ``places`` can be used for testing float type signals for almost equality.
+        Note that when the ``places`` parameter is not given, float type signals are tested for exact equality.
 
         :param scope: The scope (device) of the signal
         :param signal: The name of the signal
         :param value: The expected value
         :param msg: Message to show when this assertion fails
-        :param places: Test for equality up to the given number of decimal places (only for signals of type `float`)
+        :param places: Test for equality up to the given number of decimal places (only for signals of type ``float``)
         :raises TypeError: Raised if the signal type can not be tested or if invalid parameter combinations are used
         """
         # Get the value and the type

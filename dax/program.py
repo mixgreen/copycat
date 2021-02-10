@@ -1,6 +1,8 @@
 """
 This module is intended to be imported by users.
 It will import the ARTIQ library (``from artiq.experiment import *``) and the components for DAX.program.
+
+See :mod:`dax.base.program` and :mod:`dax.util.convert`.
 """
 
 # Import DAX program base

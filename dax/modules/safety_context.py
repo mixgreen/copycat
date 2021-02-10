@@ -19,7 +19,7 @@ class ReentrantSafetyContext(DaxModule):
     """Context class for safety controls when entering and exiting a context.
 
     Callback functions for enter and exit should be provided by the
-    `enter_cb` and `exit_cb` kwargs respectively.
+    ``enter_cb`` and ``exit_cb`` kwargs respectively.
 
     **This context is reentrant** and has all portable functions.
     The callback functions will only be called in the outermost context
@@ -80,7 +80,7 @@ class ReentrantSafetyContext(DaxModule):
     def __enter__(self):  # type: () -> None
         """Enter the safety context.
 
-        Normally this function should not be called directly but by the `with` statement instead.
+        Normally this function should not be called directly but by the ``with`` statement instead.
         """
         if self._in_context == 0:
             # Call enter callback function
@@ -93,10 +93,10 @@ class ReentrantSafetyContext(DaxModule):
     def __exit__(self, exc_type, exc_val, exc_tb):  # type: (typing.Any, typing.Any, typing.Any) -> None
         """Exit the safety context.
 
-        Normally this function should not be called directly but by the `with` statement instead.
+        Normally this function should not be called directly but by the ``with`` statement instead.
 
         It is not possible to assign default values to the argument as the ARTIQ compiler only
-        accepts `__exit__` functions with exactly four positional arguments.
+        accepts :func:`__exit__` functions with exactly four positional arguments.
         """
         if self._exit_error and self._in_context <= 0:
             # Enter and exit calls were out of sync
@@ -115,7 +115,7 @@ class SafetyContext(ReentrantSafetyContext):
     """Context class for safety controls when entering and exiting a context.
 
     Callback functions for enter and exit should be provided by the
-    `enter_cb` and `exit_cb` kwargs respectively.
+    ``enter_cb`` and ``exit_cb`` kwargs respectively.
 
     **This context is not reentrant** and has all portable functions.
     Other objects can check if the context is entered by using
@@ -139,7 +139,7 @@ class SafetyContext(ReentrantSafetyContext):
     def __enter__(self):  # type: () -> None
         """Enter the safety context.
 
-        Normally this function should not be called directly but by the `with` statement instead.
+        Normally this function should not be called directly but by the ``with`` statement instead.
         """
         if self._in_context != 0:
             # Prevent nested context

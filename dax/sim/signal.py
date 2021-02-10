@@ -30,17 +30,17 @@ class DaxSignalManager(abc.ABC, typing.Generic[_S_T]):
 
         Possible types and expected arguments:
 
-        - `bool` (a register with bit values `0`, `1`, `'X'`, `'Z'`), provide a size of the register
-        - `int`, `np.int32`, `np.int64`
-        - `float`
-        - `str`
-        - `object` (an event type with no value)
+        - ``bool`` (a register with bit values ``0``, ``1``, ``'X'``, ``'Z'``), provide a size of the register
+        - ``int``, ``np.int32``, ``np.int64``
+        - ``float``
+        - ``str``
+        - ``object`` (an event type with no value)
 
         :param scope: The scope of the signal, which is the device object
         :param name: The name of the signal
         :param type_: The type of the signal
         :param size: The size of the data (only for type bool)
-        :param init: Initial value (defaults to `X`)
+        :param init: Initial value (defaults to ``'X'``)
         :return: The signal object to use when committing events
         """
         pass
@@ -52,24 +52,24 @@ class DaxSignalManager(abc.ABC, typing.Generic[_S_T]):
 
         Note that in a parallel context, :func:`delay` and :func:`delay_mu` do not directly
         influence the time returned by :func:`now_mu`.
-        It is better to use the `time` or `offset` arguments to set events at different times.
+        It is better to use the time or offset parameters to set events at different times.
 
-        Bool type signals can have values `0`, `1`, `'X'`, `'Z'`.
-        A vector of a bool type signal has a value of type `str` (e.g. `'1001XZ'`).
+        Bool type signals can have values ``0``, ``1``, ``'X'``, ``'Z'``.
+        A vector of a bool type signal has a value of type ``str`` (e.g. ``'1001XZ'``).
 
         Integer type variables can have any int value or any value legal for a bool type signal.
 
         Float type variables can only be assigned float values.
 
-        Event (`object`) type signals represent timestamps and do not have a value.
-        We recommend to always use value `True` for event type signals.
+        Event (``object``) type signals represent timestamps and do not have a value.
+        We recommend to always use value :const:`True` for event type signals.
 
-        String type signals can use value `None` which is equivalent to `Z`.
+        String type signals can use value :const:`None` which is equivalent to ``'Z'``.
 
         :param signal: The signal that changed
         :param value: The new value of the signal
         :param time: Optional time in machine units when the event happened (:func:`now_mu` if no time was provided)
-        :param offset: Optional offset from :func:`now_mu` in machine units when the event happened (default is `0`)
+        :param offset: Optional offset from the given time in machine units (default is :const:`0`)
         """
         pass
 

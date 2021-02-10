@@ -17,6 +17,14 @@ dax.util.ccb module
     :undoc-members:
     :show-inheritance:
 
+dax.util.convert module
+-----------------------
+
+.. automodule:: dax.util.convert
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 dax.util.experiments module
 ---------------------------
 

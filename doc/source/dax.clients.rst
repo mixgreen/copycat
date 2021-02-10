@@ -25,6 +25,14 @@ dax.clients.pmt\_monitor module
     :undoc-members:
     :show-inheritance:
 
+dax.clients.program module
+--------------------------
+
+.. automodule:: dax.clients.program
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 dax.clients.rpc\_benchmark module
 ---------------------------------
 

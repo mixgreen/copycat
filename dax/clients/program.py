@@ -7,7 +7,7 @@ import shutil
 
 import artiq.tools
 
-# No wildcard import to prevent aliasing with `types`
+# No wildcard import to prevent aliasing with ``types``
 from dax.experiment import DaxClient, dax_client_factory, Experiment, StringValue
 
 import dax.base.program
@@ -34,7 +34,7 @@ class ProgramClient(DaxClient, Experiment):
 
         # Obtain arguments
         self._program_file: str = self.get_argument(
-            'file', StringValue(), tooltip='File containing the program to run or an archive with a `main.py` file')
+            'file', StringValue(), tooltip='File containing the program to run or an archive with a main.py file')
         self._program_class: str = self.get_argument(
             'class', StringValue(''), tooltip='Class name of the program to run (optional)')
 
@@ -71,7 +71,7 @@ class ProgramClient(DaxClient, Experiment):
 
     def run(self) -> None:
         # Validate the operation interface (should be done after DAX init)
-        dax.interfaces.operation.validate_operation_interface(self._interface)
+        assert dax.interfaces.operation.validate_operation_interface(self._interface)
         # Run the program
         self.logger.info('Running program')
         self._program.run()
@@ -99,5 +99,5 @@ class ProgramClient(DaxClient, Experiment):
                 shutil.unpack_archive(file_name, extract_dir=temp_dir)  # Raises exception of format is not recognized
                 unpacked_file_name = os.path.join(temp_dir, 'main.py')
                 if not os.path.isfile(unpacked_file_name):
-                    raise FileNotFoundError(f'Archive "{file_name}" does not contain a `main.py` file')
+                    raise FileNotFoundError(f'Archive "{file_name}" does not contain a main.py file')
                 return _import_file(unpacked_file_name)

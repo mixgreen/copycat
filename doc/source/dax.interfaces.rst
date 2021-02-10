@@ -9,7 +9,18 @@ dax.interfaces.detection module
     :undoc-members:
     :show-inheritance:
 
+dax.interfaces.gate module
+--------------------------
+
 .. automodule:: dax.interfaces.gate
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+dax.interfaces.operation module
+-------------------------------
+
+.. automodule:: dax.interfaces.operation
     :members:
     :undoc-members:
     :show-inheritance:
