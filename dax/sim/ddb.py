@@ -41,21 +41,21 @@ def enable_dax_sim(ddb: typing.Dict[str, typing.Any], *,
     The simulation can be configured through the function parameters or by using the
     configuration files. If given, function parameters are always prioritized over
     configuration file parameters. The possible configuration files in order of
-    priority currently are `'.dax'` and `'setup.cfg'`.
+    priority currently are ``.dax`` and ``setup.cfg``.
 
     The following options can currently be set through the configuration files
-    using the section `[dax.sim]`:
+    using the section ``[dax.sim]``:
 
-     - `enable`, required if not provided as a function parameter
-     - `coredevice_packages`, additional packages to search for coredevice drivers (in order of priority)
-     - `config_module`, the module of the simulation configuration class (defaults to DAX.sim config module)
-     - `config_class`, the class of the simulation configuration object (defaults to DAX.sim config class)
-     - `core_device`, the name of the core device (defaults to `'core'`)
-     - `localhost`, the address to use to refer to localhost (defaults to IPv6 address `'::1'`)
+     - ``enable``, required if not provided as a function parameter
+     - ``coredevice_packages``, additional packages to search for coredevice drivers (in order of priority)
+     - ``config_module``, the module of the simulation configuration class (defaults to DAX.sim config module)
+     - ``config_class``, the class of the simulation configuration object (defaults to DAX.sim config class)
+     - ``core_device``, the name of the core device (defaults to ``'core'``)
+     - ``localhost``, the address to use to refer to localhost (defaults to IPv6 address ``'::1'``)
 
     If supported by a specific simulated device driver, extra simulation-specific arguments
-    can be added by adding a `sim_args` dict to the device entry in the device DB.
-    The `arguments` dict of the device will be updated with the contents of the `sim_args` dict.
+    can be added by adding a ``'sim_args'`` key with a dict value to the device entry in the device DB.
+    The ``'arguments'`` dict of the device will be updated with the contents of the ``'sim_args'`` dict.
 
     The DAX.sim package provides a limited list of simulated coredevice drivers.
     Additional packages with simulated coredevice drivers can be added using the configuration files.
@@ -66,7 +66,7 @@ def enable_dax_sim(ddb: typing.Dict[str, typing.Any], *,
     :param ddb: The device DB (will be updated if simulation is enabled)
     :param enable: Flag to enable DAX simulation
     :param logging_level: The logging level
-    :param output: Simulation output type (`'null'`, `'vcd'`, or `'peek'`)
+    :param output: Simulation output type (``'null'``, ``'vcd'``, or ``'peek'``)
     :param moninj_service: Start the dummy MonInj service for the dashboard to connect to
     :param signal_mgr_kwargs: Arguments for the signal manager if output is enabled
     :return: The updated device DB

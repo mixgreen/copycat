@@ -6,7 +6,7 @@ __all__ = ['RpcBenchmarkLatency', 'RpcBenchmarkAsyncThroughput']
 
 
 @dax_client_factory
-class RpcBenchmarkLatency(DaxClient, EnvExperiment):
+class RpcBenchmarkLatency(DaxClient, Experiment):
     """RPC latency benchmark."""
 
     DAX_INIT: bool = False
@@ -37,7 +37,7 @@ class RpcBenchmarkLatency(DaxClient, EnvExperiment):
 
 
 @dax_client_factory
-class RpcBenchmarkAsyncThroughput(DaxClient, EnvExperiment):
+class RpcBenchmarkAsyncThroughput(DaxClient, Experiment):
     """Async RPC throughput benchmark."""
 
     DAX_INIT: bool = False

@@ -11,10 +11,11 @@ User entry points
 -----------------
 
 * :ref:`dax.experiment`
-* :ref:`dax.sim`
-* :ref:`dax.sim.test_case`
+* :ref:`dax.program`
 * :ref:`dax.scan`
 * :ref:`dax.scheduler`
+* :ref:`dax.sim`
+* :ref:`dax.sim.test_case`
 
 
 

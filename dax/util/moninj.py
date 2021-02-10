@@ -41,7 +41,7 @@ class MonInjDummyService:
     def __init__(self, host: str, port: int, auto_close: int = 0):
         """Instantiate a new MonInj dummy service.
 
-        Set `auto_close` to `0` to not serve connections forever.
+        Set ``auto_close`` to :const:`0` to serve connections forever.
 
         :param host: The host to bind to
         :param port: The port to bind to
@@ -63,7 +63,7 @@ class MonInjDummyService:
     def run(self) -> None:
         """Regular method to run the server in an infinite loop.
 
-        Uses `asyncio.run()` to start this service.
+        Uses :func:`asyncio.run()` to start this service.
 
         If the server is not able to bind, it might already be running.
 

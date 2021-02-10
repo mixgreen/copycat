@@ -12,7 +12,7 @@ __all__ = ['CpldInitModule']
 class CpldInitModule(DaxModule):
     """Module to automatically initialize CPLD devices.
 
-    This module searches for CPLD devices and calls `get_att_mu()` such that
+    This module searches for CPLD devices and calls :func:`get_att_mu` such that
     the attenuation settings are loaded to the device driver.
     """
 

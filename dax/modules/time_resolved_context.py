@@ -4,7 +4,7 @@ import collections.abc
 import math
 import numpy as np
 import h5py  # type: ignore
-import os
+import os.path
 import natsort
 
 import matplotlib.pyplot as plt  # type: ignore
@@ -114,7 +114,7 @@ class TimeResolvedContext(DaxModule):
         """Build the time resolved context module.
 
         The plot base key can be used to group plot datasets and applets as desired.
-        The base key is formatted with the `scheduler` object which allows users to
+        The base key is formatted with the ARTIQ ``scheduler`` object which allows users to
         add experiment-specific information in the base key.
 
         :param default_dataset_key: Default dataset name used for storing trace data
@@ -178,7 +178,7 @@ class TimeResolvedContext(DaxModule):
         """Partition a number of bins.
 
         This function returns a list of tuples that can be used at runtime for partitioning in a loop.
-        The format of each element is (`current_num_bins`, `current_offset`) which can be used accordingly.
+        The format of each element is ``(current_num_bins, current_offset)`` which can be used accordingly.
 
         This function returns the partition table as a list. Hence, it can only be called from the host.
 
@@ -203,7 +203,7 @@ class TimeResolvedContext(DaxModule):
         """Partition a number of bins.
 
         This function returns a list of tuples that can be used at runtime for partitioning in a loop.
-        The format of each element is (`current_num_bins`, `current_offset_mu`) which can be used accordingly.
+        The format of each element is ``(current_num_bins, current_offset_mu)`` which can be used accordingly.
 
         This function returns the partition table as a list. Hence, it can only be called from the host.
 
@@ -228,7 +228,7 @@ class TimeResolvedContext(DaxModule):
         """Partition a time window.
 
         This function returns a list of tuples that can be used at runtime for partitioning in a loop.
-        The format of each element is (`current_num_bins`, `current_offset`) which can be used accordingly.
+        The format of each element is ``(current_num_bins, current_offset)`` which can be used accordingly.
 
         This function returns the partition table as a list. Hence, it can only be called from the host.
 
@@ -255,7 +255,7 @@ class TimeResolvedContext(DaxModule):
         """Partition a time window.
 
         This function returns a list of tuples that can be used at runtime for partitioning in a loop.
-        The format of each element is (`current_num_bins`, `current_offset_mu`) which can be used accordingly.
+        The format of each element is ``(current_num_bins, current_offset_mu)`` which can be used accordingly.
 
         This function returns the partition table as a list. Hence, it can only be called from the host.
 
@@ -366,7 +366,7 @@ class TimeResolvedContext(DaxModule):
 
         This function calls :func:`append_meta` and :func:`append_data` in one call
         and can be used in case it is not required to separate the two subroutines.
-        The `offset` parameter is forwarded to :func:`append_meta`.
+        The ``offset`` parameter is forwarded to :func:`append_meta`.
 
         This function is intended to be fast to allow high input data throughput.
         No type checking is performed on the data.
@@ -387,7 +387,7 @@ class TimeResolvedContext(DaxModule):
 
         This function calls :func:`append_meta_mu` and :func:`append_data` in one call
         and can be used in case it is not required to separate the two subroutines.
-        The `offset` parameter is forwarded to :func:`append_meta_mu`. This function
+        The ``offset`` parameter is forwarded to :func:`append_meta_mu`. This function
 
         This function is intended to be fast to allow high input data throughput.
         No type checking is performed on the data.
@@ -406,7 +406,7 @@ class TimeResolvedContext(DaxModule):
         """Optional configuration of the context output dataset (async RPC).
 
         Set the dataset base key used for the following results.
-        Use `None` to reset the dataset base key to its default value.
+        Use :const:`None` to reset the dataset base key to its default value.
 
         Within ARTIQ kernels it is not possible to use string formatting functions.
         Instead, the key can be a string that includes formatting annotations while
@@ -414,7 +414,7 @@ class TimeResolvedContext(DaxModule):
         The formatting function will be called on the host.
 
         The formatter uses an extended format and it is possible to convert float values
-        to human-readable format using conversion flags such as `{!t}` and `{!f}`.
+        to human-readable format using conversion flags such as ``'{!t}'`` and ``'{!f}'``.
         See :class:`dax.util.units.UnitsFormatter` for more information about the available conversion flags.
         Note that the formatter has the default precision of 6 digits which is not likely
         to generate unique keys. An other field can be added to make sure the keys are unique.
@@ -422,8 +422,8 @@ class TimeResolvedContext(DaxModule):
         This function can not be used when already in context.
 
         :param key: Key for the result dataset using standard Python formatting notation
-        :param args: Python `str.format()` positional arguments
-        :param kwargs: Python `str.format()` keyword arguments
+        :param args: Python ``str.format()`` positional arguments
+        :param kwargs: Python ``str.format()`` keyword arguments
         :raises TimeResolvedContextError: Raised if called in context
         """
         assert isinstance(key, str) or key is None, 'Provided dataset key must be of type str or None'
@@ -456,7 +456,7 @@ class TimeResolvedContext(DaxModule):
         Optionally, this context can be configured using the :func:`config` function.
 
         This function can be used to manually enter the context.
-        We strongly recommend to use the `with` statement instead.
+        We strongly recommend to use the ``with`` statement instead.
 
         :raises TimeResolvedContextError: Raised if already in context (context is non-reentrant)
         """
@@ -476,7 +476,7 @@ class TimeResolvedContext(DaxModule):
         """Exit the context manually.
 
         This function can be used to manually exit the context.
-        We strongly recommend to use the `with` statement instead.
+        We strongly recommend to use the ``with`` statement instead.
 
         :raises TimeResolvedContextError: Raised if called out of context
         """

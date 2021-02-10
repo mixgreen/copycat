@@ -123,11 +123,11 @@ class UnitsFormatter(string.Formatter):
 
     The following extra conversions are available:
 
-    - `{!t}`, conversion to time
-    - `{!f}`, conversion to frequency
-    - `{!v}`, conversion to volt
-    - `{!a}`, conversion to ampere (overrides default ascii conversion)
-    - `{!w}`, conversion to watt
+    - ``'{!t}'``, conversion to time
+    - ``'{!f}'``, conversion to frequency
+    - ``'{!v}'``, conversion to volt
+    - ``'{!a}'``, conversion to ampere (overrides default ascii conversion)
+    - ``'{!w}'``, conversion to watt
     """
 
     def __init__(self, *, precision: int = 6):

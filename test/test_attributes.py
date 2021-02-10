@@ -1,5 +1,5 @@
 import unittest
-import os
+import os.path
 
 import dax
 

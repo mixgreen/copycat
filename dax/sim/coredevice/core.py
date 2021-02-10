@@ -41,7 +41,7 @@ class BaseCore(DaxSimDevice):
         assert isinstance(ref_multiplier, int) and ref_multiplier > 0, 'Reference multiplier must be of type int'
 
         if type(self) is BaseCore:
-            # If the base core was instantiated directly, use a default value for `_key` required by DaxSimDevice
+            # If the base core was instantiated directly, use a default value for _key required by DaxSimDevice
             kwargs.setdefault('_key', 'core')
 
         # Call super

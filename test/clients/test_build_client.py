@@ -14,9 +14,15 @@ import dax.interfaces.detection
 import dax.clients.gtkwave
 import dax.clients.introspect
 import dax.clients.pmt_monitor
+import dax.clients.program
 import dax.clients.rpc_benchmark
 import dax.clients.rtio_benchmark
 import dax.clients.system_benchmark
+
+
+def _get_managers(**kwargs):
+    return get_managers(enable_dax_sim(ddb=_DEVICE_DB, enable=True, logging_level=30,
+                                       output='null', moninj_service=False), **kwargs)
 
 
 class _TestDetectionModule(DaxModule, dax.interfaces.detection.DetectionInterface):
@@ -57,68 +63,65 @@ class _TestSystem(DaxSystem):
 class BuildClientTestCase(unittest.TestCase):
     """Test case that builds and initializes clients as a basic test."""
 
-    _CLIENTS = [
-        dax.clients.gtkwave.GTKWaveSaveGenerator,
-        dax.clients.introspect.Introspect,
-        dax.clients.pmt_monitor.PmtMonitor,
-        dax.clients.pmt_monitor.MultiPmtMonitor,
-        dax.clients.rpc_benchmark.RpcBenchmarkLatency,
-        dax.clients.rpc_benchmark.RpcBenchmarkAsyncThroughput,
-        dax.clients.rtio_benchmark.RtioBenchmarkEventThroughput,
-        dax.clients.rtio_benchmark.RtioBenchmarkEventBurst,
-        dax.clients.rtio_benchmark.RtioBenchmarkDmaThroughput,
-        dax.clients.rtio_benchmark.RtioBenchmarkLatencyCoreRtio,
-        dax.clients.rtio_benchmark.RtioBenchmarkInputBufferSize,
-        dax.clients.rtio_benchmark.RtioBenchmarkLatencyRtioCore,
-        dax.clients.rtio_benchmark.RtioBenchmarkLatencyRtt,
-        dax.clients.system_benchmark.SystemBenchmarkDaxInit,
-        dax.clients.system_benchmark.SystemBenchmarkDaxInitProfile,
+    _CLIENTS: typing.List[typing.Tuple[typing.Any, typing.Dict[str, typing.Any], bool]] = [
+        (dax.clients.gtkwave.GTKWaveSaveGenerator, {}, True),
+        (dax.clients.introspect.Introspect, {}, True),
+        (dax.clients.pmt_monitor.PmtMonitor, {}, True),
+        (dax.clients.pmt_monitor.MultiPmtMonitor, {}, True),
+        (dax.clients.program.ProgramClient, {'file': ''}, False),
+        (dax.clients.rpc_benchmark.RpcBenchmarkLatency, {}, True),
+        (dax.clients.rpc_benchmark.RpcBenchmarkAsyncThroughput, {}, True),
+        (dax.clients.rtio_benchmark.RtioBenchmarkEventThroughput, {}, True),
+        (dax.clients.rtio_benchmark.RtioBenchmarkEventBurst, {}, True),
+        (dax.clients.rtio_benchmark.RtioBenchmarkDmaThroughput, {}, True),
+        (dax.clients.rtio_benchmark.RtioBenchmarkLatencyCoreRtio, {}, True),
+        (dax.clients.rtio_benchmark.RtioBenchmarkInputBufferSize, {}, True),
+        (dax.clients.rtio_benchmark.RtioBenchmarkLatencyRtioCore, {}, True),
+        (dax.clients.rtio_benchmark.RtioBenchmarkLatencyRtt, {}, True),
+        (dax.clients.system_benchmark.SystemBenchmarkDaxInit, {}, True),
+        (dax.clients.system_benchmark.SystemBenchmarkDaxInitProfile, {}, True),
     ]
     """List of client types."""
 
-    _CUSTOM_CLIENTS = [
-        dax.clients.system_benchmark.SystemBenchmarkBuildProfile,
+    _CUSTOM_CLIENTS: typing.List[typing.Tuple[typing.Any, typing.Dict[str, typing.Any]]] = [
+        (dax.clients.system_benchmark.SystemBenchmarkBuildProfile, {}),
     ]
     """List of custom client types (not subclasses of DaxClient)."""
 
-    def setUp(self) -> None:
-        self.managers = get_managers(enable_dax_sim(ddb=_DEVICE_DB, enable=True, logging_level=30,
-                                                    output='null', moninj_service=False))
-
-    def tearDown(self) -> None:
-        # Close managers
-        self.managers.close()
-
     def test_build_client(self) -> None:
-        for client_type in self._CLIENTS:
+        for client_type, kwargs, prepare in self._CLIENTS:
             with self.subTest(client_type=client_type.__name__):
                 # noinspection PyTypeChecker
                 class _InstantiatedClient(client_type(_TestSystem)):  # type: ignore[misc]
                     pass
 
-                # Create client
-                client = _InstantiatedClient(self.managers)
-                self.assertIsInstance(client, DaxClient)
+                with _get_managers(**kwargs) as managers:
+                    # Create client
+                    client = _InstantiatedClient(managers)
+                    self.assertIsInstance(client, DaxClient)
+                    self.assertIsInstance(client, Experiment)
 
-                # Get system
-                system = client.registry.find_module(DaxSystem)
-                self.assertIsInstance(system, _TestSystem)
+                    # Get system
+                    system = client.registry.find_module(DaxSystem)
+                    self.assertIsInstance(system, _TestSystem)
 
-                if client.DAX_INIT:
-                    # Call the prepare function
-                    client.prepare()
-                    # Initialize system
-                    self.assertIsNone(system.dax_init())
+                    if prepare and client.DAX_INIT:
+                        # Call the prepare function
+                        client.prepare()
+                        # Initialize system
+                        self.assertIsNone(system.dax_init())
 
     def test_build_custom_clients(self) -> None:
-        for client_type in self._CUSTOM_CLIENTS:
+        for client_type, kwargs in self._CUSTOM_CLIENTS:
             with self.subTest(client_type=client_type.__name__):
                 # noinspection PyTypeChecker
                 class _InstantiatedClient(client_type(_TestSystem)):  # type: ignore[misc]
                     pass
 
-                # Create client
-                _InstantiatedClient(self.managers)
+                with _get_managers(**kwargs) as managers:
+                    # Create client
+                    client = _InstantiatedClient(managers)
+                    self.assertIsInstance(client, Experiment)
 
 
 _DEVICE_DB = {

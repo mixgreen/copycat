@@ -3,7 +3,6 @@ from __future__ import annotations  # Postponed evaluation of annotations
 import abc
 import logging
 import itertools
-import functools
 import re
 import natsort
 import typing
@@ -312,7 +311,7 @@ class DaxHasKey(DaxBase, abc.ABC):
         """Returns the contents of a system dataset.
 
         If the key is present, its value will be returned.
-        If the key is not present and no default is provided, a `KeyError` will be raised.
+        If the key is not present and no default is provided, a :class:`KeyError` will be raised.
         If the key is not present and a default is provided, the default value will
         be written to the dataset and the same value will be returned.
 
@@ -749,7 +748,7 @@ class DaxSystem(DaxModuleBase):
         """
 
         # Validate this system class
-        _is_valid_system_class(type(self))
+        _validate_system_class(type(self))
 
         # Call super, add names, add a new registry
         super(DaxSystem, self).__init__(managers_or_parent, *args,
@@ -804,7 +803,7 @@ class DaxSystem(DaxModuleBase):
         return self.__sim_enabled
 
     def build(self, *args: typing.Any, **kwargs: typing.Any) -> None:
-        """Override this method to build your DAX system. (Do not forget to call `super.build()` first!)
+        """Override this method to build your DAX system. (Do not forget to call ``super.build()`` first!)
 
         :param args: Positional arguments forwarded to the super class
         :param kwargs: Keyword arguments forwarded to the super class
@@ -893,8 +892,8 @@ class DaxSystem(DaxModuleBase):
         pass
 
 
-def _is_valid_system_class(system_class: typing.Type[DaxSystem]) -> None:
-    """Validate if this system class is correctly implemented."""
+def _validate_system_class(system_class: typing.Type[DaxSystem]) -> None:
+    """Check if this system class is correctly implemented."""
 
     # Check if system ID was overridden
     assert hasattr(system_class, 'SYS_ID'), 'Every DAX system class must override the SYS_ID class attribute'
@@ -963,27 +962,31 @@ class DaxClient(DaxHasSystem, abc.ABC):
     This decorator creates a factory function that allows users to provide their system
     to be used with this experiment template.
 
-    Normally, a client would inherit from the ARTIQ `Experiment` class and implement the
-    :func:`prepare`, :func:`run`, and :func:`analyze` functions to define an execution flow.
-    Additionally, a :func:`build` function can be implemented to provide a user interface
-    for configuring the client.
+    Normally, a concrete client would inherit from the ARTIQ :class:`Experiment` or :class:`EnvExperiment`
+    class and implement the :func:`prepare`, :func:`run`, and :func:`analyze` functions to
+    define an execution flow. Additionally, a :func:`build` function can be implemented to
+    provide a user interface for configuring the client.
 
-    Note that the :func:`build` function does not need to call `super()`.
+    Note that the :func:`build` function does not need to call ``super()``.
     The decorator will make sure all classes are build in the correct order.
     """
 
     DAX_INIT: bool = True
     """Flag if dax_init() should run for this client."""
+    MANAGERS_KWARG: typing.Optional[str] = None
+    """Pass the ARTIQ managers as a keyword argument to the :func:`build()` function."""
 
     def __init__(self, managers_or_parent: DaxSystem,
                  *args: typing.Any, **kwargs: typing.Any):
         """Construct the DAX client object.
 
-        :param managers_or_parent: Manager or parent of this module
+        :param managers_or_parent: Manager or parent of this client
         :param args: Positional arguments forwarded to the :func:`build` function
         :param kwargs: Keyword arguments forwarded to the :func:`build` function
         """
         assert isinstance(self.DAX_INIT, bool), 'The DAX_INIT flag must be of type bool'
+        assert self.MANAGERS_KWARG is None or isinstance(self.MANAGERS_KWARG, str), \
+            'MANAGERS_KWARG must be of type str or None'
 
         # Check if the decorator was used
         if not isinstance(managers_or_parent, DaxSystem):
@@ -1002,10 +1005,6 @@ class DaxClient(DaxHasSystem, abc.ABC):
         pass
 
     def post_init(self) -> None:
-        pass
-
-    @abc.abstractmethod
-    def run(self) -> None:
         pass
 
 
@@ -1044,7 +1043,7 @@ class DaxNameRegistry:
     def device_db(self) -> typing.Mapping[str, typing.Any]:
         """Return the current device DB.
 
-        Requesting the device DB using `HasEnvironment.get_device_db()` is slow as it
+        Requesting the device DB using ``HasEnvironment.get_device_db()`` is slow as it
         connects to the ARTIQ master to obtain the database.
         The registry caches the device DB and by using this property the number
         of calls to the ARTIQ master can be minimized.
@@ -1382,7 +1381,7 @@ class DaxNameRegistry:
         """Find a unique interface that matches the requested type.
 
         Note: mypy type checker does not handle pure abstract base classes correctly.
-        A `# type: ignore[misc]` annotation on the line using this function is probably
+        A ``# type: ignore[misc]`` annotation on the line using this function is probably
         required to pass type checking.
 
         :param type_: The type of the interface
@@ -1409,7 +1408,7 @@ class DaxNameRegistry:
         """Search for interfaces that match the requested type and return results as a dict.
 
         Note: mypy type checker does not handle pure abstract base classes correctly.
-        A `# type: ignore[misc]` annotation on the line using this function is probably
+        A ``# type: ignore[misc]`` annotation on the line using this function is probably
         required to pass type checking.
 
         :param type_: The type of the interfaces
@@ -1503,7 +1502,7 @@ class DaxDataStoreInfluxDb(DaxDataStore):
             'The environment parameter must be of type HasEnvironment'
         assert issubclass(system_class, DaxSystem), 'The system class must be a subclass of DaxSystem'
         assert isinstance(system_class.DAX_INFLUX_DB_KEY, str), 'The DAX Influx DB key must be of type str'
-        _is_valid_system_class(system_class)
+        _validate_system_class(system_class)
 
         # Call super
         super(DaxDataStoreInfluxDb, self).__init__()
@@ -1739,10 +1738,12 @@ def dax_client_factory(c: typing.Type[__DCF_C_T]) -> typing.Callable[[typing.Typ
     :return: A factory for the client class that allows the client to be matched with a system
     """
 
-    assert isinstance(c, type), 'The decorated object must be a class'
-    assert issubclass(c, DaxClient), 'The decorated class must be a subclass of DaxClient'
+    assert isinstance(c, type), 'The decorated object must be a type'
+    if not issubclass(c, DaxClient):
+        raise TypeError('The decorated class must be a subclass of DaxClient')
+    if not issubclass(c, artiq.experiment.Experiment):
+        raise TypeError('The decorated class must be a subclass of Experiment')
 
-    @functools.wraps(c, assigned=('__module__', '__name__', '__qualname__'))
     def wrapper(system_type: typing.Type[__DCF_S_T],
                 *system_args: typing.Any, **system_kwargs: typing.Any) -> typing.Type[__DCF_C_T]:
         """Create a new DAX client class.
@@ -1753,7 +1754,7 @@ def dax_client_factory(c: typing.Type[__DCF_C_T]) -> typing.Callable[[typing.Typ
         :param system_args: Positional arguments forwarded to the systems :func:`build` function
         :param system_kwargs: Keyword arguments forwarded to the systems :func:`build` function
         :return: A fusion of the client and system class
-        :raises TypeError: Raised if the provided `system_type` parameter is not a subclass of `DaxSystem`
+        :raises TypeError: Raised if the provided ``system_type`` parameter is not a subclass of :class:`DaxSystem`
         """
 
         # Check the system type
@@ -1762,7 +1763,7 @@ def dax_client_factory(c: typing.Type[__DCF_C_T]) -> typing.Callable[[typing.Typ
             raise TypeError('System type must be a subclass of DaxSystem')
 
         class WrapperClass(c):  # type: ignore[valid-type,misc]
-            """The wrapper class that finalizes the client class.
+            """The wrapper class that fuses the client class with the given system.
 
             The wrapper class extends the client class by constructing the system
             first and loading the client class afterwards using the system as the parent.
@@ -1772,6 +1773,11 @@ def dax_client_factory(c: typing.Type[__DCF_C_T]) -> typing.Callable[[typing.Typ
                          *args: typing.Any, **kwargs: typing.Any):
                 # Create the system
                 self.__system: DaxSystem = system_type(managers_or_parent, *system_args, **system_kwargs)
+
+                if self.MANAGERS_KWARG is not None:
+                    # Pass ARTIQ managers as a keyword argument
+                    assert isinstance(self.MANAGERS_KWARG, str), 'MANAGERS_KWARG must be of type str or None'
+                    kwargs[self.MANAGERS_KWARG] = managers_or_parent
                 # Call constructor of the client class and give it the system as parent
                 super(WrapperClass, self).__init__(self.__system, *args, **kwargs)
 

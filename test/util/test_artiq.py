@@ -1,4 +1,6 @@
 import unittest
+import typing
+import random
 
 from artiq.language.core import rpc, portable, kernel, host_only
 import artiq.experiment
@@ -134,18 +136,28 @@ class ArtiqTestCase(unittest.TestCase):
             with self.assertRaises(LookupError, msg='Non-unique name did not raise'):
                 dax.util.artiq.ClonedDatasetManager(managers.dataset_mgr, name=name)
 
+    def test_cloned_dataset_manager_dataset_db(self):
+        with dax.util.artiq.get_managers() as managers:
+            d = {}
+            clone = dax.util.artiq.ClonedDatasetManager(managers.dataset_mgr, dataset_db=d)
+            self.assertIsNot(clone.ddb, managers.dataset_mgr.ddb)
+            self.assertIs(clone.ddb, d)
+            self.assertIsInstance(clone, artiq.master.worker_db.DatasetManager)
+
     def test_clone_managers(self):
         with dax.util.artiq.get_managers() as managers:
-            device_mgr, dataset_mgr, argument_mgr, scheduler_defaults = managers
-            write_hdf5_fn = dataset_mgr.write_hdf5
-            cloned = dax.util.artiq.clone_managers(managers)
+            write_hdf5_fn = managers.dataset_mgr.write_hdf5
 
-            self.assertIs(device_mgr, cloned[0], 'Device manager was modified unintentionally')
-            self.assertIsNot(dataset_mgr, cloned[1], 'Dataset manager was not replaced')
-            self.assertIsNot(dataset_mgr.write_hdf5, write_hdf5_fn, 'write_hdf5() function was not replaced')
-            self.assertIsInstance(cloned[1], dax.util.artiq.ClonedDatasetManager)
-            self.assertIsNot(argument_mgr, cloned[2], 'Argument manager was not replaced')
-            self.assertIsNot(scheduler_defaults, cloned[3], 'Scheduler defaults were not replaced')
+            with dax.util.artiq.clone_managers(managers) as cloned:
+                self.assertIs(managers.device_mgr, cloned.device_mgr, 'Device manager was modified unintentionally')
+                self.assertIsNot(managers.dataset_mgr, cloned.dataset_mgr, 'Dataset manager was not replaced')
+                self.assertIsNot(managers.dataset_mgr.write_hdf5, write_hdf5_fn,
+                                 'write_hdf5() function was not replaced')
+                self.assertIsInstance(cloned.dataset_mgr, dax.util.artiq.ClonedDatasetManager)
+                self.assertIsNot(managers.argument_mgr, cloned.argument_mgr, 'Argument manager was not replaced')
+                self.assertFalse(cloned.argument_mgr.unprocessed_arguments, 'Arguments not decoupled')
+                self.assertIsNot(managers.scheduler_defaults, cloned.scheduler_defaults,
+                                 'Scheduler defaults were not replaced')
 
     def test_clone_managers_name(self):
         with dax.util.artiq.get_managers() as managers:
@@ -156,7 +168,7 @@ class ArtiqTestCase(unittest.TestCase):
             self.assertEqual(len(clone_dict), 1, 'Unexpected number of clones in dict')
             registered_clone_key, registered_clone = clone_dict.popitem()
             self.assertEqual(registered_clone_key, name, 'Dataset manager clone name was not passed correctly')
-            self.assertIs(registered_clone, cloned[1])
+            self.assertIs(registered_clone, cloned.dataset_mgr)
 
     def test_clone_managers_arguments(self):
         with dax.util.artiq.get_managers() as managers:
@@ -171,7 +183,140 @@ class ArtiqTestCase(unittest.TestCase):
 
             # Update reference to match expected outcome
             ref.update(kwargs)
-            self.assertDictEqual(ref, cloned[2].unprocessed_arguments, 'Arguments were not passed correctly')
+            self.assertDictEqual(ref, cloned.argument_mgr.unprocessed_arguments, 'Arguments were not passed correctly')
+
+    def test_clone_managers_dataset_db_broadcast(self):
+        dataset_kwargs = [{'broadcast': b, 'persist': p} for b in [False, True] for p in [False, True]]
+        self.assertEqual(len(dataset_kwargs), 4)
+        rng = random.Random()
+
+        with dax.util.artiq.get_managers() as managers:
+            with dax.util.artiq.clone_managers(managers) as cloned:
+                class TestExperiment(artiq.experiment.EnvExperiment):
+                    def run(self):
+                        pass
+
+                # Create the main experiment
+                exp = TestExperiment(managers)
+                cloned_exp = TestExperiment(cloned)
+
+                # Test write-read from main to cloned experiment
+                for i, kwargs in enumerate(dataset_kwargs):
+                    key = f'main_to_cloned{i}'
+                    value = rng.random()
+                    exp.set_dataset(key, value, **kwargs)
+                    if any(kwargs.values()):
+                        self.assertEqual(value, cloned_exp.get_dataset(key))
+                    else:
+                        with self.assertRaises(KeyError, msg='Unexpected leakage of datasets'):
+                            cloned_exp.get_dataset(key)
+
+                # Test write-read from cloned to main experiment
+                for i, kwargs in enumerate(dataset_kwargs):
+                    key = f'cloned_to_main{i}'
+                    value = rng.random()
+                    cloned_exp.set_dataset(key, value, **kwargs)
+                    if any(kwargs.values()):
+                        self.assertEqual(value, exp.get_dataset(key))
+                    else:
+                        with self.assertRaises(KeyError, msg='Unexpected leakage of datasets'):
+                            exp.get_dataset(key)
+
+    def test_isolate_managers(self):
+        with dax.util.artiq.get_managers(arguments={'foo': 1, 'bar': 2}) as managers:
+            with dax.util.artiq.isolate_managers(managers) as isolated:
+                self.assertEqual(len(managers), len(isolated))
+                for m, i in zip(managers, isolated):
+                    if not isinstance(m, dict):
+                        self.assertNotEqual(m, i)
+                    else:
+                        self.assertFalse(i)
+                    self.assertIsNot(m, i)
+                self.assertFalse(isolated.argument_mgr.unprocessed_arguments, 'Arguments not decoupled')
+
+    def test_isolate_managers_name(self):
+        with dax.util.artiq.get_managers() as managers:
+            name = 'foo'
+            with dax.util.artiq.isolate_managers(managers, name=name) as isolated:
+                clone_dict = getattr(managers.dataset_mgr, dax.util.artiq.ClonedDatasetManager._CLONE_DICT_KEY)
+                self.assertEqual(len(clone_dict), 1, 'Unexpected number of clones in dict')
+                registered_clone_key, registered_clone = clone_dict.popitem()
+                self.assertEqual(registered_clone_key, name, 'Dataset manager clone name was not passed correctly')
+                self.assertIs(registered_clone, isolated[1])
+
+    def test_isolate_managers_device_db(self):
+        ddb: typing.Dict[str, typing.Any] = {
+            'core': {
+                'type': 'local',
+                'module': 'artiq.coredevice.core',
+                'class': 'Core',
+                'arguments': {'host': '0.0.0.0', 'ref_period': 1e-9}
+            },
+            'core_cache': {
+                'type': 'local',
+                'module': 'artiq.coredevice.cache',
+                'class': 'CoreCache'
+            },
+            'core_dma': {
+                'type': 'local',
+                'module': 'artiq.coredevice.dma',
+                'class': 'CoreDMA'
+            },
+        }
+
+        with dax.util.artiq.get_managers(device_db=ddb) as managers:
+            with dax.util.artiq.isolate_managers(managers) as isolated:
+                class TestExperiment(artiq.experiment.EnvExperiment):
+                    # noinspection PyMethodParameters
+                    def build(self_):
+                        # Test if device keys raise, must be in the build function
+                        for key in ddb:
+                            with self.assertRaises(artiq.master.worker_db.DeviceError,
+                                                   msg=f'Device key "{key}" did not raise'):
+                                self_.get_device(key)
+
+                    def run(self):
+                        pass
+
+                # Create the test experiment
+                exp = TestExperiment(isolated)
+
+                # Test if device DB is empty
+                self.assertFalse(exp.get_device_db())
+
+    def test_isolate_managers_dataset_db(self):
+        with dax.util.artiq.get_managers() as managers:
+            with dax.util.artiq.isolate_managers(managers) as isolated:
+                self.assertIsNot(managers.dataset_mgr.ddb, isolated.dataset_mgr.ddb)
+                self.assertFalse(isolated.dataset_mgr.ddb)
+
+    def test_isolate_managers_dataset_db_broadcast(self):
+        dataset_kwargs = [{'broadcast': b, 'persist': p} for b in [False, True] for p in [False, True]]
+        self.assertEqual(len(dataset_kwargs), 4)
+
+        with dax.util.artiq.get_managers() as managers:
+            with dax.util.artiq.isolate_managers(managers) as isolated:
+                class TestExperiment(artiq.experiment.EnvExperiment):
+                    def run(self):
+                        pass
+
+                # Create the main experiment
+                exp = TestExperiment(managers)
+                isolated_exp = TestExperiment(isolated)
+
+                # Test write-read from main to isolated experiment
+                for i, kwargs in enumerate(dataset_kwargs):
+                    key = f'main_to_isolated{i}'
+                    exp.set_dataset(key, 33, **kwargs)
+                    with self.assertRaises(KeyError, msg='Datasets not isolated'):
+                        isolated_exp.get_dataset(key)
+
+                # Test write-read from isolated to main experiment
+                for i, kwargs in enumerate(dataset_kwargs):
+                    key = f'isolated_to_main{i}'
+                    isolated_exp.set_dataset(key, 33, **kwargs)
+                    with self.assertRaises(KeyError, msg='Datasets not isolated'):
+                        exp.get_dataset(key)
 
     """Functions used for tests"""
 

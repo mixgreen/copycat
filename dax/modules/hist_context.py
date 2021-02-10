@@ -4,7 +4,7 @@ import collections.abc
 import numpy as np
 import h5py  # type: ignore
 import natsort
-import os
+import os.path
 import math
 
 import matplotlib.pyplot as plt  # type: ignore
@@ -78,7 +78,7 @@ class HistogramContext(DaxModule):
         """Build the histogram context module.
 
         The plot base key can be used to group plot datasets and applets as desired.
-        The base key is formatted with the `scheduler` object which allows users to
+        The base key is formatted with the ARTIQ ``scheduler`` object which allows users to
         add experiment-specific information in the base key.
 
         :param default_dataset_key: Default dataset name used for storing histogram data
@@ -166,7 +166,7 @@ class HistogramContext(DaxModule):
         """Optional configuration of the histogram context output dataset (async RPC).
 
         Set the dataset base key used for the following histograms.
-        Use `None` to reset the dataset base key to its default value.
+        Use :const:`None` to reset the dataset base key to its default value.
 
         Within ARTIQ kernels it is not possible to use string formatting functions.
         Instead, the key can be a string that includes formatting annotations while
@@ -174,7 +174,7 @@ class HistogramContext(DaxModule):
         The formatting function will be called on the host.
 
         The formatter uses an extended format and it is possible to convert float values
-        to human-readable format using conversion flags such as `{!t}` and `{!f}`.
+        to human-readable format using conversion flags such as ``'{!t}'`` and ``'{!f}'``.
         See :class:`dax.util.units.UnitsFormatter` for more information about the available conversion flags.
         Note that the formatter has the default precision of 6 digits which is not likely
         to generate unique keys. An other field can be added to make sure the keys are unique.
@@ -182,8 +182,8 @@ class HistogramContext(DaxModule):
         This function can not be used when already in context.
 
         :param key: Key for the result dataset using standard Python formatting notation
-        :param args: Python `str.format()` positional arguments
-        :param kwargs: Python `str.format()` keyword arguments
+        :param args: Python ``str.format()`` positional arguments
+        :param kwargs: Python ``str.format()`` keyword arguments
         :raises HistogramContextError: Raised if called inside the histogram context
         """
         assert isinstance(key, str) or key is None, 'Provided dataset key must be of type str or None'
@@ -216,7 +216,7 @@ class HistogramContext(DaxModule):
         Optionally, this context can be configured using the :func:`config` function.
 
         This function can be used to manually enter the histogram context.
-        We strongly recommend to use the `with` statement instead.
+        We strongly recommend to use the ``with`` statement instead.
 
         :raises HistogramContextError: Raised if already in histogram context (context is non-reentrant)
         """
@@ -235,7 +235,7 @@ class HistogramContext(DaxModule):
         """Exit the histogram context manually.
 
         This function can be used to manually exit the histogram context.
-        We strongly recommend to use the `with` statement instead.
+        We strongly recommend to use the ``with`` statement instead.
 
         :raises HistogramContextError: Raised if called outside the histogram context
         """
@@ -346,7 +346,7 @@ class HistogramContext(DaxModule):
         """Open the applet that shows a plot of individual state probabilities (one for each histogram).
 
         Note that if the data points are randomized the user should provide X values
-        to sort the points and plot the graph correctly (`x` kwarg).
+        to sort the points and plot the graph correctly (``x`` kwarg).
 
         This function can only be called after the module is initialized.
 
@@ -491,7 +491,7 @@ class HistogramContext(DaxModule):
         """Obtain the raw data captured by the histogram context for a specific key.
 
         Data is formatted as a 3-dimensional list.
-        To access the raw count of histogram N of data point P of channel C: `get_raw()[N][P][C]`.
+        To access the raw count of histogram N of data point P of channel C: ``get_raw()[N][P][C]``.
 
         In case no dataset key is provided, the default dataset key is used.
 
@@ -507,7 +507,7 @@ class HistogramContext(DaxModule):
         """Obtain all histogram objects recorded by this histogram context for a specific key.
 
         The data is formatted as a list of histograms per channel.
-        So to access histogram N of channel C: `get_histograms()[C][N]`.
+        So to access histogram N of channel C: ``get_histograms()[C][N]``.
 
         In case no dataset key is provided, the default dataset key is used.
 
@@ -523,7 +523,7 @@ class HistogramContext(DaxModule):
         """Obtain all individual state probabilities recorded by this histogram context for a specific key.
 
         The data is formatted as a list of probabilities per channel.
-        So to access probability N of channel C: `get_probabilities()[C][N]`.
+        So to access probability N of channel C: ``get_probabilities()[C][N]``.
 
         If measurements were performed using counts, the state detection threshold will be used
         to decide the probability of a state.
@@ -542,9 +542,9 @@ class HistogramContext(DaxModule):
         """Obtain all mean counts recorded by this histogram context for a specific key.
 
         The data is formatted as a list of counts per channel.
-        So to access mean count N of channel C: `get_mean_counts()[C][N]`.
+        So to access mean count N of channel C: ``get_mean_counts()[C][N]``.
 
-        For binary measurements, the mean count returns a value in the range [0..1].
+        For binary measurements, the mean count returns a value in the range ``[0..1]``.
 
         :param dataset_key: Key of the dataset to obtain the mean counts of
         :return: All mean count data for the specified key
@@ -558,7 +558,7 @@ class HistogramContext(DaxModule):
         """Obtain all standard deviations of counts recorded by this histogram context for a specific key.
 
         The data is formatted as a list of standard deviations per channel.
-        So to access standard deviation N of channel C: `get_stdev_counts()[C][N]`.
+        So to access standard deviation N of channel C: ``get_stdev_counts()[C][N]``.
 
         :param dataset_key: Key of the dataset to obtain the mean counts of
         :return: All mean count data for the specified key
@@ -1095,7 +1095,7 @@ class HistogramAnalyzer:
         For full state probability graphs, see :func:`plot_all_state_probabilities`.
 
         Note that if the data points are randomized the user should provide X values
-        to sort the points and plot the graph correctly (`x_values` kwarg).
+        to sort the points and plot the graph correctly (``x_values`` kwarg).
 
         :param kwargs: Keyword arguments passed to :func:`plot_probability`
         """
@@ -1181,7 +1181,7 @@ class HistogramAnalyzer:
         """Plot mean count graphs for all keys available in the data.
 
         Note that if the data points are randomized the user should provide X values
-        to sort the points and plot the graph correctly (`x_values` kwarg).
+        to sort the points and plot the graph correctly (``x_values`` kwarg).
 
         :param kwargs: Keyword arguments passed to :func:`plot_mean_count`
         """
@@ -1277,7 +1277,7 @@ class HistogramAnalyzer:
         """Plot full state probability graphs for all keys available in the data.
 
         Note that if the data points are randomized the user should provide X values
-        to sort the points and plot the graph correctly (`x_values` kwarg).
+        to sort the points and plot the graph correctly (``x_values`` kwarg).
 
         :param kwargs: Keyword arguments passed to :func:`plot_state_probability`
         """

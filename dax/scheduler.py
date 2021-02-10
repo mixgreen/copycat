@@ -1,6 +1,8 @@
 """
 This module is intended to be imported by users.
 It will import the components required to use the DAX.scheduler infrastructure.
+
+See :mod:`dax.base.scheduler`.
 """
 
 # Import DAX scheduler

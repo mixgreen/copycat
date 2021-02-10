@@ -1,18 +1,29 @@
 dax.base package
 ================
 
-.. _dax.base.system:
+dax.base.exceptions module
+--------------------------
 
-dax.base.system module
-----------------------
-
-.. automodule:: dax.base.system
+.. automodule:: dax.base.exceptions
     :members:
     :undoc-members:
     :show-inheritance:
-    :ignore-module-all:
 
-.. _dax.base.scan:
+dax.base.interface module
+-------------------------
+
+.. automodule:: dax.base.interface
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+dax.base.program module
+-----------------------
+
+.. automodule:: dax.base.program
+    :members:
+    :undoc-members:
+    :show-inheritance:
 
 dax.base.scan module
 --------------------
@@ -21,8 +32,6 @@ dax.base.scan module
     :members:
     :undoc-members:
     :show-inheritance:
-
-.. _dax.base.scheduler:
 
 dax.base.scheduler module
 -------------------------
@@ -33,18 +42,11 @@ dax.base.scheduler module
     :show-inheritance:
     :ignore-module-all:
 
-dax.base.interface module
--------------------------
+dax.base.system module
+----------------------
 
-.. automodule:: dax.base.interface
+.. automodule:: dax.base.system
     :members:
     :undoc-members:
     :show-inheritance:
-
-dax.base.exceptions module
---------------------------
-
-.. automodule:: dax.base.exceptions
-    :members:
-    :undoc-members:
-    :show-inheritance:
+    :ignore-module-all:

@@ -10,7 +10,7 @@ __all__ = ['RtioBenchmarkEventThroughput', 'RtioBenchmarkEventBurst', 'RtioBench
 
 
 @dax_client_factory
-class RtioBenchmarkEventThroughput(DaxClient, EnvExperiment):
+class RtioBenchmarkEventThroughput(DaxClient, Experiment):
     """RTIO event throughput benchmark."""
 
     def build(self):
@@ -54,7 +54,7 @@ class RtioBenchmarkEventThroughput(DaxClient, EnvExperiment):
 
 
 @dax_client_factory
-class RtioBenchmarkEventBurst(DaxClient, EnvExperiment):
+class RtioBenchmarkEventBurst(DaxClient, Experiment):
     """RTIO event burst benchmark."""
 
     def build(self):
@@ -92,7 +92,7 @@ class RtioBenchmarkEventBurst(DaxClient, EnvExperiment):
 
 
 @dax_client_factory
-class RtioBenchmarkDmaThroughput(DaxClient, EnvExperiment):
+class RtioBenchmarkDmaThroughput(DaxClient, Experiment):
     """RTIO DMA throughput benchmark."""
 
     def build(self):
@@ -136,7 +136,7 @@ class RtioBenchmarkDmaThroughput(DaxClient, EnvExperiment):
 
 
 @dax_client_factory
-class RtioBenchmarkLatencyCoreRtio(DaxClient, EnvExperiment):
+class RtioBenchmarkLatencyCoreRtio(DaxClient, Experiment):
     """Core-RTIO latency benchmark."""
 
     def build(self):
@@ -172,7 +172,7 @@ class RtioBenchmarkLatencyCoreRtio(DaxClient, EnvExperiment):
 
 
 @dax_client_factory
-class RtioBenchmarkInputBufferSize(DaxClient, EnvExperiment):
+class RtioBenchmarkInputBufferSize(DaxClient, Experiment):
     """RTIO input buffer size benchmark."""
 
     def build(self):
@@ -202,7 +202,7 @@ class RtioBenchmarkInputBufferSize(DaxClient, EnvExperiment):
 
 
 @dax_client_factory
-class RtioBenchmarkLatencyRtioCore(DaxClient, EnvExperiment):
+class RtioBenchmarkLatencyRtioCore(DaxClient, Experiment):
     """RTIO-core and RTIO-RTIO latency benchmark."""
 
     def build(self):
@@ -225,7 +225,7 @@ class RtioBenchmarkLatencyRtioCore(DaxClient, EnvExperiment):
 
 
 @dax_client_factory
-class RtioBenchmarkLatencyRtt(DaxClient, EnvExperiment):
+class RtioBenchmarkLatencyRtt(DaxClient, Experiment):
     """RTT RTIO-core-RTIO latency benchmark."""
 
     def build(self):

@@ -29,7 +29,7 @@ class CoreCache(DaxSimDevice):
         assert isinstance(key, str), 'Key must be of type str'
 
         # Return value
-        # NOTE: `get()` mimics the fact that an empty cache key is not mutable and first has to be set using `put()`
+        # NOTE: ``get()`` mimics the fact that an empty cache key is not mutable and first has to be set using ``put()``
         return self._cache.get(key, [])
 
     @kernel

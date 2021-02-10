@@ -1,6 +1,6 @@
 from __future__ import annotations  # Postponed evaluation of annotations
 
-import os
+import os.path
 import tempfile
 import typing
 import weakref
@@ -11,11 +11,11 @@ import artiq.master.databases
 import artiq.frontend.artiq_run  # type: ignore
 
 __all__ = ['is_kernel', 'is_portable', 'is_host_only',
-           'process_arguments', 'get_managers', 'ClonedDatasetManager', 'clone_managers']
+           'process_arguments', 'get_managers', 'ClonedDatasetManager', 'clone_managers', 'isolate_managers']
 
 
 class _TemporaryDirectory(tempfile.TemporaryDirectory):  # type: ignore[type-arg]
-    """Custom `TemporaryDirectory` class."""
+    """Custom :class:`TemporaryDirectory` class."""
 
     _refs: typing.List[_TemporaryDirectory] = []
     """List of references to instances of this class."""
@@ -29,13 +29,6 @@ class _TemporaryDirectory(tempfile.TemporaryDirectory):  # type: ignore[type-arg
         # Add a finalizer to cleanup this temp dir (prevents resource warning for implicit cleanup)
         weakref.finalize(self, self.cleanup)
 
-
-_EXPID_DEFAULTS: typing.Dict[str, typing.Any] = {
-    'file': 'dax_artiq_helper_file.py',
-    'class_name': 'DaxArtiqHelperExperiment',
-    'repo_rev': 'N/A'
-}
-"""Default expid values."""
 
 _DEVICE_DB: typing.Dict[str, typing.Any] = {
     'core': {
@@ -59,7 +52,7 @@ _DEVICE_DB: typing.Dict[str, typing.Any] = {
 
 
 def is_kernel(func: typing.Any) -> bool:
-    """Helper function to detect if a function is an ARTIQ kernel (`@kernel`) or not.
+    """Helper function to detect if a function is an ARTIQ kernel (``@kernel``) or not.
 
     :param func: The function of interest
     :return: True if the given function is a kernel
@@ -69,7 +62,7 @@ def is_kernel(func: typing.Any) -> bool:
 
 
 def is_portable(func: typing.Any) -> bool:
-    """Helper function to detect if a function is an ARTIQ portable function (`@portable`) or not.
+    """Helper function to detect if a function is an ARTIQ portable function (``@portable``) or not.
 
     :param func: The function of interest
     :return: True if the given function is a portable function
@@ -79,7 +72,7 @@ def is_portable(func: typing.Any) -> bool:
 
 
 def is_host_only(func: typing.Any) -> bool:
-    """Helper function to detect if a function is marked as host only (`@host_only`) or not.
+    """Helper function to detect if a function is marked as host only (``@host_only``) or not.
 
     :param func: The function of interest
     :return: True if the given function is host only
@@ -100,7 +93,7 @@ def _convert_argument(argument: typing.Any) -> typing.Any:
 def process_arguments(arguments: typing.Dict[str, typing.Any]) -> typing.Dict[str, typing.Any]:
     """Process a dict with raw arguments to make it compatible with the ARTIQ format.
 
-    The expid and the `ProcessArgumentManager` expect arguments in a PYON serializable format.
+    The expid and the :class:`ProcessArgumentManager` expect arguments in a PYON serializable format.
     This function will make sure that complex objects (such as scan argument objects) are
     converted to the correct format
 
@@ -138,7 +131,7 @@ def get_managers(device_db: typing.Union[typing.Dict[str, typing.Any], str, None
                  expid: typing.Optional[typing.Dict[str, typing.Any]] = None,
                  arguments: typing.Optional[typing.Dict[str, typing.Any]] = None,
                  **kwargs: typing.Any) -> _ManagersTuple:
-    """Returns a tuple of ARTIQ manager objects that can be used to construct an ARTIQ `HasEnvironment` object.
+    """Returns a tuple of ARTIQ manager objects that can be used to construct an ARTIQ :class:`HasEnvironment` object.
 
     This function is primarily used for testing purposes.
 
@@ -147,7 +140,7 @@ def get_managers(device_db: typing.Union[typing.Dict[str, typing.Any], str, None
 
     We strongly recommend to close the managers before they are discarded. This will free any used resources.
     **The best way to guarantee the managers are closed is to use the returned tuple as a context manager.**
-    Alternatively, users can call the `close()` method of the tuple or close managers manually.
+    Alternatively, users can call the :func:`close` method of the tuple or close managers manually.
     Managers can be closed multiple times without any side-effects.
     Just in case the user does not manually close managers, finalizers attached to specific managers
     will close any occupied resources before object destruction.
@@ -159,8 +152,8 @@ def get_managers(device_db: typing.Union[typing.Dict[str, typing.Any], str, None
     :param dataset_db: A dataset DB as a file name
     :param expid: Dict for the scheduler expid attribute
     :param arguments: Arguments for the ProcessArgumentManager object
-    :param kwargs: Arguments for the ProcessArgumentManager object (updates `arguments`)
-    :return: A tuple of ARTIQ manager objects: (`DeviceManager`, `DatasetManager`, `ProcessArgumentManager`, `dict`)
+    :param kwargs: Arguments for the ProcessArgumentManager object (updates ``arguments``)
+    :return: A tuple of ARTIQ manager objects: ``(DeviceManager, DatasetManager, ProcessArgumentManager, dict)``
     """
 
     if arguments is None:
@@ -174,16 +167,23 @@ def get_managers(device_db: typing.Union[typing.Dict[str, typing.Any], str, None
     assert isinstance(dataset_db, str) or dataset_db is None, 'Dataset DB must be a str or None'
     assert isinstance(expid, dict) or expid is None, 'Expid must be a dict or None'
 
-    # Scheduler
+    # Create a scheduler
     scheduler = artiq.frontend.artiq_run.DummyScheduler()
-    # Construct expid of scheduler and add default values
-    scheduler.expid = {} if expid is None else expid.copy()
-    for k, v in _EXPID_DEFAULTS.items():
-        scheduler.expid.setdefault(k, v)
+    # Construct expid object
+    expid_: typing.Dict[str, typing.Any] = {
+        'file': 'dax_util_artiq_helper_file.py',
+        'class_name': 'DaxUtilArtiqHelperExperiment',
+        'repo_rev': 'N/A'
+    }
+    if expid is not None:
+        # Given expid overrides default values
+        expid_.update(expid)
     # Merge and set arguments (updates any arguments in the expid)
     arguments.update(kwargs)
     arguments = process_arguments(arguments)
-    scheduler.expid.setdefault('arguments', {}).update(arguments)
+    expid_.setdefault('arguments', {}).update(arguments)
+    # Assign expid to scheduler
+    scheduler.expid = expid_
 
     # Create a unique temp dir
     tempdir = _TemporaryDirectory()
@@ -242,18 +242,20 @@ class ClonedDatasetManager(artiq.master.worker_db.DatasetManager):
     """The key format for cloned datasets, which is used for the HDF5 group name."""
 
     def __init__(self, dataset_mgr: artiq.master.worker_db.DatasetManager, *,
-                 name: typing.Optional[str] = None):
+                 name: typing.Optional[str] = None,
+                 dataset_db: typing.Any = None):
         """Create a clone of an existing ARTIQ dataset manager.
 
-        The `name` parameter must be unique and is formatted with an `index` parameter.
-        The `index` parameter starts at `0` and is incremented for every new clone
+        The name parameter must be unique and is formatted with an index parameter.
+        The index parameter starts at :const:`0` and is incremented for every new clone
         created from the existing ARTIQ dataset manager.
 
-        The `name` is directly used as the HDF5 group name and `/` can therefore be
+        The ``name`` is directly used as the HDF5 group name and ``'/'`` can therefore be
         used to create sub-groups.
 
         :param dataset_mgr: The existing ARTIQ dataset manager
         :param name: Optional name for this clone, which will be used for the HDF5 group name
+        :param dataset_db: Optional backend dataset DB, defaults to dataset DB of the existing ARTIQ dataset manager
         """
         assert isinstance(dataset_mgr, artiq.master.worker_db.DatasetManager)
         assert isinstance(name, str) or name is None, 'Name must be of type str or None'
@@ -263,7 +265,7 @@ class ClonedDatasetManager(artiq.master.worker_db.DatasetManager):
             raise TypeError('Dataset managers can not be cloned recursively')
 
         # Initialize this clone
-        super(ClonedDatasetManager, self).__init__(dataset_mgr.ddb)
+        super(ClonedDatasetManager, self).__init__(dataset_mgr.ddb if dataset_db is None else dataset_db)
 
         if not hasattr(dataset_mgr, self._CLONE_DICT_KEY):
             # The existing ARTIQ dataset manager is still "fresh", so we need to mutate it
@@ -305,25 +307,26 @@ def clone_managers(managers: typing.Any, *,
                    **kwargs: typing.Any) -> _ManagersTuple:
     """Clone a given tuple of ARTIQ manager objects to use for a sub-experiment.
 
-    Sub-experiments (i.e. `children` in ARTIQ terminology) can share ARTIQ manager objects with their parent
+    Sub-experiments (i.e. ``children`` in ARTIQ terminology) can share ARTIQ manager objects with their parent
     by passing the parent experiment object. In this case, the same dataset manager and argument manager
     are shared, which can be undesired for certain situations (e.g. dataset aliasing or argument aliasing).
-    This function allows you to clone ARTIQ manager objects which will decouple the dataset manager
-    and the argument manager from the parent while still sharing the device manager.
+    This function allows you to clone ARTIQ manager objects which will decouple the dataset manager,
+    the argument manager, and the scheduling defaults from the parent while still sharing the device manager.
 
     This function is mainly used when creating and running multiple sub-experiments from a parent
-    experiment class where the data and arguments are preferably decoupled.
+    experiment class where the dataset manager archives and arguments are preferably decoupled.
+
+    Note that the dataset DB is still shared, which means broadcast and persistent datasets are shared.
+    To isolate a sub-experiment completely, see :func:`isolate_managers`.
 
     Cloning of the managers is not limited to the build phase, though the ARTIQ manager objects
     have to be captured in the constructor of your experiment.
 
-    Note: The scheduling defaults dict will also be decoupled.
-
     :param managers: The tuple with ARTIQ manager objects
     :param name: Optional name for cloned dataset manager, which will be used in the HDF5 group name
     :param arguments: Arguments for the ProcessArgumentManager object
-    :param kwargs: Arguments for the ProcessArgumentManager object (updates `arguments`)
-    :return: A cloned ARTIQ manager object: (`DeviceManager`, `ClonedDatasetManager`, `ProcessArgumentManager`, `dict`)
+    :param kwargs: Arguments for the ProcessArgumentManager object (updates ``arguments``)
+    :return: A cloned ARTIQ manager object: ``(DeviceManager, ClonedDatasetManager, ProcessArgumentManager, dict)``
     """
 
     if arguments is None:
@@ -359,3 +362,76 @@ def clone_managers(managers: typing.Any, *,
 
     # Return the new managers consisting of existing, cloned, and new objects
     return _ManagersTuple(device_mgr, ClonedDatasetManager(dataset_mgr, name=name), argument_mgr, {})
+
+
+class _DummyDatasetDB(typing.Dict[typing.Any, typing.Any]):
+    """A class that acts like an ARTIQ dataset DB, which works slightly different from a regular dict."""
+
+    def get(self, key: typing.Any, default: typing.Any = None) -> typing.Any:
+        # Get does not fallback on the default value
+        return self[key]
+
+
+def isolate_managers(managers: typing.Any, *,
+                     name: typing.Optional[str] = None) -> _ManagersTuple:
+    """Create a tuple of ARTIQ manager objects that is isolated from the given tuple of managers.
+
+    Isolation of manager objects can be useful when running sub-experiments that should not
+    share device/dataset/argument managers with the main experiment.
+    The isolated ARTIQ managers consists of an empty device manager, a cloned dataset manager with
+    an empty dummy dataset DB (see :class:`ClonedDatasetManager`), an empty argument manager,
+    and empty scheduling defaults.
+
+    See also :func:`clone_managers`.
+
+    :param managers: The tuple with ARTIQ manager objects
+    :param name: Optional name for cloned dataset manager, which will be used in the HDF5 group name
+    :return: Isolated ARTIQ managers: ``(DeviceManager, ClonedDatasetManager, ProcessArgumentManager, dict)``
+    """
+
+    # Check the type of the passed managers
+    if isinstance(managers, artiq.language.environment.HasEnvironment):
+        raise ValueError('A parent was passed instead of the raw managers tuple')
+    if not isinstance(managers, tuple):
+        raise ValueError('Managers must be a tuple')
+
+    try:
+        # Unpack the managers
+        _, dataset_mgr, _, _ = managers
+    except ValueError:
+        raise ValueError('The managers could not be unpacked')
+    else:
+        # Check types of the unpacked manager objects
+        if not isinstance(dataset_mgr, artiq.master.worker_db.DatasetManager):
+            raise TypeError('The unpacked dataset manager has an unexpected type')
+
+    # Arguments
+    arguments: typing.Dict[str, typing.Any] = {}
+    # Create a scheduler
+    scheduler = artiq.frontend.artiq_run.DummyScheduler()
+    # Construct expid of scheduler
+    scheduler.expid = {'file': '', 'class_name': '', 'repo_rev': 'N/A', 'arguments': arguments}
+
+    # Create a unique temp dir
+    tempdir = _TemporaryDirectory()
+
+    # Create a temporally device DB file
+    device_db_file_name = os.path.join(tempdir.name, 'device_db.py')
+    with open(device_db_file_name, 'w') as device_db_file:
+        device_db_file.write('device_db={}')
+
+    # Create the device manager
+    device_mgr = artiq.master.worker_db.DeviceManager(
+        artiq.master.databases.DeviceDB(device_db_file_name),
+        virtual_devices={
+            "scheduler": scheduler,
+            "ccb": artiq.frontend.artiq_run.DummyCCB()
+        }
+    )
+
+    # Create a new argument manager
+    argument_mgr = artiq.language.environment.ProcessArgumentManager(arguments)
+
+    # Return the isolated managers
+    return _ManagersTuple(
+        device_mgr, ClonedDatasetManager(dataset_mgr, name=name, dataset_db=_DummyDatasetDB()), argument_mgr, {})

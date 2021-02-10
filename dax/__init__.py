@@ -1,4 +1,4 @@
-import os
+import os.path
 from ._version import get_versions
 
 __dax_dir__: str = str(os.path.dirname(os.path.abspath(__file__)))

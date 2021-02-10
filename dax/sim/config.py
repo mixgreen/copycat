@@ -65,7 +65,7 @@ class DaxSimConfig:
 
     @property
     def output_enabled(self) -> bool:
-        """Returns `True` if modules should generate output."""
+        """Returns :const:`True` if modules should generate output."""
         return self.__output_enabled
 
     # noinspection PyMethodMayBeStatic
