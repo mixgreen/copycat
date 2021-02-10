@@ -4,7 +4,10 @@ import contextlib
 import os
 import os.path
 
+from test.environment import CI_ENABLED
 
+
+@unittest.skipUnless(CI_ENABLED, 'Not in a CI environment, skipping code style test')
 class TestCodeStyle(unittest.TestCase):
 
     def test_code_style(self):

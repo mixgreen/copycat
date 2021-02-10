@@ -15,6 +15,8 @@ from dax.interfaces.detection import DetectionInterface
 from dax.util.artiq import get_managers
 from dax.util.output import temp_dir
 
+from test.environment import CI_ENABLED
+
 
 class _MockDetectionModule(DaxModule, DetectionInterface):
 
@@ -691,6 +693,7 @@ class HistogramAnalyzerTestCase(unittest.TestCase):
             # Verify raw attribute is not available
             self.assertFalse(hasattr(a, 'raw'), 'Expected no attribute `raw`')
 
+    @unittest.skipUnless(CI_ENABLED, 'Not in a CI environment, skipping slow plotting test')
     def test_plot(self):
         # Add data to the archive
         num_histograms = 4
@@ -716,6 +719,7 @@ class HistogramAnalyzerTestCase(unittest.TestCase):
             a.plot_all_mean_counts()
             a.plot_all_state_probabilities()
 
+    @unittest.skipUnless(CI_ENABLED, 'Not in a CI environment, skipping slow plotting test')
     def test_plot_hdf5(self):
         # Add data to the archive
         num_histograms = 4

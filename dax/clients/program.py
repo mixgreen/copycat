@@ -1,14 +1,25 @@
+# mypy: no_warn_unused_ignores
+
 import typing
+import types
 import os.path
+import shutil
 
 import artiq.tools
 
-from dax.experiment import *
+# No wildcard import to prevent aliasing with `types`
+from dax.experiment import DaxClient, dax_client_factory, Experiment, StringValue
+
 import dax.base.program
 import dax.util.artiq
+import dax.util.output
 import dax.interfaces.operation
 
 __all__ = ['ProgramClient']
+
+
+def _import_file(file_name: str) -> types.ModuleType:
+    return artiq.tools.file_import(file_name, prefix='dax_program_client_')
 
 
 @dax_client_factory
@@ -22,18 +33,14 @@ class ProgramClient(DaxClient, Experiment):
         self._managers: typing.Any = managers
 
         # Obtain arguments
-        self._program_file: str = self.get_argument('file', StringValue(),
-                                                    tooltip='File containing the program to run')
-        self._program_class: str = self.get_argument('class', StringValue(''),
-                                                     tooltip='Class name of the program to run (optional)')
+        self._program_file: str = self.get_argument(
+            'file', StringValue(), tooltip='File containing the program to run or an archive with a `main.py` file')
+        self._program_class: str = self.get_argument(
+            'class', StringValue(''), tooltip='Class name of the program to run (optional)')
 
     def prepare(self) -> None:
-        # Load file/module
-        file_name = os.path.expanduser(self._program_file)
-        self.logger.debug(f'Loading program file "{file_name}"')
-        if not os.path.isfile(file_name):
-            raise FileNotFoundError(f'No such file or path is a directory: "{file_name}"')
-        module = artiq.tools.file_import(file_name, prefix='dax_program_client_')
+        # Load the module
+        module: types.ModuleType = self._load_module()
 
         # Obtain class
         self.logger.debug('Loading program class%s', f' "{self._program_class}"' if self._program_class else '')
@@ -47,7 +54,8 @@ class ProgramClient(DaxClient, Experiment):
 
         # Get interface
         self._interface: dax.interfaces.operation.OperationInterface
-        self._interface = self.registry.find_interface(dax.interfaces.operation.OperationInterface)
+        self._interface = self.registry.find_interface(
+            dax.interfaces.operation.OperationInterface)  # type: ignore[misc]
 
         # Build the program
         self.logger.info('Building program')
@@ -72,3 +80,24 @@ class ProgramClient(DaxClient, Experiment):
         # Analyze the program
         self.logger.info('Analyzing program')
         self._program.analyze()
+
+    def _load_module(self) -> types.ModuleType:
+        # Expand and check path
+        file_name = os.path.expanduser(self._program_file)
+        if not os.path.isfile(file_name):
+            raise FileNotFoundError(f'No such file or path is a directory: "{file_name}"')
+
+        if self._program_file.endswith('.py'):
+            # Load file/module
+            self.logger.debug(f'Loading program file "{file_name}"')
+            return _import_file(file_name)
+        else:
+            # We assume that we are dealing with an archive
+            self.logger.debug(f'Unpacking and loading program archive "{file_name}"')
+            with dax.util.output.temp_dir() as temp_dir:
+                # Unpack archive
+                shutil.unpack_archive(file_name, extract_dir=temp_dir)  # Raises exception of format is not recognized
+                unpacked_file_name = os.path.join(temp_dir, 'main.py')
+                if not os.path.isfile(unpacked_file_name):
+                    raise FileNotFoundError(f'Archive "{file_name}" does not contain a `main.py` file')
+                return _import_file(unpacked_file_name)
