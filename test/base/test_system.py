@@ -1613,6 +1613,31 @@ class DaxClientTestCase(unittest.TestCase):
 
         self.assertFalse(hasattr(c, 'is_initialized'), 'DAX system of client was initialized unexpectedly')
 
+    def test_manager_kwarg(self):
+        kwarg = 'managers'
+
+        @dax_client_factory
+        class Client(DaxClient, Experiment):
+            MANAGERS_KWARG = kwarg
+
+            def build(self, *args, **kwargs):
+                self.args = args
+                self.kwargs = kwargs
+
+            def run(self) -> None:
+                pass
+
+        # noinspection PyTypeChecker
+        class ImplementableClient(Client(_TestSystem)):
+            pass
+
+        # Disabled one inspection, inspection does not handle the decorator correctly
+        # noinspection PyArgumentList
+        c = ImplementableClient(self.managers)
+
+        self.assertFalse(c.args)
+        self.assertDictEqual(c.kwargs, {kwarg: self.managers})
+
 
 if __name__ == '__main__':
     unittest.main()
