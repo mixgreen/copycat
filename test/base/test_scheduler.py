@@ -223,6 +223,10 @@ class SchedulerMiscTestCase(unittest.TestCase):
         test_data = [
             ('', 0.0),
             ('0s', 0.0),
+            ('0s  ', 0.0),
+            ('  0s', 0.0),
+            ('   0s   ', 0.0),
+            ('  0  s  ', 0.0),
             ('3s', 3.0),
             ('3    s', 3.0),
             ('3 \t  \t s', 3.0),
