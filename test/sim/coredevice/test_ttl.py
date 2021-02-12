@@ -18,7 +18,7 @@ _DEVICE_DB = {
         'type': 'local',
         'module': 'artiq.coredevice.core',
         'class': 'Core',
-        'arguments': {'host': '1.2.3.4', 'ref_period': 1e-9}
+        'arguments': {'host': None, 'ref_period': 1e-9}
     },
     "TTLOut": {
         "type": "local",

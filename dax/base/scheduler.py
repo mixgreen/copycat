@@ -55,6 +55,9 @@ def _str_to_time(string: str) -> float:
     """
     assert isinstance(string, str), 'Input must be of type str'
 
+    # Format string
+    string = string.strip()
+
     if string:
         try:
             # Get the value and the unit

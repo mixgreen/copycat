@@ -36,7 +36,7 @@ _DEVICE_DB: typing.Dict[str, typing.Any] = {
         'type': 'local',
         'module': 'artiq.coredevice.core',
         'class': 'Core',
-        'arguments': {'host': '0.0.0.0', 'ref_period': 1e-9}
+        'arguments': {'host': None, 'ref_period': 1e-9}
     },
     'core_cache': {
         'type': 'local',
@@ -223,6 +223,10 @@ class SchedulerMiscTestCase(unittest.TestCase):
         test_data = [
             ('', 0.0),
             ('0s', 0.0),
+            ('0s  ', 0.0),
+            ('  0s', 0.0),
+            ('   0s   ', 0.0),
+            ('  0  s  ', 0.0),
             ('3s', 3.0),
             ('3    s', 3.0),
             ('3 \t  \t s', 3.0),
