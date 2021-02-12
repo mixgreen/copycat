@@ -1,10 +1,12 @@
 import unittest
 import typing
 import random
+import argparse
 
 from artiq.language.core import rpc, portable, kernel, host_only
 import artiq.experiment
 import artiq.master.worker_db
+import artiq.tools
 
 import dax.util.artiq
 import dax.util.output
@@ -93,6 +95,27 @@ class ArtiqTestCase(unittest.TestCase):
         self.assertDictEqual(processed_arguments, {k: v.describe() if isinstance(v, artiq.experiment.ScanObject) else v
                                                    for k, v in arguments.items()})
 
+    def test_parse_arguments(self):
+        arguments = {'foo': 1,
+                     'range': artiq.experiment.RangeScan(1, 10, 9),
+                     'center': artiq.experiment.CenterScan(1, 10, 9),
+                     'explicit': artiq.experiment.ExplicitScan([1, 10, 9]),
+                     'no': artiq.experiment.NoScan(10),
+                     'bar': 'baz',
+                     'foobar': 0.345,
+                     'baz': [1, 2, 3]}
+
+        processed_arguments = dax.util.artiq.process_arguments(arguments)
+        commandline_arguments = [f'{k}="{v}"' if isinstance(v, str) else f'{k}={v}'
+                                 for k, v in processed_arguments.items()]
+
+        parser = argparse.ArgumentParser()
+        parser.add_argument('args', nargs='*')
+        unprocessed_arguments = parser.parse_args(commandline_arguments).args
+        parsed_arguments = artiq.tools.parse_arguments(unprocessed_arguments)
+
+        self.assertDictEqual(parsed_arguments, processed_arguments)
+
     def test_cloned_dataset_manager(self):
         with dax.util.artiq.get_managers() as managers:
             clone = dax.util.artiq.ClonedDatasetManager(managers.dataset_mgr)
@@ -162,13 +185,13 @@ class ArtiqTestCase(unittest.TestCase):
     def test_clone_managers_name(self):
         with dax.util.artiq.get_managers() as managers:
             name = 'foo'
-            cloned = dax.util.artiq.clone_managers(managers, name=name)
 
-            clone_dict = getattr(managers.dataset_mgr, dax.util.artiq.ClonedDatasetManager._CLONE_DICT_KEY)
-            self.assertEqual(len(clone_dict), 1, 'Unexpected number of clones in dict')
-            registered_clone_key, registered_clone = clone_dict.popitem()
-            self.assertEqual(registered_clone_key, name, 'Dataset manager clone name was not passed correctly')
-            self.assertIs(registered_clone, cloned.dataset_mgr)
+            with dax.util.artiq.clone_managers(managers, name=name) as cloned:
+                clone_dict = getattr(managers.dataset_mgr, dax.util.artiq.ClonedDatasetManager._CLONE_DICT_KEY)
+                self.assertEqual(len(clone_dict), 1, 'Unexpected number of clones in dict')
+                registered_clone_key, registered_clone = clone_dict.popitem()
+                self.assertEqual(registered_clone_key, name, 'Dataset manager clone name was not passed correctly')
+                self.assertIs(registered_clone, cloned.dataset_mgr)
 
     def test_clone_managers_arguments(self):
         with dax.util.artiq.get_managers() as managers:
@@ -176,14 +199,14 @@ class ArtiqTestCase(unittest.TestCase):
             kwargs = {'foo': 4.4, 'bar': 'bar'}
             ref = arguments.copy()  # Copy a reference for usage later
 
-            cloned = dax.util.artiq.clone_managers(managers, arguments=arguments, **kwargs)
+            with dax.util.artiq.clone_managers(managers, arguments=arguments, **kwargs) as cloned:
+                # Check if we did not accidentally mutated the original arguments dict
+                self.assertDictEqual(ref, arguments, 'The original given arguments were mutated')
 
-            # Check if we did not accidentally mutated the original arguments dict
-            self.assertDictEqual(ref, arguments, 'The original given arguments were mutated')
-
-            # Update reference to match expected outcome
-            ref.update(kwargs)
-            self.assertDictEqual(ref, cloned.argument_mgr.unprocessed_arguments, 'Arguments were not passed correctly')
+                # Update reference to match expected outcome
+                ref.update(kwargs)
+                self.assertDictEqual(ref, cloned.argument_mgr.unprocessed_arguments,
+                                     'Arguments were not passed correctly')
 
     def test_clone_managers_dataset_db_broadcast(self):
         dataset_kwargs = [{'broadcast': b, 'persist': p} for b in [False, True] for p in [False, True]]
@@ -243,6 +266,21 @@ class ArtiqTestCase(unittest.TestCase):
                 registered_clone_key, registered_clone = clone_dict.popitem()
                 self.assertEqual(registered_clone_key, name, 'Dataset manager clone name was not passed correctly')
                 self.assertIs(registered_clone, isolated[1])
+
+    def test_isolate_managers_arguments(self):
+        with dax.util.artiq.get_managers() as managers:
+            arguments = {'foo-bar': 1, 'bar-baz': 4, 'name': 'some_name'}
+            kwargs = {'foo': 4.4, 'bar': 'bar'}
+            ref = arguments.copy()  # Copy a reference for usage later
+
+            with dax.util.artiq.clone_managers(managers, arguments=arguments, **kwargs) as isolated:
+                # Check if we did not accidentally mutated the original arguments dict
+                self.assertDictEqual(ref, arguments, 'The original given arguments were mutated')
+
+                # Update reference to match expected outcome
+                ref.update(kwargs)
+                self.assertDictEqual(ref, isolated.argument_mgr.unprocessed_arguments,
+                                     'Arguments were not passed correctly')
 
     def test_isolate_managers_device_db(self):
         ddb: typing.Dict[str, typing.Any] = {

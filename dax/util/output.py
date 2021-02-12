@@ -82,8 +82,7 @@ def _unique_file_name(base_path: pathlib.Path, name: str, ext: typing.Optional[s
         return file_name
 
 
-# Type ignore required to pass type checking without use of typing.Protocol
-def get_file_name_generator(scheduler: typing.Any):  # type: ignore
+def get_file_name_generator(scheduler: typing.Any) -> typing.Callable[[str, typing.Optional[str]], str]:
     """Obtain a generator that generates unique file names in a single path based on the experiment metadata.
 
     :param scheduler: The scheduler object

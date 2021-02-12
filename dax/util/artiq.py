@@ -373,7 +373,9 @@ class _DummyDatasetDB(typing.Dict[typing.Any, typing.Any]):
 
 
 def isolate_managers(managers: typing.Any, *,
-                     name: typing.Optional[str] = None) -> _ManagersTuple:
+                     name: typing.Optional[str] = None,
+                     arguments: typing.Optional[typing.Dict[str, typing.Any]] = None,
+                     **kwargs: typing.Any) -> _ManagersTuple:
     """Create a tuple of ARTIQ manager objects that is isolated from the given tuple of managers.
 
     Isolation of manager objects can be useful when running sub-experiments that should not
@@ -386,8 +388,17 @@ def isolate_managers(managers: typing.Any, *,
 
     :param managers: The tuple with ARTIQ manager objects
     :param name: Optional name for cloned dataset manager, which will be used in the HDF5 group name
+    :param arguments: Arguments for the ProcessArgumentManager object
+    :param kwargs: Arguments for the ProcessArgumentManager object (updates ``arguments``)
     :return: Isolated ARTIQ managers: ``(DeviceManager, ClonedDatasetManager, ProcessArgumentManager, dict)``
     """
+
+    if arguments is None:
+        # Set default value
+        arguments = {}
+    else:
+        assert isinstance(arguments, dict), 'Arguments must be of type dict'
+        arguments = arguments.copy()  # Copy arguments to make sure the dict is not mutated
 
     # Check the type of the passed managers
     if isinstance(managers, artiq.language.environment.HasEnvironment):
@@ -405,8 +416,6 @@ def isolate_managers(managers: typing.Any, *,
         if not isinstance(dataset_mgr, artiq.master.worker_db.DatasetManager):
             raise TypeError('The unpacked dataset manager has an unexpected type')
 
-    # Arguments
-    arguments: typing.Dict[str, typing.Any] = {}
     # Create a scheduler
     scheduler = artiq.frontend.artiq_run.DummyScheduler()
     # Construct expid of scheduler
@@ -429,6 +438,9 @@ def isolate_managers(managers: typing.Any, *,
         }
     )
 
+    # Merge keyword arguments into arguments dict
+    arguments.update(kwargs)
+    arguments = process_arguments(arguments)
     # Create a new argument manager
     argument_mgr = artiq.language.environment.ProcessArgumentManager(arguments)
 

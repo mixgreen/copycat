@@ -35,7 +35,7 @@ on other components of DAX and can be used by any ARTIQ project.
 
 **DAX.program**
 
-The DAX.program sub-module contains base classes that provide an operation-level API to DAX systems. Using these base
+The DAX.program sub-module contains base classes that provide an *operation-level API to DAX systems*. Using these base
 classes, users can write operation-level programs with an API that is independent of the underlying system. The programs
 themselves should be targeted towards a specific DAX system to work within the restrictions of the system and yield the
 best run-time performance. A DAX program is designed like a regular ARTIQ experiment and works based on the same timing

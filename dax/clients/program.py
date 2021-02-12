@@ -4,6 +4,8 @@ import typing
 import types
 import os.path
 import shutil
+import shlex
+import argparse
 
 import artiq.tools
 
@@ -33,34 +35,54 @@ class ProgramClient(DaxClient, Experiment):
         self._managers: typing.Any = managers
 
         # Obtain arguments
-        self._program_file: str = self.get_argument(
+        self._file: str = self.get_argument(
             'file', StringValue(), tooltip='File containing the program to run or an archive with a main.py file')
-        self._program_class: str = self.get_argument(
+        self._class: str = self.get_argument(
             'class', StringValue(''), tooltip='Class name of the program to run (optional)')
+        self._arguments: str = self.get_argument(
+            'arguments', StringValue(''), tooltip='Command-line arguments (format: `[KEY=PYON_VALUE ...]`)')
 
     def prepare(self) -> None:
+        # Archive input data
+        self.set_dataset('file', self._file)
+        self.set_dataset('class', self._class)
+        self.set_dataset('arguments', self._arguments)
+
         # Load the module
         module: types.ModuleType = self._load_module()
 
         # Obtain class
-        self.logger.debug('Loading program class%s', f' "{self._program_class}"' if self._program_class else '')
+        self.logger.debug('Loading program class%s', f' "{self._class}"' if self._class else '')
         program_cls = artiq.tools.get_experiment(module,
-                                                 class_name=self._program_class if self._program_class else None)
-        self.logger.info(f'Loaded program "{self._program_file}:{program_cls.__name__}"')
+                                                 class_name=self._class if self._class else None)
+        self.logger.info(f'Loaded program "{self._file}:{program_cls.__name__}"')
 
         # Test class
         if not issubclass(program_cls, dax.base.program.DaxProgram):
-            raise TypeError(f'Class "{self._program_file}:{program_cls.__name__}" is not a DAX program')
+            raise TypeError(f'Class "{self._file}:{program_cls.__name__}" is not a DAX program')
 
         # Get interface
         self._interface: dax.interfaces.operation.OperationInterface
         self._interface = self.registry.find_interface(
             dax.interfaces.operation.OperationInterface)  # type: ignore[misc]
 
+        # Parse arguments
+        if self._arguments:
+            self.logger.debug(f'Parsing arguments: {self._arguments}')
+            parser = argparse.ArgumentParser()
+            parser.add_argument('args', nargs='*')
+            try:
+                arguments: typing.Dict[str, typing.Any] = artiq.tools.parse_arguments(
+                    parser.parse_args(shlex.split(self._arguments, posix=False)).args)
+            except Exception as e:
+                raise RuntimeError('Exception occurred while parsing arguments') from e
+        else:
+            arguments = {}
+
         # Build the program
         self.logger.info('Building program')
         self._program: Experiment = program_cls(
-            dax.util.artiq.isolate_managers(self._managers, name='program'),
+            dax.util.artiq.isolate_managers(self._managers, name='program', arguments=arguments),
             core=self.core,
             interface=self._interface
         )
@@ -83,11 +105,11 @@ class ProgramClient(DaxClient, Experiment):
 
     def _load_module(self) -> types.ModuleType:
         # Expand and check path
-        file_name = os.path.expanduser(self._program_file)
+        file_name = os.path.expanduser(self._file)
         if not os.path.isfile(file_name):
             raise FileNotFoundError(f'No such file or path is a directory: "{file_name}"')
 
-        if self._program_file.endswith('.py'):
+        if self._file.endswith('.py'):
             # Load file/module
             self.logger.debug(f'Loading program file "{file_name}"')
             return _import_file(file_name)
