@@ -4,9 +4,12 @@ import os.path
 import tempfile
 import typing
 import weakref
+import time
 
+import artiq.experiment
 import artiq.language.environment
 import artiq.master.worker_db
+import artiq.master.worker_impl  # type: ignore
 import artiq.master.databases
 import artiq.frontend.artiq_run  # type: ignore
 
@@ -447,3 +450,54 @@ def isolate_managers(managers: typing.Any, *,
     # Return the isolated managers
     return _ManagersTuple(
         device_mgr, ClonedDatasetManager(dataset_mgr, name=name, dataset_db=_DummyDatasetDB()), argument_mgr, {})
+
+
+@artiq.experiment.host_only
+def pause_strict_priority(scheduler: typing.Any, *,
+                          polling_period: typing.Union[float, int] = 0.5) -> None:
+    """Allow all higher priority experiments in the pipeline to prepare and run (pauses the current experiment).
+
+    When the ARTIQ scheduler is deciding what experiment to run next, it only looks at the priority of jobs that have
+    **finished** the prepare stage. In order to achieve strict priority-order execution, we also need to consider any
+    experiments that are still preparing or waiting to prepare. If there are multiple experiments in the pipeline with
+    a higher priority than the current experiment, the ARTIQ scheduler will only prepare one of them (and will wait
+    until that experiment enters the run phase before preparing the next one).
+
+    This function waits for the first higher-priority experiment to finish preparing, then pauses the experiment that
+    this function is called from to allow the higher-priority experiment to run.
+    Upon resuming, this function recursively calls itself until all other higher-priority experiments have finished.
+
+    Note: this function will not work if any experiments in the pipeline were run with the ``flush`` flag.
+
+    :param scheduler: The instance of the ARTIQ scheduler virtual device in the experiment you want to pause
+    :param polling_period: How often to poll (in seconds) when waiting for experiments to prepare
+    """
+    assert isinstance(polling_period, (float, int)), 'Polling period must be of type float or int'
+    assert polling_period >= 0, 'Polling period must greater or equal to zero'
+
+    # Get a set of all other experiments with a higher priority than the current experiment
+    try:
+        candidates = {rid for rid, status in scheduler.get_status().items()
+                      if status['pipeline'] == scheduler.pipeline_name and status['priority'] > scheduler.priority
+                      and status['status'] in {'pending', 'preparing', 'prepare_done'}}
+
+        if candidates:
+            def wait() -> bool:
+                # Obtain the scheduler status
+                scheduler_status = scheduler.get_status()
+
+                # Check status of candidates in the scheduler
+                candidates_in_scheduler = any(rid in candidates for rid in scheduler_status)
+                candidates_in_prepare_done = any(status['status'] == 'prepare_done'
+                                                 for rid, status in scheduler_status.items() if rid in candidates)
+                return candidates_in_scheduler and not candidates_in_prepare_done
+
+            while wait():
+                time.sleep(polling_period)
+
+            # Pause to allow higher priority experiment to run
+            scheduler.pause()
+            # Keep waiting recursively for other experiments
+            pause_strict_priority(scheduler)
+    except AttributeError:
+        raise TypeError(f'Incorrect scheduler instance provided: {type(scheduler)}') from None

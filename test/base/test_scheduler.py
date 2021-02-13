@@ -7,17 +7,28 @@ import contextlib
 import socket
 import abc
 import asyncio
+import sys
+import os
+import os.path
+import subprocess
+import numpy as np
+import networkx as nx
+import textwrap
+import io
 from unittest.mock import MagicMock, call
 
 from artiq.language.scan import *
 from artiq.experiment import TerminationRequested, NumberValue
 import artiq.frontend.artiq_run  # type: ignore
+from sipyco.sync_struct import Subscriber  # type: ignore
 
 from dax.base.scheduler import *
 import dax.base.scheduler
 from dax.util.artiq import get_managers, process_arguments
 import dax.base.system
 import dax.base.exceptions
+from dax.util.output import temp_dir
+import dax
 
 from test.environment import CI_ENABLED
 
@@ -30,6 +41,9 @@ def _find_free_port() -> int:
         s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         return int(s.getsockname()[1])
 
+
+_LOCALHOST: str = '127.0.0.1'  # IPv4 for CI
+_ARTIQ_MASTER_NOTIFY_PORT: int = 3250
 
 _DEVICE_DB: typing.Dict[str, typing.Any] = {
     'core': {
@@ -51,7 +65,7 @@ _DEVICE_DB: typing.Dict[str, typing.Any] = {
     # Reference to the scheduler controller
     'dax_scheduler': {
         'type': 'controller',
-        'host': '127.0.0.1',  # IPv4 for CI
+        'host': _LOCALHOST,
         'port': _find_free_port(),
     },
 }
@@ -240,12 +254,10 @@ class SchedulerMiscTestCase(unittest.TestCase):
             ('46.5 w', 46.5 * 60 * 60 * 24 * 7),
         ]
 
-        # noinspection PyProtectedMember
-        from dax.base.scheduler import _str_to_time as str_to_time
-
         for s, v in test_data:
             with self.subTest(string=s, value=v):
-                self.assertEqual(str_to_time(s), v, 'Converted time string does not equal expected float value')
+                self.assertEqual(dax.base.scheduler._str_to_time(s), v,
+                                 'Converted time string does not equal expected float value')
 
     def test_job_action_str(self):
         for a in NodeAction:
@@ -282,13 +294,10 @@ class SchedulerMiscTestCase(unittest.TestCase):
 class SchedulerClientTestCase(unittest.TestCase):
 
     def test_client_class_instantiation(self):
-        # noinspection PyProtectedMember
-        from dax.base.scheduler import _DaxSchedulerClient
-
         class S(_Scheduler):
             CONTROLLER = 'dax_scheduler'
 
-        self.assertTrue(issubclass(dax_scheduler_client(S), _DaxSchedulerClient))
+        self.assertTrue(issubclass(dax_scheduler_client(S), dax.base.scheduler._DaxSchedulerClient))
 
     def test_client_class_instantiation_bad(self):
         with self.assertRaises(TypeError, msg='Lack of scheduler controller did not raise'):
@@ -417,8 +426,6 @@ class LazySchedulerTestCase(unittest.TestCase):
                     j.cancel()
 
     def test_create_job_bad(self):
-        from dax.base.exceptions import BuildError
-
         s = _Scheduler(self.managers)
 
         class J0(Job):
@@ -440,9 +447,9 @@ class LazySchedulerTestCase(unittest.TestCase):
             DEPENDENCIES = ['J3']
 
         test_data = [
-            (J0, BuildError),
-            (J1, BuildError),
-            (J2, BuildError),
+            (J0, dax.base.exceptions.BuildError),
+            (J1, dax.base.exceptions.BuildError),
+            (J2, dax.base.exceptions.BuildError),
             (J3, AssertionError),
             (J4, AssertionError),
             (J5, TypeError),  # Caused by failing issubclass() call
@@ -1037,12 +1044,10 @@ class LazySchedulerTestCase(unittest.TestCase):
                     raise TerminationRequested
 
             async def controller_callback(self, request_queue) -> None:
-                # noinspection PyProtectedMember
-                from dax.base.scheduler import SchedulerController
                 # Construct a separate controller with the same queue
                 # This is required because we can not use get_device() to obtain the controller
                 # Because the server and the client are running on the same thread, the situation deadlocks
-                controller = SchedulerController(self, request_queue)
+                controller = dax.base.scheduler.SchedulerController(self, request_queue)
                 for args, kwargs in requests:
                     kwargs.setdefault('block', False)
                     await controller.submit(*args, **kwargs)
@@ -1183,12 +1188,10 @@ class LazySchedulerTestCase(unittest.TestCase):
 
             # noinspection PyMethodParameters
             async def controller_callback(self_, request_queue) -> None:
-                # noinspection PyProtectedMember
-                from dax.base.scheduler import SchedulerController
                 # Construct a separate controller with the same queue
                 # This is required because we can not use get_device() to obtain the controller
                 # Because the server and the client are running on the same thread, the situation deadlocks
-                controller = SchedulerController(self_, request_queue)
+                controller = dax.base.scheduler.SchedulerController(self_, request_queue)
                 valid_keys = {n.get_name() for n in self_.NODES}
                 for node, keys in test_data:
                     if node in valid_keys:
@@ -1291,8 +1294,6 @@ class LazySchedulerTestCase(unittest.TestCase):
                     t.cancel()
 
     def test_create_trigger_bad(self):
-        from dax.base.exceptions import BuildError
-
         s = _Scheduler(self.managers)
 
         class T0(Trigger):
@@ -1317,13 +1318,13 @@ class LazySchedulerTestCase(unittest.TestCase):
             REVERSE = 'foo'
 
         test_data = [
-            (T0, BuildError),
-            (T1, BuildError),
-            (T2, BuildError),
+            (T0, dax.base.exceptions.BuildError),
+            (T1, dax.base.exceptions.BuildError),
+            (T2, dax.base.exceptions.BuildError),
             (T3, AssertionError),
             (T4, AssertionError),
             (T5, TypeError),  # Caused by failing issubclass() call
-            (T6, BuildError),
+            (T6, dax.base.exceptions.BuildError),
         ]
 
         for T, error_type in test_data:
@@ -1816,3 +1817,598 @@ class GreedySchedulerReversedTestCase(GreedySchedulerTestCase):
                     ref_counter = {'init': 1, 'visit': _NUM_WAVES}
                 self.assertDictEqual(j.counter, ref_counter,
                                      'Job call pattern did not match expected pattern')
+
+
+class _CalJob0(CalibrationJob):
+    pass
+
+
+@create_calibration
+class _CalJob1(CalibrationJob):
+    pass
+
+
+class CalibrationJobTestCase(unittest.TestCase):
+    POLICY = Policy.LAZY
+    REVERSE_WAVE = False
+
+    def setUp(self) -> None:
+        self.arguments: typing.Dict[str, typing.Any] = {'Scheduling policy': str(self.POLICY),
+                                                        'Reverse wave': self.REVERSE_WAVE,
+                                                        'Job pipeline': 'test_pipeline',
+                                                        'View graph': False}
+        self.managers = get_managers(arguments=self.arguments)
+
+    def tearDown(self) -> None:
+        # Close managers
+        self.managers.close()
+
+    def test_create_job_bad(self):
+        s = _Scheduler(self.managers)
+
+        class J0(CalibrationJob):
+            pass
+
+        class J1(CalibrationJob):
+            CHECK_FILE = 'foo.py'
+
+        class J2(CalibrationJob):
+            CHECK_FILE = 'foo.py'
+            CALIBRATION_FILE = 'foo.py'
+
+        class J3(CalibrationJob):
+            CHECK_FILE = 'foo.py'
+            CALIBRATION_FILE = 'foo.py'
+            CHECK_CLASS_NAME = 'Bar'
+
+        class J4(CalibrationJob):
+            CHECK_FILE = 'foo.py'
+            CALIBRATION_FILE = 'foo.py'
+            CALIBRATION_CLASS_NAME = 'Bar'
+
+        class J5(CalibrationJob):
+            CHECK_FILE = 'foo.py'
+            CALIBRATION_FILE = 'foo.py'
+            CHECK_CLASS_NAME = 'Bar'
+            CALIBRATION_CLASS_NAME = 'Bar'
+            CHECK_ARGUMENTS = {1: 1}
+
+        class J6(CalibrationJob):
+            CHECK_FILE = 'foo.py'
+            CALIBRATION_FILE = 'foo.py'
+            CHECK_CLASS_NAME = 'Bar'
+            CALIBRATION_CLASS_NAME = 'Bar'
+            CALIBRATION_ARGUMENTS = {1: 1}
+
+        class J7(CalibrationJob):
+            CHECK_FILE = 'foo.py'
+            CALIBRATION_FILE = 'foo.py'
+            CHECK_CLASS_NAME = 'Bar'
+            CALIBRATION_CLASS_NAME = 'Bar'
+            CALIBRATION_TIMEOUT = 2.0
+
+        test_data = [
+            (J0, dax.base.exceptions.BuildError),
+            (J1, dax.base.exceptions.BuildError),
+            (J2, dax.base.exceptions.BuildError),
+            (J3, dax.base.exceptions.BuildError),
+            (J4, dax.base.exceptions.BuildError),
+            (J5, dax.base.exceptions.BuildError),
+            (J6, dax.base.exceptions.BuildError),
+            (J7, dax.base.exceptions.BuildError),
+        ]
+
+        for J, error_type in test_data:
+            with self.subTest(job_class=J.__name__), self.assertRaises(error_type, msg='Bad job did not raise'):
+                J(s)
+
+    def test_create_node_bad_parent(self):
+        class J0(CalibrationJob):
+            pass
+
+        with self.assertRaises(TypeError, msg='Wrong calibration job parent type did not raise'):
+            # noinspection PyTypeChecker
+            J0(self.managers)
+
+    def test_job_arguments(self):
+        s = _Scheduler(self.managers)
+
+        original_check_arguments = {'foo': 1,
+                                    'range': RangeScan(1, 10, 9),
+                                    'center': CenterScan(1, 10, 9),
+                                    'explicit': ExplicitScan([1, 10, 9]),
+                                    'no': NoScan(10)}
+
+        original_cal_arguments = {'foo': -1,
+                                  'range': RangeScan(5, 10, 9),
+                                  'center': CenterScan(1, 5, 9),
+                                  'explicit': ExplicitScan([2, 10, 9]),
+                                  'no': NoScan(3)}
+
+        class J0(CalibrationJob):
+            CHECK_FILE = '/home/foo/foo.py'
+            CALIBRATION_FILE = '/home/foo/foo.py'
+            CHECK_CLASS_NAME = 'Bar'
+            CALIBRATION_CLASS_NAME = 'Bar'
+            REPOSITORY = False  # need this + abs file paths because init() tries to find repository dir otherwise
+            CHECK_ARGUMENTS = original_check_arguments.copy()
+            CALIBRATION_ARGUMENTS = original_cal_arguments.copy()
+
+        j = J0(s)
+        # CalibrationJob doesn't build _arguments until init()
+        j.init(reset=False,
+               job_pipeline='test_pipeline',
+               request_queue=None,
+               controller_key='dax_scheduler')
+        check_arguments_ref = process_arguments(original_check_arguments)
+        cal_arguments_ref = process_arguments(original_cal_arguments)
+        self.assertDictEqual(check_arguments_ref, j._arguments['check'])
+        self.assertDictEqual(cal_arguments_ref, j._arguments['calibration'])
+        self.assertDictEqual(original_check_arguments, J0.CHECK_ARGUMENTS, 'Class check arguments were mutated')
+        self.assertDictEqual(original_cal_arguments, J0.CALIBRATION_ARGUMENTS,
+                             'Class calibration arguments were mutated')
+
+    def test_job_configurable_arguments(self):
+        s = _Scheduler(self.managers)
+
+        original_check_arguments = {'foo': 1,
+                                    'range': RangeScan(1, 10, 9),
+                                    'center': CenterScan(1, 10, 9),
+                                    'explicit': ExplicitScan([1, 10, 9]),
+                                    'no': NoScan(10)}
+
+        original_cal_arguments = {'foo': -1,
+                                  'range': RangeScan(5, 10, 9),
+                                  'center': CenterScan(1, 5, 9),
+                                  'explicit': ExplicitScan([2, 10, 9]),
+                                  'no': NoScan(3)}
+
+        check_keyword_arguments: typing.Dict[str, typing.Any] = {
+            'bar': NumberValue(20),
+            'baz': Scannable(CenterScan(100, 50, 2)),
+            'foobar': Scannable(RangeScan(100, 300, 40)),
+        }
+
+        cal_keyword_arguments: typing.Dict[str, typing.Any] = {
+            'bar': NumberValue(0),
+            'baz': Scannable(CenterScan(10, 50, 2)),
+            'foobar': Scannable(RangeScan(10, 300, 40)),
+        }
+
+        class J0(CalibrationJob):
+            CHECK_FILE = '/home/foo/foo.py'
+            CALIBRATION_FILE = '/home/foo/foo.py'
+            CHECK_CLASS_NAME = 'Bar'
+            CALIBRATION_CLASS_NAME = 'Bar'
+            REPOSITORY = False  # need this + abs file paths because init() tries to find repository dir otherwise
+            CHECK_ARGUMENTS = original_check_arguments.copy()
+            CALIBRATION_ARGUMENTS = original_cal_arguments.copy()
+
+            def build_job(self) -> None:
+                for key, argument in check_keyword_arguments.items():
+                    self.CHECK_ARGUMENTS[key] = self.get_argument(key, argument)
+                for key, argument in cal_keyword_arguments.items():
+                    self.CALIBRATION_ARGUMENTS[key] = self.get_argument(key, argument)
+
+        j = J0(s)
+        j.init(reset=False,
+               job_pipeline='test_pipeline',
+               request_queue=None,
+               controller_key='dax_scheduler')
+        check_arguments_ref = original_check_arguments.copy()
+        check_arguments_ref.update({k: v.default() for k, v in check_keyword_arguments.items()})
+        check_arguments_ref = process_arguments(check_arguments_ref)
+        cal_arguments_ref = original_cal_arguments.copy()
+        cal_arguments_ref.update({k: v.default() for k, v in cal_keyword_arguments.items()})
+        cal_arguments_ref = process_arguments(cal_arguments_ref)
+
+        self.assertDictEqual(check_arguments_ref, j._arguments['check'])
+        self.assertDictEqual(cal_arguments_ref, j._arguments['calibration'])
+        self.assertEqual(len(j._arguments['check']), len(original_check_arguments) + len(check_keyword_arguments))
+        self.assertEqual(len(j._arguments['calibration']), len(original_cal_arguments) + len(cal_keyword_arguments))
+        self.assertDictEqual(original_check_arguments, J0.CHECK_ARGUMENTS, 'Class check arguments were mutated')
+        self.assertDictEqual(original_cal_arguments, J0.CALIBRATION_ARGUMENTS,
+                             'Class calibration arguments were mutated')
+        for v in j._arguments['check'].values():
+            self.assertNotIsInstance(v, ScanObject)
+        for v in j._arguments['calibration'].values():
+            self.assertNotIsInstance(v, ScanObject)
+
+    @staticmethod
+    def test_decorator():
+        assert _CalJob0._meta_exp_name() not in globals()
+        assert _CalJob1._meta_exp_name() in globals()
+
+
+class OptimusCalibrationTestCase(unittest.TestCase):
+    def setUp(self) -> None:
+        # master subprocess needs to be able to import dax
+        master_env = os.environ.copy()
+        master_env['PYTHONPATH'] = f'{os.path.dirname(dax.__dax_dir__)}:{master_env.get("PYTHONPATH", "")}'
+        # use temp_dir context for running experiments
+        self.temp_dir = temp_dir()
+        self.wd = self.temp_dir.__enter__()
+        # write device_db to temp dir
+        with open(os.path.join(self.wd, 'device_db.py'), 'x') as f:
+            f.write(f'device_db = {str(_DEVICE_DB)}')
+        # create repository
+        os.mkdir(os.path.join(self.wd, 'repository'))
+        # start master
+        master_cmd = [sys.executable, '-u', '-m', 'artiq.frontend.artiq_master',
+                      '--no-localhost-bind', '--bind', _LOCALHOST, '--port-notify', str(_ARTIQ_MASTER_NOTIFY_PORT)]
+        self.master = subprocess.Popen(master_cmd, stdout=subprocess.PIPE, universal_newlines=True, env=master_env,
+                                       bufsize=1)
+        self.master.__enter__()
+        master_ready = False
+        assert isinstance(self.master.stdout, io.TextIOBase)
+        for line in iter(self.master.stdout.readline, ''):
+            sys.stdout.write(line)
+            if line.rstrip() == 'ARTIQ master is now ready.':
+                master_ready = True
+                break
+        if not master_ready:
+            raise Exception('ARTIQ master failed to start')
+
+    def tearDown(self) -> None:
+        self.master.terminate()  # kill()?
+        self.master.__exit__(None, None, None)
+        self.temp_dir.__exit__(None, None, None)
+
+    @staticmethod
+    def _create_scheduler_exp(node_indices: typing.Set[int]) -> str:
+        return textwrap.dedent(f'''
+        class Scheduler(DaxScheduler, Experiment):
+            NAME = 'scheduler'
+            NODES = {{{', '.join(f'CalJob{i}' for i in node_indices)}, CalTrigger}}
+            CONTROLLER = 'dax_scheduler'
+            DEFAULT_SCHEDULING_POLICY = Policy.GREEDY
+            DEFAULT_RESET_NODES = False
+            LOG_LEVEL = logging.INFO
+
+            def run(self):
+                self.set_dataset('cal_order', [], archive=False, persist=True, broadcast=True)
+                now: float = time.time()
+                for node_name, node in self._node_name_map.items():
+                    if node_name == 'CalTrigger':
+                        self.set_dataset(f'{{self.NAME}}.{{node_name}}.{{node._LAST_SUBMIT_KEY}}', 0.0,
+                                         archive=False, persist=True, broadcast=True)
+                    else:
+                        self.set_dataset(f'{{self.NAME}}.{{node_name}}.{{node.LAST_CHECK_KEY}}', now,
+                                         archive=False, persist=True, broadcast=True)
+                        self.set_dataset(f'{{self.NAME}}.{{node_name}}.{{node.LAST_CAL_KEY}}', now,
+                                         archive=False, persist=True, broadcast=True)
+                super(Scheduler, self).run()
+
+            def _render_graph(self) -> None:
+                # Skip render graph, prevents output and call to the renderer
+                pass
+        ''')
+
+    @staticmethod
+    def _create_trigger(root_indices: typing.Set[int]) -> str:
+        return textwrap.dedent(f'''
+        class CalTrigger(Trigger):
+            NODES = {{{', '.join(f'CalJob{i}' for i in root_indices)}}}
+            INTERVAL = '1h'
+            POLICY = Policy.GREEDY
+
+        ''')
+
+    @staticmethod
+    def _create_calibration_job(index: int, dep_indices: typing.Set[int], timeout: bool) -> str:
+        return textwrap.dedent(f'''
+        @create_calibration
+        class CalJob{index}(CalibrationJob):
+            CHECK_FILE = 'calibrations.py'
+            CALIBRATION_FILE = 'calibrations.py'
+            CHECK_CLASS_NAME = 'Check{index}'
+            CALIBRATION_CLASS_NAME = 'Cal{index}'
+            CALIBRATION_TIMEOUT = {None if timeout else '"1h"'}
+            LOG_LEVEL = logging.INFO
+            DEPENDENCIES = {{{', '.join(f'CalJob{i}' for i in dep_indices)}}}
+
+            def submit(self, *args, **kwargs):
+                if not self.get_dataset_sys(self.DIAGNOSE_FLAG_KEY, False):
+                    self.append_to_dataset('cal_order', type(self).__name__)
+                super(CalibrationJob, self).submit(*args, **kwargs)
+
+        ''')
+
+    @staticmethod
+    def _create_check_exp(index: int, result: int) -> str:
+        result_strings = ['return', 'raise OutOfSpecError', 'raise BadDataError']
+        return textwrap.dedent(f'''
+        class Check{index}(EnvExperiment):
+            def run(self):
+                order = self.get_dataset('cal_order', [], archive=False)
+                order.append(type(self).__name__)
+                self.set_dataset('cal_order', order, archive=False, persist=True, broadcast=True)
+                {result_strings[result]}
+
+        ''')
+
+    @staticmethod
+    def _create_cal_exp(index: int, result: int) -> str:
+        result_strings = ['return', 'raise FailedCalibrationError']
+        return textwrap.dedent(f'''
+        class Cal{index}(EnvExperiment):
+            def run(self):
+                order = self.get_dataset('cal_order', [], archive=False)
+                order.append(type(self).__name__)
+                self.set_dataset('cal_order', order, archive=False, persist=True, broadcast=True)
+                {result_strings[result]}
+
+        ''')
+
+    @staticmethod
+    def _create_scheduler_imports() -> str:
+        return textwrap.dedent('''
+        from dax.scheduler import *
+        import logging
+        import time
+
+        ''')
+
+    @staticmethod
+    def _create_exp_imports() -> str:
+        return textwrap.dedent('''
+        from artiq.experiment import *
+        from dax.base.exceptions import OutOfSpecError, BadDataError, FailedCalibrationError
+
+        ''')
+
+    @staticmethod
+    def _random_dag(num_nodes: int, p: float) -> nx.DiGraph:
+        # method 1 from https://doi.org/10.1016/0167-6377(86)90066-0
+        # no point in finding transitive closure since we want transitive reduction anyway
+        assert isinstance(num_nodes, int) and num_nodes > 0
+        assert isinstance(p, float) and 0 <= p <= 1
+        adj = np.zeros((num_nodes, num_nodes))
+        for i in range(num_nodes):
+            for j in range(i + 1, num_nodes):
+                adj[i, j] = np.random.choice([1, 0], p=[p, 1 - p])  # type: ignore
+        # redundant since scheduler also calls this, but need to make sure we're working with the exact same graph
+        g: nx.DiGraph = nx.convert_matrix.from_numpy_array(adj, create_using=nx.DiGraph)  # type: ignore
+        g = nx.algorithms.transitive_reduction(g)
+        if not nx.algorithms.is_directed_acyclic_graph(g):  # don't think this should happen, but can't hurt to check
+            raise Exception('Non-DAG graph created')
+        return g
+
+    @staticmethod
+    def _get_root_nodes(g: nx.DiGraph) -> typing.Set[int]:
+        # noinspection PyTypeChecker
+        return {node for node, degree in g.in_degree if degree == 0}
+
+    @staticmethod
+    def _wait_and_get_datasets(scheduler_rid: int) -> typing.Dict:
+        async def get_datasets():
+            d_ = {}
+
+            def mod_init(x):
+                d_.clear()
+                d_.update(x)
+                raise ConnectionError
+
+            async def subscribe():
+                s = Subscriber('datasets', mod_init)
+                try:
+                    await s.connect(_LOCALHOST, _ARTIQ_MASTER_NOTIFY_PORT)
+                    await asyncio.wait_for(s.receive_task, None)
+                finally:
+                    await s.close()
+
+            await subscribe()
+            return d_
+
+        async def wait_for_scheduler():
+            d_ = {}
+
+            def mod_init(x):
+                d_.clear()
+                d_.update(x)
+                return d_
+
+            # noinspection PyUnusedLocal
+            def mod_update(mod):
+                if len(d_) <= 1:  # Also raise if there is no experiment in the schedule
+                    raise Exception
+
+            async def subscribe():
+                s = Subscriber('schedule', mod_init, notify_cb=mod_update)
+                try:
+                    await s.connect(_LOCALHOST, _ARTIQ_MASTER_NOTIFY_PORT)
+                    await asyncio.wait_for(s.receive_task, None)
+                finally:
+                    await s.close()
+
+            await subscribe()
+            assert scheduler_rid in d_, f'DAX Scheduler experiment not present in ARTIQ schedule: {d_}'
+
+        asyncio.run(wait_for_scheduler())
+        d: typing.Dict = asyncio.run(get_datasets())
+        return d
+
+    def _flatten(self, list_):
+        for el in list_:
+            if isinstance(el, list):
+                yield from self._flatten(el)
+            else:
+                yield el
+
+    def _verify_actions(self, expected: typing.List, actual: typing.List[str]) -> bool:
+        assert len(actual) == len(list(self._flatten(expected))), \
+            f'Length mismatch - actual: {len(actual)}, expected: {len(list(self._flatten(expected)))}'
+
+        def _verify(expected_item: typing.List, cur_idx: int) -> typing.Tuple[bool, int]:
+            expected_length = len(expected_item)
+            if not expected_length:
+                return True, cur_idx
+            elif expected_length == 1:  # ['Check#']
+                actual_item = actual[cur_idx]
+                cur_idx += 1
+                return bool(expected_item[0] == actual_item), cur_idx
+            else:  # ['Check#', 'Cal#'] or ['Check#', <any number of nested lists>, 'Cal#']
+                actual_item = actual[cur_idx]
+                cur_idx += 1
+                if expected_item[0] != actual_item:
+                    return False, cur_idx
+                exp_sublist = expected_item[1:-1]
+                while exp_sublist:
+                    actual_item = actual[cur_idx]
+                    next_exp = []
+                    for k, sub_item in enumerate(exp_sublist):
+                        if sub_item[0] == actual_item:
+                            next_exp = exp_sublist.pop(k)
+                            break
+                    if not next_exp:
+                        return False, cur_idx
+                    rv_, cur_idx = _verify(next_exp, cur_idx)
+                    if not rv_:
+                        return False, cur_idx
+                actual_item = actual[cur_idx]
+                cur_idx += 1
+                return bool(actual_item == expected_item[-1]), cur_idx
+
+        idx = 0
+        for el in expected:
+            rv, idx = _verify(el, idx)
+            if not rv:
+                return False
+        return True
+
+    @staticmethod
+    def _submit_scheduler_exp() -> int:
+        # submit scheduler experiment via artiq_client
+        client_cmd = [sys.executable, '-u', '-m', 'artiq.frontend.artiq_client', '-s', _LOCALHOST,
+                      'submit', '-p', 'scheduler', '-R', '-c', 'Scheduler', 'scheduler.py']
+        client_res = subprocess.run(client_cmd, capture_output=True, universal_newlines=True)
+        if client_res.returncode != 0:
+            raise Exception(
+                f'ARTIQ client submit exited with return code {client_res.returncode}: "{client_res.stderr}"')
+        # normal output is of the format 'RID: \d+'
+        # regex would probably be more robust, but slower(?)
+        rid: int = int(client_res.stdout.strip().split(' ')[1])
+        return rid
+
+    @staticmethod
+    def _delete_scheduler_exp(rid: int):
+        # delete scheduler experiment via artiq_client
+        client_cmd = [sys.executable, '-u', '-m', 'artiq.frontend.artiq_client', '-s', _LOCALHOST,
+                      'delete', '-g', str(rid)]
+        client_res = subprocess.run(client_cmd, capture_output=True, universal_newlines=True)
+        if client_res.returncode != 0:
+            raise Exception(
+                f'ARTIQ client delete exited with return code {client_res.returncode}: "{client_res.stderr}"')
+
+    @unittest.skipUnless(CI_ENABLED, 'Not in a CI environment, skipping long test')
+    def test_optimus(self):
+        # test the algorithm without failed calibrations (which aren't really addressed in the initial algorithm)
+        p = .5
+        num_reps = 5
+        for num_nodes in range(5, 10):
+            for _ in range(num_reps):
+                # create graph
+                g: nx.DiGraph = self._random_dag(num_nodes, p)
+                root_nodes: typing.Set[int] = self._get_root_nodes(g)
+                # randomly choose results for each experiment - no calibration failure though
+                timeouts: typing.List[bool] = [np.random.choice([True, False]) for _ in range(num_nodes)]
+                results: typing.List[int] = [np.random.choice([0, 1, 2]) for _ in range(num_nodes)]
+                # create the scheduler/experiment files - use reversed topological sort so that jobs are written
+                # in correct dependency order in scheduler file
+                ts_rev = list(reversed(list(nx.topological_sort(g))))
+                with open(os.path.join(self.wd, 'repository', 'scheduler.py'), 'w') as scheduler_file:
+                    with open(os.path.join(self.wd, 'repository', 'calibrations.py'), 'w') as experiment_file:
+                        scheduler_file.write(self._create_scheduler_imports())
+                        experiment_file.write(self._create_exp_imports())
+                        for idx in ts_rev:
+                            scheduler_file.write(self._create_calibration_job(idx, g.successors(idx), timeouts[idx]))
+                            experiment_file.write(self._create_check_exp(idx, results[idx]))
+                            experiment_file.write(self._create_cal_exp(idx, 0))
+                        scheduler_file.write(self._create_trigger(root_nodes))
+                        scheduler_file.write(self._create_scheduler_exp(set(g.nodes)))
+
+                rid: int = self._submit_scheduler_exp()
+                time.sleep(5)  # need to wait a bit for the DAX scheduler to submit jobs
+                datasets: typing.Dict[str, typing.Tuple[bool, typing.Any]] = self._wait_and_get_datasets(rid)
+                cal_order: typing.List[str] = datasets['cal_order'][1]
+                self._delete_scheduler_exp(rid)
+                # again, not as robust as a regex for picking the \d+ out of 'CalJob\d+', but faster
+                initial_submit: typing.List[int] = [int(node_str[6:]) for node_str in cal_order[:num_nodes]]
+                last_cals: typing.List[float] = [0.0] * num_nodes
+
+                def get_actions(node: int, diagnose: bool = False) -> typing.List:
+                    actions: typing.List = []
+                    # sort according to initial_submit order to preserve graph structure (kind of, at least)
+                    children = sorted(list(g.successors(node)), key=lambda item: initial_submit.index(item))
+                    if timeouts[node] or diagnose or any([last_cals[n] > last_cals[node] for n in children]):
+                        actions.append(f'Check{node}')
+                        if results[node] == 2:
+                            for n in children:
+                                actions.append(get_actions(n, diagnose=True))
+                        if results[node] != 0:
+                            last_cals[node] = time.time()
+                            actions.append(f'Cal{node}')
+                    return actions
+
+                expected_actions = [get_actions(node) for node in initial_submit]
+                expected_actions_flat = list(self._flatten(expected_actions))
+                actual_actions = cal_order[num_nodes:]
+                error_str = textwrap.dedent(f'''
+                Expected and actual traversals do not match:
+                expected: {expected_actions}
+                expected (flat): {expected_actions_flat}
+                actual: {actual_actions}
+
+                initial submit order: {initial_submit}
+                root nodes: {root_nodes}
+                deps: {' '.join([f'{node} -> {{{list(g.successors(node))}}}' for node in initial_submit])}
+                timeouts: {timeouts}
+                exp results: {results}
+                ''')
+                with self.subTest(num_nodes=num_nodes, p=p, expected_actions=expected_actions,
+                                  acutal_actions=actual_actions):
+                    self.assertTrue(self._verify_actions(expected_actions, actual_actions), error_str)
+
+    @unittest.skipUnless(CI_ENABLED, 'Not in a CI environment, skipping long test')
+    def test_barrier(self):
+        # verify that the barrier experiment is scheduled (and takes precedence) in the case of a failure
+        with open(os.path.join(self.wd, 'repository', 'scheduler.py'), 'w') as scheduler_file:
+            with open(os.path.join(self.wd, 'repository', 'calibrations.py'), 'w') as experiment_file:
+                scheduler_file.write(self._create_scheduler_imports())
+                experiment_file.write(self._create_exp_imports())
+                scheduler_file.write(self._create_calibration_job(0, set(), True))
+                experiment_file.write(self._create_check_exp(0, 1))  # out of spec to force calibration
+                experiment_file.write(self._create_cal_exp(0, 1))  # calibration failure
+                scheduler_file.write(self._create_trigger({0}))
+                scheduler_file.write(self._create_scheduler_exp({0}))
+        rid: int = self._submit_scheduler_exp()
+        time.sleep(5)  # need to wait a bit for the DAX scheduler to submit jobs
+
+        async def get_schedule():
+            d_ = {}
+
+            def mod_init(x):
+                d_.clear()
+                d_.update(x)
+                raise ConnectionError
+
+            async def subscribe():
+                s = Subscriber('schedule', mod_init)
+                try:
+                    await s.connect(_LOCALHOST, _ARTIQ_MASTER_NOTIFY_PORT)
+                    await asyncio.wait_for(s.receive_task, None)
+                finally:
+                    await s.close()
+
+            await subscribe()
+            return d_
+
+        schedule: typing.Dict = asyncio.run(get_schedule())
+        self._delete_scheduler_exp(rid)
+        # print(schedule)
+        for rid_, status in schedule.items():
+            if status['expid']['class_name'] != 'Barrier':
+                continue
+            elif status['status'] == 'running':
+                return
+        self.fail(f'Barrier experiment is either not in schedule or not running. Current schedule:\n{schedule}')

@@ -2,7 +2,7 @@ import typing
 import collections.abc
 
 __all__ = ['generic', 'character', 'number', 'integer', 'int32', 'int64', 'floating', 'bool_', 'ndarray',
-           'array', 'zeroes', 'ones', 'empty', 'full', 'arange', 'linspace', 'logspace',
+           'array', 'zeros', 'ones', 'empty', 'full', 'arange', 'linspace', 'logspace',
            'issubdtype', 'ndenumerate']
 
 
@@ -166,7 +166,7 @@ def array(object: typing.Sequence[typing.Any], dtype: typing.Optional[type] = ..
     ...
 
 
-def zeroes(shape: __SHAPE_T, dtype: type = ..., order: str = ...) -> ndarray:
+def zeros(shape: __SHAPE_T, dtype: type = ..., order: str = ...) -> ndarray:
     ...
 
 
