@@ -12,17 +12,26 @@ import asyncio
 import json
 import hashlib
 import dataclasses
+import os
 import os.path
+import inspect
+import sys
+import pathlib
 
 import artiq.experiment
 import artiq.master.worker_db
+import artiq.tools
 import sipyco.pc_rpc  # type: ignore
 
 import dax.base.system
+import dax.base.exceptions
 import dax.util.output
 import dax.util.artiq
+import dax.util.experiments
 
-__all__ = ['NodeAction', 'Policy', 'Job', 'Trigger', 'DaxScheduler', 'dax_scheduler_client']
+__all__ = ['NodeAction', 'Policy', 'Job', 'Trigger',
+           'CalibrationJob', 'create_calibration',
+           'DaxScheduler', 'dax_scheduler_client']
 
 _unit_to_seconds: typing.Dict[str, float] = {
     's': 1.0,
@@ -393,7 +402,104 @@ class Node(dax.base.system.DaxHasKey, abc.ABC):
         return cls.__name__
 
 
-class Job(Node):
+class BaseJob(Node, abc.ABC):
+    """Base class for jobs."""
+
+    LOG_LEVEL: int = logging.WARNING
+    """The log level for the experiment."""
+    PIPELINE: typing.Optional[str] = None
+    """The pipeline to submit this job to, defaults to the pipeline assigned by the scheduler."""
+    PRIORITY: int = 0
+    """Job priority relative to the base job priority of the scheduler."""
+    FLUSH: bool = False
+    """The flush flag when submitting a job."""
+    REPOSITORY: bool = True
+    """True if the given file(s) is (are) in the experiment repository."""
+
+    _RID_LIST_KEY: str = 'rid_list'
+    """Key to store every submitted RID."""
+    _ARGUMENTS_HASH_KEY: str = 'arguments_hash'
+    """Key to store the last arguments hash."""
+
+    def build(self) -> None:  # type: ignore
+        # Check log level, pipeline, priority, flush, and repository
+        assert isinstance(self.LOG_LEVEL, int), 'Log level must be of type int'
+        assert self.PIPELINE is None or isinstance(self.PIPELINE, str), 'Pipeline must be of type str or None'
+        assert isinstance(self.PRIORITY, int), 'Priority must be of type int'
+        assert isinstance(self.FLUSH, bool), 'Flush must be of type bool'
+        assert isinstance(self.REPOSITORY, bool), 'Repository flag must be of type bool'
+
+        # Type attributes
+        self._arguments: typing.Dict[str, typing.Any]
+        self._expid: typing.Dict[str, typing.Any]
+
+        # Call super
+        super(BaseJob, self).build()
+
+    def init(self, *, reset: bool, **kwargs: typing.Any) -> None:
+        # Check if attributes are populated
+        assert hasattr(self, '_arguments')
+        assert hasattr(self, '_expid')
+
+        # Check parameters
+        assert isinstance(reset, bool)
+        # Extract arguments
+        self._pipeline: str = kwargs['job_pipeline'] if self.PIPELINE is None else self.PIPELINE
+        assert isinstance(self._pipeline, str) and self._pipeline
+
+        # Initialize last RID to a non-existing value
+        self._last_rid: int = -1
+
+        # Initialize RID list
+        self._rid_list_key: str = self.get_system_key(self._RID_LIST_KEY)
+        self.set_dataset(self._rid_list_key, [])  # Archive only
+
+        # Calculate the argument hash
+        arguments_hash: str = _hash_dict(self._arguments)
+        try:
+            # Check if the argument hash changed
+            arguments_changed: bool = arguments_hash != self.get_dataset_sys(self._ARGUMENTS_HASH_KEY)
+        except KeyError:
+            # No previous arguments hash was available, so we can consider it changed
+            arguments_changed = True
+
+        if arguments_changed:
+            # Store the new arguments hash
+            self.logger.debug(f'Forcing reset because job arguments changed: {arguments_hash}')
+            self.set_dataset_sys(self._ARGUMENTS_HASH_KEY, arguments_hash, data_store=False)
+            # Force a reset
+            reset = True
+
+        # Call super
+        super(BaseJob, self).init(reset=reset, **kwargs)
+
+    def _submit(self, *, wave: float, priority: int) -> None:
+        status = self._scheduler.get_status()
+        if self._last_rid not in status or status[self._last_rid]['status'] in {'run_done', 'analyzing', 'deleting'}:
+            # Submit experiment of this job
+            self._last_rid = self._scheduler.submit(
+                pipeline_name=self._pipeline,
+                expid=self._expid,
+                priority=priority + self.PRIORITY,
+                flush=self.FLUSH
+            )
+            self.logger.info(f'Submitted job with RID {self._last_rid}')
+
+            # Archive the RID
+            self.append_to_dataset(self._rid_list_key, self._last_rid)
+            self.data_store.append(self._rid_list_key, self._last_rid)
+        else:
+            # Previous job was still running
+            self.logger.warning(f'Skipping job, previous job with RID {self._last_rid} is still running')
+
+    def cancel(self) -> None:
+        if self._last_rid >= 0:
+            # Cancel the last RID (returns if the RID is not running)
+            self.logger.debug(f'Cancelling job (RID {self._last_rid})')
+            self._scheduler.request_termination(self._last_rid)
+
+
+class Job(BaseJob):
     """Job class to define a job for the scheduler.
 
     Users only have to override class attributes to create a job definition.
@@ -409,46 +515,24 @@ class Job(Node):
     """
 
     FILE: typing.Optional[str] = None
-    """File containing the experiment (by default relative from the repository directory, see :attr:`REPOSITORY`)."""
-    REPOSITORY: bool = True
-    """True if the given file is in the experiment repository."""
+    """File containing the experiment (by default relative from the `repository` directory,
+    see :attr:`BaseJob.REPOSITORY`)."""
     CLASS_NAME: typing.Optional[str] = None
     """Class name of the experiment."""
     ARGUMENTS: typing.Dict[str, typing.Any] = {}
     """The experiment arguments."""
-
-    LOG_LEVEL: int = logging.WARNING
-    """The log level for the experiment."""
-    PIPELINE: typing.Optional[str] = None
-    """The pipeline to submit this job to, defaults to the pipeline assigned by the scheduler."""
-    PRIORITY: int = 0
-    """Job priority relative to the base job priority of the scheduler."""
-    FLUSH: bool = False
-    """The flush flag when submitting a job."""
-
-    _RID_LIST_KEY: str = 'rid_list'
-    """Key to store every submitted RID."""
-    _ARGUMENTS_HASH_KEY: str = 'arguments_hash'
-    """Key to store the last arguments hash."""
 
     def build(self) -> None:  # type: ignore
         """Build the job object.
 
         To add configurable arguments to this job, override the :func:`build_job` method instead.
         """
-
         # Check file, repository flag, class, and arguments
         assert isinstance(self.FILE, str) or self.FILE is None, 'The file attribute must be of type str or None'
-        assert isinstance(self.REPOSITORY, bool), 'Repository flag must be of type bool'
         assert isinstance(self.CLASS_NAME, str) or self.CLASS_NAME is None, \
             'The class name attribute must be of type str or None'
         assert isinstance(self.ARGUMENTS, dict), 'The arguments must be of type dict'
         assert all(isinstance(k, str) for k in self.ARGUMENTS), 'All argument keys must be of type str'
-        # Check log level, pipeline, priority, and flush
-        assert isinstance(self.LOG_LEVEL, int), 'Log level must be of type int'
-        assert self.PIPELINE is None or isinstance(self.PIPELINE, str), 'Pipeline must be of type str or None'
-        assert isinstance(self.PRIORITY, int), 'Priority must be of type int'
-        assert isinstance(self.FLUSH, bool), 'Flush must be of type bool'
 
         # Call super
         super(Job, self).build()
@@ -495,63 +579,6 @@ class Job(Node):
             self.ARGUMENTS['bar'] = self.get_argument('bar', Scannable(RangeScan(10 * us, 200 * us, 10)))
         """
         pass
-
-    def init(self, *, reset: bool, **kwargs: typing.Any) -> None:
-        assert isinstance(reset, bool)
-
-        # Extract attributes
-        self._pipeline: str = kwargs['job_pipeline'] if self.PIPELINE is None else self.PIPELINE
-        assert isinstance(self._pipeline, str) and self._pipeline
-
-        # Initialize last RID to a non-existing value
-        self._last_rid: int = -1
-
-        # Initialize RID list
-        self._rid_list_key: str = self.get_system_key(self._RID_LIST_KEY)
-        self.set_dataset(self._rid_list_key, [])  # Archive only
-
-        # Calculate the argument hash
-        arguments_hash: str = _hash_dict(self._arguments)
-        try:
-            # Check if the argument hash changed
-            arguments_changed: bool = arguments_hash != self.get_dataset_sys(self._ARGUMENTS_HASH_KEY)
-        except KeyError:
-            # No previous arguments hash was available, so we can consider it changed
-            arguments_changed = True
-
-        if arguments_changed:
-            # Store the new arguments hash
-            self.logger.debug(f'Forcing reset because job arguments changed: {arguments_hash}')
-            self.set_dataset_sys(self._ARGUMENTS_HASH_KEY, arguments_hash, data_store=False)
-            # Force a reset
-            reset = True
-
-        # Call super
-        super(Job, self).init(reset=reset, **kwargs)
-
-    def _submit(self, *, wave: float, priority: int) -> None:
-        if self._last_rid not in self._scheduler.get_status():
-            # Submit experiment of this job
-            self._last_rid = self._scheduler.submit(
-                pipeline_name=self._pipeline,
-                expid=self._expid,
-                priority=priority + self.PRIORITY,
-                flush=self.FLUSH
-            )
-            self.logger.info(f'Submitted job with RID {self._last_rid}')
-
-            # Archive the RID
-            self.append_to_dataset(self._rid_list_key, self._last_rid)
-            self.data_store.append(self._rid_list_key, self._last_rid)
-        else:
-            # Previous job was still running
-            self.logger.warning(f'Skipping job, previous job with RID {self._last_rid} is still running')
-
-    def cancel(self) -> None:
-        if self._last_rid >= 0:
-            # Cancel the last RID (returns if the RID is not running)
-            self.logger.debug(f'Cancelling job (RID {self._last_rid})')
-            self._scheduler.request_termination(self._last_rid)
 
     def is_meta(self) -> bool:
         # Decide if this job is a meta-job
@@ -643,6 +670,391 @@ class Trigger(Node):
     def is_meta(self) -> bool:
         # This trigger is a meta-trigger if there are no nodes to trigger
         return len(self.NODES) == 0
+
+
+class CalibrationJob(BaseJob):
+    """Meta-class to create a job for the scheduler that wraps two experiments.
+
+    The two experiments are intended to be ``check_data`` and ``calibrate`` experiments
+    as detailed in https://arxiv.org/abs/1803.03226.
+
+    In order to 'communicate' the results of each experiment, certain exceptions must be raised, corresponding to the
+    possible results of the experiments as detailed in the above paper.
+
+    For ``check_data``:
+
+    - :class:`dax.base.exceptions.OutOfSpecError`: raise in the case that the data is out of spec and the parameter
+      should be re-calibrated.
+    - :class:`dax.base.exceptions.BadDataError`: raise in the case of bad data (i.e. if you suspect that there is some
+      condition that would prevent the calibration from being resolvable).
+
+    For ``calibrate``:
+
+    - :class:`dax.base.exceptions.FailedCalibrationError`: raise in the case that the calibration has failed without
+      resolution. Ideally, this should happen very rarely, as most conditions that would cause a calibration to fail
+      should be resolved by ``diagnose``, which is triggered by raising a BadDataError in the ``check_data`` experiment.
+
+    Users only have to override class attributes to create a job definition.
+    The following main attributes **must** be overridden:
+
+    - :attr:`CHECK_FILE`: The file containing the check experiment
+    - :attr:`CALIBRATION_FILE`: The file containing the calibration experiment
+    - :attr:`CHECK_CLASS_NAME`: The class name of the check experiment
+    - :attr:`CALIBRATION_CLASS_NAME`: The class name of the calibration experiment
+
+    The following attributes can optionally be overridden:
+
+    - :attr:`CHECK_ARGUMENTS`: A dictionary with experiment arguments for the `check_data` experiment
+    - :attr:`CALIBRATION_ARGUMENTS`: A dictionary with experiment arguments for the `calibrate` experiment
+    - :attr:`CALIBRATION_TIMEOUT`: The timeout period for the `check_state` phase (as specified by the optimus
+      algorithm). If set to :const:`None` (default), the calibration will always go straight to the `check_data` phase.
+    - :attr:`GREEDY_FAILURE`: Whether or not to fail 'greedily'. In other words, if an experiment fails due to an
+      uncaught exception (not a calibration exception), whether to schedule the :class:`dax.util.experiments.Barrier`
+      experiment to prevent other experiments from executing. Defaults to :const:`True`. If :const:`False`, the
+      experiment in question will fail and the rest of the scheduled experiments will be unaffected.
+    - :attr:`Node.INTERVAL`: The submit interval
+    - :attr:`Node.DEPENDENCIES`: A collection of node classes on which this job depends
+
+    Optionally, users can override the :func:`build_job` method to add configurable arguments.
+
+    **Notes regarding intended use**:
+
+    - In order to exactly implement the 'Optimus' algorithm, :class:`CalibrationJob`\\ s should not specify an
+      :attr:`Node.INTERVAL` (using :attr:`CALIBRATION_TIMEOUT` instead). The root node(s) of the calibration graph
+      should instead be submitted by a :class:`Trigger` with a :attr:`Policy.GREEDY` :attr:`Trigger.POLICY`, with
+      whatever :attr:`Node.INTERVAL` is desired.
+    - :class:`Trigger`\\ s can also be added to submit a subgraph of the calibration graph.
+    - :class:`Job`\\ s **can** be present in the calibration graph. Due to the :attr:`Policy.GREEDY` :class:`Trigger`,
+      they will be submitted along with the :class:`CalibrationJob`\\ s. However, in the case of a ``diagnose`` wave,
+      those :class:`Job`\\ s will not be submitted as they are not taken into account by the 'Optimus' algorithm.
+    """
+
+    CHECK_FILE: str
+    """File containing the check experiment."""
+    CALIBRATION_FILE: str
+    """File containing the calibration experiment."""
+    CHECK_CLASS_NAME: str
+    """Class name of check experiment."""
+    CALIBRATION_CLASS_NAME: str
+    """Class name of calibration experiment."""
+    CHECK_ARGUMENTS: typing.Dict[str, typing.Any] = {}
+    """The experiment arguments."""
+    CALIBRATION_ARGUMENTS: typing.Dict[str, typing.Any] = {}
+    """The experiment arguments."""
+    CALIBRATION_TIMEOUT: typing.Optional[str] = None
+    """Calibration timeout period. This is should be used instead of :attr:`Node.INTERVAL`."""
+    GREEDY_FAILURE: bool = True
+    """Whether or not to fail 'greedily'. In other words, if an experiment fails due to an uncaught exception (not a
+     calibration exception), whether to schedule the :class:`dax.util.experiments.Barrier` experiment to prevent
+     other experiments from executing. Defaults to :const:`True`. If :const:`False`, the experiment in question will
+     fail and the rest of the scheduled experiments will be unaffected."""
+
+    # Public so that meta exp can access them
+    LAST_CAL_KEY: str = 'last_calibration'
+    """Key to store the last time the calibration was successfully run."""
+    LAST_CHECK_KEY: str = 'last_check'
+    """Key to store the last time `check_data` passed."""
+    DIAGNOSE_FLAG_KEY: str = 'diagnose'
+    """Key to store a flag that tells experiment to run diagnose instead of maintain (basically skip `check_state`)."""
+
+    @classmethod
+    def _meta_exp_name(cls) -> str:
+        return f'_{cls.__name__}MetaExp'
+
+    @classmethod  # noqa: C901
+    def build_meta_exp(cls) -> typing.Tuple[typing.Type[artiq.experiment.Experiment], str]:
+        """Build the meta-experiment class."""
+
+        class MetaExp(dax.base.system.DaxBase, artiq.experiment.Experiment):  # pragma: no cover
+            """The generated meta-experiment class."""
+
+            def __init__(self, managers_or_parent: typing.Any, *args: typing.Any, **kwargs: typing.Any):
+                _, _, argument_mgr, _ = managers_or_parent
+                check_managers = dax.util.artiq.clone_managers(
+                    managers_or_parent,
+                    name=f'{cls.CHECK_CLASS_NAME}_{{index}}',
+                    arguments=argument_mgr.unprocessed_arguments.pop('check')
+                )
+                cal_managers = dax.util.artiq.clone_managers(
+                    managers_or_parent,
+                    name=f'{cls.CALIBRATION_CLASS_NAME}_{{index}}',
+                    arguments=argument_mgr.unprocessed_arguments.pop('calibration')
+                )
+                self._controller_key: str = argument_mgr.unprocessed_arguments.pop('controller_key')
+                self._my_dataset_keys: typing.Dict[str, str] = argument_mgr.unprocessed_arguments.pop('my_dataset_keys')
+                self._dep_dataset_keys: typing.Dict[str, typing.Dict[str, str]] = \
+                    argument_mgr.unprocessed_arguments.pop('dep_dataset_keys')
+                self._timeout: float = argument_mgr.unprocessed_arguments.pop('timeout')
+                check_file = argument_mgr.unprocessed_arguments.pop('check_file')
+                cal_file = argument_mgr.unprocessed_arguments.pop('calibration_file')
+                check_mod = artiq.tools.file_import(check_file, prefix='')
+                cal_mod = artiq.tools.file_import(cal_file, prefix='')
+                check_cls = artiq.tools.get_experiment(check_mod, cls.CHECK_CLASS_NAME)
+                cal_cls = artiq.tools.get_experiment(cal_mod, cls.CALIBRATION_CLASS_NAME)
+                # need the HasEnvironment constructor as well as the usual Experiment methods
+                assert issubclass(check_cls, artiq.experiment.HasEnvironment)
+                assert issubclass(cal_cls, artiq.experiment.HasEnvironment)
+                # mypy/python doesn't support "intersection" style typing (yet), so just have to use typing.Any
+                self.check_exp: typing.Any = check_cls(check_managers)
+                self.calibration_exp: typing.Any = cal_cls(cal_managers)
+                # flags for analyze phase
+                self._check_analyze: bool = False
+                self._cal_analyze: bool = False
+                # call super at the end (instead of beginning) so that we can do the above arg pre-processing
+                # before the sub-experiments are built
+                super(MetaExp, self).__init__(managers_or_parent, *args, **kwargs)
+
+            def get_identifier(self) -> str:
+                return cls._meta_exp_name()
+
+            def _check_state(self) -> bool:
+                # 1st check: has this calibration timed out
+                last_cal = self.get_dataset(self._my_dataset_keys[cls.LAST_CAL_KEY], 0.0, archive=False)
+                last_check = self.get_dataset(self._my_dataset_keys[cls.LAST_CHECK_KEY], 0.0, archive=False)
+                assert isinstance(last_cal, float), 'Unexpected return type from dataset'
+                assert isinstance(last_check, float), 'Unexpected return type from dataset'
+                last_cal_or_check: float = max(last_cal, last_check)
+                if time.time() > last_cal_or_check + self._timeout:
+                    self.logger.info('check_state failed: timeout')
+                    return False
+
+                # 2nd check: have any dependencies been re-calibrated since the last time this cal passed check_data
+                # or was re-calibrated
+                last_cals: typing.Dict[str, float] = {
+                    name: typing.cast(float, self.get_dataset(key_dict[cls.LAST_CAL_KEY], 0.0, archive=False))
+                    for name, key_dict in self._dep_dataset_keys.items()
+                }
+                assert all(isinstance(t, float) for t in last_cals.values()), 'Unexpected return type from dataset'
+                re_calibrated = {name for name, cal_time in last_cals.items()
+                                 if cal_time > last_cal_or_check}
+                if re_calibrated:
+                    self.logger.info(f'check_state failed: one or more dependencies re-calibrated: {re_calibrated}')
+                    return False
+                else:
+                    self.logger.info('check_state passed')
+                    return True
+
+            def build(self, *args: typing.Any, **kwargs: typing.Any) -> None:
+                self._scheduler = self.get_device('scheduler')
+                self._dax_scheduler = self.get_device(self._controller_key)
+                # construct system keys for dependency datasets
+                self._dep_dataset_keys = {
+                    name: {
+                        key_name: self._dax_scheduler.get_foreign_key(name, key_value)
+                        for key_name, key_value in key_dict.items()
+                    } for name, key_dict in self._dep_dataset_keys.items()
+                }
+
+            def prepare(self) -> None:
+                # might be unnecessary to prepare check_exp, but in the case that it does run this will save some time
+                # vs. putting this call in run()
+                self.check_exp.prepare()
+
+            def run(self) -> None:
+                # noinspection PyBroadException
+                try:
+                    # check_state (only if diagnose flag is False and timeout is not None)
+                    if not self.get_dataset(self._my_dataset_keys[cls.DIAGNOSE_FLAG_KEY], False, archive=False) \
+                            and self._timeout is not None and self._check_state():
+                        return
+
+                    # check_data
+                    self._check_analyze = True
+                    try:
+                        self.check_exp.run()
+                    except dax.base.exceptions.BadDataError:
+                        self.logger.info('Bad data, triggering diagnose wave')
+                        for name, key_dict in self._dep_dataset_keys.items():
+                            self.set_dataset(key_dict[cls.DIAGNOSE_FLAG_KEY], True,
+                                             broadcast=True, persist=True, archive=False)
+                        self._dax_scheduler.submit(cls.__name__, policy=str(Policy.GREEDY), depth=1, start_depth=1,
+                                                   priority=self._scheduler.priority + 1)
+                        dax.util.artiq.pause_strict_priority(self._scheduler)
+                        self.logger.info('Diagnose finished, continuing to calibration')
+                    except dax.base.exceptions.OutOfSpecError:
+                        self.logger.info('Out of spec, continuing to calibration')
+                    else:
+                        self.logger.info('Check data passed, returning')
+                        self.set_dataset(self._my_dataset_keys[cls.LAST_CHECK_KEY], time.time(),
+                                         broadcast=True, persist=True, archive=False)
+                        return
+
+                    # calibrate
+                    try:
+                        self.calibration_exp.prepare()
+                        self.calibration_exp.run()
+                    except dax.base.exceptions.FailedCalibrationError as fce:
+                        self.logger.exception(fce)
+                        dax.util.experiments.Barrier.submit(self, pipeline=self._scheduler.pipeline_name)
+                        dax.util.artiq.pause_strict_priority(self._scheduler)
+                    else:
+                        self.logger.info('Calibration succeeded')
+                        self._cal_analyze = True
+                        self.set_dataset(self._my_dataset_keys[cls.LAST_CAL_KEY], time.time(),
+                                         broadcast=True, persist=True, archive=False)
+                except Exception:
+                    if cls.GREEDY_FAILURE:
+                        self.logger.exception('Uncaught exception')
+                        dax.util.experiments.Barrier.submit(self, pipeline=self._scheduler.pipeline_name)
+                        dax.util.artiq.pause_strict_priority(self._scheduler)
+                    else:
+                        raise
+                finally:
+                    self.set_dataset(self._my_dataset_keys[cls.DIAGNOSE_FLAG_KEY], False,
+                                     broadcast=True, persist=True, archive=False)
+
+            def analyze(self) -> None:
+                if self._check_analyze:
+                    self.check_exp.analyze()
+                if self._cal_analyze:
+                    self.calibration_exp.analyze()
+
+        # Return the meta experiment class and its name
+        return MetaExp, cls._meta_exp_name()
+
+    def build(self) -> None:  # type: ignore
+        """Build the job object.
+
+        To add configurable arguments to this job, override the :func:`build_job` method instead.
+        """
+
+        # Check classes and arguments
+        assert isinstance(self.CHECK_FILE, str), 'The check file must by provided'
+        assert isinstance(self.CALIBRATION_FILE, str), 'The calibration file must by provided'
+        assert isinstance(self.CHECK_CLASS_NAME, str), 'The check class name must be provided'
+        assert isinstance(self.CALIBRATION_CLASS_NAME, str), 'The calibration class name must be provided'
+        assert isinstance(self.CHECK_ARGUMENTS, dict), 'The check arguments must be of type dict'
+        assert isinstance(self.CALIBRATION_ARGUMENTS, dict), 'The calibration arguments must be of type dict'
+        assert all(isinstance(k, str) for k in self.CHECK_ARGUMENTS), 'All argument keys must be of type str'
+        assert all(isinstance(k, str) for k in self.CALIBRATION_ARGUMENTS), 'All argument keys must be of type str'
+        assert isinstance(self.CALIBRATION_TIMEOUT, str) or self.CALIBRATION_TIMEOUT is None, \
+            'The calibration timeout attribute must be of type str or None'
+        assert isinstance(self.GREEDY_FAILURE, bool), 'The greedy failure attribute must be of type bool'
+        if self.INTERVAL is not None:
+            self.logger.warning(
+                f'Non-None INTERVAL "{self.INTERVAL}" could result in unexpected behavior of calibration jobs.')
+        # Call super
+        super(CalibrationJob, self).build()
+
+        # Copy the class arguments attribute (prevents class attribute from being mutated)
+        self.CHECK_ARGUMENTS = self.CHECK_ARGUMENTS.copy()
+        self.CALIBRATION_ARGUMENTS = self.CALIBRATION_ARGUMENTS.copy()
+        # Build this job
+        self.build_job()
+
+    def build_job(self) -> None:
+        """Build this job.
+
+        Override this function to add configurable arguments to this job.
+        Please note that **argument keys must be unique over all jobs in the job set and the scheduler**.
+        It is up to the programmer to ensure that there are no duplicate argument keys.
+
+        Configurable arguments should be added directly to the :attr:`CHECK_ARGUMENTS`
+        or :attr:`CALIBRATION_ARGUMENTS` attributes.
+        For example::
+
+            self.CHECK_ARGUMENTS['foo'] = self.get_argument('foo', BooleanValue())
+            self.CALIBRATION_ARGUMENTS['bar'] = self.get_argument('bar', Scannable(RangeScan(10 * us, 200 * us, 10)))
+        """
+        pass
+
+    def init(self, *, reset: bool, **kwargs: typing.Any) -> None:
+        # Process the arguments for check/calibration experiments
+        check_arguments = dax.util.artiq.process_arguments(self.CHECK_ARGUMENTS)
+        calibration_arguments = dax.util.artiq.process_arguments(self.CALIBRATION_ARGUMENTS)
+        # construct 'arguments' for meta exp
+        my_dataset_keys = {
+            self.LAST_CAL_KEY: self.get_system_key(self.LAST_CAL_KEY),
+            self.LAST_CHECK_KEY: self.get_system_key(self.LAST_CHECK_KEY),
+            self.DIAGNOSE_FLAG_KEY: self.get_system_key(self.DIAGNOSE_FLAG_KEY)
+        }
+        # reset timestamps if `reset` is True
+        if reset:
+            self.set_dataset(my_dataset_keys[self.LAST_CAL_KEY], 0.0, broadcast=True, persist=True, archive=False)
+            self.set_dataset(my_dataset_keys[self.LAST_CHECK_KEY], 0.0, broadcast=True, persist=True, archive=False)
+        # type checking on dependencies because regular Jobs won't have these datasets
+        dep_dataset_keys = {
+            dep.get_name(): {
+                self.LAST_CAL_KEY: dep.LAST_CAL_KEY,
+                self.LAST_CHECK_KEY: dep.LAST_CHECK_KEY,
+                self.DIAGNOSE_FLAG_KEY: dep.DIAGNOSE_FLAG_KEY
+            } for dep in self.DEPENDENCIES if issubclass(dep, CalibrationJob)
+        }
+        # convert timeout to float
+        timeout: typing.Optional[float] = _str_to_time(
+            self.CALIBRATION_TIMEOUT) if self.CALIBRATION_TIMEOUT is not None else None
+
+        # process file paths
+        if not self.REPOSITORY:
+            # Expand files
+            check_file = os.path.expanduser(self.CHECK_FILE)
+            assert os.path.isabs(check_file), 'The given check file must be an absolute path'
+            cal_file = os.path.expanduser(self.CALIBRATION_FILE)
+            assert os.path.isabs(cal_file), 'The given check file must be an absolute path'
+        else:
+            # check that job definition is in-repo
+            assert 'repo_rev' in self._scheduler.expid, 'Job definition must be inside the repository.'
+            # find repository path - only works if directory name is actually 'repository'
+            cwd = pathlib.PurePath(os.getcwd())
+            repo_path = pathlib.PurePath(*cwd.parts[:cwd.parts.index('results')], 'repository')
+            assert os.path.exists(repo_path), f'Path {repo_path} does not exist'
+            check_file = str(repo_path.joinpath(self.CHECK_FILE))
+            cal_file = str(repo_path.joinpath(self.CALIBRATION_FILE))
+
+        # actual arguments to pass to meta exp
+        self._arguments = {
+            'check': check_arguments,
+            'calibration': calibration_arguments,
+            'check_file': check_file,
+            'calibration_file': cal_file,
+            'controller_key': kwargs['controller_key'],
+            'my_dataset_keys': my_dataset_keys,
+            'dep_dataset_keys': dep_dataset_keys,
+            'timeout': timeout
+        }
+
+        # Construct an expid for this job
+        self._expid: typing.Dict[str, typing.Any] = {
+            'file': sys.modules[self.__module__].__file__,
+            'class_name': self._meta_exp_name(),
+            'arguments': self._arguments,
+            'log_level': self.LOG_LEVEL,
+            'repo_rev': None,  # assumes that the scheduler instance is in the user repo
+        }
+        self.logger.debug(f'expid: {self._expid}')
+
+        # Call super
+        super(CalibrationJob, self).init(reset=reset, **kwargs)
+
+    def is_meta(self) -> bool:
+        """Returns `False`. Calibration jobs can not be meta-jobs."""
+        return False
+
+
+__CJ_T = typing.TypeVar('__CJ_T', bound=CalibrationJob)  # Calibration job type var
+
+
+def create_calibration(cls: typing.Type[__CJ_T]) -> typing.Type[__CJ_T]:
+    """Mandatory decorator for calibration jobs to ensure that the meta experiment is built at import time.
+
+    :param cls: A subclass of :class:`CalibrationJob`
+    :return: The unmodified calibration job class
+    """
+    if not issubclass(cls, CalibrationJob):
+        raise TypeError(f'Class {cls.__name__} is not a subclass of dax.base.scheduler.CalibrationJob.')
+
+    # Build the meta experiment
+    meta_exp, name = cls.build_meta_exp()
+
+    # Obtain the global namespace of the caller
+    gn = inspect.stack()[1].frame.f_globals
+    if name in gn:
+        raise LookupError(f'Name "{name}" already exists')
+    # Insert meta experiment into the global namespace of the caller
+    gn[name] = meta_exp
+
+    # Return the unmodified calibration job class
+    return cls
 
 
 class SchedulerController:
@@ -860,8 +1272,7 @@ class DaxScheduler(dax.base.system.DaxHasKey, abc.ABC):
                                                      group='Dependency graph')
         self._view_graph: bool = self.get_argument('View graph',
                                                    artiq.experiment.BooleanValue(False),
-                                                   tooltip='View the dependency graph at startup '
-                                                           '(graph is viewed on the ARTIQ master only)',
+                                                   tooltip='View the dependency graph at startup',
                                                    group='Dependency graph')
 
         # Call super and forward arguments, for compatibility with other libraries
@@ -945,7 +1356,8 @@ class DaxScheduler(dax.base.system.DaxHasKey, abc.ABC):
         for node in self._graph:
             node.init(reset=self._reset_nodes,
                       job_pipeline=self._job_pipeline,
-                      request_queue=request_queue)
+                      request_queue=request_queue,
+                      controller_key=self.CONTROLLER)
 
         # Start the request handler task
         self.logger.debug('Starting the request handler')

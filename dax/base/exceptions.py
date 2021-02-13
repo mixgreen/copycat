@@ -1,4 +1,5 @@
-__all__ = ['BuildError', 'NonUniqueRegistrationError']
+__all__ = ['BuildError', 'NonUniqueRegistrationError',
+           'CalibrationError', 'OutOfSpecError', 'BadDataError', 'FailedCalibrationError']
 
 
 class BuildError(RuntimeError):
@@ -14,4 +15,24 @@ class NonUniqueRegistrationError(LookupError):
 
     Raised when registering an object with a name that was already occupied.
     """
+    pass
+
+
+class CalibrationError(RuntimeError):
+    """Base class for calibration-related errors."""
+    pass
+
+
+class OutOfSpecError(CalibrationError):
+    """Exception for `check_data` experiments to throw in the case that a parameter is out of spec."""
+    pass
+
+
+class BadDataError(CalibrationError):
+    """Exception for `check_data` experiments to throw in the case of bad data."""
+    pass
+
+
+class FailedCalibrationError(CalibrationError):
+    """Exception to throw when a calibration has failed without resolution."""
     pass

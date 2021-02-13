@@ -356,6 +356,26 @@ class ArtiqTestCase(unittest.TestCase):
                     with self.assertRaises(KeyError, msg='Datasets not isolated'):
                         exp.get_dataset(key)
 
+    def test_pause_strict_priority(self):
+        # Must be host only
+        self.assertTrue(dax.util.artiq.is_host_only(dax.util.artiq.pause_strict_priority))
+
+        with dax.util.artiq.get_managers() as managers:
+            class TestExperiment(artiq.experiment.EnvExperiment):
+                def build(self):
+                    self.core = self.get_device('core')
+                    self.scheduler = self.get_device('scheduler')
+
+                # noinspection PyMethodParameters
+                def run(self_):
+                    dax.util.artiq.pause_strict_priority(self_.scheduler)
+                    with self.assertRaises(TypeError, msg='Wrong scheduler object did not raise'):
+                        dax.util.artiq.pause_strict_priority(self_.core)
+
+            # Create the main experiment
+            exp = TestExperiment(managers)
+            exp.run()
+
     """Functions used for tests"""
 
     def _undecorated_func(self):

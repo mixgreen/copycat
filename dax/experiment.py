@@ -8,5 +8,8 @@ See :mod:`dax.base.system`.
 # Import DAX system base
 from dax.base.system import *  # noqa: F401
 
+# Import DAX calibration exceptions
+from dax.base.exceptions import BadDataError, OutOfSpecError, FailedCalibrationError  # noqa: F401
+
 # Import artiq.experiment
 from artiq.experiment import *  # noqa: F401
