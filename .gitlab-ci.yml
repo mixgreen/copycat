@@ -1,19 +1,10 @@
+include:
+  project: 'Duke-ARTIQ/ci-scripts'
+  file: '/envs.yml'
+
 stages:
   - test
   - deploy
-
-.nix_env:
-  image: nixos/nix:latest
-  before_script:
-    # Setup Nix channels
-    - nix-channel --add https://nixbld.m-labs.hk/channel/custom/artiq/full/artiq-full
-    - nix-channel --remove nixpkgs
-    - nix-channel --add https://nixos.org/channels/nixos-20.03 nixpkgs
-    - nix-channel --update
-    # Add M-Lab public key
-    - mkdir -p ~/.config/nix/
-    - echo "substituters = https://cache.nixos.org https://nixbld.m-labs.hk" > ~/.config/nix/nix.conf
-    - echo "trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= nixbld.m-labs.hk-1:5aSRVA5b320xbNvu30tqxVPXpld73bhtOeH6uAjRyHc=" >> ~/.config/nix/nix.conf
 
 .conda_env:
   image: ubuntu
