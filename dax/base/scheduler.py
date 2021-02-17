@@ -775,7 +775,7 @@ class CalibrationJob(BaseJob):
                     name=f'{cls.CHECK_CLASS_NAME}_{{index}}',
                     arguments=argument_mgr.unprocessed_arguments.pop('check')
                 )
-                cal_managers = dax.util.artiq.clone_managers(
+                self._cal_managers = dax.util.artiq.clone_managers(
                     managers_or_parent,
                     name=f'{cls.CALIBRATION_CLASS_NAME}_{{index}}',
                     arguments=argument_mgr.unprocessed_arguments.pop('calibration')
@@ -790,13 +790,17 @@ class CalibrationJob(BaseJob):
                 check_mod = artiq.tools.file_import(check_file, prefix='')
                 cal_mod = artiq.tools.file_import(cal_file, prefix='')
                 check_cls = artiq.tools.get_experiment(check_mod, cls.CHECK_CLASS_NAME)
-                cal_cls = artiq.tools.get_experiment(cal_mod, cls.CALIBRATION_CLASS_NAME)
+                self._cal_cls: typing.Any = artiq.tools.get_experiment(cal_mod, cls.CALIBRATION_CLASS_NAME)
                 # need the HasEnvironment constructor as well as the usual Experiment methods
                 assert issubclass(check_cls, artiq.experiment.HasEnvironment)
-                assert issubclass(cal_cls, artiq.experiment.HasEnvironment)
+                assert issubclass(self._cal_cls, artiq.experiment.HasEnvironment)
                 # mypy/python doesn't support "intersection" style typing (yet), so just have to use typing.Any
-                self.check_exp: typing.Any = check_cls(check_managers)
-                self.calibration_exp: typing.Any = cal_cls(cal_managers)
+                try:
+                    self.check_exp: typing.Any = check_cls(check_managers)
+                except Exception as e:
+                    self._check_exception: typing.Optional[Exception] = e
+                else:
+                    self._check_exception = None
                 # flags for analyze phase
                 self._check_analyze: bool = False
                 self._cal_analyze: bool = False
@@ -848,7 +852,11 @@ class CalibrationJob(BaseJob):
             def prepare(self) -> None:
                 # might be unnecessary to prepare check_exp, but in the case that it does run this will save some time
                 # vs. putting this call in run()
-                self.check_exp.prepare()
+                if self._check_exception is None:
+                    try:
+                        self.check_exp.prepare()
+                    except Exception as e:
+                        self._check_exception = e
 
             def run(self) -> None:
                 # noinspection PyBroadException
@@ -859,8 +867,10 @@ class CalibrationJob(BaseJob):
                         return
 
                     # check_data
-                    self._check_analyze = True
                     try:
+                        if self._check_exception is not None:
+                            raise self._check_exception
+                        self._check_analyze = True
                         self.check_exp.run()
                     except dax.base.exceptions.BadDataError:
                         self.logger.info('Bad data, triggering diagnose wave')
@@ -881,6 +891,7 @@ class CalibrationJob(BaseJob):
 
                     # calibrate
                     try:
+                        self.calibration_exp: typing.Any = self._cal_cls(self._cal_managers)
                         self.calibration_exp.prepare()
                         self.calibration_exp.run()
                     except dax.base.exceptions.FailedCalibrationError as fce:
