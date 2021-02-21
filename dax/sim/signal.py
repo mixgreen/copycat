@@ -115,7 +115,7 @@ class NullSignalManager(DaxSignalManager[None]):
         pass
 
 
-_VS_T = vcd.writer.Variable  # The VCD signal type
+_VS_T = vcd.writer.Variable[vcd.writer.VarValue]  # The VCD signal type
 _VT_T = typing.Type[typing.Union[bool, int, np.int32, np.int64, float, str, object]]  # The VCD signal-type type
 _VV_T = typing.Union[bool, int, np.int32, np.int64, float, str, None]  # The VCD value types
 

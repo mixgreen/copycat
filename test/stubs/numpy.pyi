@@ -53,7 +53,6 @@ __SHAPE_T = typing.Union[int, __SHAPE_TUPLE_T]
 # noinspection PyPep8Naming
 class ndarray(collections.abc.Sequence, typing.Generic[__A_T]):
 
-    # noinspection PyMissingConstructor
     def __init__(self, shape: __SHAPE_TUPLE_T, dtype: type = ..., buffer: typing.Any = ..., offset: int = ...,
                  strides: typing.Optional[typing.Tuple[int]] = ..., order: typing.Optional[str] = ...):
         ...

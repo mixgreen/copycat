@@ -5,11 +5,9 @@
 import numpy as np
 
 from artiq.language.core import *
+from artiq.language.types import *
 from artiq.language.units import *
 from artiq.coredevice.ad9910 import PHASE_MODE_CONTINUOUS, PHASE_MODE_ABSOLUTE, PHASE_MODE_TRACKING  # type: ignore
-from artiq.coredevice.ad9910 import RAM_DEST_FTW, RAM_DEST_POW, RAM_DEST_ASF, RAM_DEST_POWASF  # noqa: F401
-from artiq.coredevice.ad9910 import RAM_MODE_DIRECTSWITCH, RAM_MODE_RAMPUP, RAM_MODE_BIDIR_RAMP  # noqa: F401
-from artiq.coredevice.ad9910 import RAM_MODE_CONT_BIDIR_RAMP, RAM_MODE_CONT_RAMPUP  # noqa: F401
 
 from dax.sim.device import DaxSimDevice
 from dax.sim.signal import get_signal_manager
@@ -74,7 +72,15 @@ class AD9910(DaxSimDevice):
         self.phase_mode = phase_mode
 
     @kernel
+    def write16(self, addr, data):
+        raise NotImplementedError
+
+    @kernel
     def write32(self, addr, data):
+        raise NotImplementedError
+
+    @kernel
+    def read16(self, addr):
         raise NotImplementedError
 
     @kernel
@@ -100,7 +106,8 @@ class AD9910(DaxSimDevice):
     @kernel
     def set_cfr1(self, power_down=0b0000, phase_autoclear=0,
                  drg_load_lrr=0, drg_autoclear=0,
-                 internal_profile=0, ram_destination=0, ram_enable=0):
+                 internal_profile=0, ram_destination=0, ram_enable=0,
+                 manual_osk_external=0, osk_enable=0, select_auto_osk=0):
         raise NotImplementedError
 
     @kernel
@@ -159,7 +166,7 @@ class AD9910(DaxSimDevice):
         self.set_phase(self.pow_to_turns(pow_))
 
     @portable(flags={"fast-math"})
-    def frequency_to_ftw(self, frequency):
+    def frequency_to_ftw(self, frequency) -> TInt32:
         return np.int32(round(float(self.ftw_per_hz * frequency)))
 
     @portable(flags={"fast-math"})
@@ -167,20 +174,23 @@ class AD9910(DaxSimDevice):
         return ftw / self.ftw_per_hz
 
     @portable(flags={"fast-math"})
-    def turns_to_pow(self, turns):
-        return np.int32(round(float(turns * 0x10000)))
+    def turns_to_pow(self, turns) -> TInt32:
+        return np.int32(round(float(turns * 0x10000))) & np.int32(0xffff)
 
     @portable(flags={"fast-math"})
     def pow_to_turns(self, pow_):
         return pow_ / 0x10000
 
     @portable(flags={"fast-math"})
-    def amplitude_to_asf(self, amplitude):
-        return np.int32(round(float(amplitude * 0x3fff)))  # 0x3ffe in the ARTIQ driver
+    def amplitude_to_asf(self, amplitude) -> TInt32:
+        code = np.int32(round(float(amplitude * 0x3fff)))
+        if code < 0 or code > 0x3fff:
+            raise ValueError("Invalid AD9910 fractional amplitude!")
+        return code
 
     @portable(flags={"fast-math"})
     def asf_to_amplitude(self, asf):
-        return asf / float(0x3fff)  # 0x3ffe in the ARTIQ driver
+        return asf / float(0x3fff)
 
     @portable(flags={"fast-math"})
     def frequency_to_ram(self, frequency, ram):

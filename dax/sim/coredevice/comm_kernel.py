@@ -1,5 +1,3 @@
-import typing
-
 import artiq.coredevice.comm_kernel
 
 
@@ -13,17 +11,8 @@ class CommKernelDummy(artiq.coredevice.comm_kernel.CommKernelDummy):
     def __init__(self) -> None:
         pass
 
-    def open(self, **kwargs: typing.Any) -> None:
+    def open(self) -> None:
         pass
 
     def close(self) -> None:
         pass
-
-    def read(self, length: int) -> bytes:
-        raise NotImplementedError
-
-    def write(self, data: bytes) -> None:
-        raise NotImplementedError
-
-    def reset_session(self) -> None:
-        raise NotImplementedError

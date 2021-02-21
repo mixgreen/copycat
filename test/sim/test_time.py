@@ -2,8 +2,6 @@ import unittest
 import random
 
 from artiq.language.core import now_mu, at_mu, delay, delay_mu, parallel, sequential, set_time_manager
-from artiq.language.core import watchdog
-from artiq.coredevice.exceptions import WatchdogExpired
 from artiq.language.units import *
 
 from dax.sim.time import DaxTimeManager
@@ -234,105 +232,8 @@ class TimeManagerTestCase(unittest.TestCase):
 
 
 class TimeManagerTestCase1ns(TimeManagerTestCase):
-    REF_PERIOD = ns
+    REF_PERIOD = 1 * ns
 
 
 class TimeManagerTestCase5ns(TimeManagerTestCase):
     REF_PERIOD = 5 * ns
-
-
-class WatchdogTestCase(unittest.TestCase):
-    # The reference period for this class
-    REF_PERIOD = ns
-    # Seed for random samples
-    SEED = None
-    # Window size
-    WINDOW = 5 * us
-
-    def setUp(self) -> None:
-        assert isinstance(self.REF_PERIOD, float)
-        assert self.REF_PERIOD > 0.0
-        set_time_manager(DaxTimeManager(self.REF_PERIOD))
-        self.rnd = random.Random(self.SEED)
-
-    def test_watchdog_in_time(self):
-        with watchdog(self.WINDOW):
-            t = now_mu()
-            for _ in range(_NUM_SAMPLES):
-                # All delays are less than the window, so no exceptions should be raised
-                at_mu(t)
-                delay(self.WINDOW * self.rnd.random())
-
-        for _ in range(_NUM_SAMPLES):
-            with watchdog(self.WINDOW):
-                # All delays are less than the window, so no exceptions should be raised
-                delay(self.WINDOW * self.rnd.random())
-
-        with watchdog(self.WINDOW):
-            # Exact same time does not raise
-            delay(self.WINDOW)
-
-    def test_watchdog_expired(self):
-        with watchdog(self.WINDOW):
-            with self.assertRaises(WatchdogExpired, msg='Watchdog timeout did not raise'):
-                # More than a window, so exception should be raised
-                delay(self.WINDOW * (self.rnd.random() + 2))
-
-        with watchdog(self.WINDOW):
-            with self.assertRaises(WatchdogExpired, msg='Watchdog timeout did not raise'):
-                # More than a window, so exception should be raised
-                delay(self.WINDOW + self.REF_PERIOD)
-
-    def test_nested_watchdog_in_time(self):
-        with watchdog(self.WINDOW):
-            with watchdog(self.WINDOW):
-                with watchdog(self.WINDOW):
-                    t = now_mu()
-                    for _ in range(_NUM_SAMPLES):
-                        # All delays are less than the window, so no exceptions should be raised
-                        at_mu(t)
-                        delay(self.WINDOW * self.rnd.random())
-
-        for _ in range(_NUM_SAMPLES):
-            with watchdog(self.WINDOW):
-                with watchdog(self.WINDOW):
-                    with watchdog(self.WINDOW):
-                        # All delays are less than the window, so no exceptions should be raised
-                        delay(self.WINDOW * self.rnd.random())
-
-        with watchdog(self.WINDOW):
-            with watchdog(self.WINDOW):
-                with watchdog(self.WINDOW):
-                    # Exact same time does not raise
-                    delay(self.WINDOW)
-
-    def test_nested_watchdog_expired(self):
-        with watchdog(self.WINDOW):
-            with watchdog(self.WINDOW):
-                with watchdog(self.WINDOW):
-                    with self.assertRaises(WatchdogExpired, msg='Watchdog timeout in inner nested watchdog context '
-                                                                'did not raise'):
-                        # More than a window, so exception should be raised
-                        delay(self.WINDOW * (self.rnd.random() + 2))
-
-        with self.assertRaises(WatchdogExpired, msg='Watchdog timeout in outer nested watchdog context did not raise'):
-            with watchdog(self.WINDOW):
-                with watchdog(self.WINDOW):
-                    with watchdog(self.WINDOW):
-                        # More than a window, so exception should be raised
-                        delay(self.WINDOW * (self.rnd.random() + 2))
-
-        with watchdog(self.WINDOW):
-            with watchdog(self.WINDOW):
-                with watchdog(self.WINDOW):
-                    with self.assertRaises(WatchdogExpired, msg='Watchdog timeout in inner nested watchdog context '
-                                                                'did not raise'):
-                        # More than a window, so exception should be raised
-                        delay(self.WINDOW + self.REF_PERIOD)
-
-        with self.assertRaises(WatchdogExpired, msg='Watchdog timeout in outer nested watchdog context did not raise'):
-            with watchdog(self.WINDOW):
-                with watchdog(self.WINDOW):
-                    with watchdog(self.WINDOW):
-                        # More than a window, so exception should be raised
-                        delay(self.WINDOW + self.REF_PERIOD)

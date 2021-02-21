@@ -4,17 +4,7 @@
 
 from artiq.language.core import *
 from artiq.language.units import *
-from artiq.coredevice.ad53xx import voltage_to_mu  # type: ignore
-from artiq.coredevice.ad53xx import ad53xx_cmd_write_ch, ad53xx_cmd_read_ch  # noqa: F401
-from artiq.coredevice.ad53xx import AD53XX_CMD_DATA, AD53XX_CMD_OFFSET  # noqa: F401
-from artiq.coredevice.ad53xx import AD53XX_CMD_GAIN, AD53XX_CMD_SPECIAL  # noqa: F401
-from artiq.coredevice.ad53xx import AD53XX_SPECIAL_NOP, AD53XX_SPECIAL_CONTROL, AD53XX_SPECIAL_OFS0  # noqa: F401
-from artiq.coredevice.ad53xx import AD53XX_SPECIAL_OFS1, AD53XX_SPECIAL_READ  # noqa: F401
-from artiq.coredevice.ad53xx import AD53XX_SPECIAL_AB0, AD53XX_SPECIAL_AB1, AD53XX_SPECIAL_AB2  # noqa: F401
-from artiq.coredevice.ad53xx import AD53XX_SPECIAL_AB3, AD53XX_SPECIAL_AB  # noqa: F401
-from artiq.coredevice.ad53xx import AD53XX_READ_X1A, AD53XX_READ_X1B, AD53XX_READ_OFFSET, AD53XX_READ_GAIN  # noqa: F401
-from artiq.coredevice.ad53xx import AD53XX_READ_CONTROL, AD53XX_READ_OFS0, AD53XX_READ_OFS1  # noqa: F401
-from artiq.coredevice.ad53xx import AD53XX_READ_AB0, AD53XX_READ_AB1, AD53XX_READ_AB2, AD53XX_READ_AB3  # noqa: F401
+from artiq.coredevice.ad53xx import voltage_to_mu, AD53XX_READ_X1A  # type: ignore
 
 from dax.sim.device import DaxSimDevice
 from dax.sim.signal import get_signal_manager
@@ -22,16 +12,6 @@ from dax.sim.signal import get_signal_manager
 
 def _mu_to_voltage(voltage_mu, *, vref, offset_dacs=0x0):
     return ((voltage_mu - (offset_dacs * 0x4)) / 0x10000) * (4. * vref)
-
-
-class _DummyTTL:
-    @portable
-    def on(self):
-        pass
-
-    @portable
-    def off(self):
-        pass
 
 
 class AD53xx(DaxSimDevice):
@@ -103,7 +83,7 @@ class AD53xx(DaxSimDevice):
 
     @kernel
     def write_dac(self, channel, voltage):
-        self.write_dac_mu(channel, voltage_to_mu(voltage, vref=self.vref, offset_dacs=self.offset_dacs))
+        self.write_dac_mu(channel, self.voltage_to_mu(voltage))
 
     @kernel
     def load(self):
@@ -127,14 +107,14 @@ class AD53xx(DaxSimDevice):
 
     @kernel
     def set_dac(self, voltages, channels=None):
-        voltages_mu = [voltage_to_mu(v, vref=self.vref, offset_dacs=self.offset_dacs) for v in voltages]
+        voltages_mu = [self.voltage_to_mu(v) for v in voltages]
         assert all(0 <= v_mu < 2 ** 16 for v_mu in voltages_mu), 'One or more voltages out of range'
         self.set_dac_mu(voltages_mu, channels)
 
     @kernel
     def calibrate(self, channel, vzs, vfs):
-        offset_err = voltage_to_mu(vzs, vref=self.vref, offset_dacs=self.offset_dacs)
-        gain_err = voltage_to_mu(vfs, vref=self.vref, offset_dacs=self.offset_dacs) - (offset_err + 0xffff)
+        offset_err = self.voltage_to_mu(vzs)
+        gain_err = self.voltage_to_mu(vfs) - (offset_err + 0xffff)
 
         assert offset_err <= 0
         assert gain_err >= 0
@@ -142,3 +122,7 @@ class AD53xx(DaxSimDevice):
         self.core.break_realtime()
         self.write_offset_mu(channel, 0x8000 - offset_err)
         self.write_gain_mu(channel, 0xffff - gain_err)
+
+    @portable
+    def voltage_to_mu(self, voltage):
+        return voltage_to_mu(voltage, self.offset_dacs, self.vref)
