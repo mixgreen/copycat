@@ -1,5 +1,6 @@
+{ pkgs ? import <nixpkgs> {} }:
+
 let
-    pkgs = import <nixpkgs> {};
     artiq-full = import <artiq-full> { inherit pkgs; };
 in
     pkgs.mkShell {

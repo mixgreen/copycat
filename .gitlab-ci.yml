@@ -8,9 +8,12 @@ stages:
 
 .conda_env:
   image: ubuntu
+  tags:
+    - docker
   variables:
     CONDA_SCRIPT: "$HOME/miniconda.sh"
     CONDA_DIR: "$HOME/miniconda"
+    CONDA_PACKAGES: "artiq numpy scipy pyvcd natsort pygit2 matplotlib python-graphviz h5py networkx"
   before_script:
     # Setup conda
     - apt-get -qq update; apt-get -qq -y install wget
@@ -22,7 +25,8 @@ stages:
     # Install and activate environment
     - conda config --prepend channels https://conda.m-labs.hk/artiq
     - conda config --append channels conda-forge
-    - conda create -y -n env artiq numpy scipy pyvcd natsort pygit2 matplotlib python-graphviz h5py networkx
+    - echo $CONDA_PACKAGES
+    - conda create -y -n env $CONDA_PACKAGES
     - conda activate env
 
 test_nix:
@@ -42,6 +46,7 @@ test_nix:
 test_conda:
   extends: .conda_env
   stage: test
+  allow_failure: true  # Temp workaround for conda llvm artiq issues
   script:
     # Install packages required for testing
     - conda install -y pytest pycodestyle mypy flake8-artiq

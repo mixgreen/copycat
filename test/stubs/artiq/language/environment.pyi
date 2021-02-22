@@ -14,6 +14,10 @@ class NoDefault:
     ...
 
 
+class DefaultMissing(Exception):
+    ...
+
+
 class _SimpleArgProcessor:
 
     def __init__(self, default: typing.Any = ...):
@@ -30,9 +34,7 @@ class _SimpleArgProcessor:
 
 
 class PYONValue(_SimpleArgProcessor):
-
-    def process(self, x: typing.Any) -> typing.Any:
-        ...
+    ...
 
 
 class BooleanValue(_SimpleArgProcessor):
@@ -41,29 +43,19 @@ class BooleanValue(_SimpleArgProcessor):
 
 class EnumerationValue(_SimpleArgProcessor):
 
-    # noinspection PyMissingConstructor
     def __init__(self, choices: typing.Sequence[str], default: typing.Union[str, typing.Type[NoDefault]] = ...):
         ...
 
 
 class NumberValue(_SimpleArgProcessor):
-    # Types of a number value
-    __N_T = typing.Union[int, float]
+    __N_T = typing.Union[int, float]  # Types of a number value
 
-    # noinspection PyShadowingBuiltins,PyMissingConstructor
+    valid_types: typing.List[str] = ...
+
     def __init__(self, default: typing.Union[__N_T, typing.Type[NoDefault]] = ..., unit: str = ...,
                  scale: typing.Optional[__N_T] = ...,
                  step: typing.Optional[__N_T] = ..., min: typing.Optional[__N_T] = ...,
-                 max: typing.Optional[__N_T] = ..., ndecimals: int = ...):
-        ...
-
-    def _is_int(self) -> bool:
-        ...
-
-    def default(self) -> __N_T:
-        ...
-
-    def process(self, x: str) -> __N_T:
+                 max: typing.Optional[__N_T] = ..., ndecimals: int = ..., type: str = ...):
         ...
 
 
@@ -169,4 +161,8 @@ class EnvExperiment(Experiment, HasEnvironment, abc.ABC):
 
 
 def is_experiment(o: typing.Any) -> bool:
+    ...
+
+
+def is_public_experiment(o: typing.Any) -> bool:
     ...

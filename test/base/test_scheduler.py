@@ -1850,23 +1850,28 @@ class CalibrationJobTestCase(unittest.TestCase):
             pass
 
         class J1(CalibrationJob):
+            _META_EXP_FILE = '/home/foo/scheduler.py'
             CHECK_FILE = 'foo.py'
 
         class J2(CalibrationJob):
+            _META_EXP_FILE = '/home/foo/scheduler.py'
             CHECK_FILE = 'foo.py'
             CALIBRATION_FILE = 'foo.py'
 
         class J3(CalibrationJob):
+            _META_EXP_FILE = '/home/foo/scheduler.py'
             CHECK_FILE = 'foo.py'
             CALIBRATION_FILE = 'foo.py'
             CHECK_CLASS_NAME = 'Bar'
 
         class J4(CalibrationJob):
+            _META_EXP_FILE = '/home/foo/scheduler.py'
             CHECK_FILE = 'foo.py'
             CALIBRATION_FILE = 'foo.py'
             CALIBRATION_CLASS_NAME = 'Bar'
 
         class J5(CalibrationJob):
+            _META_EXP_FILE = '/home/foo/scheduler.py'
             CHECK_FILE = 'foo.py'
             CALIBRATION_FILE = 'foo.py'
             CHECK_CLASS_NAME = 'Bar'
@@ -1874,6 +1879,7 @@ class CalibrationJobTestCase(unittest.TestCase):
             CHECK_ARGUMENTS = {1: 1}
 
         class J6(CalibrationJob):
+            _META_EXP_FILE = '/home/foo/scheduler.py'
             CHECK_FILE = 'foo.py'
             CALIBRATION_FILE = 'foo.py'
             CHECK_CLASS_NAME = 'Bar'
@@ -1881,6 +1887,7 @@ class CalibrationJobTestCase(unittest.TestCase):
             CALIBRATION_ARGUMENTS = {1: 1}
 
         class J7(CalibrationJob):
+            _META_EXP_FILE = '/home/foo/scheduler.py'
             CHECK_FILE = 'foo.py'
             CALIBRATION_FILE = 'foo.py'
             CHECK_CLASS_NAME = 'Bar'
@@ -1926,6 +1933,7 @@ class CalibrationJobTestCase(unittest.TestCase):
                                   'no': NoScan(3)}
 
         class J0(CalibrationJob):
+            _META_EXP_FILE = '/home/foo/scheduler.py'
             CHECK_FILE = '/home/foo/foo.py'
             CALIBRATION_FILE = '/home/foo/foo.py'
             CHECK_CLASS_NAME = 'Bar'
@@ -1976,6 +1984,7 @@ class CalibrationJobTestCase(unittest.TestCase):
         }
 
         class J0(CalibrationJob):
+            _META_EXP_FILE = '/home/foo/scheduler.py'
             CHECK_FILE = '/home/foo/foo.py'
             CALIBRATION_FILE = '/home/foo/foo.py'
             CHECK_CLASS_NAME = 'Bar'
@@ -2018,6 +2027,8 @@ class CalibrationJobTestCase(unittest.TestCase):
     def test_decorator():
         assert _CalJob0._meta_exp_name() not in globals()
         assert _CalJob1._meta_exp_name() in globals()
+        assert not hasattr(_CalJob0, '_META_EXP_FILE')
+        assert hasattr(_CalJob1, '_META_EXP_FILE')
 
 
 class OptimusCalibrationTestCase(unittest.TestCase):

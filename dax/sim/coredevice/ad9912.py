@@ -5,8 +5,8 @@
 import numpy as np
 
 from artiq.language.core import *
+from artiq.language.types import *
 from artiq.language.units import *
-from artiq.coredevice.ad9912_reg import *  # type: ignore
 
 from dax.sim.device import DaxSimDevice
 from dax.sim.signal import get_signal_manager
@@ -68,16 +68,16 @@ class AD9912(DaxSimDevice):
         self.set(self.ftw_to_frequency(ftw), phase)
 
     @portable(flags={"fast-math"})
-    def frequency_to_ftw(self, frequency):
-        return np.int64(round(float(self.ftw_per_hz * frequency)))
+    def frequency_to_ftw(self, frequency) -> TInt64:
+        return np.int64(round(float(self.ftw_per_hz * frequency))) & ((np.int64(1) << 48) - 1)
 
     @portable(flags={"fast-math"})
     def ftw_to_frequency(self, ftw):
         return ftw / self.ftw_per_hz
 
     @portable(flags={"fast-math"})
-    def turns_to_pow(self, phase):
-        return np.int32(round(float((1 << 14) * phase)))
+    def turns_to_pow(self, phase) -> TInt32:
+        return np.int32(round(float((1 << 14) * phase))) & np.int32(0xffff)
 
     @kernel
     def set(self, frequency, phase=0.0):

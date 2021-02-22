@@ -15,7 +15,6 @@ import dataclasses
 import os
 import os.path
 import inspect
-import sys
 import pathlib
 
 import artiq.experiment
@@ -755,15 +754,22 @@ class CalibrationJob(BaseJob):
     LAST_CHECK_KEY: str = 'last_check'
     """Key to store the last time `check_data` passed."""
     DIAGNOSE_FLAG_KEY: str = 'diagnose'
-    """Key to store a flag that tells experiment to run diagnose instead of maintain (basically skip `check_state`)."""
+    """Key to store a flag that tells experiment to run diagnose instead of maintain (i.e. skip ``check_state``)."""
+
+    _META_EXP_FILE: str
+    """Path to the file that the meta experiment is inserted into. Should only be written to via the decorator calling
+    ``build_meta_exp()``."""
 
     @classmethod
     def _meta_exp_name(cls) -> str:
         return f'_{cls.__name__}MetaExp'
 
     @classmethod  # noqa: C901
-    def build_meta_exp(cls) -> typing.Tuple[typing.Type[artiq.experiment.Experiment], str]:
+    def build_meta_exp(cls, file: str) -> typing.Tuple[typing.Type[artiq.experiment.Experiment], str]:  # noqa: C901
         """Build the meta-experiment class."""
+
+        # set file attribute to use when submitting the meta experiment
+        cls._META_EXP_FILE = file
 
         class MetaExp(dax.base.system.DaxBase, artiq.experiment.Experiment):  # pragma: no cover
             """The generated meta-experiment class."""
@@ -930,6 +936,7 @@ class CalibrationJob(BaseJob):
         """
 
         # Check classes and arguments
+        assert self.hasattr('_META_EXP_FILE'), 'The @create_calibration decorator must be used'
         assert isinstance(self.CHECK_FILE, str), 'The check file must by provided'
         assert isinstance(self.CALIBRATION_FILE, str), 'The calibration file must by provided'
         assert isinstance(self.CHECK_CLASS_NAME, str), 'The check class name must be provided'
@@ -1007,6 +1014,10 @@ class CalibrationJob(BaseJob):
             assert 'repo_rev' in self._scheduler.expid, 'Job definition must be inside the repository.'
             # find repository path - only works if directory name is actually 'repository'
             cwd = pathlib.PurePath(os.getcwd())
+            # in ARTIQ, cwd is some subdirectory of 'results', which resides at the same level as 'repository'
+            # so, trim the path all the way up to 'results', and then append 'repository'
+            # todo: this is a bit of a hack because the repository directory isn't currently exposed through ARTIQ.
+            #  if/when that changes, this should be updated
             repo_path = pathlib.PurePath(*cwd.parts[:cwd.parts.index('results')], 'repository')
             assert os.path.exists(repo_path), f'Path {repo_path} does not exist'
             check_file = str(repo_path.joinpath(self.CHECK_FILE))
@@ -1026,7 +1037,7 @@ class CalibrationJob(BaseJob):
 
         # Construct an expid for this job
         self._expid: typing.Dict[str, typing.Any] = {
-            'file': sys.modules[self.__module__].__file__,
+            'file': self._META_EXP_FILE,
             'class_name': self._meta_exp_name(),
             'arguments': self._arguments,
             'log_level': self.LOG_LEVEL,
@@ -1054,14 +1065,15 @@ def create_calibration(cls: typing.Type[__CJ_T]) -> typing.Type[__CJ_T]:
     if not issubclass(cls, CalibrationJob):
         raise TypeError(f'Class {cls.__name__} is not a subclass of dax.base.scheduler.CalibrationJob.')
 
-    # Build the meta experiment
-    meta_exp, name = cls.build_meta_exp()
-
     # Obtain the global namespace of the caller
     gn = inspect.stack()[1].frame.f_globals
+    file = gn['__file__']
+    # Build the meta experiment
+    meta_exp, name = cls.build_meta_exp(file)
+
+    # Insert meta experiment into the global namespace of the caller
     if name in gn:
         raise LookupError(f'Name "{name}" already exists')
-    # Insert meta experiment into the global namespace of the caller
     gn[name] = meta_exp
 
     # Return the unmodified calibration job class
