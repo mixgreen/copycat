@@ -46,6 +46,7 @@ test_nix:
 test_conda:
   extends: .conda_env
   stage: test
+  allow_failure: true  # Temp workaround for conda llvm artiq issues
   script:
     # Install packages required for testing
     - conda install -y pytest pycodestyle mypy flake8-artiq
