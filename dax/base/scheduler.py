@@ -761,7 +761,7 @@ class CalibrationJob(BaseJob):
     def _meta_exp_name(cls) -> str:
         return f'_{cls.__name__}MetaExp'
 
-    @classmethod
+    @classmethod  # noqa: C901
     def build_meta_exp(cls) -> typing.Tuple[typing.Type[artiq.experiment.Experiment], str]:  # noqa: C901
         """Build the meta-experiment class."""
 

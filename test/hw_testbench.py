@@ -14,6 +14,9 @@ from test.environment import CI_ENABLED, NIX_ENV, TB_DISABLED, JOB_ID
 
 __all__ = ['TestBenchCase']
 
+_TIMEOUT: float = 4.0
+"""Timeout in seconds for commands involving core devices."""
+
 _DDB_T = typing.Dict[str, typing.Any]  # Type for a device DB
 
 _KC705_CORE_ADDR: str = '192.168.1.75'
@@ -133,11 +136,13 @@ class _CoreDevice:
 
         :param args: Additional arguments to append to the subprocess run command
         :param kwargs: Keyword arguments for the subprocess run call
-        :return: A :class:`CompletedProcess` object
+        :raises subprocess.TimeoutExpired: Raised if the timeout for the command expired
+        :return: A :class:`subprocess.CompletedProcess` object
         """
         command: typing.List[str] = ['artiq_coremgmt', '-D', self.address]
         command.extend(args)
-        return subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, **kwargs)
+        return subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                              text=True, timeout=_TIMEOUT, **kwargs)
 
 
 _AVAILABLE_CORE_DEVICES: typing.List[_CoreDevice] = [
@@ -153,12 +158,15 @@ def _get_core_device() -> typing.Optional[_CoreDevice]:
         # Only find a core device if all conditions are met
 
         for core_device in _AVAILABLE_CORE_DEVICES:
-            # Request the IP address of the core device
-            r = core_device.run_command('config', 'read', 'ip')
-
-            if r.returncode == 0 and r.stdout.strip() == core_device.address:
-                # Use this core device
-                return core_device
+            try:
+                # Request the IP address of the core device
+                r = core_device.run_command('config', 'read', 'ip')
+            except subprocess.TimeoutExpired:
+                pass  # Timeout, device unreachable
+            else:
+                if r.returncode == 0 and r.stdout.strip() == core_device.address:
+                    # Use this core device
+                    return core_device
 
     # No core device was available
     return None
@@ -206,7 +214,7 @@ class TestBenchCase(unittest.TestCase):
             raise RuntimeError(f'Could not lock core device at [{_CORE_DEVICE.address}] (return code {r.returncode})')
 
         # Confirm the lock was obtained successfully (required due to the lack of an atomic read-and-lock action)
-        time.sleep(3.0)  # Grace period
+        time.sleep(_TIMEOUT + 1.0)  # Grace period
         r = _CORE_DEVICE.run_command('config', 'read', _LOCK_KEY)
         if r.returncode != 0:
             raise RuntimeError(f'Could not confirm lock status of core device at [{_CORE_DEVICE.address}] '
