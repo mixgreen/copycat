@@ -214,6 +214,7 @@ class _Request:
     start_depth: int
 
 
+# Workaround required for Python<=3.8
 if typing.TYPE_CHECKING:
     __RQ_T = asyncio.Queue[_Request]  # Type variable for the request queue
 else:

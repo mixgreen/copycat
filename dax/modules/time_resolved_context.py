@@ -16,6 +16,7 @@ from dax.util.units import UnitsFormatter
 
 __all__ = ['TimeResolvedContext', 'TimeResolvedAnalyzer', 'TimeResolvedContextError']
 
+# Workaround required for Python<=3.8
 if typing.TYPE_CHECKING:
     _TD_T = typing.Dict[str, typing.Union[typing.Sequence[float],
                                           typing.Sequence[typing.Sequence[float]]]]  # Type for a trace dict
@@ -720,8 +721,8 @@ class TimeResolvedAnalyzer:
 
         for index, t in enumerate(traces):
             # Obtain raw data
-            time = np.asarray(t['time'])
-            width = np.asarray(t['width'])
+            time = np.asarray(typing.cast(np.ndarray, t['time']))
+            width = np.asarray(typing.cast(np.ndarray, t['width']))
             results = typing.cast(typing.Sequence[np.ndarray], t['result'])  # List with result arrays
 
             # Create X values

@@ -16,8 +16,14 @@ import artiq.frontend.artiq_run  # type: ignore
 __all__ = ['is_kernel', 'is_portable', 'is_host_only',
            'process_arguments', 'get_managers', 'ClonedDatasetManager', 'clone_managers', 'isolate_managers']
 
+# Workaround required for Python<=3.8
+if typing.TYPE_CHECKING:
+    _TD_T = tempfile.TemporaryDirectory[str]  # Type for a temporary directory
+else:
+    _TD_T = tempfile.TemporaryDirectory
 
-class _TemporaryDirectory(tempfile.TemporaryDirectory):  # type: ignore[type-arg]
+
+class _TemporaryDirectory(_TD_T):
     """Custom :class:`TemporaryDirectory` class."""
 
     _refs: typing.List[_TemporaryDirectory] = []

@@ -90,7 +90,7 @@ class _ScanProductGenerator:
         else:
             # Create one empty scan index
             si = self.ScanIndex()
-            for _ in range(np.prod([len(s) for s in self._scans])):  # type: ignore[attr-defined]
+            for _ in range(np.prod([len(s) for s in self._scans])):
                 # Yield the empty scan index object for all
                 yield si
 
