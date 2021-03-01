@@ -108,7 +108,7 @@ class AD53xxPeekTestCase(dax.sim.test_case.PeekTestCase):
             c = self.rng.randrange(self._NUM_CHANNELS)
             self.env.dut.write_gain_mu(c, g)
             self.env.dut.load()
-            self.expect(self.env.dut, f'gain_{c}', (g + 1) / 2 ** 16, places=7)
+            self.expect_close(self.env.dut, f'gain_{c}', (g + 1) / 2 ** 16, places=7)
 
     def test_v_out(self):
         self._test_uninitialized()
@@ -124,7 +124,7 @@ class AD53xxPeekTestCase(dax.sim.test_case.PeekTestCase):
                 self.env.dut.write_offset_dacs_mu(o)
                 self.env.dut.set_dac([v], [c])
                 # Test
-                self.expect(self.env.dut, f'v_out_{c}', v, places=3)
+                self.expect_close(self.env.dut, f'v_out_{c}', v, places=3)
 
     def test_write_dac_mu_timing(self):
         for c in range(self._NUM_CHANNELS):
@@ -136,7 +136,7 @@ class AD53xxPeekTestCase(dax.sim.test_case.PeekTestCase):
         self._test_uninitialized()
         self.env.dut.write_offset_dacs_mu(0)  # Should apply immediately
         for i in range(self._NUM_CHANNELS):
-            self.expect(self.env.dut, f'v_out_{i}', 0.0, places=7)
+            self.expect_close(self.env.dut, f'v_out_{i}', 0.0, places=7)
 
 
 if __name__ == '__main__':

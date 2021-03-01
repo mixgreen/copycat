@@ -83,7 +83,7 @@ class AD9910TestCase(dax.sim.test_case.PeekTestCase):
             p = self.rng.randrange(2 ** 16)
             a = self.rng.randrange(2 ** 14)
             self.env.dut.set_mu(self.env.dut.frequency_to_ftw(f), pow_=p, asf=a)
-            self.expect(self.env.dut, 'freq', f, places=0)
+            self.expect_close(self.env.dut, 'freq', f, places=0)
             self.expect(self.env.dut, 'phase', self.env.dut.pow_to_turns(p))
             self.expect(self.env.dut, 'amp', self.env.dut.asf_to_amplitude(a))
 
@@ -96,7 +96,7 @@ class AD9910TestCase(dax.sim.test_case.PeekTestCase):
             self.env.dut.set_ftw(self.env.dut.frequency_to_ftw(f))
             self.env.dut.set_pow(p)
             self.env.dut.set_asf(a)
-            self.expect(self.env.dut, 'freq', f, places=0)
+            self.expect_close(self.env.dut, 'freq', f, places=0)
             self.expect(self.env.dut, 'phase', self.env.dut.pow_to_turns(p))
             self.expect(self.env.dut, 'amp', self.env.dut.asf_to_amplitude(a))
 

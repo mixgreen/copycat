@@ -119,12 +119,12 @@ class PeekTestCaseTestCase(dax.sim.test_case.PeekTestCase):
                 scope.set(val)
                 # Test value
                 self.expect(scope, signal, ref)
-                self.expect(scope, signal, ref, places=7)
+                self.expect_close(scope, signal, ref, places=7)
                 delay(1 * us)
                 self.expect(scope, signal, ref)
-                self.expect(scope, signal, ref, places=7)
+                self.expect_close(scope, signal, ref, places=7)
 
-    def test_expect_float_places(self):
+    def test_expect_is_close(self):
         test_data = [
             (99.2004, 99.2, 3),
             (-99.2004, -99.2, 3),
@@ -151,32 +151,46 @@ class PeekTestCaseTestCase(dax.sim.test_case.PeekTestCase):
                 delay(1 * us)
                 scope.set(val)
                 # Test value
-                self.expect(scope, signal, ref, places=places)
+                self.expect_close(scope, signal, ref, places=places)
                 delay(1 * us)
-                self.expect(scope, signal, ref, places=places)
+                self.expect_close(scope, signal, ref, places=places)
                 # Make the test fail
                 with self.assertRaises(self.failureException, msg='expect() did not fail on almost equality'):
-                    self.expect(scope, signal, ref, places=places + 1)
+                    self.expect_close(scope, signal, ref, places=places + 1)
 
-    def test_expect_float_places_value_type_error(self):
+    def test_expect_is_close_notset(self):
+        # Device and scope
+        scope = self.sys.ttl_clk  # This driver has no checks on its set() function
+        signal = 'freq'
+
+        # Test starting values
+        self.expect(scope, signal, SignalNotSet)
+
+        with self.assertRaises(self.failureException, msg='expect() did not fail on almost equality'):
+            # Fail on signal not set
+            self.expect_close(scope, signal, 0.1)
+
+    def test_expect_is_close_value_type_error(self):
         # Device and scope
         scope = self.sys.ttl_clk
         signal = 'freq'
 
-        for v in [SignalNotSet, 'x', 'z', True, False]:
+        for v in [SignalNotSet, 'x', 'z']:
             with self.assertRaises(TypeError, msg='Non-numerical value did not raise'):
-                self.expect(scope, signal, v, places=1)
+                self.expect_close(scope, signal, v, places=1)
 
-    def test_expect_float_places_signal_type_error(self):
+    def test_expect_is_close_signal_type_error(self):
         # Device and scope
         signals = [
             (self.sys.ttl0, 'state'),  # bool
             (self.sys.ec, 'count'),  # int
+            (self.sys.core_dma, 'play'),  # object
+            (self.sys.core_dma, 'play_name'),  # str
         ]
 
         for scope, signal in signals:
-            with self.assertRaises(TypeError, msg='Non-float signal type did not raise'):
-                self.expect(scope, signal, 0, places=1)
+            with self.assertRaises(TypeError, msg='Non-float/int signal type did not raise'):
+                self.expect_close(scope, signal, 0, places=1)
 
     def test_expect_assertion(self):
         test_data = {
