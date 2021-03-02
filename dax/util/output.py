@@ -5,7 +5,7 @@ import pathlib
 import contextlib
 import tempfile
 
-__all__ = ['temp_dir', 'get_base_path', 'get_file_name_generator', 'dummy_file_name_generator', 'get_file_name']
+__all__ = ['temp_dir', 'get_base_path', 'FileNameGenerator', 'BaseFileNameGenerator', 'get_file_name']
 
 
 @contextlib.contextmanager
@@ -57,44 +57,50 @@ def get_base_path(scheduler: typing.Any) -> pathlib.Path:
     return base_path
 
 
-def _unique_file_name(base_path: pathlib.Path, name: str, ext: typing.Optional[str], *,
-                      count: int = 0) -> pathlib.Path:
-    """Given the input parameters, return a unique file name using sequence numbers if necessary.
+class BaseFileNameGenerator:
+    """A file name generator that generates file names in a base path."""
 
-    :param base_path: The base path of the file
-    :param name: Name of the file
-    :param ext: The extension of the file
-    :param count: Current sequence number
-    """
+    def __init__(self, base: typing.Union[str, pathlib.Path] = '', *,
+                 unique: bool = False):
+        """Create a new base file name generator.
 
-    # Generate count string
-    count_str: str = '' if count == 0 else f' ({count})'
-    # Generate ext string
-    ext_str: str = '' if ext is None else f'.{ext}'
-    # Join base path with assembled name
-    file_name: pathlib.Path = base_path.joinpath(f'{name}{count_str}{ext_str}')
+        :param base: The base path, current working directory by default
+        :param unique: Force unique file names
+        """
+        assert isinstance(base, (str, pathlib.Path))
+        assert isinstance(unique, bool)
 
-    if file_name.exists():
-        # File name exists, recurse
-        return _unique_file_name(base_path, name, ext, count=count + 1)
-    else:
-        # File name is unique
-        return file_name
+        # Store attributes
+        self._base_path: pathlib.Path = pathlib.Path(base) if isinstance(base, str) else base
+        self._unique: bool = unique
 
+    def _generate_file_name(self, name: str, ext: typing.Optional[str], *,
+                            count: int = 0) -> pathlib.Path:
+        """Generate a file name.
 
-def get_file_name_generator(scheduler: typing.Any) -> typing.Callable[[str, typing.Optional[str]], str]:
-    """Obtain a generator that generates unique file names in a single path based on the experiment metadata.
+        If file names must be unique, use sequence numbers if necessary.
 
-    :param scheduler: The scheduler object
-    :return: Generator function for file names
-    """
+        :param name: Name of the file
+        :param ext: The extension of the file
+        :param count: Current sequence number
+        """
 
-    # Get base path
-    base_path = get_base_path(scheduler)
+        # Generate count string
+        count_str: str = '' if count == 0 else f' ({count})'
+        # Generate ext string
+        ext_str: str = '' if ext is None else f'.{ext}'
+        # Join base path with assembled name
+        file_name: pathlib.Path = self._base_path.joinpath(f'{name}{count_str}{ext_str}')
 
-    # Generator function
-    def file_name_generator(name: str, ext: typing.Optional[str] = None) -> str:
-        """Generate unique and uniformly styled output file names.
+        if self._unique and file_name.exists():
+            # File name exists, recurse
+            return self._generate_file_name(name, ext, count=count + 1)
+        else:
+            # Return file name
+            return file_name
+
+    def __call__(self, name: str, ext: typing.Optional[str] = None) -> str:
+        """Generate an output file name.
 
         :param name: Name of the file
         :param ext: The extension of the file
@@ -107,37 +113,19 @@ def get_file_name_generator(scheduler: typing.Any) -> typing.Callable[[str, typi
         if not name:
             raise ValueError('The given name can not be empty')
 
-        # Obtain a unique file name
-        file_name = _unique_file_name(base_path, name, ext)
-        # Return full file name as a string
-        return str(file_name)
-
-    # Return generator function
-    return file_name_generator
+        # Return name
+        return str(self._generate_file_name(name, ext))
 
 
-def dummy_file_name_generator(name: str, ext: typing.Optional[str] = None) -> str:
-    """Generate output file names, dummy replacement for :func:`get_file_name_generator`.
+class FileNameGenerator(BaseFileNameGenerator):
+    """A file name generator that generates unique file names in a single path based on the experiment metadata."""
 
-    This function has the same interface as the generator returned by :func:`get_file_name_generator`.
+    def __init__(self, scheduler: typing.Any):
+        """Create a new file name generator.
 
-    :param name: Name of the file
-    :param ext: The extension of the file
-    :return: A complete file name
-    :raises ValueError: Raised if the name is empty
-    """
-    assert isinstance(name, str), 'File name must be of type str'
-    assert isinstance(ext, str) or ext is None, 'File extension must be of type str or None'
-
-    if not name:
-        raise ValueError('The given name can not be empty')
-
-    if ext is not None:
-        # Add file extension
-        name = f'{name}.{ext}'
-
-    # Return name
-    return name
+        :param scheduler: The ARTIQ scheduler object
+        """
+        super(FileNameGenerator, self).__init__(get_base_path(scheduler), unique=True)
 
 
 def get_file_name(scheduler: typing.Any, name: str, ext: typing.Optional[str] = None) -> str:
@@ -146,6 +134,8 @@ def get_file_name(scheduler: typing.Any, name: str, ext: typing.Optional[str] = 
     When using this function in combination with :func:`temp_dir`, make sure
     this function is called before leaving the context.
 
+    When generating more file names, it is more efficient to use :class:`FileNameGenerator`.
+
     :param scheduler: The scheduler object
     :param name: Name of the file
     :param ext: The extension of the file
@@ -153,7 +143,5 @@ def get_file_name(scheduler: typing.Any, name: str, ext: typing.Optional[str] = 
     :raises ValueError: Raised if the name is empty
     """
 
-    # Get a generator (extra typing annotation required to pass type checking without use of typing.Protocol)
-    gen: typing.Callable[[str, typing.Optional[str]], str] = get_file_name_generator(scheduler)
     # Return full file name
-    return gen(name, ext)
+    return FileNameGenerator(scheduler)(name, ext)

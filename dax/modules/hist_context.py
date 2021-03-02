@@ -13,7 +13,7 @@ import matplotlib.ticker  # type: ignore
 from dax.experiment import *
 from dax.interfaces.detection import DetectionInterface
 from dax.util.ccb import get_ccb_tool
-from dax.util.output import get_file_name_generator, dummy_file_name_generator
+from dax.util.output import FileNameGenerator, BaseFileNameGenerator
 from dax.util.units import UnitsFormatter
 
 __all__ = ['HistogramContext', 'HistogramAnalyzer', 'HistogramContextError']
@@ -668,7 +668,7 @@ class HistogramAnalyzer:
                 {k: [np.asarray(r) for r in source.get_raw(k)] for k in self.keys}
 
             # Obtain the file name generator
-            self._file_name_generator = get_file_name_generator(source.get_device('scheduler'))
+            self._file_name_generator: BaseFileNameGenerator = FileNameGenerator(source.get_device('scheduler'))
 
         elif isinstance(source, h5py.File):
             # Construct HDF5 group name
@@ -703,7 +703,7 @@ class HistogramAnalyzer:
                 pass
 
             # Get a file name generator
-            self._file_name_generator = dummy_file_name_generator
+            self._file_name_generator = BaseFileNameGenerator()
 
         else:
             raise TypeError('Unsupported source type')

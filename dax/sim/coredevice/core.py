@@ -13,7 +13,7 @@ from dax.sim.time import DaxTimeManager
 from dax.sim.coredevice.comm_kernel import CommKernelDummy
 from dax.sim.config import DaxSimConfig
 from dax.util.units import time_to_str
-from dax.util.output import get_file_name_generator, dummy_file_name_generator
+from dax.util.output import FileNameGenerator, BaseFileNameGenerator
 
 __all__ = ['BaseCore', 'Core']
 
@@ -165,10 +165,10 @@ class Core(BaseCore):
         # Get file name generator (explicitly in constructor to not obtain file name too late)
         if self._sim_config.output_enabled:
             # Requesting the generator creates the parent directory, only create if output is enabled
-            self._file_name_generator = get_file_name_generator(self._device_manager.get('scheduler'))
+            self._file_name_generator: BaseFileNameGenerator = FileNameGenerator(self._device_manager.get('scheduler'))
         else:
-            # For completeness, set a dummy file name generator if output is disabled
-            self._file_name_generator = dummy_file_name_generator
+            # For completeness, set a base file name generator if output is disabled
+            self._file_name_generator = BaseFileNameGenerator()
 
         # Get the signal manager and register signals
         self._signal_manager = get_signal_manager()

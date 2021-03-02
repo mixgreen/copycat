@@ -58,6 +58,7 @@ def _get_cwd_commit() -> typing.Optional[str]:
     """
     # Discover repository path of current working directory, also looks in parent directories
     try:
+        # noinspection PyCallingNonCallable
         path = pygit2.discover_repository(os.getcwd())
         return None if path is None else str(pygit2.Repository(path).head.target.hex)
     except pygit2.GitError:

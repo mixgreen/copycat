@@ -109,7 +109,7 @@ class SystemBenchmarkDaxInitProfile(DaxClient, Experiment):
 
     def analyze(self) -> None:
         # Dump raw stats
-        file_name_generator = dax.util.output.get_file_name_generator(self.get_device('scheduler'))
+        file_name_generator = dax.util.output.FileNameGenerator(self.get_device('scheduler'))
         self.profile.dump_stats(file_name_generator('cprofile', 'stats'))
 
         with open(file_name_generator('cprofile', 'txt'), 'w') as file:
@@ -165,7 +165,7 @@ class _SystemBenchmarkBuildProfile(EnvExperiment):
 
     def analyze(self) -> None:
         # Dump raw stats
-        file_name_generator = dax.util.output.get_file_name_generator(self.get_device('scheduler'))
+        file_name_generator = dax.util.output.FileNameGenerator(self.get_device('scheduler'))
         self.profile.dump_stats(file_name_generator('cprofile', 'stats'))
 
         with open(file_name_generator('cprofile', 'txt'), 'w') as file:

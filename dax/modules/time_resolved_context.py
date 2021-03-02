@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt  # type: ignore
 
 from dax.experiment import *
 from dax.util.ccb import get_ccb_tool
-from dax.util.output import get_file_name_generator, dummy_file_name_generator
+from dax.util.output import FileNameGenerator, BaseFileNameGenerator
 from dax.util.units import UnitsFormatter
 
 __all__ = ['TimeResolvedContext', 'TimeResolvedAnalyzer', 'TimeResolvedContextError']
@@ -662,7 +662,7 @@ class TimeResolvedAnalyzer:
             self.traces: typing.Dict[str, typing.List[_TD_T]] = {k: source.get_traces(k) for k in self.keys}
 
             # Obtain the file name generator
-            self._file_name_generator = get_file_name_generator(source.get_device('scheduler'))
+            self._file_name_generator: BaseFileNameGenerator = FileNameGenerator(source.get_device('scheduler'))
 
         elif isinstance(source, h5py.File):
             # Construct HDF5 group name
@@ -681,7 +681,7 @@ class TimeResolvedAnalyzer:
                                for index in natsort.natsorted(group[k])] for k in self.keys}
 
             # Get a file name generator
-            self._file_name_generator = dummy_file_name_generator
+            self._file_name_generator = BaseFileNameGenerator()
 
         else:
             raise TypeError('Unsupported source type')
