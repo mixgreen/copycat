@@ -4,12 +4,14 @@ Duke ARTIQ Extensions (DAX).
 
 DAX is a library that extends the capabilities of [ARTIQ](https://github.com/m-labs/artiq)
 while maintaining a vanilla ARTIQ experience. The goal of the project is to provide a framework for modular system
-organization and to improve usability by automating common functionality. Users can implement their own system and
+organization and to improve usability by automating common functionality. Users can implement their system and
 components using the DAX framework and combine it with generic components and utilities provided by DAX.
 
-Supplementary communication tools for DAX are available in the
-[DAX comtools package](https://gitlab.com/duke-artiq/dax-comtools). Optional applets for DAX are available in the
-[DAX applets package](https://gitlab.com/duke-artiq/dax-applets).
+Projects related to DAX:
+
+- [DAX comtools](https://gitlab.com/duke-artiq/dax-comtools), supplementary communication tools for DAX
+- [DAX applets](https://gitlab.com/duke-artiq/dax-applets), optional applets for DAX
+- [flake8-artiq](https://gitlab.com/duke-artiq/flake8-artiq), flake8 plugin for ARTIQ code
 
 More information about ARTIQ can be found in the [ARTIQ manual](https://m-labs.hk/artiq/manual/).
 
@@ -81,6 +83,10 @@ The base classes and utilities of DAX.program can be imported using the followin
 ```python
 from dax.program import *
 ```
+
+## Versioning
+
+The major version number of DAX matches the version of the targeted ARTIQ release.
 
 ## Testing
 
