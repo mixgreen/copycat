@@ -7,7 +7,7 @@ __all__ = ["TNone", "TTuple",
            "TList", "TArray", "TRange32", "TRange64",
            "TVar"]
 
-TNone = typing.Any  # Simplified typing
+TNone = type(None)
 TBool = bool
 TInt32 = np.int32
 TInt64 = np.int64
