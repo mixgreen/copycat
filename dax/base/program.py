@@ -1,7 +1,7 @@
 import typing
 import abc
 
-import artiq.experiment
+import artiq.language.core
 import artiq.coredevice.core
 
 import dax.base.system
@@ -69,7 +69,7 @@ class DaxProgram(dax.base.system.DaxBase, abc.ABC):
         """
         return self.__q
 
-    @artiq.experiment.host_only
+    @artiq.language.core.host_only
     def get_identifier(self) -> str:
         """Return the class name."""
         return f'({self.__class__.__name__})'

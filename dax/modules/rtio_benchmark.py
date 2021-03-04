@@ -203,8 +203,8 @@ class RtioBenchmarkModule(DaxModule):
             self.set_dataset_sys(self.EVENT_PERIOD_KEY, last_period)
 
     @kernel
-    def _benchmark_event_throughput(self, period_scan, num_samples: TInt32, num_events: TInt32,
-                                    no_underflow_cutoff: TInt32):
+    def _benchmark_event_throughput(self, period_scan: TArray(TFloat), num_samples: TInt32,  # type: ignore
+                                    num_events: TInt32, no_underflow_cutoff: TInt32):
         # Storage for last period
         last_period = 0.0
         # Count of last period without underflow
@@ -467,8 +467,8 @@ class RtioBenchmarkModule(DaxModule):
             self.set_dataset_sys(self.DMA_EVENT_PERIOD_KEY, last_period)
 
     @kernel
-    def _benchmark_dma_throughput(self, period_scan, num_samples: TInt32, num_events: TInt32,
-                                  no_underflow_cutoff: TInt32):
+    def _benchmark_dma_throughput(self, period_scan: TArray(TFloat), num_samples: TInt32,  # type: ignore
+                                  num_events: TInt32, no_underflow_cutoff: TInt32):
         # Storage for last period
         last_period = 0.0
         # Count of last period without underflow
@@ -523,7 +523,7 @@ class RtioBenchmarkModule(DaxModule):
         self.set_dataset('last_period', last_period)
 
     @kernel
-    def _spawn_dma_events(self, period: TFloat, num_samples: TInt32, num_events: TInt32,
+    def _spawn_dma_events(self, period: TFloat, num_samples: TInt32, num_events: TInt32,  # noqa: ATQ306
                           dma_handle_on, dma_handle_off):
         # Convert period to machine units
         period_mu = self.core.seconds_to_mu(period)

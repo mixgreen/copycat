@@ -6,8 +6,9 @@ import typing
 import weakref
 import time
 
-import artiq.experiment
+import artiq.language.core
 import artiq.language.environment
+import artiq.language.scan
 import artiq.master.worker_db
 import artiq.master.worker_impl  # type: ignore
 import artiq.master.databases
@@ -92,7 +93,7 @@ def is_host_only(func: typing.Any) -> bool:
 
 def _convert_argument(argument: typing.Any) -> typing.Any:
     """Convert a single argument."""
-    if isinstance(argument, artiq.experiment.ScanObject):
+    if isinstance(argument, artiq.language.scan.ScanObject):
         return argument.describe()  # type: ignore[attr-defined]
     else:
         # No conversion required
@@ -458,7 +459,7 @@ def isolate_managers(managers: typing.Any, *,
         device_mgr, ClonedDatasetManager(dataset_mgr, name=name, dataset_db=_DummyDatasetDB()), argument_mgr, {})
 
 
-@artiq.experiment.host_only
+@artiq.language.core.host_only
 def pause_strict_priority(scheduler: typing.Any, *,
                           polling_period: typing.Union[float, int] = 0.5) -> None:
     """Allow all higher priority experiments in the pipeline to prepare and run (pauses the current experiment).

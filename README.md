@@ -9,8 +9,8 @@ components using the DAX framework and combine it with generic components and ut
 
 Projects related to DAX:
 
-- [DAX comtools](https://gitlab.com/duke-artiq/dax-comtools), supplementary communication tools for DAX
-- [DAX applets](https://gitlab.com/duke-artiq/dax-applets), optional applets for DAX
+- [DAX comtools](https://gitlab.com/duke-artiq/dax-comtools), lightweight communication tools for DAX and ARTIQ
+- [DAX applets](https://gitlab.com/duke-artiq/dax-applets), applets for DAX and the ARTIQ dashboard
 - [flake8-artiq](https://gitlab.com/duke-artiq/flake8-artiq), flake8 plugin for ARTIQ code
 
 More information about ARTIQ can be found in the [ARTIQ manual](https://m-labs.hk/artiq/manual/).

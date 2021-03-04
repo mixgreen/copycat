@@ -90,7 +90,7 @@ class ReentrantSafetyContext(DaxModule):
         self._in_context += 1
 
     @portable
-    def __exit__(self, exc_type, exc_val, exc_tb):  # type: (typing.Any, typing.Any, typing.Any) -> None
+    def __exit__(self, exc_type, exc_val, exc_tb):  # type: (typing.Any, typing.Any, typing.Any) -> None # noqa: ATQ306
         """Exit the safety context.
 
         Normally this function should not be called directly but by the ``with`` statement instead.

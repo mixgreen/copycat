@@ -15,9 +15,9 @@ TFloat = float
 TStr = str
 TBytes = bytes
 TByteArray = bytearray
-TList = lambda elt=...: typing.List  # Simplified typing
-TArray = lambda elt=..., num_dims=...: np.ndarray  # Simplified typing
+TList = lambda elt=...: typing.List  # Does not type check well because it is a function
+TArray = lambda elt=..., num_dims=...: np.ndarray  # Does not type check well because it is a function
 TRange32 = typing.Iterable[TInt32]
 TRange64 = typing.Iterable[TInt64]
 TVar = typing.Any  # Simplified typing
-TTuple = lambda elts=...: typing.Tuple  # Simplified typing
+TTuple = lambda elts=...: typing.Tuple  # Does not type check well because it is a function

@@ -63,23 +63,23 @@ class LedModule(DaxModule):
     """Module functionality"""
 
     @kernel
-    def set_o(self, o, index: TInt32 = np.int32(0)):
+    def set_o(self, o: TBool, index: TInt32 = 0):
         self.led[index].set_o(o)
 
     @kernel
-    def on(self, index: TInt32 = np.int32(0)):
+    def on(self, index: TInt32 = 0):
         self.led[index].on()
 
     @kernel
-    def off(self, index: TInt32 = np.int32(0)):
+    def off(self, index: TInt32 = 0):
         self.led[index].off()
 
     @kernel
-    def pulse(self, duration: TFloat, index: TInt32 = np.int32(0)):
+    def pulse(self, duration: TFloat, index: TInt32 = 0):
         self.led[index].pulse(duration)
 
     @kernel
-    def pulse_mu(self, duration: TInt64, index=np.int32(0)):
+    def pulse_mu(self, duration: TInt64, index: TInt32 = 0):
         self.led[index].pulse_mu(duration)
 
     @kernel

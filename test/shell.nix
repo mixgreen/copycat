@@ -2,6 +2,7 @@
 
 let
     artiq-full = import <artiq-full> { inherit pkgs; };
+    dax-full = import <dax-full> { inherit pkgs; };
 in
     pkgs.mkShell {
         buildInputs = [
@@ -23,7 +24,7 @@ in
                 ps.mypy
                 ps.pycodestyle
                 ps.coverage
-                artiq-full.flake8-artiq
+                dax-full.flake8-artiq
             ]))
             # Packages required for hardware testbenches
             artiq-full.binutils-or1k
