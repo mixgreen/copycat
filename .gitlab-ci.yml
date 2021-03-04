@@ -43,6 +43,9 @@ test_nix:
     - $NIX_CMD "flake8 --version; flake8 --no-untyped-args --no-untyped-return"
     - $NIX_CMD "coverage --version; coverage run -m pytest -v -rs"
     - $NIX_CMD "coverage report"
+    # Run build commands
+    - nix build -f ./default.nix
+    - nix-shell ./shell.nix --run "python -c 'import dax; print(dax.__version__)'"
 
 test_conda:
   extends: .conda_env

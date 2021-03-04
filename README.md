@@ -51,7 +51,8 @@ and execution principles. The execution model of DAX.program follows the acceler
 ## Installation
 
 Currently, we only build packages on a private server. For internal users, installation instructions can be found on
-the [DAX wiki installation page](https://gitlab.com/duke-artiq/dax/-/wikis/DAX/Installation).
+the [DAX wiki installation page](https://gitlab.com/duke-artiq/dax/-/wikis/DAX/Installation). External users can build
+the DAX Nix package locally using the provided Nix scripts.
 
 ## Usage
 
