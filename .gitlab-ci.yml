@@ -43,17 +43,7 @@ test_nix:
     - $NIX_CMD "flake8 --version; flake8 --no-untyped-args --no-untyped-return"
     - $NIX_CMD "coverage --version; coverage run -m pytest -v -rs"
     - $NIX_CMD "coverage report"
-
-test_nix_build:
-  image: nixpkgs/nix:nixos-20.09
-  stage: test
-  before_script:
-    # Set nixpkgs channel
-    - NIX_PATH=nixpkgs=channel:nixos-20.09
-    # Print Nix version
-    - nix --version
-  script:
-    # Run test commands
+    # Run build commands
     - nix build -f ./default.nix
     - nix-shell ./shell.nix --run "python -c 'import dax; print(dax.__version__)'"
 
