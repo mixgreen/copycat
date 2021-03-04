@@ -25,6 +25,7 @@ stages:
     # Install and activate environment
     - conda config --prepend channels https://conda.m-labs.hk/artiq
     - conda config --append channels conda-forge
+    - conda config --prepend channels http://build-mblab.duckdns.org/conda
     - echo $CONDA_PACKAGES
     - conda create -y -n env $CONDA_PACKAGES
     - conda activate env
