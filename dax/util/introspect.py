@@ -232,7 +232,7 @@ class GraphvizBase(graphviz.Digraph):
 
 
 class ComponentGraphviz(GraphvizBase):
-    """Component graph class which visualizes the relations between system modules."""
+    """Component graph class which visualizes the relations between system modules or services."""
 
     def __init__(self, system: dax.base.system.DaxSystem, **kwargs: typing.Any):
         """Create a new component Graphviz object.
@@ -243,8 +243,8 @@ class ComponentGraphviz(GraphvizBase):
         assert isinstance(system, dax.base.system.DaxSystem), 'System must be a DAX system'
 
         # Set default arguments
-        kwargs.setdefault('engine', 'fdp')
-        kwargs.setdefault('name', 'component_graph')
+        kwargs.setdefault('engine', 'dot')
+        kwargs.setdefault('name', f'component_graph_{kwargs["engine"]}')
         kwargs.setdefault('directory', str(get_base_path(system.get_device('scheduler'))))
         graph_attr = kwargs.setdefault('graph_attr', {})
         graph_attr.setdefault('splines', 'spline')
