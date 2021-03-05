@@ -9,9 +9,14 @@ from dax.util.output import get_base_path
 __all__ = ['GraphvizBase', 'ComponentGraphviz', 'RelationGraphviz']
 
 
-def _get_attributes(o: typing.Any) -> typing.Iterator[typing.Any]:
-    """Get an iterator over attributes of an object, excluding class-private attributes."""
-    return (getattr(o, attr) for attr in dir(o) if attr[0:2] != '__')
+def _get_attributes(o: typing.Any) -> typing.Generator[typing.Any, None, None]:
+    """Get a generator over attributes of an object, excluding class-private attributes."""
+    for attr in dir(o):
+        if attr[0:2] != '__':
+            try:
+                yield getattr(o, attr)
+            except AttributeError:
+                pass
 
 
 _logger: logging.Logger = logging.getLogger(__name__)
