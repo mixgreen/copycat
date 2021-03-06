@@ -1,3 +1,2 @@
-include README.md
 include versioneer.py
 include dax/_version.py
