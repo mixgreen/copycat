@@ -63,6 +63,34 @@ class DdbTestCase(unittest.TestCase):
         },
     }
 
+    DEVICE_DB_MISSING_HOST = {
+        'core': {
+            'type': 'local',
+            'module': 'artiq.coredevice.core',
+            'class': 'Core',
+            'arguments': {'host': None, 'ref_period': 1e-9}
+        },
+        'controller': {
+            'type': 'controller',
+            'port': 1,
+            'command': 'some_command'
+        },
+    }
+
+    DEVICE_DB_MISSING_PORT = {
+        'core': {
+            'type': 'local',
+            'module': 'artiq.coredevice.core',
+            'class': 'Core',
+            'arguments': {'host': None, 'ref_period': 1e-9}
+        },
+        'controller': {
+            'type': 'controller',
+            'host': 'some_host',
+            'command': 'some_command'
+        },
+    }
+
     DEVICE_DB_GENERIC_0 = {
         'core': {
             'type': 'local',
@@ -101,6 +129,10 @@ class DdbTestCase(unittest.TestCase):
         },
     }
 
+    def setUp(self) -> None:
+        # Always make a deep copy at the start to make sure we do not mutate the dict
+        self.DEVICE_DB = copy.deepcopy(self.DEVICE_DB)
+
     def test_disable(self):
         self.assertDictEqual(enable_dax_sim(copy.deepcopy(self.DEVICE_DB), enable=False, logging_level=logging.WARNING,
                                             moninj_service=False),
@@ -129,19 +161,11 @@ class DdbTestCase(unittest.TestCase):
         # Compare if the dicts are the same
         self.assertDictEqual(d0, d1, 'Second application did modify ddb while it should not')
 
-    def test_ddb_shallow_copy(self):
-        # Modify a shallow copy of the device db
-        ddb = enable_dax_sim(self.DEVICE_DB.copy(), enable=True, logging_level=logging.WARNING, moninj_service=False)
-        # Verify the object attribute is still the same as the class attribute
-        self.assertDictEqual(self.DEVICE_DB, DdbTestCase.DEVICE_DB, 'Shallow copy does not protect test usage of ddb')
-        # Verify the modified device db is not the same as the object attribute
-        self.assertNotEqual(ddb, self.DEVICE_DB, 'Shallow copy was not different from object attribute reference')
-
     def test_sim_config_device(self, *, config_module='dax.sim.config', config_class='DaxSimConfig'):
         # Signal manager kwargs
         sm_kwargs = {'_some_random': 1, '_random_random': 2, '_keyword_random': 3, '_arguments_random': 4}
 
-        ddb = enable_dax_sim(self.DEVICE_DB.copy(), enable=True, logging_level=logging.WARNING, **sm_kwargs,
+        ddb = enable_dax_sim(self.DEVICE_DB, enable=True, logging_level=logging.WARNING, **sm_kwargs,
                              moninj_service=False)
         self.assertIn(DAX_SIM_CONFIG_KEY, ddb, 'Sim config device not found')
         self.assertEqual(ddb[DAX_SIM_CONFIG_KEY]['type'], 'local')
@@ -151,7 +175,7 @@ class DdbTestCase(unittest.TestCase):
                              'Signal manager kwargs do not match expected dict')
 
     def test_mutate_entries(self, *, localhost='::1'):
-        ddb = enable_dax_sim(self.DEVICE_DB.copy(), enable=True, logging_level=logging.WARNING, moninj_service=False)
+        ddb = enable_dax_sim(self.DEVICE_DB, enable=True, logging_level=logging.WARNING, moninj_service=False)
         for k, v in ddb.items():
             type_ = v['type']
             if type_ == 'local':
@@ -168,19 +192,36 @@ class DdbTestCase(unittest.TestCase):
 
     def test_conflicting_ports(self):
         with self.assertRaises(ValueError, msg='Conflicting ports did not raise'):
-            enable_dax_sim(self.DEVICE_DB_CONFLICTING_PORTS.copy(), enable=True,
+            enable_dax_sim(copy.deepcopy(self.DEVICE_DB_CONFLICTING_PORTS), enable=True,
+                           logging_level=logging.CRITICAL, moninj_service=False)
+
+    def test_missing_host(self):
+        with self.assertRaises(KeyError, msg='Missing host did not raise'):
+            enable_dax_sim(copy.deepcopy(self.DEVICE_DB_MISSING_HOST), enable=True,
+                           logging_level=logging.CRITICAL, moninj_service=False)
+
+    def test_missing_port(self):
+        with self.assertRaises(KeyError, msg='Missing port did not raise'):
+            enable_dax_sim(copy.deepcopy(self.DEVICE_DB_MISSING_PORT), enable=True,
                            logging_level=logging.CRITICAL, moninj_service=False)
 
     def test_core_address(self, *, ddb=None, core_device='core', localhost='::1'):
         if ddb is None:
             ddb = self.DEVICE_DB
-        ddb = enable_dax_sim(ddb.copy(), enable=True, logging_level=logging.WARNING, moninj_service=False)
+        ddb = enable_dax_sim(copy.deepcopy(ddb), enable=True, logging_level=logging.WARNING, moninj_service=False)
         # Core host address should be mutated to localhost
         self.assertIn(core_device, ddb)
         self.assertEqual(ddb[core_device]['arguments']['host'], localhost)
 
+    def test_core_compile_flag(self, *, core_device='core', compile_flag=None):
+        ddb = enable_dax_sim(copy.deepcopy(self.DEVICE_DB), enable=True, logging_level=logging.WARNING,
+                             moninj_service=False)
+        # Core compile flag should be added
+        self.assertIn(core_device, ddb)
+        self.assertEqual(ddb[core_device]['arguments'].get('compile'), compile_flag)
+
     def test_generic(self):
-        for ddb in [self.DEVICE_DB_GENERIC_0.copy(), self.DEVICE_DB_GENERIC_1.copy()]:
+        for ddb in [copy.deepcopy(self.DEVICE_DB_GENERIC_0), copy.deepcopy(self.DEVICE_DB_GENERIC_1)]:
             ddb = enable_dax_sim(ddb, enable=True, logging_level=logging.WARNING, moninj_service=False)
             self.assertEqual(ddb['generic']['module'], 'dax.sim.coredevice.generic')
             self.assertEqual(ddb['generic']['class'], 'Generic')
@@ -191,12 +232,13 @@ class DdbTestCase(unittest.TestCase):
         enable = {}
         """
         for cfg_file in ['.dax', 'setup.cfg']:
-            for dax_enable in [True, False]:
-                with temp_dir():
+            with temp_dir():
+                for dax_enable in [True, False]:
                     with open(cfg_file, mode='w') as f:
                         f.write(textwrap.dedent(cfg.format(str(dax_enable).lower())))
 
-                    ddb = enable_dax_sim(self.DEVICE_DB.copy(), logging_level=logging.WARNING, moninj_service=False)
+                    ddb = enable_dax_sim(copy.deepcopy(self.DEVICE_DB),
+                                         logging_level=logging.WARNING, moninj_service=False)
                     if dax_enable:
                         self.assertIn(DAX_SIM_CONFIG_KEY, ddb, 'DAX.sim was unintentionally enabled')
                     else:
@@ -214,7 +256,7 @@ class DdbTestCase(unittest.TestCase):
                 with open('setup.cfg', mode='w') as f:
                     f.write(textwrap.dedent(cfg.format(setup_enable)))
 
-                ddb = enable_dax_sim(self.DEVICE_DB.copy(), logging_level=logging.WARNING, moninj_service=False)
+                ddb = enable_dax_sim(copy.deepcopy(self.DEVICE_DB), logging_level=logging.WARNING, moninj_service=False)
                 if dax_enable:
                     self.assertIn(DAX_SIM_CONFIG_KEY, ddb, 'DAX.sim was unintentionally enabled')
                 else:
@@ -245,6 +287,17 @@ class DdbTestCase(unittest.TestCase):
 
             with self.assertRaises(KeyError, msg='Non-existing core device key did not raise'):
                 self.test_core_address(core_device=core_device)
+
+    def test_cfg_compile(self):
+        with temp_dir():
+            for compile_flag in [True, False]:
+                cfg = f"""
+                [dax.sim]
+                compile = {compile_flag}
+                """
+                with open('.dax', mode='w') as f:
+                    f.write(textwrap.dedent(cfg))
+                self.test_core_compile_flag(compile_flag=compile_flag)
 
     def test_cfg_config_module_class(self):
         config_module = 'my.config.module'
