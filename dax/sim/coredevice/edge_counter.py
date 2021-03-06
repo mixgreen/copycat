@@ -44,11 +44,18 @@ class _Config:
 
 class EdgeCounter(DaxSimDevice):
 
-    def __init__(self, dmgr: typing.Any, input_freq: float = 0.0, input_stdev: float = 0.0,
-                 seed: typing.Optional[int] = None, gateware_width: int = 31, **kwargs: typing.Any):
+    def __init__(self, dmgr: typing.Any, gateware_width: int = 31,
+                 input_freq: float = 0.0, input_stdev: float = 0.0, seed: typing.Optional[int] = None,
+                 **kwargs: typing.Any):
+        """Simulation driver for :class:`artiq.coredevice.edge_counter.EdgeCounter`.
+
+        :param input_freq: Simulated input frequency for gate operations
+        :param input_stdev: Simulated input frequency standard deviation for gate operations
+        :param seed: Seed for the random number generator used for simulating input
+        """
+        assert isinstance(gateware_width, int), 'Gateware width must be of type int'
         assert isinstance(input_freq, float) and input_freq >= 0.0, 'Input frequency must be a positive float'
         assert isinstance(input_stdev, float) and input_stdev >= 0.0, 'Input stdev must be a non-negative float'
-        assert isinstance(gateware_width, int), 'Gateware width must be of type int'
 
         # Call super
         super(EdgeCounter, self).__init__(dmgr, **kwargs)

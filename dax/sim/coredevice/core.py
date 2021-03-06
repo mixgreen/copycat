@@ -5,6 +5,7 @@ import logging
 import numpy as np
 
 from artiq.language.core import *
+import artiq.coredevice.core
 
 from dax.sim.device import DaxSimDevice
 from dax.sim.signal import get_signal_manager
@@ -138,7 +139,7 @@ class Core(BaseCore):
     It inherits all the functionality of the base coredevice driver and includes
     features for signal manager output and performance profiling.
 
-    Normally, users never instantiate this class by themselves and the ARTIQ
+    Normally, users never instantiate this class directly and the ARTIQ
     device manager will take care of that.
 
     The signature of the :func:`__init__` function is equivalent to the ARTIQ coredevice
@@ -146,11 +147,14 @@ class Core(BaseCore):
     original environment.
     """
 
-    def __init__(self, dmgr: typing.Any,
-                 ref_period: float, ref_multiplier: int = 8,
-                 **kwargs: typing.Any):
-        assert isinstance(ref_period, float) and ref_period > 0.0, 'Reference period must be of type float'
-        assert isinstance(ref_multiplier, int) and ref_multiplier > 0, 'Reference multiplier must be of type int'
+    # noinspection PyShadowingBuiltins
+    def __init__(self, dmgr: typing.Any, ref_period: float, ref_multiplier: int = 8,
+                 compile: bool = False, **kwargs: typing.Any):
+        """Simulation driver for :class:`artiq.coredevice.core.Core`.
+
+        :param compile: If :const:`True`, compile kernels before simulation to expose any potential compile errors
+        """
+        assert isinstance(compile, bool), 'Compile flag must be of type bool'
 
         # Get the virtual simulation configuration device, which will configure the simulation
         # DAX system already initializes the virtual sim config device, this is a fallback
@@ -183,8 +187,20 @@ class Core(BaseCore):
         self._func_counter: typing.Counter[typing.Any] = collections.Counter()
         self._func_time: typing.Counter[typing.Any] = collections.Counter()
 
+        # Configure compiler
+        if compile:
+            core_kwargs = {k: v for k, v in kwargs.items() if k in {'target'}}
+            self._compiler: typing.Optional[artiq.coredevice.core.Core] = artiq.coredevice.core.Core(
+                dmgr, host=None, ref_period=ref_period, ref_multiplier=ref_multiplier, **core_kwargs)
+        else:
+            self._compiler = None
+
     def run(self, function: typing.Any,
             args: typing.Tuple[typing.Any, ...], kwargs: typing.Dict[str, typing.Any]) -> typing.Any:
+        if self._level == 0 and self._compiler is not None:
+            # Compile the kernel
+            self._compiler.compile(function, args, kwargs)
+
         # Unpack function
         kernel_func = function.artiq_embedded.function
 
