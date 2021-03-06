@@ -3,7 +3,7 @@
 with pkgs;
 python3Packages.buildPythonPackage rec {
   pname = "dax";
-  version = if (isNull daxVersion) then import ./version.nix { inherit pkgs src; } else daxVersion;
+  version = if daxVersion == null then import ./version.nix { inherit pkgs src; } else daxVersion;
 
   src = nix-gitignore.gitignoreSource [ "*.nix" ] ./.;
 
