@@ -62,8 +62,16 @@ class TTLInOut(TTLOut):
         FALLING = 2
         BOTH = 3
 
-    def __init__(self, dmgr: typing.Any, input_freq: float = 0.0, input_stdev: float = 0.0, input_prob: float = 0.5,
+    def __init__(self, dmgr: typing.Any,
+                 input_freq: float = 0.0, input_stdev: float = 0.0, input_prob: float = 0.5,
                  seed: typing.Optional[int] = None, **kwargs: typing.Any):
+        """Simulation driver for :class:`artiq.coredevice.ttl.TTLInOut`.
+
+        :param input_freq: Simulated input frequency for gate operations
+        :param input_stdev: Simulated input frequency standard deviation for gate operations
+        :param input_prob: Probability of a high signal when using :func:`sample_input`
+        :param seed: Seed for the random number generator used for simulating input
+        """
         assert isinstance(input_freq, float) and input_freq >= 0.0, 'Input frequency must be a positive float'
         assert isinstance(input_stdev, float) and input_stdev >= 0.0, 'Input stdev must be a non-negative float'
         assert isinstance(input_prob, float), 'Input probability must be a float'

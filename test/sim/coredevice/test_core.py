@@ -20,12 +20,13 @@ class BaseCoreTestCase(unittest.TestCase):
             'type': 'local',
             'module': 'artiq.coredevice.core',
             'class': 'Core',
-            'arguments': {'host': None, 'ref_period': 1e-9}
+            'arguments': {'host': None, 'ref_period': 1e-9},
         },
     }
 
-    def setUp(self) -> None:
+    def setUp(self):
         self.core_arguments = self._DEVICE_DB['core']['arguments']
+        self.core_arguments.update(self._DEVICE_DB['core'].get('sim_args', {}))
         set_signal_manager(NullSignalManager())
         self.managers = get_managers(enable_dax_sim(copy.deepcopy(self._DEVICE_DB), enable=True,
                                                     logging_level=logging.WARNING, moninj_service=False, output='null'))
@@ -123,7 +124,8 @@ class CoreCompileTestCase(CoreTestCase):
             'type': 'local',
             'module': 'artiq.coredevice.core',
             'class': 'Core',
-            'arguments': {'host': None, 'ref_period': 1e-9, 'compile': True}
+            'arguments': {'host': None, 'ref_period': 1e-9},
+            'sim_args': {'compile': True},
         },
     }
 

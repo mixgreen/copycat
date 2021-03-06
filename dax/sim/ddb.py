@@ -83,8 +83,8 @@ def enable_dax_sim(ddb: typing.Dict[str, typing.Any], *,
      - ``config_module``, the module of the simulation configuration class (defaults to DAX.sim config module)
      - ``config_class``, the class of the simulation configuration object (defaults to DAX.sim config class)
      - ``core_device``, the name of the core device (defaults to ``'core'``)
+     - ``compile``, if this configuration flag is set, its value will be passed to the arguments of the core device
      - ``localhost``, the address to use to refer to localhost (defaults to IPv6 address ``'::1'``)
-     - ``compile``, if this configuration is set, its value will be passed to the arguments of the core device
 
     If supported by a specific simulated device driver, extra simulation-specific arguments
     can be added by adding a ``'sim_args'`` key with a dict value to the device entry in the device DB.

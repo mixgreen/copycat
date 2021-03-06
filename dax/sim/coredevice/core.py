@@ -139,7 +139,7 @@ class Core(BaseCore):
     It inherits all the functionality of the base coredevice driver and includes
     features for signal manager output and performance profiling.
 
-    Normally, users never instantiate this class by themselves and the ARTIQ
+    Normally, users never instantiate this class directly and the ARTIQ
     device manager will take care of that.
 
     The signature of the :func:`__init__` function is equivalent to the ARTIQ coredevice
@@ -150,6 +150,10 @@ class Core(BaseCore):
     # noinspection PyShadowingBuiltins
     def __init__(self, dmgr: typing.Any, ref_period: float, ref_multiplier: int = 8,
                  compile: bool = False, **kwargs: typing.Any):
+        """Simulation driver for :class:`artiq.coredevice.core.Core`.
+
+        :param compile: If :const:`True`, compile kernels before simulation to expose any potential compile errors
+        """
         assert isinstance(compile, bool), 'Compile flag must be of type bool'
 
         # Get the virtual simulation configuration device, which will configure the simulation

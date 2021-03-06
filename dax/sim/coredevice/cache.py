@@ -12,6 +12,11 @@ class CoreCache(DaxSimDevice):
     def __init__(self, dmgr: typing.Any,
                  cache: typing.Optional[typing.Dict[str, __V_T]] = None,
                  **kwargs: typing.Any):
+        """Simulation driver for :class:`artiq.coredevice.cache.CoreCache`.
+
+        :param cache: Initial state of the cache
+        """
+
         if isinstance(cache, dict):
             assert all(isinstance(k, str) and isinstance(v, list) for k, v in cache.items())
             assert all(all(isinstance(e, (int, np.integer)) for e in list_) for list_ in cache.values())

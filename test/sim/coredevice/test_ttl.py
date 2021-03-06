@@ -30,7 +30,8 @@ _DEVICE_DB = {
         "type": "local",
         "module": "artiq.coredevice.ttl",
         "class": "TTLInOut",
-        "arguments": {'input_freq': _INPUT_FREQ}
+        "arguments": {},
+        "sim_args": {'input_freq': _INPUT_FREQ}
     },
     "TTLClockGen": {
         "type": "local",
