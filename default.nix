@@ -1,9 +1,9 @@
-{ pkgs ? import <nixpkgs> {}, artiqpkgs ? import <artiq-full> { inherit pkgs; } }:
+{ pkgs ? import <nixpkgs> {}, artiqpkgs ? import <artiq-full> { inherit pkgs; }, daxVersion ? null }:
 
 with pkgs;
 python3Packages.buildPythonPackage rec {
   pname = "dax";
-  version = import ./version.nix { inherit stdenv git src; };
+  version = if (isNull daxVersion) then import ./version.nix { inherit pkgs src; } else daxVersion;
 
   src = nix-gitignore.gitignoreSource [ "*.nix" ] ./.;
 

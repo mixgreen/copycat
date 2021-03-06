@@ -1,8 +1,10 @@
-{ stdenv, git, src }:
+{ pkgs, src }:
+
+with pkgs;
 let
   dax-version = stdenv.mkDerivation {
     name = "dax-version";
-    src = src;
+    inherit src;
     buildPhase = ''
       # mimic versioneer version string: remove version prefix ('v'),
       # replace first '-' with a '+' and other '-'es with a '.'
