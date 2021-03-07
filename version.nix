@@ -6,9 +6,14 @@ let
     name = "dax-version";
     inherit src;
     buildPhase = ''
-      # mimic versioneer version string: remove version prefix ('v'),
-      # replace first '-' with a '+' and other '-'es with a '.'
-      VERSION=`${git}/bin/git describe --tags --always --dirty | sed '1s/^v//' | sed '0,/-/s//+/' | tr - .`
+      if [ -d .git ]
+      then
+        # mimic versioneer version string: remove version prefix ('v'),
+        # replace first '-' with a '+' and other '-'es with a '.'
+        VERSION=`${git}/bin/git describe --tags --always --dirty | sed '1s/^v//' | sed '0,/-/s//+/' | tr - .`
+      else
+        VERSION="0+unknown"
+      fi;
     '';
     installPhase = ''
       echo -n $VERSION > $out
