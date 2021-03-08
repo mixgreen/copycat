@@ -27,6 +27,7 @@ class DdbTestCase(unittest.TestCase):
             'module': 'artiq.coredevice.ttl',
             'class': 'TTLInOut',
             'arguments': {'channel': 0},
+            'sim_args': {'input_prob': 0.9}
         },
         'controller': {
             'type': 'controller',
@@ -288,17 +289,6 @@ class DdbTestCase(unittest.TestCase):
             with self.assertRaises(KeyError, msg='Non-existing core device key did not raise'):
                 self.test_core_address(core_device=core_device)
 
-    def test_cfg_compile(self):
-        with temp_dir():
-            for compile_flag in [True, False]:
-                cfg = f"""
-                [dax.sim]
-                compile = {compile_flag}
-                """
-                with open('.dax', mode='w') as f:
-                    f.write(textwrap.dedent(cfg))
-                self.test_core_compile_flag(compile_flag=compile_flag)
-
     def test_cfg_config_module_class(self):
         config_module = 'my.config.module'
         config_class = 'MyConfigClass'
@@ -312,3 +302,37 @@ class DdbTestCase(unittest.TestCase):
                 f.write(textwrap.dedent(cfg))
 
             self.test_sim_config_device(config_module=config_module, config_class=config_class)
+
+    def test_cfg_sim_args(self):
+        with temp_dir():
+            device = 'ttl0'
+            args = {'channel': '77', 'input_prob': '0.0',
+                    'float': '9.9', 'int': '1', 'str': '"foo"', 'bool': 'true', 'None': 'None', 'cAsE': 'None',
+                    '_key': '"foobar"'}
+            ref = {'channel': 77, 'input_prob': 0.0,
+                   'float': 9.9, 'int': 1, 'str': 'foo', 'bool': True, 'None': None, 'cAsE': None,
+                   '_key': device}
+
+            args_str = '\n'.join(f'{k}={v}' for k, v in args.items())
+            cfg = f"""
+            [dax.sim.{device}]
+            {args_str}
+            """
+            with open('.dax', mode='w') as f:
+                f.write(cfg)
+
+            ddb = enable_dax_sim(copy.deepcopy(self.DEVICE_DB), enable=True, logging_level=logging.WARNING,
+                                 moninj_service=False)
+            # Check if configuration args are correctly overwritten, both 'arguments' values and 'sim_args'
+            self.assertDictEqual(ddb[device]['arguments'], ref)
+
+    def test_cfg_sim_args_compile(self):
+        with temp_dir():
+            for compile_flag in [True, False]:
+                cfg = f"""
+                [dax.sim.core]
+                compile = {compile_flag}
+                """
+                with open('.dax', mode='w') as f:
+                    f.write(textwrap.dedent(cfg))
+                self.test_core_compile_flag(compile_flag=compile_flag)

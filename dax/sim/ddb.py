@@ -6,6 +6,8 @@ import typing
 import configparser
 import dataclasses
 
+import sipyco.pyon  # type: ignore
+
 __all__ = ['DAX_SIM_CONFIG_KEY', 'enable_dax_sim']
 
 _logger: logging.Logger = logging.getLogger(__name__)
@@ -39,7 +41,21 @@ class _ConfigData:
     coredevice_packages: typing.List[str]
     core_device: str
     localhost: str
-    compile: typing.Optional[bool]
+    _config: configparser.ConfigParser
+
+    def get_args(self, key: str) -> typing.Dict[str, typing.Any]:
+        """Get additional simulation arguments provided through the config file.
+
+        Additional arguments are decoded as PYON values.
+
+        :param key: The key of the device
+        :return: A dict with simulation arguments
+        """
+        section: str = f'{_CONFIG_SECTION}.{key}'
+        if section in self._config:
+            return {k: sipyco.pyon.decode(v) for k, v in self._config.items(section)}
+        else:
+            return {}
 
     @classmethod
     def create(cls, config: configparser.ConfigParser) -> _ConfigData:
@@ -56,7 +72,7 @@ class _ConfigData:
             coredevice_packages=coredevice_packages,
             core_device=config.get(_CONFIG_SECTION, 'core_device', fallback='core'),
             localhost=config.get(_CONFIG_SECTION, 'localhost', fallback='::1'),
-            compile=config.getboolean(_CONFIG_SECTION, 'compile', fallback=None)
+            _config=config
         )
 
 
@@ -83,12 +99,14 @@ def enable_dax_sim(ddb: typing.Dict[str, typing.Any], *,
      - ``config_module``, the module of the simulation configuration class (defaults to DAX.sim config module)
      - ``config_class``, the class of the simulation configuration object (defaults to DAX.sim config class)
      - ``core_device``, the name of the core device (defaults to ``'core'``)
-     - ``compile``, if this configuration flag is set, its value will be passed to the arguments of the core device
      - ``localhost``, the address to use to refer to localhost (defaults to IPv6 address ``'::1'``)
 
     If supported by a specific simulated device driver, extra simulation-specific arguments
     can be added by adding a ``'sim_args'`` key with a dict value to the device entry in the device DB.
     The ``'arguments'`` dict of the device will be updated with the contents of the ``'sim_args'`` dict.
+    Extra simulation-specific arguments can also be passed through the configuration file.
+    To add arguments for a device with key ``'device_key'`` add a section ``[dax.sim.device_key]``.
+    Values in the section are decoded as PYON values.
 
     The DAX.sim package provides a limited list of simulated coredevice drivers.
     Additional packages with simulated coredevice drivers can be added using the configuration files.
@@ -118,6 +136,8 @@ def enable_dax_sim(ddb: typing.Dict[str, typing.Any], *,
     # Read configuration file
     _logger.debug('Reading configuration file')
     config: configparser.ConfigParser = configparser.ConfigParser()
+    # noinspection PyTypeHints
+    config.optionxform = str  # type: ignore[assignment] # Make option names case sensitive
 
     if not config.read(_CONFIG_FILES) and enable is None:
         # No files were successfully read but one or more fields require a configuration file
@@ -227,6 +247,9 @@ def _mutate_local(key: str, value: typing.Dict[str, typing.Any], *, config: _Con
         raise TypeError(f'The sim_args key of local device "{key}" must be of type dict')
     arguments.update(sim_args)
 
+    # Add simulation arguments passed through the config file
+    arguments.update(config.get_args(key))
+
     # Add key of the device to the device arguments
     arguments['_key'] = key
 
@@ -235,9 +258,6 @@ def _mutate_local(key: str, value: typing.Dict[str, typing.Any], *, config: _Con
         if 'host' not in arguments:
             raise KeyError(f'No host argument present for core device "{key}"')
         arguments['host'] = config.localhost
-        # Add additional arguments
-        if config.compile is not None:
-            arguments['compile'] = config.compile
 
     # Update the module of the current device to a simulation-capable coredevice driver
     _update_module(key, value, config=config)

@@ -9,7 +9,7 @@ python3Packages.buildPythonPackage rec {
 
   VERSIONEER_OVERRIDE = version;
 
-  propagatedBuildInputs = (with artiqpkgs; [ artiq ])
+  propagatedBuildInputs = (with artiqpkgs; [ artiq sipyco ])
     ++ (with python3Packages; [ numpy scipy pyvcd natsort pygit2 matplotlib graphviz h5py networkx ]);
 
   checkInputs = with python3Packages; [ pytestCheckHook ];
