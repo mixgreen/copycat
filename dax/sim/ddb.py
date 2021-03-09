@@ -263,7 +263,7 @@ def _mutate_local(key: str, value: typing.Dict[str, typing.Any], *, config: _Con
     _update_module(key, value, config=config)
 
     # Debug message
-    _logger.debug(f'Converted local device "{key}" to class "{value["module"]}.{value["class"]}"')
+    _logger.debug(f'Local device "{key}": class "{value["module"]}.{value["class"]}", arguments {arguments}')
 
 
 def _update_module(key: str, value: typing.Dict[str, typing.Any], *, config: _ConfigData) -> None:
@@ -314,7 +314,7 @@ def _mutate_controller(key: str, value: typing.Dict[str, typing.Any], *,
 
     if command is None:
         # No command was set
-        _logger.debug(f'No command found for controller "{key}"')
+        _logger.debug(f'Controller "{key}": no command found')
     elif isinstance(command, str):
         # See which simulation arguments are not present
         args: typing.List[str] = [a for a in _SIMULATION_ARGS if a not in command]
@@ -322,10 +322,10 @@ def _mutate_controller(key: str, value: typing.Dict[str, typing.Any], *,
             # Add simulation arguments
             sim_args: str = ' '.join(args)
             value['command'] = f'{command} {sim_args}'
-            _logger.debug(f'Added simulation argument(s) "{sim_args}" to command for controller "{key}"')
+            _logger.debug(f'Controller "{key}": added simulation argument(s) "{sim_args}" to command')
         else:
             # No simulation arguments added
-            _logger.debug(f'Controller "{key}" was not modified')
+            _logger.debug(f'Controller "{key}": command not modified')
     else:
         # Command was not of type str
         raise TypeError(f'The command key of controller "{key}" must be of type str')
@@ -334,7 +334,6 @@ def _mutate_controller(key: str, value: typing.Dict[str, typing.Any], *,
     if 'host' not in value:
         raise KeyError(f'No host field present for controller "{key}"')
     value['host'] = config.localhost
-    _logger.debug(f'Controller "{key}" configured to run on host {config.localhost}')
 
     # Check that there are no port conflicts and add port to used_ports
     if 'port' not in value:
