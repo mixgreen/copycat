@@ -2061,8 +2061,9 @@ class OptimusCalibrationTestCase(unittest.TestCase):
             raise Exception('ARTIQ master failed to start')
 
     def tearDown(self) -> None:
-        self.master.terminate()  # kill()?
+        self.master.terminate()
         self.master.__exit__(None, None, None)
+        time.sleep(5)  # wait a bit to make sure all subprocesses are closed
         self.temp_dir.__exit__(None, None, None)
 
     @staticmethod
@@ -2074,6 +2075,7 @@ class OptimusCalibrationTestCase(unittest.TestCase):
             CONTROLLER = 'dax_scheduler'
             DEFAULT_SCHEDULING_POLICY = Policy.GREEDY
             DEFAULT_RESET_NODES = False
+            DEFAULT_CANCEL_NODES = True
             LOG_LEVEL = logging.INFO
 
             def run(self):
@@ -2222,7 +2224,7 @@ class OptimusCalibrationTestCase(unittest.TestCase):
             # noinspection PyUnusedLocal
             def mod_update(mod):
                 if len(d_) <= 1:  # Also raise if there is no experiment in the schedule
-                    raise Exception
+                    raise Exception('This exception is just used to exit the subscriber')
 
             async def subscribe():
                 s = Subscriber('schedule', mod_init, notify_cb=mod_update)
@@ -2301,8 +2303,8 @@ class OptimusCalibrationTestCase(unittest.TestCase):
         rid: int = int(client_res.stdout.strip().split(' ')[1])
         return rid
 
-    @staticmethod
-    def _delete_scheduler_exp(rid: int):
+    @classmethod
+    def _delete_exp(cls, rid: int) -> None:
         # delete scheduler experiment via artiq_client
         client_cmd = [sys.executable, '-u', '-m', 'artiq.frontend.artiq_client', '-s', _LOCALHOST,
                       'delete', '-g', str(rid)]
@@ -2310,6 +2312,11 @@ class OptimusCalibrationTestCase(unittest.TestCase):
         if client_res.returncode != 0:
             raise Exception(
                 f'ARTIQ client delete exited with return code {client_res.returncode}: "{client_res.stderr}"')
+
+    @classmethod
+    def _delete_all_exp(cls, rids: typing.Collection[int]) -> None:
+        for rid in rids:
+            cls._delete_exp(rid)
 
     @unittest.skipUnless(CI_ENABLED, 'Not in a CI environment, skipping long test')
     def test_optimus(self):
@@ -2342,7 +2349,7 @@ class OptimusCalibrationTestCase(unittest.TestCase):
                 time.sleep(5)  # need to wait a bit for the DAX scheduler to submit jobs
                 datasets: typing.Dict[str, typing.Tuple[bool, typing.Any]] = self._wait_and_get_datasets(rid)
                 cal_order: typing.List[str] = datasets['cal_order'][1]
-                self._delete_scheduler_exp(rid)
+                self._delete_exp(rid)
                 # again, not as robust as a regex for picking the \d+ out of 'CalJob\d+', but faster
                 initial_submit: typing.List[int] = [int(node_str[6:]) for node_str in cal_order[:num_nodes]]
                 last_cals: typing.List[float] = [0.0] * num_nodes
@@ -2414,12 +2421,9 @@ class OptimusCalibrationTestCase(unittest.TestCase):
             await subscribe()
             return d_
 
-        schedule: typing.Dict = asyncio.run(get_schedule())
-        self._delete_scheduler_exp(rid)
-        # print(schedule)
-        for rid_, status in schedule.items():
-            if status['expid']['class_name'] != 'Barrier':
-                continue
-            elif status['status'] == 'running':
-                return
-        self.fail(f'Barrier experiment is either not in schedule or not running. Current schedule:\n{schedule}')
+        schedule = asyncio.run(get_schedule())
+        self._delete_exp(rid)
+        self._delete_all_exp(schedule)
+        barriers = [s for s in schedule.values() if s['expid']['class_name'] == 'Barrier' and s['status'] == 'running']
+        if len(barriers) != 1:
+            self.fail(f'Barrier experiment is either not in the schedule or not running. Current schedule:\n{schedule}')
