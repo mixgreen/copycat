@@ -191,7 +191,9 @@ class Core(BaseCore):
         if compile:
             core_kwargs = {k: v for k, v in kwargs.items() if k in {'target'}}
             self._compiler: typing.Optional[artiq.coredevice.core.Core] = artiq.coredevice.core.Core(
-                dmgr, host=None, ref_period=ref_period, ref_multiplier=ref_multiplier, **core_kwargs)
+                {}, host=None, ref_period=ref_period, ref_multiplier=ref_multiplier, **core_kwargs)
+            # Set the compiler's device manager core to reference its own core
+            self._compiler.dmgr[self.key] = self._compiler
             _logger.debug('Kernel compilation during simulation enabled')
         else:
             self._compiler = None

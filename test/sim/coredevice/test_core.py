@@ -58,21 +58,29 @@ class CoreTestCase(BaseCoreTestCase):
 
         with unittest.mock.patch.object(self, 'core', core, create=True):
             if compile_flag:
-                with unittest.mock.patch.object(core._compiler, 'compile') as mock_method:
-                    # Call run
-                    core.run(self._kernel_fn, (self,), {})
-                    # Verify if compile function was called
+                with unittest.mock.patch.object(core._compiler, 'compile', autospec=True) as mock_method:
+                    # Call kernel function
+                    self._kernel_fn()
+                    # Verify if compile function was called exactly once
                     self.assertEqual(mock_method.call_count, compile_flag)
+
+                # Call the kernel function without patching the compile function, causing an actual compilation
+                try:
+                    self._kernel_fn()
+                except FileNotFoundError:
+                    # NOTE: compilation only works from the Nix shell, otherwise the linker command can not be found!
+                    # We catch this exception here to make this test work in debug sessions outside the Nix shell
+                    pass
 
                 for fn in bad_kernels:
                     with self.assertRaises(CompileError, msg='No compile error raised for bad kernel function'):
-                        # Call run
-                        core.run(fn, (self,), {})
+                        # Call kernel function
+                        fn()
             else:
                 self.assertIsNone(core._compiler)
                 for fn in [self._kernel_fn] + bad_kernels:
-                    # Call run, all functions should simulate fine because we do not compile
-                    core.run(fn, (self,), {})
+                    # Call all functions, should simulate fine because we do not compile
+                    fn()
 
     @kernel
     def _kernel_fn(self):
