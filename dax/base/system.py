@@ -13,7 +13,8 @@ import types
 import numpy as np
 
 from artiq import __version__ as _artiq_version
-import artiq.experiment
+import artiq.language.core
+import artiq.language.environment
 import artiq.master.worker_db
 
 import artiq.coredevice.core
@@ -58,6 +59,7 @@ def _get_cwd_commit() -> typing.Optional[str]:
     """
     # Discover repository path of current working directory, also looks in parent directories
     try:
+        # noinspection PyCallingNonCallable
         path = pygit2.discover_repository(os.getcwd())
         return None if path is None else str(pygit2.Repository(path).head.target.hex)
     except pygit2.GitError:
@@ -73,7 +75,7 @@ _ARTIQ_VIRTUAL_DEVICES: typing.Set[str] = {'scheduler', 'ccb'}
 """ARTIQ virtual devices."""
 
 
-class DaxBase(artiq.experiment.HasEnvironment, abc.ABC):
+class DaxBase(artiq.language.environment.HasEnvironment, abc.ABC):
     """Base class for all DAX base classes."""
 
     def __init__(self, managers_or_parent: typing.Any,
@@ -109,7 +111,7 @@ class DaxBase(artiq.experiment.HasEnvironment, abc.ABC):
         """
         return self.__logger
 
-    @artiq.experiment.host_only
+    @artiq.language.core.host_only
     def update_kernel_invariants(self, *keys: str) -> None:
         """Add one or more keys to the set of kernel invariants.
 
@@ -200,12 +202,12 @@ class DaxHasKey(DaxBase, abc.ABC):
             parent.logger.exception('Missing key attributes (super.build() was probably not called)')
             raise
 
-    @artiq.experiment.host_only
+    @artiq.language.core.host_only
     def get_name(self) -> str:
         """Get the name of this component."""
         return self.__name
 
-    @artiq.experiment.host_only
+    @artiq.language.core.host_only
     def get_system_key(self, *keys: str) -> str:
         """Get the full key based on the system key.
 
@@ -227,7 +229,7 @@ class DaxHasKey(DaxBase, abc.ABC):
         # Return the assigned key
         return _KEY_SEPARATOR.join([self.__system_key, *keys])
 
-    @artiq.experiment.rpc(flags={'async'})
+    @artiq.language.core.rpc(flags={'async'})
     def set_dataset_sys(self, key, value, data_store=True):  # type: (str, typing.Any, bool) -> None
         """Sets the contents of a system dataset.
 
@@ -256,7 +258,7 @@ class DaxHasKey(DaxBase, abc.ABC):
             # Archive value using the data store
             self.data_store.set(system_key, value)
 
-    @artiq.experiment.rpc(flags={'async'})
+    @artiq.language.core.rpc(flags={'async'})
     def mutate_dataset_sys(self, key, index, value,
                            data_store=True):  # type: (str, typing.Any, typing.Any, bool) -> None
         """Mutate an existing system dataset at the given index.
@@ -282,7 +284,7 @@ class DaxHasKey(DaxBase, abc.ABC):
             # Archive value using the data store
             self.data_store.mutate(system_key, index, value)
 
-    @artiq.experiment.rpc(flags={'async'})
+    @artiq.language.core.rpc(flags={'async'})
     def append_to_dataset_sys(self, key, value, data_store=True):  # type: (str, typing.Any, bool) -> None
         """Append a value to a system dataset.
 
@@ -306,7 +308,8 @@ class DaxHasKey(DaxBase, abc.ABC):
             # Archive value using the data store
             self.data_store.append(system_key, value)
 
-    def get_dataset_sys(self, key: str, default: typing.Any = artiq.experiment.NoDefault,
+    @artiq.language.core.host_only
+    def get_dataset_sys(self, key: str, default: typing.Any = artiq.language.environment.NoDefault,
                         data_store: bool = True) -> typing.Any:
         """Returns the contents of a system dataset.
 
@@ -341,7 +344,7 @@ class DaxHasKey(DaxBase, abc.ABC):
             # Get value from system dataset with extra flags
             value: typing.Any = self.get_dataset(system_key, archive=True)
         except KeyError:
-            if default is artiq.experiment.NoDefault:
+            if default is artiq.language.environment.NoDefault:
                 # The value was not available in the system dataset and no default was provided
                 raise KeyError(f'System dataset key "{system_key}" not found') from None
             else:
@@ -363,8 +366,8 @@ class DaxHasKey(DaxBase, abc.ABC):
         # Return value
         return value
 
-    @artiq.experiment.host_only
-    def setattr_dataset_sys(self, key: str, default: typing.Any = artiq.experiment.NoDefault,
+    @artiq.language.core.host_only
+    def setattr_dataset_sys(self, key: str, default: typing.Any = artiq.language.environment.NoDefault,
                             data_store: bool = True, kernel_invariant: bool = True) -> None:
         """Sets the contents of a system dataset as attribute.
 
@@ -412,7 +415,7 @@ class DaxHasKey(DaxBase, abc.ABC):
             msg_postfix: str = ' (kernel invariant)' if kernel_invariant else ''
             self.logger.debug(f'System attribute "{key}" set to value "{value}"{msg_postfix}')
 
-    @artiq.experiment.host_only
+    @artiq.language.core.host_only
     def hasattr(self, *keys: str) -> bool:
         """Returns if this object has the given attributes.
 
@@ -424,7 +427,7 @@ class DaxHasKey(DaxBase, abc.ABC):
         assert all(isinstance(k, str) for k in keys), 'Keys must be of type str'
         return all(hasattr(self, k) for k in keys)
 
-    @artiq.experiment.host_only
+    @artiq.language.core.host_only
     def get_identifier(self) -> str:
         """Return the system key with the class name."""
         return f'[{self.get_system_key()}]({self.__class__.__name__})'
@@ -511,7 +514,7 @@ class DaxHasSystem(DaxHasKey, abc.ABC):
             parent.logger.exception('Missing core attributes (super.build() was probably not called)')
             raise
 
-    @artiq.experiment.host_only
+    @artiq.language.core.host_only
     def _init_system(self) -> None:
         """Initialize the DAX system, for dataset access, device initialization, and recording DMA traces."""
 
@@ -533,7 +536,7 @@ class DaxHasSystem(DaxHasKey, abc.ABC):
         else:
             self.logger.debug('Initialization finished')
 
-    @artiq.experiment.host_only
+    @artiq.language.core.host_only
     def _post_init_system(self) -> None:
         """DAX system post-initialization (e.g. obtaining DMA handles)."""
 
@@ -584,7 +587,7 @@ class DaxHasSystem(DaxHasKey, abc.ABC):
     def get_device(self, key: str, type_: typing.Type[__D_T]) -> __D_T:
         ...
 
-    @artiq.experiment.host_only
+    @artiq.language.core.host_only
     def get_device(self, key: str, type_: typing.Optional[typing.Type[__D_T]] = None) -> typing.Any:
         """Get a device driver.
 
@@ -628,7 +631,7 @@ class DaxHasSystem(DaxHasKey, abc.ABC):
         # Return the device
         return device
 
-    @artiq.experiment.host_only
+    @artiq.language.core.host_only
     def setattr_device(self, key: str, type_: typing.Optional[typing.Type[__D_T]] = None) -> None:
         """Sets a device driver as attribute.
 
@@ -862,7 +865,7 @@ class DaxSystem(DaxModuleBase):
             # No data store configured
             self.__data_store = DaxDataStore()
 
-    @artiq.experiment.host_only
+    @artiq.language.core.host_only
     def dax_init(self) -> None:
         """Initialize the DAX system.
 
@@ -1445,7 +1448,7 @@ class DaxDataStore:
         # Create a logger object
         self._logger: logging.Logger = logging.getLogger(f'{self.__module__}.{self.__class__.__name__}')
 
-    @artiq.experiment.rpc(flags={'async'})
+    @artiq.language.core.rpc(flags={'async'})
     def set(self, key, value):  # type: (str, typing.Any) -> None
         """Write a key-value into the data store.
 
@@ -1454,7 +1457,7 @@ class DaxDataStore:
         """
         self._logger.debug(f'Set key "{key}" to value: "{value}"')
 
-    @artiq.experiment.rpc(flags={'async'})
+    @artiq.language.core.rpc(flags={'async'})
     def mutate(self, key, index, value):  # type: (str, typing.Any, typing.Any) -> None
         """Mutate a specific index of a key-value in the data store.
 
@@ -1464,7 +1467,7 @@ class DaxDataStore:
         """
         self._logger.debug(f'Mutate key "{key}"[{index}] to value "{value}"')
 
-    @artiq.experiment.rpc(flags={'async'})
+    @artiq.language.core.rpc(flags={'async'})
     def append(self, key, value):  # type: (str, typing.Any) -> None
         """Append a value to a key-value in the data store.
 
@@ -1490,7 +1493,7 @@ class DaxDataStoreInfluxDb(DaxDataStore):
     _NP_FIELD_TYPES: typing.List[type] = [np.integer, np.floating, np.bool_, np.character]
     """Legal field types (Numpy types) for Influx DB."""
 
-    def __init__(self, environment: artiq.experiment.HasEnvironment,
+    def __init__(self, environment: artiq.language.environment.HasEnvironment,
                  system_class: typing.Type[DaxSystem]):
         """Create a new DAX data store that uses an Influx DB backend.
 
@@ -1498,7 +1501,7 @@ class DaxDataStoreInfluxDb(DaxDataStore):
         :param system_class: The DAX system class this data store identifies itself with
         """
 
-        assert isinstance(environment, artiq.experiment.HasEnvironment), \
+        assert isinstance(environment, artiq.language.environment.HasEnvironment), \
             'The environment parameter must be of type HasEnvironment'
         assert issubclass(system_class, DaxSystem), 'The system class must be a subclass of DaxSystem'
         assert isinstance(system_class.DAX_INFLUX_DB_KEY, str), 'The DAX Influx DB key must be of type str'
@@ -1549,7 +1552,7 @@ class DaxDataStoreInfluxDb(DaxDataStore):
         # Debug message
         self._logger.debug(f'Initialized base fields: {self._base_fields}')
 
-    @artiq.experiment.rpc(flags={'async'})
+    @artiq.language.core.rpc(flags={'async'})
     def set(self, key, value):  # type: (str, typing.Any) -> None
         """Write a key-value into the Influx DB data store.
 
@@ -1580,7 +1583,7 @@ class DaxDataStoreInfluxDb(DaxDataStore):
             # Unsupported type, do not raise but warn user instead
             self._logger.warning(f'Could not store value for key "{key}", unsupported value type for value "{value}"')
 
-    @artiq.experiment.rpc(flags={'async'})
+    @artiq.language.core.rpc(flags={'async'})
     def mutate(self, key, index, value):  # type: (str, typing.Any, typing.Any) -> None
         """Mutate a specified index of a key-value in the Influx DB data store.
 
@@ -1605,7 +1608,7 @@ class DaxDataStoreInfluxDb(DaxDataStore):
             # Unsupported type, do not raise but warn user instead
             self._logger.warning(f'Could not mutate value for key "{key}", unsupported value type for value "{value}"')
 
-    @artiq.experiment.rpc(flags={'async'})
+    @artiq.language.core.rpc(flags={'async'})
     def append(self, key, value):  # type: (str, typing.Any) -> None
         """Append a value to a key-value in the Influx DB data store.
 
@@ -1677,7 +1680,7 @@ class DaxDataStoreInfluxDb(DaxDataStore):
         # Return point
         return point
 
-    def _get_driver(self, environment: artiq.experiment.HasEnvironment, key: str) -> None:
+    def _get_driver(self, environment: artiq.language.environment.HasEnvironment, key: str) -> None:
         """Get the required driver.
 
         This method was separated to allow testing without writing points.
@@ -1741,7 +1744,7 @@ def dax_client_factory(c: typing.Type[__DCF_C_T]) -> typing.Callable[[typing.Typ
     assert isinstance(c, type), 'The decorated object must be a type'
     if not issubclass(c, DaxClient):
         raise TypeError('The decorated class must be a subclass of DaxClient')
-    if not issubclass(c, artiq.experiment.Experiment):
+    if not issubclass(c, artiq.language.environment.Experiment):
         raise TypeError('The decorated class must be a subclass of Experiment')
 
     def wrapper(system_type: typing.Type[__DCF_S_T],

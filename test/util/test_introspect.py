@@ -29,7 +29,10 @@ class _TestModule(dax.base.system.DaxModule):
 
 
 class _TestModuleChild(_TestModule):
-    pass
+    @property
+    def foo(self):
+        # This property is not available pre-initialization, which is ok
+        raise AttributeError
 
 
 class _TestService(dax.base.system.DaxService):

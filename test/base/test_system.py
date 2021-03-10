@@ -199,6 +199,7 @@ class DaxHelpersTestCase(unittest.TestCase):
         self.assertIsInstance(dax.base.system._CWD_COMMIT, (str, type(None)), 'Unexpected type for CWD commit hash')
 
         # Discover repo path
+        # noinspection PyCallingNonCallable
         path = pygit2.discover_repository(os.getcwd())
 
         if path is None:

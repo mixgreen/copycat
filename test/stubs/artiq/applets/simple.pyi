@@ -12,7 +12,7 @@ class SimpleApplet:
     def args_init(self) -> None:
         ...
 
-    def quamash_init(self) -> None:
+    def qasync_init(self) -> None:
         ...
 
     def ipc_init(self) -> None:

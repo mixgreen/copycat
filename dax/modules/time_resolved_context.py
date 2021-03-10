@@ -1,3 +1,6 @@
+# Mitigates https://github.com/m-labs/artiq/issues/1625
+from __future__ import annotations  # Postponed evaluation of annotations
+
 import typing
 import collections
 import collections.abc
@@ -11,11 +14,12 @@ import matplotlib.pyplot as plt  # type: ignore
 
 from dax.experiment import *
 from dax.util.ccb import get_ccb_tool
-from dax.util.output import get_file_name_generator, dummy_file_name_generator
+from dax.util.output import FileNameGenerator, BaseFileNameGenerator
 from dax.util.units import UnitsFormatter
 
 __all__ = ['TimeResolvedContext', 'TimeResolvedAnalyzer', 'TimeResolvedContextError']
 
+# Workaround required for Python<=3.8
 if typing.TYPE_CHECKING:
     _TD_T = typing.Dict[str, typing.Union[typing.Sequence[float],
                                           typing.Sequence[typing.Sequence[float]]]]  # Type for a trace dict
@@ -445,7 +449,7 @@ class TimeResolvedContext(DaxModule):
         self.open()
 
     @portable
-    def __exit__(self, exc_type, exc_val, exc_tb):  # type: (typing.Any, typing.Any, typing.Any) -> None
+    def __exit__(self, exc_type, exc_val, exc_tb):  # type: (typing.Any, typing.Any, typing.Any) -> None # noqa: ATQ306
         """Exit the context."""
         self.close()
 
@@ -661,7 +665,7 @@ class TimeResolvedAnalyzer:
             self.traces: typing.Dict[str, typing.List[_TD_T]] = {k: source.get_traces(k) for k in self.keys}
 
             # Obtain the file name generator
-            self._file_name_generator = get_file_name_generator(source.get_device('scheduler'))
+            self._file_name_generator: BaseFileNameGenerator = FileNameGenerator(source.get_device('scheduler'))
 
         elif isinstance(source, h5py.File):
             # Construct HDF5 group name
@@ -680,7 +684,7 @@ class TimeResolvedAnalyzer:
                                for index in natsort.natsorted(group[k])] for k in self.keys}
 
             # Get a file name generator
-            self._file_name_generator = dummy_file_name_generator
+            self._file_name_generator = BaseFileNameGenerator()
 
         else:
             raise TypeError('Unsupported source type')
@@ -720,8 +724,8 @@ class TimeResolvedAnalyzer:
 
         for index, t in enumerate(traces):
             # Obtain raw data
-            time = np.asarray(t['time'])
-            width = np.asarray(t['width'])
+            time = np.asarray(typing.cast(np.ndarray, t['time']))
+            width = np.asarray(typing.cast(np.ndarray, t['width']))
             results = typing.cast(typing.Sequence[np.ndarray], t['result'])  # List with result arrays
 
             # Create X values

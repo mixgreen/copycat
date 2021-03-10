@@ -30,7 +30,8 @@ _DEVICE_DB = {
         "type": "local",
         "module": "artiq.coredevice.ttl",
         "class": "TTLInOut",
-        "arguments": {'input_freq': _INPUT_FREQ}
+        "arguments": {},
+        "sim_args": {'input_freq': _INPUT_FREQ}
     },
     "TTLClockGen": {
         "type": "local",
@@ -208,7 +209,7 @@ class TTLInOutTestCase(TTLOutTestCase):
             for _ in range(_NUM_SAMPLES):
                 f = self.rng.uniform(0.0, 1 * GHz)
                 self.env.dut.set_mu(self.env.dut.frequency_to_ftw(f))
-                self.expect(self.env.dut, 'freq', f, places=-1)
+                self.expect_close(self.env.dut, 'freq', f, places=-1)
 
         def test_stop(self):
             self.env.dut.stop()

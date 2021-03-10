@@ -13,10 +13,15 @@ class Introspect(DaxClient, Experiment):
     DAX_INIT: bool = False
     """Disable DAX init."""
 
-    GRAPHS: typing.Dict[str, typing.List[type]] = {
-        'All': [ComponentGraphviz, RelationGraphviz],
-        'Component graph': [ComponentGraphviz],
-        'Relation graph': [RelationGraphviz],
+    GRAPHS: typing.Dict[str, typing.List[typing.Tuple[type, typing.Dict[str, typing.Any]]]] = {
+        'All': [
+            (ComponentGraphviz, {}),
+            (ComponentGraphviz, {'engine': 'fdp'}),
+            (RelationGraphviz, {})
+        ],
+        'Component graph': [(ComponentGraphviz, {})],
+        'Component graph (fdp)': [(ComponentGraphviz, {'engine': 'fdp'})],
+        'Relation graph': [(RelationGraphviz, {})],
     }
     """Dict with available graph types."""
 
@@ -66,7 +71,7 @@ class Introspect(DaxClient, Experiment):
         # Get the system
         system = self.registry.find_module(DaxSystem)
         # Create the graph objects
-        self._graphs = [g(system, **self._graph_args) for g in self.GRAPHS[self._graph_types]]
+        self._graphs = [g(system, **kwargs, **self._graph_args) for g, kwargs in self.GRAPHS[self._graph_types]]
 
     def run(self) -> None:
         pass

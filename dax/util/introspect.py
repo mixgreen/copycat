@@ -9,9 +9,14 @@ from dax.util.output import get_base_path
 __all__ = ['GraphvizBase', 'ComponentGraphviz', 'RelationGraphviz']
 
 
-def _get_attributes(o: typing.Any) -> typing.Iterator[typing.Any]:
-    """Get an iterator over attributes of an object, excluding class-private attributes."""
-    return (getattr(o, attr) for attr in dir(o) if attr[0:2] != '__')
+def _get_attributes(o: typing.Any) -> typing.Generator[typing.Any, None, None]:
+    """Get a generator over attributes of an object, excluding class-private attributes."""
+    for attr in dir(o):
+        if attr[0:2] != '__':
+            try:
+                yield getattr(o, attr)
+            except AttributeError:
+                pass
 
 
 _logger: logging.Logger = logging.getLogger(__name__)
@@ -227,7 +232,7 @@ class GraphvizBase(graphviz.Digraph):
 
 
 class ComponentGraphviz(GraphvizBase):
-    """Component graph class which visualizes the relations between system modules."""
+    """Component graph class which visualizes the relations between system modules or services."""
 
     def __init__(self, system: dax.base.system.DaxSystem, **kwargs: typing.Any):
         """Create a new component Graphviz object.
@@ -238,8 +243,8 @@ class ComponentGraphviz(GraphvizBase):
         assert isinstance(system, dax.base.system.DaxSystem), 'System must be a DAX system'
 
         # Set default arguments
-        kwargs.setdefault('engine', 'fdp')
-        kwargs.setdefault('name', 'component_graph')
+        kwargs.setdefault('engine', 'dot')
+        kwargs.setdefault('name', f'component_graph_{kwargs["engine"]}')
         kwargs.setdefault('directory', str(get_base_path(system.get_device('scheduler'))))
         graph_attr = kwargs.setdefault('graph_attr', {})
         graph_attr.setdefault('splines', 'spline')

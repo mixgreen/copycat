@@ -26,6 +26,7 @@ $ flake8
 
 ## Merging
 
+Sign off your patches using `git commit --signoff`.
 To merge into master, please issue a merge request.
 
 ## Releases
@@ -37,3 +38,5 @@ See the following examples.
 - `v3.0` for a major release with breaking changes.
 - `v3.1` for a minor release.
 - `v3.1.1` for a micro release containing bug fixes.
+
+Starting from `v6.0`, the major version number of DAX will match the version of the targeted ARTIQ release.

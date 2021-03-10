@@ -7,6 +7,7 @@ from artiq.language.core import kernel
 from dax.sim.coredevice.ad53xx import AD53xx
 
 
+# noinspection PyAbstractClass
 class Zotino(AD53xx):
 
     def __init__(self, dmgr, **kwargs):

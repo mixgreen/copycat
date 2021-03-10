@@ -1,25 +1,19 @@
+include:
+  project: 'Duke-ARTIQ/ci-scripts'
+  file: '/envs.yml'
+
 stages:
   - test
   - deploy
 
-.nix_env:
-  image: nixos/nix:latest
-  before_script:
-    # Setup Nix channels
-    - nix-channel --add https://nixbld.m-labs.hk/channel/custom/artiq/full/artiq-full
-    - nix-channel --remove nixpkgs
-    - nix-channel --add https://nixos.org/channels/nixos-20.03 nixpkgs
-    - nix-channel --update
-    # Add M-Lab public key
-    - mkdir -p ~/.config/nix/
-    - echo "substituters = https://cache.nixos.org https://nixbld.m-labs.hk" > ~/.config/nix/nix.conf
-    - echo "trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= nixbld.m-labs.hk-1:5aSRVA5b320xbNvu30tqxVPXpld73bhtOeH6uAjRyHc=" >> ~/.config/nix/nix.conf
-
 .conda_env:
   image: ubuntu
+  tags:
+    - docker
   variables:
     CONDA_SCRIPT: "$HOME/miniconda.sh"
     CONDA_DIR: "$HOME/miniconda"
+    CONDA_PACKAGES: "artiq sipyco numpy scipy pyvcd natsort pygit2 matplotlib python-graphviz h5py networkx"
   before_script:
     # Setup conda
     - apt-get -qq update; apt-get -qq -y install wget
@@ -31,7 +25,9 @@ stages:
     # Install and activate environment
     - conda config --prepend channels https://conda.m-labs.hk/artiq
     - conda config --append channels conda-forge
-    - conda create -y -n env artiq numpy scipy pyvcd natsort pygit2 matplotlib python-graphviz h5py networkx
+    - conda config --prepend channels http://build-mblab.duckdns.org/conda
+    - echo $CONDA_PACKAGES
+    - conda create -y -n env $CONDA_PACKAGES
     - conda activate env
 
 test_nix:
@@ -44,9 +40,12 @@ test_nix:
     # Run test commands
     - $NIX_CMD "python3 --version"
     - $NIX_CMD "mypy --version; mypy"
-    - $NIX_CMD "flake8 --version; flake8"
+    - $NIX_CMD "flake8 --version; flake8 --no-untyped-args --no-untyped-return"
     - $NIX_CMD "coverage --version; coverage run -m pytest -v -rs"
     - $NIX_CMD "coverage report"
+    # Run build commands
+    - nix build -f ./default.nix
+    - nix-shell ./shell.nix --run "python -c 'import dax; print(dax.__version__)'"
 
 test_conda:
   extends: .conda_env

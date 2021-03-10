@@ -16,7 +16,10 @@ def _mu_to_att(att_mu):
 
 
 def _att_to_mu(att):
-    return int(255 - np.int32(round(att * 8)))
+    code = 255 - np.int32(round(att * 8))
+    if code < 0 or code > 255:
+        raise ValueError("Invalid urukul.CPLD attenuation!")
+    return code
 
 
 def _state_to_sw_reg(state):

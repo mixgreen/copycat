@@ -5,6 +5,7 @@ import logging
 import numpy as np
 
 from artiq.language.core import *
+import artiq.coredevice.core
 
 from dax.sim.device import DaxSimDevice
 from dax.sim.signal import get_signal_manager
@@ -13,7 +14,7 @@ from dax.sim.time import DaxTimeManager
 from dax.sim.coredevice.comm_kernel import CommKernelDummy
 from dax.sim.config import DaxSimConfig
 from dax.util.units import time_to_str
-from dax.util.output import get_file_name_generator, dummy_file_name_generator
+from dax.util.output import FileNameGenerator, BaseFileNameGenerator
 
 __all__ = ['BaseCore', 'Core']
 
@@ -138,7 +139,7 @@ class Core(BaseCore):
     It inherits all the functionality of the base coredevice driver and includes
     features for signal manager output and performance profiling.
 
-    Normally, users never instantiate this class by themselves and the ARTIQ
+    Normally, users never instantiate this class directly and the ARTIQ
     device manager will take care of that.
 
     The signature of the :func:`__init__` function is equivalent to the ARTIQ coredevice
@@ -146,11 +147,14 @@ class Core(BaseCore):
     original environment.
     """
 
-    def __init__(self, dmgr: typing.Any,
-                 ref_period: float, ref_multiplier: int = 8,
-                 **kwargs: typing.Any):
-        assert isinstance(ref_period, float) and ref_period > 0.0, 'Reference period must be of type float'
-        assert isinstance(ref_multiplier, int) and ref_multiplier > 0, 'Reference multiplier must be of type int'
+    # noinspection PyShadowingBuiltins
+    def __init__(self, dmgr: typing.Any, ref_period: float, ref_multiplier: int = 8,
+                 compile: bool = False, **kwargs: typing.Any):
+        """Simulation driver for :class:`artiq.coredevice.core.Core`.
+
+        :param compile: If :const:`True`, compile kernels before simulation to expose any potential compile errors
+        """
+        assert isinstance(compile, bool), 'Compile flag must be of type bool'
 
         # Get the virtual simulation configuration device, which will configure the simulation
         # DAX system already initializes the virtual sim config device, this is a fallback
@@ -165,10 +169,10 @@ class Core(BaseCore):
         # Get file name generator (explicitly in constructor to not obtain file name too late)
         if self._sim_config.output_enabled:
             # Requesting the generator creates the parent directory, only create if output is enabled
-            self._file_name_generator = get_file_name_generator(self._device_manager.get('scheduler'))
+            self._file_name_generator: BaseFileNameGenerator = FileNameGenerator(self._device_manager.get('scheduler'))
         else:
-            # For completeness, set a dummy file name generator if output is disabled
-            self._file_name_generator = dummy_file_name_generator
+            # For completeness, set a base file name generator if output is disabled
+            self._file_name_generator = BaseFileNameGenerator()
 
         # Get the signal manager and register signals
         self._signal_manager = get_signal_manager()
@@ -183,8 +187,23 @@ class Core(BaseCore):
         self._func_counter: typing.Counter[typing.Any] = collections.Counter()
         self._func_time: typing.Counter[typing.Any] = collections.Counter()
 
+        # Configure compiler
+        if compile:
+            core_kwargs = {k: v for k, v in kwargs.items() if k in {'target'}}
+            self._compiler: typing.Optional[artiq.coredevice.core.Core] = artiq.coredevice.core.Core(
+                {}, host=None, ref_period=ref_period, ref_multiplier=ref_multiplier, **core_kwargs)
+            # Set the compiler's device manager core to reference its own core
+            self._compiler.dmgr[self.key] = self._compiler
+            _logger.debug('Kernel compilation during simulation enabled')
+        else:
+            self._compiler = None
+
     def run(self, function: typing.Any,
             args: typing.Tuple[typing.Any, ...], kwargs: typing.Dict[str, typing.Any]) -> typing.Any:
+        if self._level == 0 and self._compiler is not None:
+            # Compile the kernel
+            self._compiler.compile(function, args, kwargs)
+
         # Unpack function
         kernel_func = function.artiq_embedded.function
 

@@ -16,7 +16,7 @@ class _ContextExperiment(HasEnvironment):
             self._append('enter')
 
         @kernel
-        def __exit__(self, exc_type, exc_val, exc_tb):
+        def __exit__(self, exc_type, exc_val, exc_tb):  # noqa:ATQ306
             self._append('exit')
 
         def _append(self, msg):

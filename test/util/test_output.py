@@ -1,6 +1,7 @@
 import unittest
 import pathlib
 import os
+import os.path
 
 from dax.util.output import *
 
@@ -19,9 +20,28 @@ class OutputTestCase(unittest.TestCase):
             self.assertIsInstance(base, pathlib.Path)
             self.assertTrue(str(base).startswith(os.getcwd()))
 
+    def test_base_file_name_generator(self):
+        with temp_dir():
+            gen = FileNameGenerator(None)
+            base_gen = BaseFileNameGenerator()
+            self.assertIn(base_gen('bar'), gen('bar'))
+            self.assertIn(base_gen('bar', 'pdf'), gen('bar', 'pdf'))
+            self.assertEqual('bar.pdf', base_gen('bar', 'pdf'))
+            self.assertEqual(base_gen('bar'), base_gen('bar'), 'Generated different file names, expected the same')
+
+            with self.assertRaises(ValueError, msg='Empty name did not raise'):
+                base_gen('')
+
+    def test_base_file_name_generator_base_path(self):
+        base_gen = BaseFileNameGenerator()
+        base_path = os.path.join('some', 'path')
+        base_gen_path = BaseFileNameGenerator(base_path)
+        self.assertIn(base_gen('bar'), base_gen_path('bar'))
+        self.assertEqual(os.path.join(base_path, 'bar'), base_gen_path('bar'))
+
     def test_file_name_generator(self):
         with temp_dir():
-            gen = get_file_name_generator(None)
+            gen = FileNameGenerator(None)
             self.assertIn('bar', gen('bar'))
             self.assertIn('bar.pdf', gen('bar', 'pdf'))
 
@@ -30,7 +50,7 @@ class OutputTestCase(unittest.TestCase):
 
     def test_file_name_generator_unique(self):
         with temp_dir():
-            gen = get_file_name_generator(None)
+            gen = FileNameGenerator(None)
 
             for _ in range(5):
                 n = gen('bar', 'pdf')
@@ -42,15 +62,6 @@ class OutputTestCase(unittest.TestCase):
 
             with self.assertRaises(ValueError, msg='Empty name did not raise'):
                 gen('')
-
-    def test_dummy_file_name_generator(self):
-        with temp_dir():
-            gen = get_file_name_generator(None)
-            self.assertIn(dummy_file_name_generator('bar'), gen('bar'))
-            self.assertIn(dummy_file_name_generator('bar', 'pdf'), gen('bar', 'pdf'))
-
-            with self.assertRaises(ValueError, msg='Empty name did not raise'):
-                dummy_file_name_generator('')
 
     def test_file_name(self):
         with temp_dir():
