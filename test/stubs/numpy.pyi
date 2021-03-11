@@ -4,7 +4,7 @@ import collections.abc
 __all__ = ['generic', 'character', 'number', 'integer', 'int32', 'int64', 'floating', 'bool_', 'ndarray',
            'array', 'zeros', 'ones', 'empty', 'full', 'arange', 'linspace', 'logspace',
            'issubdtype', 'ndenumerate',
-           'prod']
+           'prod', 'size', 'log2']
 
 
 # noinspection PyPep8Naming
@@ -241,5 +241,6 @@ def size(a: typing.Any, axis: typing.Optional[int] = ...) -> int:
     ...
 
 
-def log2(x: __E_T, /, out: typing.Optional[ndarray[__E_T]] = ..., **kwargs: typing.Any) -> __E_T:
+def log2(x: __E_T, out: typing.Optional[ndarray[__E_T]] = ..., *, where: __E_T = ..., **kwargs: typing.Any) -> __E_T:
+    # Left out positional-only parameters `/` for compatibility with Python<3.8
     ...
