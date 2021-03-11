@@ -235,3 +235,11 @@ def prod(a: typing.Sequence[__E_T], axis: __AXIS_T = ..., dtype: typing.Optional
          out: typing.Optional[ndarray[__E_T]] = ..., keepdims: typing.Optional[bool] = ...,
          initial: typing.Optional[__E_T] = ..., where: typing.Optional[typing.Sequence[bool]] = ...) -> __E_T:
     ...
+
+
+def size(a: typing.Any, axis: typing.Optional[int] = ...) -> int:
+    ...
+
+
+def log2(x: __E_T, /, out: typing.Optional[ndarray[__E_T]] = ..., **kwargs: typing.Any) -> __E_T:
+    ...
