@@ -31,10 +31,10 @@ def _get_gates(circuit: str, available_gates: typing.Dict[str, __G_T], separator
         return [available_gates[g] for g in circuit.split(f':{separator}')
                 if g != f'@({separator})' and g != f'{{}}@({separator})']
     except KeyError as e:
-        raise KeyError(f'Gate "{e}" is not available according to the dictionary!')
+        raise KeyError(f'Gate "{e}" is not available according to the dictionary!') from None
 
 
-def _partition_gate_list(circuit_list: typing.List[__G_T],
+def _partition_gate_list(circuit_list: typing.Sequence[__G_T],
                          max_partition_size: int) -> typing.Sequence[typing.Sequence[__G_T]]:
     """Partition circuit list based on max size the hardware can handle."""
     partitions: typing.List[typing.List[__G_T]] = [[]]
