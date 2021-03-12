@@ -10,6 +10,7 @@ from dax.util.artiq import get_managers
 from dax.sim import enable_dax_sim
 
 import test.interfaces.test_operation
+import test.interfaces.test_data_context
 
 _DEVICE_DB: typing.Dict[str, typing.Any] = {
     'core': {
@@ -31,7 +32,9 @@ _DEVICE_DB: typing.Dict[str, typing.Any] = {
 }
 
 
-class _TestSystem(dax.base.system.DaxSystem, test.interfaces.test_operation.OperationInstance):
+class _TestSystem(dax.base.system.DaxSystem,
+                  test.interfaces.test_operation.OperationInstance,
+                  test.interfaces.test_data_context.DataContextInstance):
     SYS_ID = 'unittest_system'
     SYS_VER = 0
 
@@ -61,6 +64,8 @@ class _TestProgram(dax.base.program.DaxProgram, artiq.experiment.Experiment):
 
 
 class DaxProgramTestCase(unittest.TestCase):
+    EXPECTED_KERNEL_INVARIANTS = {'core', 'q', 'data_context'}
+
     def setUp(self) -> None:
         self.managers = get_managers(enable_dax_sim(ddb=_DEVICE_DB, enable=True, logging_level=30,
                                                     output='null', moninj_service=False))
@@ -72,14 +77,14 @@ class DaxProgramTestCase(unittest.TestCase):
         # Create system
         system = _TestSystem(self.managers)
         # Dynamically link system to the program
-        program = _TestProgram(system, core=system.core, interface=system)
+        program = _TestProgram(system, core=system.core, operation=system, data_context=system)
         # Basic checks
         self.assertIsInstance(program, dax.base.program.DaxProgram)
         self.assertIs(program.core, system.core)
         self.assertIs(program.q, system)
-        self.assertSetEqual(program.kernel_invariants, {'q', 'core'})
+        self.assertSetEqual(program.kernel_invariants, self.EXPECTED_KERNEL_INVARIANTS)
         self.assertIn(_TestProgram.__name__, program.get_identifier())
-        dax.interfaces.operation.validate_operation_interface(program.q)
+        dax.interfaces.operation.validate_interface(program.q)
 
     def test_isolated_link(self):
         # Create isolated managers
@@ -87,14 +92,14 @@ class DaxProgramTestCase(unittest.TestCase):
         # Create system
         system = _TestSystem(self.managers)
         # Dynamically link system to the program in an isolated fashion
-        program = _TestProgram(isolated, core=system.core, interface=system)
+        program = _TestProgram(isolated, core=system.core, operation=system, data_context=system)
         # Basic checks
         self.assertIsInstance(program, dax.base.program.DaxProgram)
         self.assertIs(program.core, system.core)
         self.assertIs(program.q, system)
-        self.assertSetEqual(program.kernel_invariants, {'q', 'core'})
+        self.assertSetEqual(program.kernel_invariants, self.EXPECTED_KERNEL_INVARIANTS)
         self.assertIn(_TestProgram.__name__, program.get_identifier())
-        dax.interfaces.operation.validate_operation_interface(program.q)
+        dax.interfaces.operation.validate_interface(program.q)
 
         # Return program for other tests
         return program

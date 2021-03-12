@@ -14,6 +14,7 @@ import matplotlib.pyplot as plt  # type: ignore
 import matplotlib.ticker  # type: ignore
 
 from dax.experiment import *
+from dax.interfaces.data_context import DataContextInterface, DataContextError
 from dax.interfaces.detection import DetectionInterface
 from dax.util.ccb import get_ccb_tool
 from dax.util.output import FileNameGenerator, BaseFileNameGenerator
@@ -22,12 +23,12 @@ from dax.util.units import UnitsFormatter
 __all__ = ['HistogramContext', 'HistogramAnalyzer', 'HistogramContextError']
 
 
-class HistogramContextError(RuntimeError):
+class HistogramContextError(DataContextError):
     """Class for histogram context errors."""
     pass
 
 
-class HistogramContext(DaxModule):
+class HistogramContext(DaxModule, DataContextInterface):
     """Context class for managing storage of PMT histogram data.
 
     This module can be used as a sub-module of a service providing state measurement abilities.
@@ -35,6 +36,7 @@ class HistogramContext(DaxModule):
     or call its additional functions.
 
     Note that the histogram context requires a :class:`DetectionInterface` in your system.
+    This class implements the :class:`DataContextInterface`.
 
     The histogram context objects manages all result values, but the user is responsible for tracking
     "input parameters".
@@ -221,7 +223,7 @@ class HistogramContext(DaxModule):
         This function can be used to manually enter the histogram context.
         We strongly recommend to use the ``with`` statement instead.
 
-        :raises HistogramContextError: Raised if already in histogram context (context is non-reentrant)
+        :raises HistogramContextError: Raised if the histogram context was already entered (context is non-reentrant)
         """
 
         if self._in_context:
@@ -240,7 +242,7 @@ class HistogramContext(DaxModule):
         This function can be used to manually exit the histogram context.
         We strongly recommend to use the ``with`` statement instead.
 
-        :raises HistogramContextError: Raised if called outside the histogram context
+        :raises HistogramContextError: Raised if the histogram context was not entered
         """
 
         if not self._in_context:
