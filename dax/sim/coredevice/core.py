@@ -32,7 +32,7 @@ class BaseCore(DaxSimDevice):
     for testing device drivers without a full ARTIQ environment.
     """
 
-    RESET_TIME_MU: int = 125000
+    RESET_TIME_MU: np.int64 = np.int64(125000)
     """The reset time in machine units."""
 
     def __init__(self, dmgr: typing.Any = None,
@@ -145,6 +145,11 @@ class Core(BaseCore):
     The signature of the :func:`__init__` function is equivalent to the ARTIQ coredevice
     driver to make sure the simulated environment has the same requirements as the
     original environment.
+
+    This coredevice driver has a flag to enable compilation of kernels before simulation.
+    The idea is that by compiling kernels during simulation, compile errors are exposed.
+    At this moment, almost no simulation drivers support compilation.
+    Hence, the compilation feature is currently not very useful.
     """
 
     # noinspection PyShadowingBuiltins
@@ -152,7 +157,7 @@ class Core(BaseCore):
                  compile: bool = False, **kwargs: typing.Any):
         """Simulation driver for :class:`artiq.coredevice.core.Core`.
 
-        :param compile: If :const:`True`, compile kernels before simulation to expose any potential compile errors
+        :param compile: If :const:`True`, compile kernels before simulation (see also :class:`Core`)
         """
         assert isinstance(compile, bool), 'Compile flag must be of type bool'
 
@@ -257,13 +262,16 @@ class Core(BaseCore):
     def reset(self):  # type: () -> None
         # Reset signal to 1
         self._signal_manager.event(self._reset_signal, 1)
-
-        # Reset devices to clear buffers
-        for _, d in self._device_manager.active_devices:
-            if isinstance(d, DaxSimDevice):
-                d.core_reset()
+        # Reset devices
+        self._reset_devices()
 
         # Move cursor
         delay_mu(self.RESET_TIME_MU)
         # Reset signal back to 0
         self._signal_manager.event(self._reset_signal, 0)
+
+    def _reset_devices(self):  # type: () -> None
+        # Reset devices to clear buffers
+        for _, d in self._device_manager.active_devices:
+            if isinstance(d, DaxSimDevice):
+                d.core_reset()

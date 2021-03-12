@@ -19,46 +19,41 @@ class PeekTestCaseTestCase(dax.sim.test_case.PeekTestCase):
         self.sys = self.construct_env(_TestSystem, device_db=_DEVICE_DB)
 
     def test_expect_bool(self):
-        test_data = [
-            (0, False),
-            (0, 0),
-            (1, True),
-            (True, 1),
-            (True, True),
-            (0, False),
-            (False, 0),
-            (np.int32(0), False),
-            (np.int32(1), True),
-            (np.int32(0), 0),
-            (np.int32(1), 1),
-        ]
+        zero_values = [0, False, np.int32(0), np.int64(0)]
+        one_values = [1, True, np.int32(1), np.int64(1)]
+        x_values = ['x', 'X', SignalNotSet]
+        z_values = ['z', 'Z']
+        test_data = [(v, values) for values in [zero_values, one_values] for v in values]
 
         # Device and scope
         scope = self.sys.ttl0
         signal = 'state'
 
         # Test starting values
-        self.expect(scope, signal, 'x')
-        self.expect(scope, signal, 'X')
-        self.expect(scope, 'direction', 'X')
-        self.expect(scope, 'sensitivity', 'x')
+        for s in [signal, 'direction', 'sensitivity']:
+            for v in x_values:
+                self.expect(scope, s, v)
 
         # Initialize device
         scope.output()
-        self.expect(scope, signal, 'x')
-        self.expect(scope, signal, 'X')
-        self.expect(scope, 'direction', 1)
-        self.expect(scope, 'sensitivity', 'z')
+        for v in x_values:
+            self.expect(scope, signal, v)
+        for v in one_values:
+            self.expect(scope, 'direction', v)
+        for v in z_values:
+            self.expect(scope, 'sensitivity', v)
 
         for val, ref in test_data:
             with self.subTest(value=val, reference=ref):
                 # Set new value
                 delay(1 * us)
                 scope.set_o(val)
-                # Test value
-                self.expect(scope, signal, ref)
+                # Test against reference values
+                for r in ref:
+                    self.expect(scope, signal, r)
                 delay(1 * us)
-                self.expect(scope, signal, ref)
+                for r in ref:
+                    self.expect(scope, signal, r)
 
     def test_expect_bool_vector(self):
         test_data = [

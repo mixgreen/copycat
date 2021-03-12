@@ -27,7 +27,6 @@ def _state_to_sw_reg(state):
 
 
 class CPLD(DaxSimDevice):
-    """Minimal implementation of CPLD to initialize AD99xx devices correctly."""
 
     def __init__(self, dmgr, clk_div=0, rf_sw=0, refclk=125e6, att=0x00000000, **kwargs):
         # Call super
