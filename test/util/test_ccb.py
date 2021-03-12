@@ -25,17 +25,21 @@ class CcbTestCase(unittest.TestCase):
         from dax.util.ccb import _generate_command
 
         data = {
-            'base1': {'foo_bar': 'bar', 'baz': None},
-            'base2': {'foo_bar': 1.5, 'baz': 'bar'},
-            'base3': {'foo_bar': None, 'bar': None, 'baz': 1},
-            'base4': {'foo_bar': True, 'baz': False},
+            'base1': (['y'], {'foo_bar': 'bar', 'baz': None}),
+            'base2': (['y'], {'foo_bar': 1.5, 'baz': 'bar'}),
+            'base3': (['y', 'fit'], {'foo_bar': None, 'bar': None, 'baz': 1}),
+            'base4': (['y', 'fit'], {'foo_bar': True, 'baz': False}),
+            'base5': (['y', "'fit'"], {'foo_bar': 'bar', 'baz': "'baz'"}),
         }
 
-        for base, kwargs in data.items():
-            with self.subTest(base_cmd=base, kwargs=kwargs):
-                cmd = _generate_command(base, **kwargs)
+        for base, (args, kwargs) in data.items():
+            with self.subTest(base_cmd=base, args=args, kwargs=kwargs):
+                cmd = _generate_command(base, *args, **kwargs)
                 self.assertTrue(cmd.startswith(base), 'Command does not start with base command')
                 self.assertNotIn('_', cmd, 'Underscores not filtered out of command')
+                for a in args:
+                    a = a.replace("'", "")
+                    self.assertIn(f"'{a}'", cmd, 'Positional argument not found in command')
                 for k, v in kwargs.items():
                     if v in {None, False}:
                         self.assertNotIn(k, cmd, 'None or False valued argument found in command')
@@ -44,7 +48,9 @@ class CcbTestCase(unittest.TestCase):
                         self.assertNotIn('True', cmd, 'True string found in command')
                     else:
                         self.assertIn(f'--{k.replace("_", "-")}', cmd, 'Argument not found in command')
-                        self.assertIn(f'"{v}"', cmd, 'Argument value not found in command')
+                        if isinstance(v, str):
+                            v = v.replace("'", "")
+                        self.assertIn(f"'{v}'", cmd, 'Argument value not found in command')
 
     def test_ccb_tool(self):
         with get_managers() as managers:
