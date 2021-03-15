@@ -28,7 +28,7 @@ class DataContextInstance(dax.interfaces.data_context.DataContextInterface):
 
 
 class DataContextInterfaceTestCase(unittest.TestCase):
-    def test_valid_interface(self):
+    def test_validate_interface(self):
         interface = DataContextInstance()
         self.assertTrue(dax.interfaces.data_context.validate_interface(interface))
 

@@ -97,7 +97,7 @@ class OperationInstance(dax.interfaces.operation.OperationInterface):
 
 
 class OperationInterfaceTestCase(unittest.TestCase):
-    def test_valid_interface(self):
+    def test_validate_interface(self):
         interface = OperationInstance()
         self.assertTrue(dax.interfaces.operation.validate_interface(interface))
         self.assertTrue(dax.interfaces.operation.validate_interface(interface, num_qubits=OperationInstance.NUM_QUBITS))
