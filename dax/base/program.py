@@ -32,7 +32,7 @@ class DaxProgram(dax.base.system.DaxBase, abc.ABC):
       (note: should not be used in kernels)
 
     The ARTIQ environment of a DAX program is partially decoupled from the environment that hosts the DAX system.
-    The device DB is empty, arguments are not passed to/from the DAX system, and datasets are isolated.
+    The device DB is empty, arguments are not shared with the DAX system, and datasets are isolated.
     """
 
     def __init__(self, managers_or_parent: typing.Any,
@@ -74,6 +74,7 @@ class DaxProgram(dax.base.system.DaxBase, abc.ABC):
         """Property that provides gate-level access to the quantum domain.
 
         This attribute should only be used in the :func:`run` and :func:`analyze` functions.
+        Any functions for actual quantum operations can only be used in the :func:`run` function.
         """
         return self.__q
 
@@ -81,9 +82,8 @@ class DaxProgram(dax.base.system.DaxBase, abc.ABC):
     def data_context(self) -> dax.interfaces.data_context.DataContextInterface:
         """Context to batch data collection when storing measurement data.
 
-        The data context is not reentrant and should only be used in the :func:`run` function.
-
-        See also :class:`dax.interfaces.operation.OperationInterface`.
+        The data context is not reentrant and should only be used as a context in the :func:`run` function.
+        Data retrieval functions of this object can be used in the :func:`run` and :func:`analyze` functions.
         """
         return self.__data_context
 
