@@ -21,6 +21,9 @@ import dax.clients.rpc_benchmark
 import dax.clients.rtio_benchmark
 import dax.clients.system_benchmark
 
+import test.interfaces.test_operation
+import test.interfaces.test_data_context
+
 
 def _get_managers(**kwargs):
     return get_managers(enable_dax_sim(ddb=_DEVICE_DB, enable=True, logging_level=30,
@@ -49,59 +52,9 @@ class _TestDetectionModule(DaxModule, dax.interfaces.detection.DetectionInterfac
         return 100 * us
 
 
-class _TestGateService(DaxService, dax.interfaces.gate.GateInterface):
-    SERVICE_NAME = 'gate_service'
-
-    def init(self) -> None:
-        pass
-
-    def post_init(self) -> None:
-        pass
-
-    def i(self, qubit: TInt32):
-        pass
-
-    def x(self, qubit: TInt32):
-        pass
-
-    def y(self, qubit: TInt32):
-        pass
-
-    def z(self, qubit: TInt32):
-        pass
-
-    def h(self, qubit: TInt32):
-        pass
-
-    def sqrt_x(self, qubit: TInt32):
-        pass
-
-    def sqrt_x_dag(self, qubit: TInt32):
-        pass
-
-    def sqrt_y(self, qubit: TInt32):
-        pass
-
-    def sqrt_y_dag(self, qubit: TInt32):
-        pass
-
-    def sqrt_z(self, qubit: TInt32):
-        pass
-
-    def sqrt_z_dag(self, qubit: TInt32):
-        pass
-
-    def rx(self, theta: TFloat, qubit: TInt32):
-        pass
-
-    def ry(self, theta: TFloat, qubit: TInt32):
-        pass
-
-    def rz(self, theta: TFloat, qubit: TInt32):
-        pass
-
-
-class _TestSystem(DaxSystem):
+class _TestSystem(DaxSystem,
+                  test.interfaces.test_operation.OperationInstance,
+                  test.interfaces.test_data_context.DataContextInstance):
     SYS_ID = 'unittest_system'
     SYS_VER = 0
 
@@ -112,8 +65,6 @@ class _TestSystem(DaxSystem):
         _TestDetectionModule(self, 'detection')
         dax.modules.rtio_benchmark.RtioLoopBenchmarkModule(self, 'rtio_bench', ttl_out='ttl0', ttl_in='ttl1')
         dax.modules.rpc_benchmark.RpcBenchmarkModule(self, 'rpc_bench')
-        # Create services
-        _TestGateService(self)
 
 
 class BuildClientTestCase(unittest.TestCase):
@@ -126,7 +77,7 @@ class BuildClientTestCase(unittest.TestCase):
         (dax.clients.pmt_monitor.MultiPmtMonitor, {}, True),
         (dax.clients.program.ProgramClient, {'file': ''}, False),
         (dax.clients.pygsti.RandomizedBenchmarkingSQ, {
-            'Gate interface': '.'.join([_TestSystem.SYS_SERVICES, _TestGateService.SERVICE_NAME]),
+            'Gate interface': _TestSystem.SYS_ID,
             'Max depth': '128',
         }, False),
         (dax.clients.rpc_benchmark.RpcBenchmarkLatency, {}, True),

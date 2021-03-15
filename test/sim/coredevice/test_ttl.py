@@ -5,7 +5,6 @@ import numpy as np
 from artiq.experiment import *
 
 import dax.sim.test_case
-import dax.sim.coredevice.urukul
 
 from test.environment import CI_ENABLED
 
@@ -215,5 +214,6 @@ class TTLInOutTestCase(TTLOutTestCase):
             self.env.dut.stop()
             self.expect(self.env.dut, 'freq', 0 * Hz)
 
-    if __name__ == '__main__':
-        unittest.main()
+
+if __name__ == '__main__':
+    unittest.main()

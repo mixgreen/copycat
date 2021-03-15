@@ -64,13 +64,12 @@ class CoreTestCase(BaseCoreTestCase):
                     # Verify if compile function was called exactly once
                     self.assertEqual(mock_method.call_count, compile_flag)
 
-                # Call the kernel function without patching the compile function, causing an actual compilation
                 try:
+                    # Call the kernel function without patching the compile function, causing an actual compilation
                     self._kernel_fn()
-                except FileNotFoundError:
-                    # NOTE: compilation only works from the Nix shell, otherwise the linker command can not be found!
-                    # We catch this exception here to make this test work in debug sessions outside the Nix shell
-                    pass
+                except FileNotFoundError as e:
+                    # NOTE: compilation only works from the Nix shell/Conda env, otherwise the linker can not be found
+                    self.skipTest(f'Skipping compiler test: {e}')
 
                 for fn in bad_kernels:
                     with self.assertRaises(CompileError, msg='No compile error raised for bad kernel function'):
