@@ -150,7 +150,7 @@ class ProgramClient(DaxClient, Experiment):
         self._program.prepare()
 
     def run(self) -> None:
-        # Validate interfaces (should be done after DAX init)
+        # Validate interfaces
         assert dax.interfaces.operation.validate_interface(self._operation)
         assert dax.interfaces.data_context.validate_interface(self._data_context)
         # Run the program

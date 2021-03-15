@@ -26,13 +26,22 @@ class DataContextInstance(dax.interfaces.data_context.DataContextInterface):
     def __exit__(self, exc_type, exc_val, exc_tb):  # noqa: ATQ306
         self.close()
 
+    @host_only
+    def get_raw(self):
+        return [[[]]]
+
 
 class DataContextInterfaceTestCase(unittest.TestCase):
-    def test_valid_interface(self):
+    HOST_ONLY_FN = {'get_raw'}
+    NOT_HOST_ONLY_FN = {n for n, _ in inspect.getmembers(DataContextInstance, inspect.isfunction)
+                        if not n.startswith('_') or n in {'__enter__', '__exit__'}} - HOST_ONLY_FN
+
+    def test_validate_interface(self):
         interface = DataContextInstance()
         self.assertTrue(dax.interfaces.data_context.validate_interface(interface))
 
-    def _validate_functions(self, fn_names):
+    def _validate_functions(self, fn_names, valid_fn):
+        all_fn = {self._dummy_fn, self._portable_fn, self._rpc_fn, self._host_only_fn}
         interface = DataContextInstance()
 
         for fn in fn_names:
@@ -40,20 +49,24 @@ class DataContextInterfaceTestCase(unittest.TestCase):
                 # Make sure the interface is valid
                 dax.interfaces.data_context.validate_interface(interface)
 
-                for replacement_fn in [self._dummy_fn, self._portable_fn, self._rpc_fn]:
+                for replacement_fn in valid_fn:
                     with unittest.mock.patch.object(interface, fn, replacement_fn):
                         dax.interfaces.data_context.validate_interface(interface)
 
-                with unittest.mock.patch.object(interface, fn, self._host_only_fn):
-                    # Patch interface and verify the validation fails
-                    with self.assertRaises(AssertionError, msg='Validate did not raise'):
-                        dax.interfaces.data_context.validate_interface(interface)
+                for replacement_fn in all_fn - valid_fn:
+                    with unittest.mock.patch.object(interface, fn, replacement_fn):
+                        # Patch interface and verify the validation fails
+                        with self.assertRaises(TypeError, msg='Validate did not raise'):
+                            dax.interfaces.data_context.validate_interface(interface)
 
     def test_validate_not_host_only_fn(self):
-        not_host_only_fn = [n for n, _ in inspect.getmembers(DataContextInstance, inspect.isfunction)
-                            if not n.startswith('_') or n in {'__enter__', '__exit__'}]
-        self.assertGreater(len(not_host_only_fn), 2, 'Not enough functions were found')
-        self._validate_functions(not_host_only_fn)
+        self.assertGreater(len(self.NOT_HOST_ONLY_FN), 2, 'Not enough functions were found')
+        self._validate_functions(self.NOT_HOST_ONLY_FN, {self._dummy_fn, self._portable_fn, self._rpc_fn})
+
+    def test_validate_host_only_fn(self):
+        self._validate_functions(self.HOST_ONLY_FN, {self._host_only_fn})
+
+    """Helper functions"""
 
     def _dummy_fn(self):
         pass

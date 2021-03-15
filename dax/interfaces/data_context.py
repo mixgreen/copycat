@@ -46,22 +46,39 @@ class DataContextInterface(DaxInterface, abc.ABC):
         """Exit the data context."""
         pass
 
+    @abc.abstractmethod
+    def get_raw(self) -> typing.Sequence[typing.Sequence[typing.Sequence[int]]]:
+        """Obtain the raw data captured by the data context.
+
+        **This function can only be called from the host.**
+
+        Data is formatted as a 3-dimensional list.
+        To access the measurement of data context N of data point P of qubit C: ``get_raw()[N][P][C]``.
+
+        :return: Raw measurement data
+        """
+        pass
+
 
 def validate_interface(data_context: DataContextInterface) -> bool:
     """Validate a data context interface object.
 
     :param data_context: The data context interface object
     :return: :const:`True`, to allow usage of this function in an ``assert`` statement
-    :raise AssertionError: Raised if validation failed
-    :raise TypeError: Raised if the given object has an invalid type
+    :raise TypeError: Raised if validation failed
     """
     if not isinstance(data_context, DataContextInterface):
         raise TypeError('The provided interface is not of type DataContextInterface')
 
     # Validate not host only functions
     not_host_only_fn: typing.Set[str] = {'open', 'close', '__enter__', '__exit__'}
-    assert all(not dax.util.artiq.is_host_only(getattr(data_context, fn, None)) for fn in not_host_only_fn), \
-        f'The following functions can not be host only: {", ".join(not_host_only_fn)}'
+    if not all(not dax.util.artiq.is_host_only(getattr(data_context, fn, None)) for fn in not_host_only_fn):
+        raise TypeError(f'The following functions can not be host only: {", ".join(not_host_only_fn)}')
+
+    # Validate host only functions
+    host_only_fn: typing.Set[str] = {'get_raw'}
+    if not all(dax.util.artiq.is_host_only(getattr(data_context, fn, None)) for fn in host_only_fn):
+        raise TypeError(f'The following functions must be host only: {", ".join(host_only_fn)}')
 
     # Return True
     return True
