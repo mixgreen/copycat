@@ -56,7 +56,7 @@ class DataContextInterfaceTestCase(unittest.TestCase):
                 for replacement_fn in all_fn - valid_fn:
                     with unittest.mock.patch.object(interface, fn, replacement_fn):
                         # Patch interface and verify the validation fails
-                        with self.assertRaises(AssertionError, msg='Validate did not raise'):
+                        with self.assertRaises(TypeError, msg='Validate did not raise'):
                             dax.interfaces.data_context.validate_interface(interface)
 
     def test_validate_not_host_only_fn(self):

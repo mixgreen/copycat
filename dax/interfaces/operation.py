@@ -117,8 +117,7 @@ def validate_interface(interface: OperationInterface, *, num_qubits: typing.Opti
     :param interface: The operation interface object
     :param num_qubits: The exact number of qubits in the system (optional)
     :return: :const:`True`, to allow usage of this function in an ``assert`` statement
-    :raise AssertionError: Raised if validation failed
-    :raise TypeError: Raised if the given object has an invalid type
+    :raise TypeError: Raised if validation failed
     """
     if not isinstance(interface, OperationInterface):
         raise TypeError('The provided interface is not of type OperationInterface')
@@ -129,24 +128,24 @@ def validate_interface(interface: OperationInterface, *, num_qubits: typing.Opti
     properties: typing.Dict[str, typing.Callable[[typing.Any], bool]] = {
         'num_qubits': lambda p: isinstance(p, np.int32) and (p == num_qubits or num_qubits is None),
     }
-    assert all(fn(getattr(interface, p, None)) for p, fn in properties.items()), \
-        'Not all properties return the correct types'
+    if not all(fn(getattr(interface, p, None)) for p, fn in properties.items()):
+        raise TypeError('Not all properties return the correct types')
 
     # Validate kernel invariants
     kernel_invariants: typing.Set[str] = {'pi'} | properties.keys()
-    assert all(i in getattr(interface, 'kernel_invariants', {}) for i in kernel_invariants), \
-        'Not all kernel invariants are correctly added'
+    if not all(i in getattr(interface, 'kernel_invariants', {}) for i in kernel_invariants):
+        raise TypeError('Not all kernel invariants are correctly added')
 
     # Validate host only functions
     host_only_fn: typing.Set[str] = {'set_realtime'}
-    assert all(dax.util.artiq.is_host_only(getattr(interface, fn, None)) for fn in host_only_fn), \
-        'Not all host only functions are decorated correctly'
+    if not all(dax.util.artiq.is_host_only(getattr(interface, fn, None)) for fn in host_only_fn):
+        raise TypeError('Not all host only functions are decorated correctly')
 
     # Validate kernel functions
     kernel_fn: typing.Set[str] = {n for n, _ in inspect.getmembers(OperationInterface, inspect.isfunction)
                                   if not n.startswith('_') and n not in host_only_fn}
-    assert all(dax.util.artiq.is_kernel(getattr(interface, fn, None)) for fn in kernel_fn), \
-        'Not all kernel functions are decorated correctly'
+    if not all(dax.util.artiq.is_kernel(getattr(interface, fn, None)) for fn in kernel_fn):
+        raise TypeError('Not all kernel functions are decorated correctly')
 
     # Return True
     return True
