@@ -33,6 +33,14 @@ dax.clients.program module
     :undoc-members:
     :show-inheritance:
 
+dax.clients.pygsti module
+-------------------------
+
+.. automodule:: dax.clients.pygsti
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 dax.clients.rpc\_benchmark module
 ---------------------------------
 

@@ -77,7 +77,7 @@ class BuildClientTestCase(unittest.TestCase):
         (dax.clients.pmt_monitor.MultiPmtMonitor, {}, True),
         (dax.clients.program.ProgramClient, {'file': ''}, False),
         (dax.clients.pygsti.RandomizedBenchmarkingSQ, {
-            'Gate interface': _TestSystem.SYS_ID,
+            'Operation interface': _TestSystem.SYS_NAME,
             'Max depth': '128',
         }, False),
         (dax.clients.rpc_benchmark.RpcBenchmarkLatency, {}, True),

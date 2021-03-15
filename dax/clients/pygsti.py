@@ -59,10 +59,9 @@ class RandomizedBenchmarkingSQ(DaxClient, Experiment):
 
     To use this client, a system needs to have the following components available:
 
-    - An :class:`OperationInterface` and a
-    - At least one :class:`GateInterface`
+    - At least one :class:`OperationInterface`
     - A :class:`DetectionInterface`
-    - A :class:`HistogramContext` that can be utilized by the :class:`OperationInterface`
+    - A :class:`HistogramContext` that functions as a data context for the :class:`OperationInterface`
 
     This class can be customized by overriding the :func:`add_arguments`,
     :func:`device_setup`, :func:`device_cleanup`, :func:`host_setup`, and :func:`host_cleanup` functions.
@@ -86,18 +85,18 @@ class RandomizedBenchmarkingSQ(DaxClient, Experiment):
         assert not is_kernel(self.host_setup), 'host_setup() can not be a kernel function'
         assert not is_kernel(self.host_cleanup), 'host_cleanup() can not be a kernel function'
 
-        # Search for gate interfaces
-        self._gate_interfaces = self.registry.search_interfaces(GateInterface)  # type: ignore[misc]
-        if not self._gate_interfaces:
-            raise LookupError('No gate interfaces were found')
+        # Search for operation interfaces
+        self._operation_interfaces = self.registry.search_interfaces(OperationInterface)  # type: ignore[misc]
+        if not self._operation_interfaces:
+            raise LookupError('No operation interfaces were found')
 
         # Calculate available circuit depths
         self._available_circuit_depths = {str(2 ** n): n for n in range(int(np.log2(self.MAX_CIRCUIT_DEPTH)) + 1)}
 
         # Add general arguments
-        self._gate_interface: str = self.get_argument('Gate interface',
-                                                      EnumerationValue(sorted(self._gate_interfaces)),
-                                                      tooltip='The gate interface to use for benchmarking')
+        self._operation_interface: str = self.get_argument('Operation interface',
+                                                           EnumerationValue(sorted(self._operation_interfaces)),
+                                                           tooltip='The operation interface to use for benchmarking')
         self._max_depth: int = self.get_argument('Max depth',
                                                  EnumerationValue(sorted(self._available_circuit_depths)),
                                                  tooltip='Max circuit depth, automatically generates every power '
@@ -156,12 +155,10 @@ class RandomizedBenchmarkingSQ(DaxClient, Experiment):
             self.logger.info(f'pyGSTi version: {version}')
 
         # Obtain system components
-        self._system = self.registry.find_module(DaxSystem)
-        self._gate = self._gate_interfaces[self._gate_interface]
-        self._operation = self.registry.find_interface(OperationInterface)
+        self._operation = self._operation_interfaces[self._operation_interface]
         self._histogram_context = self.registry.find_module(HistogramContext)
         self._detect = self.registry.find_interface(DetectionInterface)
-        self.update_kernel_invariants('_gate', '_operation', '_histogram_context')
+        self.update_kernel_invariants('_operation', '_histogram_context')
 
         # Get the scheduler
         self._scheduler = self.get_device('scheduler')
@@ -171,9 +168,9 @@ class RandomizedBenchmarkingSQ(DaxClient, Experiment):
         circuit_depths = [2 ** n for n in range(self._available_circuit_depths[self._max_depth] + 1)]
         self.logger.debug(f'Circuit depths: {circuit_depths}')
         # Get the available gates
-        available_gates = self.get_available_gates(self._gate)
+        available_gates = self.get_available_gates(self._operation)
         available_gates_list = sorted(available_gates)
-        self.logger.debug(f'Available gates: {available_gates_list}')
+        self.logger.debug(f'Available gates: {", ".join(available_gates_list)}')
 
         # Create Processor Specifications and Experiment Design
         pspec = pygsti.obj.ProcessorSpec(nQubits=1, gate_names=available_gates_list, qubit_labels=self.QUBIT_LABELS,
@@ -190,10 +187,7 @@ class RandomizedBenchmarkingSQ(DaxClient, Experiment):
     def run(self):
         """Entry point of the experiment."""
 
-        # DAX init on system
-        self._system.dax_init()
-
-        # Set realtime gates
+        # Set realtime
         self._operation.set_realtime(self._real_time)
 
         if self._plot_histograms:
