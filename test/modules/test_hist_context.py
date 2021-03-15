@@ -12,6 +12,7 @@ import dax.base.system
 import dax.util.matplotlib_backend  # noqa: F401
 from dax.modules.hist_context import *
 from dax.interfaces.detection import DetectionInterface
+from dax.interfaces.data_context import DataContextInterface, DataContextError, validate_interface
 from dax.util.artiq import get_managers
 from dax.util.output import temp_dir
 
@@ -61,6 +62,13 @@ class HistogramContextTestCase(unittest.TestCase):
         # Close managers
         self.managers.close()
 
+    def test_data_context_types(self):
+        self.assertIsInstance(self.h, DataContextInterface)
+        self.assertIsInstance(HistogramContextError(), DataContextError)
+
+    def test_data_context_valid_interface(self):
+        self.assertTrue(validate_interface(self.h), 'HistogramContext is not a valid data context')
+
     def test_in_context(self):
         # Initially we are out of context
         self.assertFalse(self.h.in_context(), 'in_context() reported wrong value')
@@ -80,31 +88,34 @@ class HistogramContextTestCase(unittest.TestCase):
         self.assertFalse(self.h.in_context(), 'in_context() reported wrong value')
 
     def test_append_out_of_context(self):
-        # We can not call append out of context
-        with self.assertRaises(HistogramContextError, msg='Append out of context did not raise'):
-            self.h.append([1])
+        for err_type in [HistogramContextError, DataContextError]:
+            # We can not call append out of context
+            with self.assertRaises(err_type, msg='Append out of context did not raise'):
+                self.h.append([1])
 
     def test_call_in_context(self):
-        # We can not call the histogram context out of context
-        with self.h:
-            with self.assertRaises(HistogramContextError, msg='Config in context did not raise'):
-                self.h.config_dataset()
+        for err_type in [HistogramContextError, DataContextError]:
+            # We can not call the histogram context out of context
+            with self.h:
+                with self.assertRaises(err_type, msg='Config in context did not raise'):
+                    self.h.config_dataset()
 
     def test_nesting_exceptions(self):
-        with self.assertRaises(HistogramContextError, msg='Close histogram out of context did not raise'):
-            self.h.close()
-        # Open the context
-        self.h.open()
-        with self.assertRaises(HistogramContextError, msg='Open context in context did not raise'):
+        for err_type in [HistogramContextError, DataContextError]:
+            with self.assertRaises(err_type, msg='Close histogram out of context did not raise'):
+                self.h.close()
+            # Open the context
             self.h.open()
-        # Close the context
-        self.h.close()
-        with self.assertRaises(HistogramContextError, msg='Close histogram out of context did not raise'):
+            with self.assertRaises(err_type, msg='Open context in context did not raise'):
+                self.h.open()
+            # Close the context
             self.h.close()
-        with self.h:
-            with self.assertRaises(HistogramContextError, msg='Nesting context did not raise'):
-                with self.h:
-                    pass
+            with self.assertRaises(err_type, msg='Close histogram out of context did not raise'):
+                self.h.close()
+            with self.h:
+                with self.assertRaises(err_type, msg='Nesting context did not raise'):
+                    with self.h:
+                        pass
 
     def test_append(self):
         data = [

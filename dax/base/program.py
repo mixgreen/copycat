@@ -6,6 +6,7 @@ import artiq.coredevice.core
 
 import dax.base.system
 import dax.interfaces.operation
+import dax.interfaces.data_context
 
 __all__ = ['DaxProgram']
 
@@ -21,25 +22,31 @@ class DaxProgram(dax.base.system.DaxBase, abc.ABC):
     A DAX program is designed like a regular ARTIQ experiment and has access to the following additional attributes:
 
     - :attr:`core`, is already populated with the core device driver
-    - :attr:`q`, gate-level access to the quantum domain (see :class:`dax.interfaces.operation.OperationInterface`)
+    - :attr:`q`, gate-level access to the quantum domain
+      (see :class:`dax.interfaces.operation.OperationInterface`)
+      (note: this attribute should only be used in the :func:`run` and :func:`analyze` functions)
+    - :attr:`data_context`, context to batch data collection when storing measurement data
+      (see :class:`dax.interfaces.data_context.DataContextInterface`)
       (note: this attribute should only be used in the :func:`run` and :func:`analyze` functions)
     - :attr:`logger`, program logger (see also :class:`dax.base.system.DaxBase`)
       (note: should not be used in kernels)
 
     The ARTIQ environment of a DAX program is partially decoupled from the environment that hosts the DAX system.
-    The device DB is empty, arguments are not passed to/from the DAX system, and datasets are isolated.
+    The device DB is empty, arguments are not shared with the DAX system, and datasets are isolated.
     """
 
     def __init__(self, managers_or_parent: typing.Any,
                  *args: typing.Any,
                  core: artiq.coredevice.core.Core,
-                 interface: dax.interfaces.operation.OperationInterface,
+                 operation: dax.interfaces.operation.OperationInterface,
+                 data_context: dax.interfaces.data_context.DataContextInterface,
                  **kwargs: typing.Any):
         """Construct a DAX program object.
 
         :param managers_or_parent: Manager or parent of this program
         :param core: The core object
-        :param interface: The operation interface object
+        :param operation: The operation interface object
+        :param data_context: The data context interface object
         :param args: Positional arguments forwarded to the :func:`build` function
         :param kwargs: Keyword arguments forwarded to the :func:`build` function
         """
@@ -49,9 +56,10 @@ class DaxProgram(dax.base.system.DaxBase, abc.ABC):
 
         # Store attributes after ``build()``
         self.__core: artiq.coredevice.core.Core = core
-        self.__q: dax.interfaces.operation.OperationInterface = interface
+        self.__q: dax.interfaces.operation.OperationInterface = operation
+        self.__data_context: dax.interfaces.data_context.DataContextInterface = data_context
         # Update kernel invariants
-        self.update_kernel_invariants('core', 'q')
+        self.update_kernel_invariants('core', 'q', 'data_context')
 
     @property
     def core(self) -> artiq.coredevice.core.Core:
@@ -66,8 +74,18 @@ class DaxProgram(dax.base.system.DaxBase, abc.ABC):
         """Property that provides gate-level access to the quantum domain.
 
         This attribute should only be used in the :func:`run` and :func:`analyze` functions.
+        Any functions for actual quantum operations can only be used in the :func:`run` function.
         """
         return self.__q
+
+    @property
+    def data_context(self) -> dax.interfaces.data_context.DataContextInterface:
+        """Context to batch data collection when storing measurement data.
+
+        The data context is not reentrant and should only be used as a context in the :func:`run` function.
+        Data retrieval functions of this object can be used in the :func:`run` and :func:`analyze` functions.
+        """
+        return self.__data_context
 
     @artiq.language.core.host_only
     def get_identifier(self) -> str:

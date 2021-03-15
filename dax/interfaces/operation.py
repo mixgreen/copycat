@@ -12,7 +12,7 @@ from artiq.language import TInt32, TList, kernel
 from dax.interfaces.gate import GateInterface
 import dax.util.artiq
 
-__all__ = ['OperationInterface', 'validate_operation_interface']
+__all__ = ['OperationInterface', 'validate_interface']
 
 
 class OperationInterface(GateInterface, abc.ABC):
@@ -20,8 +20,11 @@ class OperationInterface(GateInterface, abc.ABC):
 
     When this interface is implemented, :attr:`pi` and :attr:`num_qubits` need to be marked kernel invariant.
 
-    Normally, all operation methods are expected to be kernel functions unless mentioned otherwise.
+    All operation methods are expected to be kernel functions unless mentioned otherwise.
     Operations that are not implemented should raise a :class:`NotImplementedError`.
+
+    Note that some functions of the operation interface must be used inside a
+    :class:`dax.interfaces.data_context.DataContextInterface` context.
     """
 
     """Operations"""
@@ -64,7 +67,8 @@ class OperationInterface(GateInterface, abc.ABC):
     def store_measurements(self, qubits: TList(TInt32)):  # type: ignore
         """Store the binary measurement results of the given qubits in the archive.
 
-        This function can be used after one or more measurement operations were scheduled on each target qubit.
+        This function must be used inside a :class:`dax.interfaces.data_context.DataContextInterface` context.
+        It can be used after one or more measurement operations were scheduled on each target qubit.
         The execution of this function will block until all measurement results are available.
 
         :param qubits: A list of target qubits
@@ -75,7 +79,8 @@ class OperationInterface(GateInterface, abc.ABC):
     def store_measurements_all(self):
         """Store the binary measurement results of all qubits in the archive.
 
-        This function can be used after one or more measurement operations were scheduled on all qubits.
+        This function must be used inside a :class:`dax.interfaces.data_context.DataContextInterface` context.
+        It can be used after one or more measurement operations were scheduled on all qubits.
         The execution of this function will block until all measurement results are available.
         """
         self.store_measurements(list(range(self.num_qubits)))
@@ -106,39 +111,41 @@ class OperationInterface(GateInterface, abc.ABC):
         pass
 
 
-def validate_operation_interface(interface: OperationInterface, *, num_qubits: typing.Optional[int] = None) -> bool:
+def validate_interface(interface: OperationInterface, *, num_qubits: typing.Optional[int] = None) -> bool:
     """Validate an operation interface object.
 
     :param interface: The operation interface object
     :param num_qubits: The exact number of qubits in the system (optional)
     :return: :const:`True`, to allow usage of this function in an ``assert`` statement
-    :raise AssertionError: Raised if validation failed
+    :raise TypeError: Raised if validation failed
     """
-    assert isinstance(interface, OperationInterface), 'The provided interface is not of type OperationInterface'
-    assert isinstance(num_qubits, int) or num_qubits is None, 'Num qubits must be of type int or None'
+    if not isinstance(interface, OperationInterface):
+        raise TypeError('The provided interface is not of type OperationInterface')
+    if not isinstance(num_qubits, (int, type(None))):
+        raise TypeError('Num qubits must be of type int or None')
 
     # Validate properties
     properties: typing.Dict[str, typing.Callable[[typing.Any], bool]] = {
         'num_qubits': lambda p: isinstance(p, np.int32) and (p == num_qubits or num_qubits is None),
     }
-    assert all(fn(getattr(interface, p, None)) for p, fn in properties.items()), \
-        'Not all properties return the correct types'
+    if not all(fn(getattr(interface, p, None)) for p, fn in properties.items()):
+        raise TypeError('Not all properties return the correct types')
 
     # Validate kernel invariants
     kernel_invariants: typing.Set[str] = {'pi'} | properties.keys()
-    assert all(i in getattr(interface, 'kernel_invariants', {}) for i in kernel_invariants), \
-        'Not all kernel invariants are correctly added'
+    if not all(i in getattr(interface, 'kernel_invariants', {}) for i in kernel_invariants):
+        raise TypeError('Not all kernel invariants are correctly added')
 
     # Validate host only functions
     host_only_fn: typing.Set[str] = {'set_realtime'}
-    assert all(dax.util.artiq.is_host_only(getattr(interface, fn, None)) for fn in host_only_fn), \
-        'Not all host only functions are decorated correctly'
+    if not all(dax.util.artiq.is_host_only(getattr(interface, fn, None)) for fn in host_only_fn):
+        raise TypeError('Not all host only functions are decorated correctly')
 
     # Validate kernel functions
     kernel_fn: typing.Set[str] = {n for n, _ in inspect.getmembers(OperationInterface, inspect.isfunction)
                                   if not n.startswith('_') and n not in host_only_fn}
-    assert all(dax.util.artiq.is_kernel(getattr(interface, fn, None)) for fn in kernel_fn), \
-        'Not all kernel functions are decorated correctly'
+    if not all(dax.util.artiq.is_kernel(getattr(interface, fn, None)) for fn in kernel_fn):
+        raise TypeError('Not all kernel functions are decorated correctly')
 
     # Return True
     return True

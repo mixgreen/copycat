@@ -1,4 +1,5 @@
 import unittest
+import unittest.mock
 import inspect
 import numpy as np
 
@@ -96,21 +97,23 @@ class OperationInstance(dax.interfaces.operation.OperationInterface):
 
 
 class OperationInterfaceTestCase(unittest.TestCase):
-    def test_correct_interface(self):
+    def test_validate_interface(self):
         interface = OperationInstance()
-        self.assertTrue(
-            dax.interfaces.operation.validate_operation_interface(interface, num_qubits=OperationInstance.NUM_QUBITS))
-        self.assertTrue(dax.interfaces.operation.validate_operation_interface(interface))
+        self.assertTrue(dax.interfaces.operation.validate_interface(interface))
+        self.assertTrue(dax.interfaces.operation.validate_interface(interface, num_qubits=OperationInstance.NUM_QUBITS))
 
     def _validate_functions(self, fn_names):
+        interface = OperationInstance()
+
         for fn in fn_names:
             with self.subTest(fn=fn):
-                # Create a new interface object and replace the function to test with the dummy function
-                interface = OperationInstance()
-                setattr(interface, fn, self._dummy_fn)
+                # Make sure the interface is valid
+                dax.interfaces.operation.validate_interface(interface, num_qubits=interface.NUM_QUBITS)
 
-                with self.assertRaises(AssertionError, msg='Validate did not raise'):
-                    dax.interfaces.operation.validate_operation_interface(interface, num_qubits=interface.NUM_QUBITS)
+                with unittest.mock.patch.object(interface, fn, self._dummy_fn):
+                    # Patch interface and verify the validation fails
+                    with self.assertRaises(TypeError, msg='Validate did not raise'):
+                        dax.interfaces.operation.validate_interface(interface, num_qubits=interface.NUM_QUBITS)
 
     def test_validate_kernel_fn(self):
         kernel_fn = [n for n, fn in inspect.getmembers(OperationInstance, inspect.isfunction) if is_kernel(fn)]
@@ -129,8 +132,8 @@ class OperationInterfaceTestCase(unittest.TestCase):
             with self.subTest(invariant=invariant):
                 # Remove the invariant and test
                 interface.kernel_invariants.remove(invariant)
-                with self.assertRaises(AssertionError, msg='Validate did not raise'):
-                    dax.interfaces.operation.validate_operation_interface(interface, num_qubits=interface.NUM_QUBITS)
+                with self.assertRaises(TypeError, msg='Validate did not raise'):
+                    dax.interfaces.operation.validate_interface(interface, num_qubits=interface.NUM_QUBITS)
 
                 # Restore the invariant
                 interface.kernel_invariants.add(invariant)
@@ -143,8 +146,8 @@ class OperationInterfaceTestCase(unittest.TestCase):
                 return int(super(_Instance, self).num_qubits)
 
         interface = _Instance()
-        with self.assertRaises(AssertionError, msg='Validate did not raise'):
-            dax.interfaces.operation.validate_operation_interface(interface, num_qubits=interface.NUM_QUBITS)
+        with self.assertRaises(TypeError, msg='Validate did not raise'):
+            dax.interfaces.operation.validate_interface(interface, num_qubits=interface.NUM_QUBITS)
 
     def _dummy_fn(self):
         """Dummy function used for testing."""

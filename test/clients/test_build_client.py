@@ -19,6 +19,9 @@ import dax.clients.rpc_benchmark
 import dax.clients.rtio_benchmark
 import dax.clients.system_benchmark
 
+import test.interfaces.test_operation
+import test.interfaces.test_data_context
+
 
 def _get_managers(**kwargs):
     return get_managers(enable_dax_sim(ddb=_DEVICE_DB, enable=True, logging_level=30,
@@ -47,7 +50,9 @@ class _TestDetectionModule(DaxModule, dax.interfaces.detection.DetectionInterfac
         return 100 * us
 
 
-class _TestSystem(DaxSystem):
+class _TestSystem(dax.base.system.DaxSystem,
+                  test.interfaces.test_operation.OperationInstance,
+                  test.interfaces.test_data_context.DataContextInstance):
     SYS_ID = 'unittest_system'
     SYS_VER = 0
 

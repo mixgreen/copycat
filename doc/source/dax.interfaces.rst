@@ -1,6 +1,14 @@
 dax.interfaces package
 ======================
 
+dax.interfaces.data_context module
+----------------------------------
+
+.. automodule:: dax.interfaces.data_context
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 dax.interfaces.detection module
 -------------------------------
 

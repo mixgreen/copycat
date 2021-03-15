@@ -14,6 +14,7 @@ import matplotlib.pyplot as plt  # type: ignore
 import matplotlib.ticker  # type: ignore
 
 from dax.experiment import *
+from dax.interfaces.data_context import DataContextInterface, DataContextError
 from dax.interfaces.detection import DetectionInterface
 from dax.util.ccb import get_ccb_tool
 from dax.util.output import FileNameGenerator, BaseFileNameGenerator
@@ -22,12 +23,12 @@ from dax.util.units import UnitsFormatter
 __all__ = ['HistogramContext', 'HistogramAnalyzer', 'HistogramContextError']
 
 
-class HistogramContextError(RuntimeError):
+class HistogramContextError(DataContextError):
     """Class for histogram context errors."""
     pass
 
 
-class HistogramContext(DaxModule):
+class HistogramContext(DaxModule, DataContextInterface):
     """Context class for managing storage of PMT histogram data.
 
     This module can be used as a sub-module of a service providing state measurement abilities.
@@ -35,6 +36,7 @@ class HistogramContext(DaxModule):
     or call its additional functions.
 
     Note that the histogram context requires a :class:`DetectionInterface` in your system.
+    This class implements the :class:`DataContextInterface`.
 
     The histogram context objects manages all result values, but the user is responsible for tracking
     "input parameters".
@@ -221,7 +223,7 @@ class HistogramContext(DaxModule):
         This function can be used to manually enter the histogram context.
         We strongly recommend to use the ``with`` statement instead.
 
-        :raises HistogramContextError: Raised if already in histogram context (context is non-reentrant)
+        :raises HistogramContextError: Raised if the histogram context was already entered (context is non-reentrant)
         """
 
         if self._in_context:
@@ -240,7 +242,7 @@ class HistogramContext(DaxModule):
         This function can be used to manually exit the histogram context.
         We strongly recommend to use the ``with`` statement instead.
 
-        :raises HistogramContextError: Raised if called outside the histogram context
+        :raises HistogramContextError: Raised if the histogram context was not entered
         """
 
         if not self._in_context:
@@ -494,7 +496,7 @@ class HistogramContext(DaxModule):
         """Obtain the raw data captured by the histogram context for a specific key.
 
         Data is formatted as a 3-dimensional list.
-        To access the raw count of histogram N of data point P of channel C: ``get_raw()[N][P][C]``.
+        To access the data of histogram N of data point P of channel C: ``get_raw()[N][P][C]``.
 
         In case no dataset key is provided, the default dataset key is used.
 
@@ -582,7 +584,7 @@ class HistogramAnalyzer:
 
     :attr:`histograms` is a dict which for each key contains a list of histograms per channel.
     The first dimension is the channel and the second dimension are the histograms.
-    Note that histograms are stored as Counter objects, which behave like dicts.
+    Note that histograms are stored as ``Counter`` objects, which behave like dicts.
 
     :attr:`probabilities` is a dict which for each key contains a list of individual state probabilities.
     This attribute is only available if a state detection threshold is available.
@@ -599,18 +601,18 @@ class HistogramAnalyzer:
 
     Various helper functions for data processing are also available.
     :func:`histogram_to_probability` converts a single histogram, formatted as a
-    Counter object, to a state probability based on a given state detection threshold.
-    :func:`histograms_to_probabilities` maps a list of histograms per channel (2D array of Counter objects)
+    ``Counter`` object, to a state probability based on a given state detection threshold.
+    :func:`histograms_to_probabilities` maps a list of histograms per channel (2D array of ``Counter`` objects)
     to a list of probabilities per channel based on a given state detection threshold.
-    :func:`histogram_to_mean_count` converts a single histogram, formatted as a Counter object, to a mean count.
-    :func:`histograms_to_mean_counts` maps a list of histograms per channel (2D array of Counter objects)
+    :func:`histogram_to_mean_count` converts a single histogram, formatted as a ``Counter`` object, to a mean count.
+    :func:`histograms_to_mean_counts` maps a list of histograms per channel (2D array of ``Counter`` objects)
     to a list of mean counts per channel.
-    :func:`histogram_to_stdev_count` converts a single histogram, formatted as a Counter object,
+    :func:`histogram_to_stdev_count` converts a single histogram, formatted as a ``Counter`` object,
     to a count standard deviation.
-    :func:`histograms_to_stdev_counts` maps a list of histograms per channel (2D array of Counter objects)
+    :func:`histograms_to_stdev_counts` maps a list of histograms per channel (2D array of ``Counter`` objects)
     to a list of count standard deviations per channel.
     :func:`counter_to_ndarray` and :func:`ndarray_to_counter` convert a single histogram
-    stored as a Counter object to an array representation and vice versa.
+    stored as a ``Counter`` object to an array representation and vice versa.
     :func:`raw_to_states` converts raw data to sequences of integer states based on a given detection threshold.
     :func:`raw_to_state_probabilities` converts raw data to full state probabilities
     based on a given detection threshold.
@@ -720,7 +722,7 @@ class HistogramAnalyzer:
         This function works correct for both binary measurements and detection counts.
         For detection counts, counts *greater than* the state detection threshold are considered to be in state one.
 
-        :param counter: The counter object representing the histogram
+        :param counter: The ``Counter`` object representing the histogram
         :param state_detection_threshold: The state detection threshold to use
         :return: The number of one measurements
         """
@@ -735,7 +737,7 @@ class HistogramAnalyzer:
 
         Counts *greater than* the state detection threshold are considered to be in state one.
 
-        :param counter: The counter object representing the histogram
+        :param counter: The ``Counter`` object representing the histogram
         :param state_detection_threshold: The state detection threshold to use
         :return: The state probability as a float
         """
@@ -751,7 +753,7 @@ class HistogramAnalyzer:
                                     state_detection_threshold: int) -> np.ndarray:
         """Convert histograms to individual state probabilities based on a state detection threshold.
 
-        Histograms are provided as a 2D array of Counter objects.
+        Histograms are provided as a 2D array of ``Counter`` objects.
         The first dimension is the channel, the second dimension is the sequence of counters.
 
         :param histograms: The input histograms
@@ -770,7 +772,7 @@ class HistogramAnalyzer:
     def _histogram_to_mean_count(cls, counter: collections.Counter) -> typing.Tuple[float, int]:
         """Helper function to calculate the mean count of a histogram.
 
-        :param counter: The counter object representing the histogram
+        :param counter: The ``Counter`` object representing the histogram
         :return: A tuple with the mean count as a float and the total number of samples as an int
         """
         num_samples = sum(counter.values())
@@ -781,7 +783,7 @@ class HistogramAnalyzer:
     def histogram_to_mean_count(cls, counter: collections.Counter) -> float:
         """Helper function to calculate the mean count of a histogram.
 
-        :param counter: The counter object representing the histogram
+        :param counter: The ``Counter`` object representing the histogram
         :return: The mean count as a float
         """
         mean, _ = cls._histogram_to_mean_count(counter)
@@ -791,7 +793,7 @@ class HistogramAnalyzer:
     def histograms_to_mean_counts(cls, histograms: typing.Sequence[typing.Sequence[collections.Counter]]) -> np.ndarray:
         """Convert histograms to mean counts.
 
-        Histograms are provided as a 2D array of Counter objects.
+        Histograms are provided as a 2D array of ``Counter`` objects.
         The first dimension is the channel, the second dimension is the sequence of counters.
 
         :param histograms: The input histograms
@@ -807,7 +809,7 @@ class HistogramAnalyzer:
         This helper function is more efficient than calculating mean and standard deviation separately.
         It is mainly intended to be used for real-time data processing in :class:`HistogramContext`.
 
-        :param counter: The counter object representing the histogram
+        :param counter: The ``Counter`` object representing the histogram
         :return: The mean and standard deviation of the histogram as a tuple of floats
         """
         mean, num_samples = cls._histogram_to_mean_count(counter)
@@ -818,7 +820,7 @@ class HistogramAnalyzer:
     def histogram_to_stdev_count(cls, counter: collections.Counter) -> float:
         """Helper function to calculate the count standard deviation of a histogram.
 
-        :param counter: The counter object representing the histogram
+        :param counter: The ``Counter`` object representing the histogram
         :return: The standard deviation of the histogram as a float
         """
         _, stdev = cls.histogram_to_mean_stdev_count(counter)
@@ -829,7 +831,7 @@ class HistogramAnalyzer:
             -> np.ndarray:
         """Convert histograms to count standard deviations.
 
-        Histograms are provided as a 2D array of Counter objects.
+        Histograms are provided as a 2D array of ``Counter`` objects.
         The first dimension is the channel, the second dimension is the sequence of counters.
 
         :param histograms: The input histograms
@@ -840,19 +842,19 @@ class HistogramAnalyzer:
 
     @staticmethod
     def counter_to_ndarray(histogram: collections.Counter) -> np.ndarray:
-        """Convert a histogram stored as a Counter object to an ndarray.
+        """Convert a histogram stored as a ``Counter`` object to an ndarray.
 
-        :param histogram: The histogram in Counter format
+        :param histogram: The histogram in ``Counter`` format
         :return: ndarray that represents the same histogram
         """
         return np.asarray([histogram[i] for i in range(max(histogram) + 1)])
 
     @staticmethod
     def ndarray_to_counter(histogram: typing.Sequence[int]) -> collections.Counter:
-        """Convert a histogram stored as an ndarray to a Counter object.
+        """Convert a histogram stored as an ndarray to a ``Counter`` object.
 
         :param histogram: The histogram in ndarray format
-        :return: Counter object that represents the same histogram
+        :return: ``Counter`` object that represents the same histogram
         """
         return collections.Counter({i: v for i, v in enumerate(histogram) if v > 0})
 
