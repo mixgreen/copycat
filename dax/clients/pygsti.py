@@ -26,7 +26,7 @@ __G_T = typing.TypeVar('__G_T')  # Type variable for gates
 
 
 def _get_gates(circuit: str, available_gates: typing.Dict[str, __G_T], separator: str) -> typing.List[__G_T]:
-    """Create list of gates."""
+    """Create list of gates from a circuit."""
     try:
         return [available_gates[g] for g in circuit.split(f':{separator}')
                 if g != f'@({separator})' and g != f'{{}}@({separator})']
@@ -34,16 +34,16 @@ def _get_gates(circuit: str, available_gates: typing.Dict[str, __G_T], separator
         raise KeyError(f'Gate "{e}" is not available according to the dictionary!') from None
 
 
-def _partition_gate_list(circuit_list: typing.Sequence[__G_T],
-                         max_partition_size: int) -> typing.Sequence[typing.Sequence[__G_T]]:
+def _partition_circuit_list(circuit_list: typing.Sequence[typing.Sequence[__G_T]],
+                            max_partition_size: int) -> typing.Sequence[typing.Sequence[typing.Sequence[__G_T]]]:
     """Partition circuit list based on max size the hardware can handle."""
-    partitions: typing.List[typing.List[__G_T]] = [[]]
+    partitions: typing.List[typing.List[typing.Sequence[__G_T]]] = [[]]
 
     for circuit in circuit_list:
-        circuit_size = np.size(circuit)
+        circuit_size = len(circuit)
         if circuit_size > max_partition_size:
             raise ValueError(f'Single circuit of size {circuit_size} too large')
-        elif circuit_size + np.size(partitions[-1]) <= max_partition_size:
+        elif circuit_size + sum(len(p) for p in partitions[-1]) <= max_partition_size:
             partitions[-1].append(circuit)
         else:
             partitions.append([circuit])
@@ -173,16 +173,21 @@ class RandomizedBenchmarkingSQ(DaxClient, Experiment):
         self.logger.debug(f'Available gates: {", ".join(available_gates_list)}')
 
         # Create Processor Specifications and Experiment Design
+        self.logger.debug('Creating pyGSTi processor spec')
         pspec = pygsti.obj.ProcessorSpec(nQubits=1, gate_names=available_gates_list, qubit_labels=self.QUBIT_LABELS,
                                          construct_models=('clifford',), verbosity=self._verbosity)
+        self.logger.debug('Creating pyGSTi protocol')
         self._exp_design = pygsti.protocols.CliffordRBDesign(pspec, circuit_depths, self._num_circuits,
                                                              qubit_labels=self.QUBIT_LABELS, verbosity=self._verbosity)
 
         # Convert experiment design to circuit list
+        self.logger.debug('Converting circuits')
         all_circuits = [_get_gates(c.str, available_gates, self.QUBIT_LABELS[0])
                         for c_list in self._exp_design.circuit_lists for c in c_list]
         # Partition circuit list
-        self._partitions = _partition_gate_list(all_circuits, self.MAX_CIRCUIT_DEPTH)
+        self.logger.debug('Partitioning circuits')
+        self._partitions = _partition_circuit_list(all_circuits, self.MAX_CIRCUIT_DEPTH)
+        self.logger.debug(f'Number of circuit partitions: {len(self._partitions)}')
 
     def run(self):
         """Entry point of the experiment."""
@@ -282,7 +287,7 @@ class RandomizedBenchmarkingSQ(DaxClient, Experiment):
         protocol_data = pygsti.protocols.ProtocolData(self._exp_design, ds)
 
         # Save data for later analysis
-        dir_name = str(get_base_path(self._scheduler))
+        dir_name = str(get_base_path(self._scheduler).joinpath('pygsti'))
         self.logger.info(f'Saving pyGSTi data to {dir_name}')
         protocol_data.write(dir_name)
 

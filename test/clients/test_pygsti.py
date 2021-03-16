@@ -9,7 +9,7 @@ def _mkl(size):
 
 
 class PygstTestCase(unittest.TestCase):
-    def test_partition_gate_list(self):
+    def test_partition_circuit_list(self):
         data = [
             # Circuit list, max partition size, ref for num partitions
             ([_mkl(4), _mkl(4), _mkl(4)], 4, 3),
@@ -33,7 +33,7 @@ class PygstTestCase(unittest.TestCase):
         for circuit_list, max_partition_size, num_partitions_ref in data:
             with self.subTest(circuit_list=circuit_list, max_partition_size=max_partition_size,
                               num_partitions_ref=num_partitions_ref):
-                result = dax.clients.pygsti._partition_gate_list(circuit_list, max_partition_size=max_partition_size)
+                result = dax.clients.pygsti._partition_circuit_list(circuit_list, max_partition_size=max_partition_size)
 
                 for partition in result:
                     # Test if partition size is not exceeded
@@ -43,7 +43,7 @@ class PygstTestCase(unittest.TestCase):
                 # Test number of partitions
                 self.assertEqual(len(result), num_partitions_ref, 'Unexpected number of partitions')
 
-    def test_partition_gate_list_error(self):
+    def test_partition_circuit_list_error(self):
         data = [
             # Circuit list, max partition size
             ([_mkl(4), _mkl(4), _mkl(5)], 4),
@@ -62,7 +62,7 @@ class PygstTestCase(unittest.TestCase):
         for circuit_list, max_partition_size in data:
             with self.subTest(circuit_list=circuit_list, max_partition_size=max_partition_size):
                 with self.assertRaises(ValueError, msg='Impossible partitioning did not raise'):
-                    dax.clients.pygsti._partition_gate_list(circuit_list, max_partition_size=max_partition_size)
+                    dax.clients.pygsti._partition_circuit_list(circuit_list, max_partition_size=max_partition_size)
 
 
 if __name__ == '__main__':
