@@ -10,11 +10,13 @@ from dax.util.artiq import get_managers
 import dax.modules.rtio_benchmark
 import dax.modules.rpc_benchmark
 import dax.interfaces.detection
+import dax.interfaces.gate
 
 import dax.clients.gtkwave
 import dax.clients.introspect
 import dax.clients.pmt_monitor
 import dax.clients.program
+import dax.clients.pygsti
 import dax.clients.rpc_benchmark
 import dax.clients.rtio_benchmark
 import dax.clients.system_benchmark
@@ -50,7 +52,7 @@ class _TestDetectionModule(DaxModule, dax.interfaces.detection.DetectionInterfac
         return 100 * us
 
 
-class _TestSystem(dax.base.system.DaxSystem,
+class _TestSystem(DaxSystem,
                   test.interfaces.test_operation.OperationInstance,
                   test.interfaces.test_data_context.DataContextInstance):
     SYS_ID = 'unittest_system'
@@ -74,6 +76,10 @@ class BuildClientTestCase(unittest.TestCase):
         (dax.clients.pmt_monitor.PmtMonitor, {}, True),
         (dax.clients.pmt_monitor.MultiPmtMonitor, {}, True),
         (dax.clients.program.ProgramClient, {'file': ''}, False),
+        (dax.clients.pygsti.RandomizedBenchmarkingSQ, {
+            'Operation interface': _TestSystem.SYS_NAME,
+            'Max depth': '128',
+        }, False),
         (dax.clients.rpc_benchmark.RpcBenchmarkLatency, {}, True),
         (dax.clients.rpc_benchmark.RpcBenchmarkAsyncThroughput, {}, True),
         (dax.clients.rtio_benchmark.RtioBenchmarkEventThroughput, {}, True),

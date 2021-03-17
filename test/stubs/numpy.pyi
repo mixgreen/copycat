@@ -4,7 +4,7 @@ import collections.abc
 __all__ = ['generic', 'character', 'number', 'integer', 'int32', 'int64', 'floating', 'bool_', 'ndarray',
            'array', 'zeros', 'ones', 'empty', 'full', 'arange', 'linspace', 'logspace',
            'issubdtype', 'ndenumerate',
-           'prod']
+           'prod', 'size', 'log2']
 
 
 # noinspection PyPep8Naming
@@ -234,4 +234,13 @@ def ndenumerate(arr: ndarray[__E_T]) -> typing.Iterator[typing.Tuple[typing.Tupl
 def prod(a: typing.Sequence[__E_T], axis: __AXIS_T = ..., dtype: typing.Optional[type] = ...,
          out: typing.Optional[ndarray[__E_T]] = ..., keepdims: typing.Optional[bool] = ...,
          initial: typing.Optional[__E_T] = ..., where: typing.Optional[typing.Sequence[bool]] = ...) -> __E_T:
+    ...
+
+
+def size(a: typing.Any, axis: typing.Optional[int] = ...) -> int:
+    ...
+
+
+def log2(x: __E_T, out: typing.Optional[ndarray[__E_T]] = ..., *, where: __E_T = ..., **kwargs: typing.Any) -> __E_T:
+    # Left out positional-only parameters `/` for compatibility with Python<3.8
     ...
