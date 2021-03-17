@@ -532,12 +532,12 @@ class DaxScan(dax.base.system.DaxBase, abc.ABC):
         pass
 
     def host_setup(self) -> None:
-        """1. Preparation on the host, called once at entry and after a pause."""
+        """1. Setup on the host, called once at entry and after a pause."""
         pass
 
     @portable
     def device_setup(self):  # type: () -> None
-        """2. Preparation on the core device, called once at entry and after a pause.
+        """2. Setup on the core device, called once at entry and after a pause.
 
         Can for example be used to reset the core.
         """

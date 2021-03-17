@@ -331,12 +331,12 @@ class RandomizedBenchmarkingSQ(DaxClient, Experiment):
         pass
 
     def host_setup(self) -> None:
-        """Preparation on the host, called once at entry."""
+        """Setup on the host, called once at entry."""
         pass
 
     @kernel
     def device_setup(self):  # type: () -> None
-        """Preparation on the core device, called once at each entry of a kernel.
+        """Setup on the core device, called once at each entry of a kernel.
 
         Should at least reset the core.
         """
@@ -353,5 +353,5 @@ class RandomizedBenchmarkingSQ(DaxClient, Experiment):
         pass
 
     def host_cleanup(self) -> None:
-        """Cleanup on the host, called at exit."""
+        """Cleanup on the host, called once at exit."""
         pass

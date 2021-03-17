@@ -53,6 +53,9 @@ class ProgramClient(DaxClient, Experiment):
 
     - :attr:`DEFAULT_OPERATION_KEY`
     - :attr:`DEFAULT_DATA_CONTEXT_KEY`
+
+    This class can be customized by overriding the :func:`add_arguments`, :func:`setup`,
+    and :func:`cleanup` functions.
     """
 
     MANAGERS_KWARG = 'managers'
@@ -98,6 +101,9 @@ class ProgramClient(DaxClient, Experiment):
             'data_context',
             EnumerationValue(sorted(self._data_context_interfaces), default=default_data_context_key),
             tooltip='The data context interface to use')
+
+        # Add custom arguments
+        self.add_arguments()
 
     def prepare(self) -> None:
         # Archive input data
@@ -153,9 +159,19 @@ class ProgramClient(DaxClient, Experiment):
         # Validate interfaces
         assert dax.interfaces.operation.validate_interface(self._operation)
         assert dax.interfaces.data_context.validate_interface(self._data_context)
-        # Run the program
-        self.logger.info('Running program')
-        self._program.run()
+
+        try:
+            # Perform setup
+            self.setup()
+
+            # Run the program
+            self.logger.info('Running program')
+            self._program.run()
+            self.logger.debug('Program finished')
+
+        finally:
+            # Perform cleanup
+            self.cleanup()
 
     def analyze(self) -> None:
         # Analyze the program
@@ -182,3 +198,23 @@ class ProgramClient(DaxClient, Experiment):
                 if not os.path.isfile(unpacked_file_name):
                     raise FileNotFoundError(f'Archive "{file_name}" does not contain a main.py file')
                 return _import_file(unpacked_file_name)
+
+    """Customization functions"""
+
+    def add_arguments(self) -> None:
+        """Add custom arguments during the build phase."""
+        pass
+
+    def setup(self):  # type: () -> None
+        """Setup on the host and/or the core device, called once at entry.
+
+        Host and device setup are not separated for this client.
+        """
+        pass
+
+    def cleanup(self):  # type: () -> None
+        """Cleanup on the host and/or the core device, called once at exit.
+
+        Host and device setup are not separated for this client.
+        """
+        pass

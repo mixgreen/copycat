@@ -263,12 +263,12 @@ class _PmtMonitorBase(DaxClient, Experiment, abc.ABC):
         pass
 
     def host_setup(self) -> None:
-        """Preparation on the host, called once at entry and after a pause."""
+        """Setup on the host, called once at entry and after a pause."""
         pass
 
     @kernel
     def device_setup(self):  # type: () -> None
-        """Preparation on the core device, called once at entry and after a pause.
+        """Setup on the core device, called once at entry and after a pause.
 
         Should at least reset the core.
         """
