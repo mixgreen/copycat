@@ -2197,13 +2197,13 @@ class OptimusCalibrationTestCase(unittest.TestCase):
         async def get_datasets():
             d_ = {}
 
-            def mod_init(x):
+            def sub_init(x):
                 d_.clear()
                 d_.update(x)
                 raise ConnectionError
 
             async def subscribe():
-                s = Subscriber('datasets', mod_init)
+                s = Subscriber('datasets', sub_init)
                 try:
                     await s.connect(_LOCALHOST, _ARTIQ_MASTER_NOTIFY_PORT)
                     await asyncio.wait_for(s.receive_task, None)
@@ -2216,18 +2216,18 @@ class OptimusCalibrationTestCase(unittest.TestCase):
         async def wait_for_scheduler():
             d_ = {}
 
-            def mod_init(x):
+            def sub_init(x):
                 d_.clear()
                 d_.update(x)
                 return d_
 
             # noinspection PyUnusedLocal
-            def mod_update(mod):
+            def sub_mod(mod):
                 if len(d_) <= 1:  # Also raise if there is no experiment in the schedule
                     raise Exception('This exception is just used to exit the subscriber')
 
             async def subscribe():
-                s = Subscriber('schedule', mod_init, notify_cb=mod_update)
+                s = Subscriber('schedule', sub_init, notify_cb=sub_mod)
                 try:
                     await s.connect(_LOCALHOST, _ARTIQ_MASTER_NOTIFY_PORT)
                     await asyncio.wait_for(s.receive_task, None)
@@ -2249,8 +2249,8 @@ class OptimusCalibrationTestCase(unittest.TestCase):
                 yield el
 
     def _verify_actions(self, expected: typing.List, actual: typing.List[str]) -> bool:
-        assert len(actual) == len(list(self._flatten(expected))), \
-            f'Length mismatch - actual: {len(actual)}, expected: {len(list(self._flatten(expected)))}'
+        if len(actual) != len(list(self._flatten(expected))):
+            return False
 
         def _verify(expected_item: typing.List, cur_idx: int) -> typing.Tuple[bool, int]:
             expected_length = len(expected_item)
@@ -2405,13 +2405,13 @@ class OptimusCalibrationTestCase(unittest.TestCase):
         async def get_schedule():
             d_ = {}
 
-            def mod_init(x):
+            def sub_init(x):
                 d_.clear()
                 d_.update(x)
                 raise ConnectionError
 
             async def subscribe():
-                s = Subscriber('schedule', mod_init)
+                s = Subscriber('schedule', sub_init)
                 try:
                     await s.connect(_LOCALHOST, _ARTIQ_MASTER_NOTIFY_PORT)
                     await asyncio.wait_for(s.receive_task, None)
