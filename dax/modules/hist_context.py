@@ -1,6 +1,3 @@
-# Mitigates https://github.com/m-labs/artiq/issues/1625
-from __future__ import annotations  # Postponed evaluation of annotations
-
 import typing
 import collections
 import collections.abc
