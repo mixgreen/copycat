@@ -7,7 +7,6 @@ import collections.abc
 import time
 import enum
 import networkx as nx
-import graphviz
 import asyncio
 import json
 import hashlib
@@ -1639,6 +1638,9 @@ class DaxScheduler(dax.base.system.DaxHasKey, abc.ABC):
 
     def _render_graph(self) -> None:
         """Render the dependency graph."""
+
+        # Lazy import
+        import graphviz
 
         # Create a directed graph object
         plot = graphviz.Digraph(name=self.NAME, directory=str(dax.util.output.get_base_path(self._scheduler)))

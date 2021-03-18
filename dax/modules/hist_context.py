@@ -10,9 +10,6 @@ import natsort
 import os.path
 import math
 
-import matplotlib.pyplot as plt  # type: ignore
-import matplotlib.ticker  # type: ignore
-
 from dax.experiment import *
 from dax.interfaces.data_context import DataContextInterface, DataContextError
 from dax.interfaces.detection import DetectionInterface
@@ -621,9 +618,6 @@ class HistogramAnalyzer:
     STATE_PROBABILITY_PLOT_FILE_FORMAT: str = '{key}_state_probability'
     """File name format for full state probability plot files."""
 
-    _MPL_DEFAULT_FIG_SIZE = plt.rcParams.get('figure.figsize')
-    """Default matplotlib figure size."""
-
     def __init__(self, source: typing.Union[DaxSystem, HistogramContext, str, h5py.File],
                  state_detection_threshold: typing.Optional[int] = None, *,
                  hdf5_group: typing.Optional[str] = None):
@@ -988,9 +982,13 @@ class HistogramAnalyzer:
         assert isinstance(width, float)
         assert isinstance(ext, str)
 
+        # Lazy import
+        import matplotlib.pyplot as plt  # type: ignore
+        import matplotlib.ticker  # type: ignore
+
         if fig_size is None:
             # Make the default width of the figure wider
-            fig_w, fig_h = self._MPL_DEFAULT_FIG_SIZE
+            fig_w, fig_h = plt.rcParams.get('figure.figsize')
             fig_size = (fig_w * 2, fig_h)
 
         # Get the histograms associated with the given key
@@ -1098,6 +1096,9 @@ class HistogramAnalyzer:
         # Plotting defaults
         kwargs.setdefault('marker', 'o')
 
+        # Lazy import
+        import matplotlib.pyplot as plt
+
         # Plot
         fig, ax = plt.subplots(figsize=fig_size)
         for y, label in zip(probabilities, current_labels):
@@ -1186,6 +1187,9 @@ class HistogramAnalyzer:
 
         # Plotting defaults
         kwargs.setdefault('marker', 'o')
+
+        # Lazy import
+        import matplotlib.pyplot as plt
 
         # Plot
         fig, ax = plt.subplots(figsize=fig_size)
@@ -1282,6 +1286,9 @@ class HistogramAnalyzer:
 
         # Plotting defaults
         kwargs.setdefault('marker', 'o')
+
+        # Lazy import
+        import matplotlib.pyplot as plt
 
         # Plot
         fig, ax = plt.subplots(figsize=fig_size)

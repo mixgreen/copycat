@@ -10,8 +10,6 @@ import h5py  # type: ignore
 import os.path
 import natsort
 
-import matplotlib.pyplot as plt  # type: ignore
-
 from dax.experiment import *
 from dax.util.ccb import get_ccb_tool
 from dax.util.output import FileNameGenerator, BaseFileNameGenerator
@@ -719,6 +717,9 @@ class TimeResolvedAnalyzer:
 
         # Get the traces associated with the given key
         traces = self.traces[key]
+
+        # Lazy import
+        import matplotlib.pyplot as plt  # type: ignore
 
         # Create figure
         fig, ax = plt.subplots(figsize=fig_size)
