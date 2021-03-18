@@ -28,6 +28,9 @@ class HistogramContextError(DataContextError):
     pass
 
 
+_DATA_T = typing.Union[bool, int]  # Type of raw data
+
+
 class HistogramContext(DaxModule, DataContextInterface):
     """Context class for managing storage of PMT histogram data.
 
@@ -67,13 +70,11 @@ class HistogramContext(DaxModule, DataContextInterface):
     PLOT_GROUP_FORMAT: str = '{base}.histogram_context'
     """Group to which the plot applets belong."""
 
-    HISTOGRAM_DATASET_GROUP: str = 'histogram_context'
+    DATASET_GROUP: str = 'histogram_context'
     """The group name for archiving histogram data."""
-    HISTOGRAM_DATASET_KEY_FORMAT: str = HISTOGRAM_DATASET_GROUP + '/{dataset_key}/{index}'
-    """Format string for histogram sub-dataset keys."""
     RAW_DATASET_GROUP: str = 'raw'
     """The group name for archiving raw data."""
-    RAW_DATASET_KEY_FORMAT: str = f'{HISTOGRAM_DATASET_GROUP}/{{dataset_key}}/{RAW_DATASET_GROUP}/{{index}}'
+    DATASET_KEY_FORMAT: str = f'{DATASET_GROUP}/{{dataset_key}}/{RAW_DATASET_GROUP}/{{index}}'
     """Format string for raw sub-dataset keys."""
     DEFAULT_DATASET_KEY: str = 'histogram'
     """The default dataset key of the output sub-datasets."""
@@ -109,14 +110,14 @@ class HistogramContext(DaxModule, DataContextInterface):
         # By default we are not in context
         self._in_context: np.int32 = np.int32(0)
         # The count buffer (buffer appending is a bit faster than dict operations)
-        self._buffer: typing.List[typing.Sequence[int]] = []
+        self._buffer: typing.List[typing.Sequence[_DATA_T]] = []
         # Flag for the first call to close()
         self._first_close: bool = True
 
         # Cache for raw data
-        self._raw_cache: typing.Dict[str, typing.List[typing.Sequence[typing.Sequence[int]]]] = {}
+        self._raw_cache: typing.Dict[str, typing.List[typing.Sequence[typing.Sequence[_DATA_T]]]] = {}
         # Cache for histogram data
-        self._histogram_cache: typing.Dict[str, typing.List[typing.Sequence[collections.Counter]]] = {}
+        self._histogram_cache: typing.Dict[str, typing.List[typing.Sequence[typing.Counter[_DATA_T]]]] = {}
 
         # Target dataset key
         self._dataset_key: str = self._default_dataset_key
@@ -150,7 +151,7 @@ class HistogramContext(DaxModule, DataContextInterface):
         return bool(self._in_context)
 
     @rpc(flags={'async'})
-    def append(self, data):  # type: (typing.Sequence[int]) -> None
+    def append(self, data):  # type: (typing.Sequence[_DATA_T]) -> None
         """Append PMT data to the histogram (async RPC).
 
         This function is intended to be fast to allow high input data throughput.
@@ -256,36 +257,30 @@ class HistogramContext(DaxModule, DataContextInterface):
             # Clear flag
             self._first_close = False
 
-        # Create a sub-dataset keys for this result (HDF5 only supports static array dimensions)
-        histogram_sub_dataset_key: str = self.HISTOGRAM_DATASET_KEY_FORMAT.format(
-            dataset_key=self._dataset_key, index=self._open_datasets[self._dataset_key])
-        raw_sub_dataset_key: str = self.RAW_DATASET_KEY_FORMAT.format(
+        # Create a sub-dataset keys for archiving this result (HDF5 only supports static array dimensions)
+        archive_dataset_key: str = self.DATASET_KEY_FORMAT.format(
             dataset_key=self._dataset_key, index=self._open_datasets[self._dataset_key])
 
         if len(self._buffer):
             # Check consistency of data in the buffer
             if any(len(b) != len(self._buffer[0]) for b in self._buffer):
-                raise RuntimeError('Data in the buffer is not consistent, data probably corrupt')
+                raise RuntimeError('Data in the buffer is ragged')
             if len(self._buffer[0]) == 0:
                 raise RuntimeError('Data elements in the buffer are empty')
 
             # Store raw data in the cache
             self._raw_cache.setdefault(self._dataset_key, []).append(self._buffer)
             # Archive raw data
-            self.set_dataset(raw_sub_dataset_key, self._buffer, archive=True)
+            self.set_dataset(archive_dataset_key, self._buffer, archive=True)
 
             # Transform buffer data to pack counts per ion and convert into histograms
-            histograms: typing.List[typing.Counter[int]] = [collections.Counter(c) for c in zip(*self._buffer)]
+            histograms: typing.List[typing.Counter[_DATA_T]] = HistogramAnalyzer.raw_to_histograms(self._buffer)
             # Store histograms in the cache
             self._histogram_cache.setdefault(self._dataset_key, []).append(histograms)
 
-            # Obtain maximum count over all histograms (HDF5 only supports fixed size arrays)
+            # Flatten dict-like histograms to uniformly-sized list-style histograms
             max_count: int = max(max(h) for h in histograms)
-            # Flatten dict-like histograms to same-size list-style histograms (HDF5 does not support mapping types)
-            flat_histograms: typing.List[typing.List[int]] = [[h[i] for i in range(max_count + 1)] for h in histograms]
-
-            # Write result to histogram sub-dataset for archiving
-            self.set_dataset(histogram_sub_dataset_key, flat_histograms, archive=True)
+            flat_histograms = [HistogramAnalyzer.counter_to_ndarray(h, max_count=max_count) for h in histograms]
             # Write result to histogram plotting dataset
             self.set_dataset(self._histogram_plot_key, flat_histograms, broadcast=True, archive=False)
 
@@ -297,7 +292,6 @@ class HistogramContext(DaxModule, DataContextInterface):
             # Calculate count mean and standard deviation per histogram
             mean_stdev_counts = (HistogramAnalyzer.histogram_to_mean_stdev_count(h) for h in histograms)
             mean_counts, stdev_counts = list(zip(*mean_stdev_counts))  # Transpose data and unpack
-
             # Append results to count mean and standard deviation plotting datasets
             self.append_to_dataset(self._mean_count_plot_key, mean_counts)
             self.append_to_dataset(self._stdev_count_plot_key, stdev_counts)
@@ -306,16 +300,15 @@ class HistogramContext(DaxModule, DataContextInterface):
             # Add empty element to the caches (keeps indexing consistent)
             self._raw_cache.setdefault(self._dataset_key, []).append([])
             self._histogram_cache.setdefault(self._dataset_key, []).append([])
-            # Write empty element to sub-datasets for archiving (keeps indexing consistent)
-            self.set_dataset(raw_sub_dataset_key, [], archive=True)
-            self.set_dataset(histogram_sub_dataset_key, [], archive=True)
+            # Write empty element to sub-dataset for archiving (keeps indexing consistent)
+            self.set_dataset(archive_dataset_key, [], archive=True)
 
         # Update counter for this dataset key
         self._open_datasets[self._dataset_key] += 1
         # Update context counter
         self._in_context -= 1
 
-    def _histogram_to_probability(self, histogram: collections.Counter,
+    def _histogram_to_probability(self, histogram: typing.Counter[_DATA_T],
                                   state_detection_threshold: typing.Optional[int] = None) -> float:
         """Convert a histogram to an individual state probability.
 
@@ -489,10 +482,11 @@ class HistogramContext(DaxModule, DataContextInterface):
 
         :return: A list with keys
         """
-        return list(self._raw_cache)
+        return natsort.natsorted(self._raw_cache)
 
     @host_only
-    def get_raw(self, dataset_key: typing.Optional[str] = None) -> typing.List[typing.Sequence[typing.Sequence[int]]]:
+    def get_raw(self, dataset_key: typing.Optional[str] = None) \
+            -> typing.List[typing.Sequence[typing.Sequence[_DATA_T]]]:
         """Obtain the raw data captured by the histogram context for a specific key.
 
         Data is formatted as a 3-dimensional list.
@@ -661,7 +655,7 @@ class HistogramAnalyzer:
 
             # Get data from histogram context module
             self.keys: typing.List[str] = source.get_keys()
-            self.histograms: typing.Dict[str, typing.List[typing.Sequence[typing.Counter[int]]]] = \
+            self.histograms: typing.Dict[str, typing.List[typing.Sequence[typing.Counter[_DATA_T]]]] = \
                 {k: source.get_histograms(k) for k in self.keys}
             self.probabilities: typing.Dict[str, np.ndarray] = \
                 {k: np.asarray(source.get_probabilities(k, state_detection_threshold)) for k in self.keys}
@@ -678,7 +672,7 @@ class HistogramAnalyzer:
         elif isinstance(source, h5py.File):
             # Construct HDF5 group name
             path = [] if hdf5_group is None else [hdf5_group]
-            group_name = '/'.join(path + ['datasets', HistogramContext.HISTOGRAM_DATASET_GROUP])
+            group_name = '/'.join(path + ['datasets', HistogramContext.DATASET_GROUP])
             # Verify format of HDF5 file
             if group_name not in source:
                 raise KeyError('The HDF5 file does not contain histogram data')
@@ -686,26 +680,30 @@ class HistogramAnalyzer:
             # Get the group which contains all data
             group = source[group_name]
 
-            # Read and convert data from HDF5 file
-            self.keys = list(group)
-            histograms = ((k, (group[k][index] for index in natsort.natsorted(group[k])
-                               if index != HistogramContext.RAW_DATASET_GROUP)) for k in self.keys)
-            self.histograms = {k: [[self.ndarray_to_counter(values) for values in channel]
-                                   for channel in zip(*datasets)] for k, datasets in histograms}
+            # Read keys
+            self.keys = natsort.natsorted(group)
+
+            # Read data from HDF5 file
+            if self.keys and HistogramContext.RAW_DATASET_GROUP in group[self.keys[0]]:
+                # Raw data available
+                self.raw = {k: [np.asarray(group[k][HistogramContext.RAW_DATASET_GROUP][index])
+                                for index in natsort.natsorted(group[k][HistogramContext.RAW_DATASET_GROUP])]
+                            for k in self.keys}
+                # Reconstruct histograms from raw data
+                self.histograms = {k: list(zip(*(self.raw_to_histograms(r) for r in raw)))
+                                   for k, raw in self.raw.items()}
+            else:
+                # No raw data available (DAX<0.4), using legacy histogram storage
+                histograms = ((k, (group[k][index] for index in natsort.natsorted(group[k]))) for k in self.keys)
+                self.histograms = {k: [[self.ndarray_to_counter(values) for values in channel]
+                                       for channel in zip(*datasets)] for k, datasets in histograms}
+
             if state_detection_threshold is not None:
                 self.state_detection_threshold = state_detection_threshold  # Store state detection threshold
                 self.probabilities = {k: self.histograms_to_probabilities(h, state_detection_threshold)
                                       for k, h in self.histograms.items()}
             self.mean_counts = {k: self.histograms_to_mean_counts(h) for k, h in self.histograms.items()}
             self.stdev_counts = {k: self.histograms_to_stdev_counts(h) for k, h in self.histograms.items()}
-
-            try:
-                # Try to obtain raw data
-                self.raw = {k: [np.asarray(group[k]['raw'][index]) for index in natsort.natsorted(group[k]['raw'])]
-                            for k in self.keys}
-            except KeyError:
-                # No raw data available
-                pass
 
             # Get a file name generator
             self._file_name_generator = BaseFileNameGenerator()
@@ -716,7 +714,7 @@ class HistogramAnalyzer:
     """Helper functions"""
 
     @classmethod
-    def histogram_to_one_count(cls, counter: collections.Counter, state_detection_threshold: int) -> int:
+    def histogram_to_one_count(cls, counter: typing.Counter[_DATA_T], state_detection_threshold: int) -> int:
         """Helper function to count the number of one measurements in a histogram.
 
         This function works correct for both binary measurements and detection counts.
@@ -732,7 +730,7 @@ class HistogramAnalyzer:
         return sum(f for c, f in counter.items() if c is True or c > state_detection_threshold)
 
     @classmethod
-    def histogram_to_probability(cls, counter: collections.Counter, state_detection_threshold: int) -> float:
+    def histogram_to_probability(cls, counter: typing.Counter[_DATA_T], state_detection_threshold: int) -> float:
         """Helper function to convert a histogram to an individual state probability.
 
         Counts *greater than* the state detection threshold are considered to be in state one.
@@ -769,7 +767,7 @@ class HistogramAnalyzer:
         return np.asarray(probabilities)
 
     @classmethod
-    def _histogram_to_mean_count(cls, counter: collections.Counter) -> typing.Tuple[float, int]:
+    def _histogram_to_mean_count(cls, counter: typing.Counter[_DATA_T]) -> typing.Tuple[float, int]:
         """Helper function to calculate the mean count of a histogram.
 
         :param counter: The ``Counter`` object representing the histogram
@@ -780,7 +778,7 @@ class HistogramAnalyzer:
         return mean, num_samples
 
     @classmethod
-    def histogram_to_mean_count(cls, counter: collections.Counter) -> float:
+    def histogram_to_mean_count(cls, counter: typing.Counter[_DATA_T]) -> float:
         """Helper function to calculate the mean count of a histogram.
 
         :param counter: The ``Counter`` object representing the histogram
@@ -803,7 +801,7 @@ class HistogramAnalyzer:
         return np.asarray(counts)
 
     @classmethod
-    def histogram_to_mean_stdev_count(cls, counter: collections.Counter) -> typing.Tuple[float, float]:
+    def histogram_to_mean_stdev_count(cls, counter: typing.Counter[_DATA_T]) -> typing.Tuple[float, float]:
         """Helper function to calculate the count mean and standard deviation of a histogram.
 
         This helper function is more efficient than calculating mean and standard deviation separately.
@@ -817,7 +815,7 @@ class HistogramAnalyzer:
         return mean, math.sqrt(squared_mean - mean ** 2)
 
     @classmethod
-    def histogram_to_stdev_count(cls, counter: collections.Counter) -> float:
+    def histogram_to_stdev_count(cls, counter: typing.Counter[_DATA_T]) -> float:
         """Helper function to calculate the count standard deviation of a histogram.
 
         :param counter: The ``Counter`` object representing the histogram
@@ -841,17 +839,31 @@ class HistogramAnalyzer:
         return np.asarray(counts)
 
     @staticmethod
-    def counter_to_ndarray(histogram: collections.Counter) -> np.ndarray:
+    def counter_to_ndarray(histogram: typing.Counter[_DATA_T], *, max_count: typing.Optional[int] = None) -> np.ndarray:
         """Convert a histogram stored as a ``Counter`` object to an ndarray.
 
+        Note that histograms with binary measurement results will be converted to an array with length 2.
+        Hence, the information that the histogram only contains binary measurements is lost.
+
         :param histogram: The histogram in ``Counter`` format
+        :param max_count: The maximum count the array should be able to store (optional)
         :return: ndarray that represents the same histogram
         """
-        return np.asarray([histogram[i] for i in range(max(histogram) + 1)])
+        assert isinstance(max_count, int) or max_count is None, 'Max must be of type int or None'
+
+        if max_count is None:
+            # Choose length such that the highest count in the histogram fits
+            max_count = max(histogram)
+
+        return np.asarray([histogram[i] for i in range(max_count + 1)])
 
     @staticmethod
     def ndarray_to_counter(histogram: typing.Sequence[int]) -> collections.Counter:
         """Convert a histogram stored as an ndarray to a ``Counter`` object.
+
+        Note that it is not possible to determine if arrays only contain binary measurement results,
+        this information is lost when converting the counter to an array.
+        See also :func:`counter_to_ndarray`.
 
         :param histogram: The histogram in ndarray format
         :return: ``Counter`` object that represents the same histogram
@@ -859,7 +871,16 @@ class HistogramAnalyzer:
         return collections.Counter({i: v for i, v in enumerate(histogram) if v > 0})
 
     @classmethod
-    def _vector_to_int(cls, vector: typing.Sequence[int], state_detection_threshold: int) -> int:
+    def raw_to_histograms(cls, raw: typing.Sequence[typing.Sequence[_DATA_T]]) -> typing.List[typing.Counter[_DATA_T]]:
+        """Convert raw data to a histogram per channel.
+
+        :param raw: The raw data to process, one buffer of data
+        :return: A list of ``Counter`` objects that represent the histogram for each channel
+        """
+        return [collections.Counter(c) for c in zip(*raw)]
+
+    @classmethod
+    def _vector_to_int(cls, vector: typing.Sequence[_DATA_T], state_detection_threshold: int) -> int:
         """Convert a vector of raw counts to an integer state."""
 
         # Accumulated result
@@ -869,13 +890,13 @@ class HistogramAnalyzer:
             # Shift accumulator
             acc <<= 1
             # Add bit
-            acc |= count > state_detection_threshold
+            acc |= count is True or count > state_detection_threshold
 
         # Return the accumulated result
         return acc
 
     @classmethod
-    def raw_to_states(cls, raw: typing.Sequence[typing.Sequence[typing.Sequence[int]]],
+    def raw_to_states(cls, raw: typing.Sequence[typing.Sequence[typing.Sequence[_DATA_T]]],
                       state_detection_threshold: int) -> typing.List[typing.List[int]]:
         """Convert raw data to integer states.
 
@@ -900,7 +921,7 @@ class HistogramAnalyzer:
         return {k: v / total for k, v in counter.items()}
 
     @classmethod
-    def raw_to_state_probabilities(cls, raw: typing.Sequence[typing.Sequence[typing.Sequence[int]]],
+    def raw_to_state_probabilities(cls, raw: typing.Sequence[typing.Sequence[typing.Sequence[_DATA_T]]],
                                    state_detection_threshold: int) -> typing.List[typing.Dict[int, float]]:
         """Convert raw data into full state probabilities.
 
@@ -913,7 +934,7 @@ class HistogramAnalyzer:
         return [cls._states_to_probabilities(states) for states in cls.raw_to_states(raw, state_detection_threshold)]
 
     @classmethod
-    def raw_to_flat_state_probabilities(cls, raw: typing.Sequence[typing.Sequence[typing.Sequence[int]]],
+    def raw_to_flat_state_probabilities(cls, raw: typing.Sequence[typing.Sequence[typing.Sequence[_DATA_T]]],
                                         state_detection_threshold: int) -> typing.List[typing.List[float]]:
         """Convert raw data into flattened full state probabilities.
 

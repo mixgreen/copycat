@@ -497,13 +497,13 @@ class TimeResolvedContext(DaxModule):
         if len(self._buffer_data) or len(self._buffer_meta):
             # Check consistency of data in the buffers
             if len(self._buffer_data) != len(self._buffer_meta):
-                raise RuntimeError('Length of the data and meta buffer are not consistent, data probably corrupt')
+                raise RuntimeError('Length of the data and meta buffer are not consistent')
             if any(len(b) != len(self._buffer_data[0][0]) for b, _ in self._buffer_data):
-                raise RuntimeError('Buffered data is not consistent, data probably corrupt')
+                raise RuntimeError('Data in the buffer is ragged')
             if len(self._buffer_data[0][0]) == 0:
                 raise RuntimeError('Data elements in the buffer are empty')
             if any(len(s) != len(b[0]) for b, _ in self._buffer_data for s in b):
-                raise RuntimeError('Buffered data (inner series) is not consistent, data probably corrupt')
+                raise RuntimeError('Data in the buffer is ragged (inner series)')
 
             # Transform metadata and raw data
             buffer = [[(meta, d) for meta, d in zip(self._buffer_meta, data)]
@@ -604,14 +604,14 @@ class TimeResolvedContext(DaxModule):
 
         :return: A list with keys
         """
-        return list(self._cache)
+        return natsort.natsorted(self._cache)
 
     @host_only
     def get_traces(self, dataset_key: typing.Optional[str] = None) -> typing.List[_TD_T]:
         """Obtain all trace objects recorded by this time-resolved context for a specific key.
 
         The data is formatted as a list of dictionaries with the self-explaining keys
-        time, width, and results (see :attr:`DATASET_COLUMNS`).
+        ``time``, ``width``, and ``results`` (see :attr:`DATASET_COLUMNS`).
         Time and width are one-dimensional arrays while results is a list with one-dimensional arrays
         where the list index corresponds to the channels.
 
@@ -634,7 +634,8 @@ class TimeResolvedAnalyzer:
     :attr:`keys` is a list of keys for which data is available.
 
     :attr:`traces` is a dict which for each key contains a list of traces.
-    Each trace is a dict with values for bin width, bin, time, and results.
+    Each trace is a dict with values for bin time, bin width, and results.
+    See also :func:`TimeResolvedContext.get_traces`.
     Results are stored in a 2D array of which the first dimension is the channel
     and the second dimension are the values.
     """
@@ -679,7 +680,7 @@ class TimeResolvedAnalyzer:
             group = source[group_name]
 
             # Read and convert data from HDF5 file
-            self.keys = list(group)
+            self.keys = natsort.natsorted(group)
             self.traces = {k: [{column: group[k][index][column][()] for column in TimeResolvedContext.DATASET_COLUMNS}
                                for index in natsort.natsorted(group[k])] for k in self.keys}
 
