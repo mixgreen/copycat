@@ -256,8 +256,8 @@ class HistogramContextTestCase(unittest.TestCase):
         for h in histograms[1]:  # Channel 1
             self.assertDictEqual(h, {8: 2, 9: 4}, 'Obtained histograms did not meet expected format')
 
-    def test_dataset_histograms(self):
-        # Add data to the archive
+    def test_dataset_raw(self):
+        # Add data to the datasets
         num_histograms = 8
         data = [
             [1, 9],
@@ -273,13 +273,12 @@ class HistogramContextTestCase(unittest.TestCase):
                 for d in data:
                     self.h.append(d)
 
-        # Get datasets which stored flat histograms
-        dataset = self.s.get_dataset('/'.join([self.h.HISTOGRAM_DATASET_GROUP, self.h.DEFAULT_DATASET_KEY, '0']))
-        flat = [[0, 1, 2, 3, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0, 2, 4]]
-        self.assertEqual(dataset, flat, 'Stored dataset does not match expected format')
+        # Get raw datasets
+        key = '/'.join([self.h.DATASET_GROUP, self.h.DEFAULT_DATASET_KEY, self.h.RAW_DATASET_GROUP, '0'])
+        dataset = self.s.get_dataset(key)
+        self.assertEqual(dataset, data, 'Stored dataset does not match expected format')
 
-    def test_archive_probabilities(self):
-        # Add data to the archive
+    def test_get_probabilities(self):
         num_histograms = 8
         data = [
             [1, 9],
@@ -306,8 +305,7 @@ class HistogramContextTestCase(unittest.TestCase):
         for p in probabilities[1]:  # Channel 1
             self.assertEqual(p, 6 / len(data), 'Obtained probabilities did not meet expected format')
 
-    def test_archive_mean_counts(self):
-        # Add data to the archive
+    def test_get_mean_counts(self):
         num_histograms = 8
         data = [
             [1, 9],
@@ -335,8 +333,7 @@ class HistogramContextTestCase(unittest.TestCase):
             for c in counts:
                 self.assertAlmostEqual(c, ref, msg='Obtained mean count does not match reference')
 
-    def test_archive_stdev_counts(self):
-        # Add data to the archive
+    def test_get_stdev_counts(self):
         num_histograms = 8
         data = [
             [1, 9],
@@ -456,12 +453,38 @@ class HistogramAnalyzerTestCase(unittest.TestCase):
         a = np.asarray([0, 1, 1, 2, 3, 0, 0, 0, 0, 1])
         n = HistogramAnalyzer.counter_to_ndarray(c)
         self.assertListEqual(list(n), list(a), 'Counter did not convert correctly to ndarray')
+        n = HistogramAnalyzer.counter_to_ndarray(c, max_count=max(c))
+        self.assertListEqual(list(n), list(a), 'Counter did not convert correctly to ndarray with a given max')
+
+    def test_counter_to_ndarray_max_count(self):
+        c = collections.Counter([1, 2, 3, 3, 4, 4, 4, 9])
+        a = np.asarray([0, 1, 1, 2, 3, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0])
+        for i in range(len(a)):
+            n = HistogramAnalyzer.counter_to_ndarray(c, max_count=i)
+            self.assertListEqual(list(n), list(a[:i + 1]),
+                                 'Counter did not convert correctly to ndarray with a given max count')
 
     def test_ndarray_to_counter(self):
         c = collections.Counter([1, 2, 3, 3, 4, 4, 4, 9])
         a = np.asarray([0, 1, 1, 2, 3, 0, 0, 0, 0, 1])
         n = HistogramAnalyzer.ndarray_to_counter(a)
         self.assertEqual(n, c, 'ndarray did not convert correctly to Counter')
+
+    def test_raw_to_histograms(self):
+        raw = [
+            [[1, 2, 0], [5, 5, 5], [6, 7, 0], ],
+            [[6, 7, 0], [1, 2, 0], [5, 5, 5], ],
+            [[True, True, False], [False, False, False], [True, True, True], ],
+        ]
+        ref = [
+            [collections.Counter([1, 5, 6]), collections.Counter([2, 5, 7]), collections.Counter([0, 5, 0])],
+            [collections.Counter([6, 1, 5]), collections.Counter([7, 2, 5]), collections.Counter([0, 0, 5])],
+            [collections.Counter({True: 2, False: 1})] * 2 + [collections.Counter({True: 1, False: 2})],
+        ]
+
+        for rw, rf in zip(raw, ref):
+            result = HistogramAnalyzer.raw_to_histograms(rw)
+            self.assertListEqual(result, rf, 'Counters did not matched reference')
 
     def test_histogram_to_one_count(self):
         data = [
@@ -551,11 +574,12 @@ class HistogramAnalyzerTestCase(unittest.TestCase):
         raw = [
             [[1, 2, 0], [5, 5, 5], [6, 7, 0], ],
             [[6, 7, 0], [1, 2, 0], [5, 5, 5], ],
+            [[True, True, False], [False, False, False], [True, True, True], ],
         ]
         assert all(all(all(u < num_states for u in t) for t in s) for s in raw)
 
         # Calculate reference using the string conversion method
-        ref = [[int(''.join('1' if p > threshold else '0' for p in reversed(points)), base=2)
+        ref = [[int(''.join('1' if p > threshold or p is True else '0' for p in reversed(points)), base=2)
                 for points in hist] for hist in raw]
 
         result = HistogramAnalyzer.raw_to_states(raw, threshold)
@@ -569,10 +593,12 @@ class HistogramAnalyzerTestCase(unittest.TestCase):
         raw = [
             [[1, 2, 0], [5, 5, 5], [5, 5, 5], [6, 7, 0], ],
             [[6, 7, 0], [1, 2, 0], [1, 2, 0], [5, 5, 5], ],
+            [[True, True, False], [False, False, False], [False, False, False], [True, True, True], ],
         ]
         assert all(all(all(u < num_states for u in t) for t in s) for s in raw)
         ref = [
             {0b000: 0.25, 0b111: 0.5, 0b011: 0.25},
+            {0b011: 0.25, 0b000: 0.5, 0b111: 0.25},
             {0b011: 0.25, 0b000: 0.5, 0b111: 0.25},
         ]
         assert all(all(v < num_states for v in r.values()) for r in ref)
@@ -588,11 +614,13 @@ class HistogramAnalyzerTestCase(unittest.TestCase):
         raw = [
             [[1, 2, 0], [5, 5, 5], [5, 5, 5], [6, 7, 0], ],
             [[6, 7, 0], [1, 2, 0], [1, 2, 0], [5, 5, 5], ],
+            [[True, True, False], [False, False, False], [False, False, False], [True, True, True], ],
         ]
         assert all(all(all(u < num_states for u in t) for t in s) for s in raw)
 
         ref_sparse = [
             {0b000: 0.25, 0b111: 0.5, 0b011: 0.25},
+            {0b011: 0.25, 0b000: 0.5, 0b111: 0.25},
             {0b011: 0.25, 0b000: 0.5, 0b111: 0.25},
         ]
         assert all(all(v < num_states for v in r.values()) for r in ref_sparse)
@@ -604,52 +632,56 @@ class HistogramAnalyzerTestCase(unittest.TestCase):
         for a, b in zip(result, ref):
             self.assertListEqual(a, b, 'Flat state probabilities did not matched reference')
 
-    def _setup_test_hdf5_data(self, *, keep_raw=True):
-        # Add data to the archive
+    def _generate_hdf5_data(self, *, keep_raw=True, add_legacy=False):
         num_histograms = 8
-        dataset_key = 'foo'
-        data_0 = [
-            [1, 9],
-            [2, 9],
-            [2, 9],
-            [3, 9],
-            [3, 8],
-            [3, 8],
-        ]
-        data_1 = [
-            [4, 1, 0],
-            [5, 2, 0],
-            [6, 3, 0],
-            [7, 4, 0],
-            [8, 5, 0],
-        ]
+        all_data = {
+            'foo': [[1, 9], [2, 9], [2, 9], [3, 9], [3, 8], [3, 8]],  # Specific dataset
+            None: [[4, 1, 0], [5, 2, 0], [6, 3, 0], [7, 4, 0], [8, 5, 0]],  # Default dataset
+        }
 
-        # Store in a specific dataset
-        self.h.config_dataset(dataset_key)
-        for i in range(num_histograms):
-            with self.h:
-                for d in data_0:
-                    self.h.append(d)
+        for key, data in all_data.items():
+            # Store data
+            self.h.config_dataset(key)
+            for i in range(num_histograms):
+                with self.h:
+                    for d in data:
+                        self.h.append(d)
 
-            if not keep_raw:
-                # Remove raw data from datasets
-                self.h.set_dataset(self.h.RAW_DATASET_KEY_FORMAT.format(dataset_key=dataset_key, index=i), None,
-                                   archive=False)
+                # Reconstruct dataset key
+                dataset_key = self.h.DEFAULT_DATASET_KEY if key is None else key
+                dataset_key = self.h.DATASET_KEY_FORMAT.format(dataset_key=dataset_key, index=i)
 
-        # Store other data too in the default dataset
-        self.h.config_dataset()
-        for i in range(num_histograms):
-            with self.h:
-                for d in data_1:
-                    self.h.append(d)
+                if add_legacy:
+                    # Add histograms in legacy data format
+                    histograms = self.h.get_histograms(key)
+                    max_count = max(max(max(h) for h in c) for c in histograms)
+                    flat_histograms = [HistogramAnalyzer.counter_to_ndarray(channel[-1], max_count=max_count)
+                                       for channel in histograms]
+                    self.h.set_dataset(dataset_key.replace('/raw/', '/'), flat_histograms, archive=True)
 
-            if not keep_raw:
-                # Remove raw data from datasets
-                self.h.set_dataset(self.h.RAW_DATASET_KEY_FORMAT.format(dataset_key=self.h.DEFAULT_DATASET_KEY,
-                                                                        index=i), None, archive=False)
+                if not keep_raw:
+                    # Remove raw data from datasets
+                    self.h.set_dataset(dataset_key, None, archive=False)
+
+    def _compare_analyzer_to_context(self, a, *, has_raw=True):
+        """"Compare histogram analyzer output to current histogram context."""
+
+        self.assertListEqual(a.keys, self.h.get_keys(), 'Keys did not match')
+        for key in a.keys:
+            for v, w in zip(a.histograms[key], self.h.get_histograms(key)):
+                self.assertListEqual(list(v), list(w), 'Histograms did not match')
+            for v, w in zip(a.probabilities[key], self.h.get_probabilities(key)):
+                self.assertListEqual(list(v), w, 'Probabilities did not match')
+            for v, w in zip(a.mean_counts[key], self.h.get_mean_counts(key)):
+                self.assertListEqual(list(v), w, 'Mean counts did not match')
+            for v, w in zip(a.stdev_counts[key], self.h.get_stdev_counts(key)):
+                self.assertListEqual(list(v), w, 'Stdev counts did not match')
+            if has_raw:
+                for v, w in zip(a.raw[key], self.h.get_raw(key)):
+                    self.assertListEqual(v.tolist(), list(w), 'Raw counts did not match')
 
     def test_hdf5_read(self):
-        self._setup_test_hdf5_data()
+        self._generate_hdf5_data()
 
         with temp_dir():
             # Write data to HDF5 file
@@ -660,37 +692,26 @@ class HistogramAnalyzerTestCase(unittest.TestCase):
             # Read file with HistogramAnalyzer
             a = HistogramAnalyzer(file_name, self.s.detection.get_state_detection_threshold())
 
-            # Compare results
-            self.assertSetEqual(set(a.keys), set(self.h.get_keys()), 'Keys did not match')
-            for k in a.keys:
-                for v, w in zip(a.histograms[k], self.h.get_histograms(k)):
-                    self.assertListEqual(v, list(w), 'Histograms did not match')
-                for v, w in zip(a.probabilities[k], self.h.get_probabilities(k)):
-                    self.assertListEqual(list(v), w, 'Probabilities did not match')
-                for v, w in zip(a.mean_counts[k], self.h.get_mean_counts(k)):
-                    self.assertListEqual(list(v), w, 'Mean counts did not match')
-                for v, w in zip(a.stdev_counts[k], self.h.get_stdev_counts(k)):
-                    self.assertListEqual(list(v), w, 'Stdev counts did not match')
-                for v, w in zip(a.raw[k], self.h.get_raw(k)):
-                    self.assertListEqual(v.tolist(), list(w), 'Raw counts did not match')
+            # Compare analyzer to histogram context
+            self._compare_analyzer_to_context(a)
 
             # Compare to analyzer from object source
             b = HistogramAnalyzer(self.s, self.s.detection.get_state_detection_threshold())
-            self.assertSetEqual(set(a.keys), set(b.keys), 'Keys did not match')
-            for k in a.keys:
-                for v, w in zip(a.histograms[k], b.histograms[k]):
-                    self.assertListEqual(v, list(w), 'Histograms did not match')
-                for v, w in zip(a.probabilities[k], b.probabilities[k]):
+            self.assertListEqual(a.keys, b.keys, 'Keys did not match')
+            for key in a.keys:
+                for v, w in zip(a.histograms[key], b.histograms[key]):
+                    self.assertListEqual(list(v), list(w), 'Histograms did not match')
+                for v, w in zip(a.probabilities[key], b.probabilities[key]):
                     self.assertListEqual(list(v), list(w), 'Probabilities did not match')
-                for v, w in zip(a.mean_counts[k], b.mean_counts[k]):
+                for v, w in zip(a.mean_counts[key], b.mean_counts[key]):
                     self.assertListEqual(list(v), list(w), 'Mean counts did not match')
-                for v, w in zip(a.stdev_counts[k], b.stdev_counts[k]):
+                for v, w in zip(a.stdev_counts[key], b.stdev_counts[key]):
                     self.assertListEqual(list(v), list(w), 'Stdev counts did not match')
-                for v, w in zip(a.raw[k], b.raw[k]):
+                for v, w in zip(a.raw[key], b.raw[key]):
                     self.assertListEqual(v.tolist(), w.tolist(), 'Raw counts did not match')
 
     def test_hdf5_read_no_raw(self):
-        self._setup_test_hdf5_data(keep_raw=False)
+        self._generate_hdf5_data(keep_raw=False, add_legacy=True)
 
         with temp_dir():
             # Write data to HDF5 file
@@ -703,6 +724,39 @@ class HistogramAnalyzerTestCase(unittest.TestCase):
 
             # Verify raw attribute is not available
             self.assertFalse(hasattr(a, 'raw'), 'Expected no attribute `raw`')
+
+            # Compare analyzer to histogram context
+            self._compare_analyzer_to_context(a, has_raw=False)
+
+    def test_hdf5_read_raw_and_legacy(self):
+        self._generate_hdf5_data(keep_raw=True, add_legacy=True)
+
+        with temp_dir():
+            # Write data to HDF5 file
+            file_name = 'result.h5'
+            with h5py.File(file_name, 'w') as f:
+                self.managers.dataset_mgr.write_hdf5(f)
+
+            # Read file with HistogramAnalyzer
+            a = HistogramAnalyzer(file_name, self.s.detection.get_state_detection_threshold())
+
+            # Verify raw attribute is available
+            self.assertTrue(hasattr(a, 'raw'), 'Expected attribute `raw`')
+
+            # Compare analyzer to histogram context
+            self._compare_analyzer_to_context(a)
+
+    def test_hdf5_read_no_histogram_data(self):
+        self._generate_hdf5_data(keep_raw=False, add_legacy=False)
+
+        with temp_dir():
+            # Write data to HDF5 file
+            file_name = 'result.h5'
+            with h5py.File(file_name, 'w') as f:
+                self.managers.dataset_mgr.write_hdf5(f)
+
+            with self.assertRaises(KeyError, msg='Absence of histogram data did not raise'):
+                HistogramAnalyzer(file_name)
 
     @unittest.skipUnless(CI_ENABLED, 'Not in a CI environment, skipping slow plotting test')
     def test_plot(self):

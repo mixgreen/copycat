@@ -576,7 +576,7 @@ class TimeResolvedAnalyzerTestCase(unittest.TestCase):
             a = TimeResolvedAnalyzer(file_name)
 
             # Compare results
-            self.assertSetEqual(set(a.keys), set(self.t.get_keys()), 'Keys did not match')
+            self.assertListEqual(a.keys, self.t.get_keys(), 'Keys did not match')
             for k in a.keys:
                 for v, w in zip(a.traces[k], self.t.get_traces(k)):
                     for c in TimeResolvedContext.DATASET_COLUMNS:
@@ -586,7 +586,7 @@ class TimeResolvedAnalyzerTestCase(unittest.TestCase):
 
             # Compare to analyzer from object source
             b = TimeResolvedAnalyzer(self.s)
-            self.assertSetEqual(set(a.keys), set(b.keys), 'Keys did not match')
+            self.assertListEqual(a.keys, b.keys, 'Keys did not match')
             for k in a.keys:
                 for v, w in zip(a.traces[k], b.traces[k]):
                     for c in TimeResolvedContext.DATASET_COLUMNS:
