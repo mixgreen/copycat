@@ -106,11 +106,6 @@ class ProgramClient(DaxClient, Experiment):
         self.add_arguments()
 
     def prepare(self) -> None:
-        # Archive input data
-        self.set_dataset('file', self._file)
-        self.set_dataset('class', self._class)
-        self.set_dataset('arguments', self._arguments)
-
         # Load the module
         module: types.ModuleType = self._load_module()
 
@@ -119,10 +114,16 @@ class ProgramClient(DaxClient, Experiment):
         program_cls = artiq.tools.get_experiment(module,
                                                  class_name=self._class if self._class else None)
         self.logger.info(f'Loaded program "{self._file}:{program_cls.__name__}"')
+        self._class = program_cls.__name__  # Store class name in case none was given
+
+        # Archive program metadata
+        self.set_dataset('file', self._file)
+        self.set_dataset('class', self._class)
+        self.set_dataset('arguments', self._arguments)
 
         # Test class
         if not issubclass(program_cls, dax.base.program.DaxProgram):
-            raise TypeError(f'Class "{self._file}:{program_cls.__name__}" is not a DAX program')
+            raise TypeError(f'Class "{self._file}:{self._class}" is not a DAX program')
 
         # Get interfaces
         self._operation: dax.interfaces.operation.OperationInterface = self._operation_interfaces[self._operation_key]
@@ -143,7 +144,7 @@ class ProgramClient(DaxClient, Experiment):
             arguments = {}
 
         # Build the program
-        self.logger.info('Building program')
+        self.logger.info(f'Building program "{self._class}"')
         self._program: Experiment = program_cls(
             dax.util.artiq.isolate_managers(self._managers, name='program', arguments=arguments),
             core=self.core,
@@ -152,7 +153,7 @@ class ProgramClient(DaxClient, Experiment):
         )
 
         # Prepare the program
-        self.logger.info('Preparing program')
+        self.logger.info(f'Preparing program "{self._class}"')
         self._program.prepare()
 
     def run(self) -> None:
@@ -165,7 +166,7 @@ class ProgramClient(DaxClient, Experiment):
             self.setup()
 
             # Run the program
-            self.logger.info('Running program')
+            self.logger.info(f'Running program "{self._class}"')
             self._program.run()
             self.logger.debug('Program finished')
 
@@ -175,7 +176,7 @@ class ProgramClient(DaxClient, Experiment):
 
     def analyze(self) -> None:
         # Analyze the program
-        self.logger.info('Analyzing program')
+        self.logger.info(f'Analyzing program "{self._class}"')
         self._program.analyze()
 
     def _load_module(self) -> types.ModuleType:
