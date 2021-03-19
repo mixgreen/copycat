@@ -279,9 +279,10 @@ class RandomizedBenchmarkingSQ(DaxClient, Experiment):
 
         # Create RB dataset
         ds = pygsti.objects.DataSet(outcomeLabels=['0', '1'])
-        threshold = self._detect.get_state_detection_threshold()
+        # threshold = self._detect.get_state_detection_threshold()  # TODO
         for i, circuit in enumerate(itertools.chain.from_iterable(self._exp_design.circuit_lists)):
-            one = HistogramAnalyzer.histogram_to_one_count(h.histograms['histogram'][0][i], threshold)
+            # one = HistogramAnalyzer.histogram_to_one_count(h.histograms['histogram'][0][i], threshold)  # TODO
+            one = h.histograms['histogram'][0][i][1]  # TODO: temp fix for https://github.com/m-labs/artiq/issues/1635
             ds.add_count_dict(circuit, {'0': self._num_samples - one, '1': one})
         ds.done_adding_data()
         protocol_data = pygsti.protocols.ProtocolData(self._exp_design, ds)
