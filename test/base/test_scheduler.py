@@ -45,6 +45,8 @@ def _find_free_port() -> int:
 _LOCALHOST: str = '127.0.0.1'  # IPv4 for CI
 _ARTIQ_MASTER_NOTIFY_PORT: int = 3250
 
+_REF_DICT_T = typing.Dict[typing.Optional[typing.Type[Job]], typing.Dict[str, int]]  # Type of a reference dict
+
 _DEVICE_DB: typing.Dict[str, typing.Any] = {
     'core': {
         'type': 'local',
@@ -861,6 +863,14 @@ class LazySchedulerTestCase(unittest.TestCase):
         with self.assertLogs(s.logger, logging.WARNING):
             s.prepare()
 
+    def _check_scheduler(self, scheduler: DaxScheduler, reference: _REF_DICT_T) -> None:
+        """Test scheduler outcome against a reference."""
+        default = reference.get(None, {})
+        for j in scheduler._graph:
+            with self.subTest(job=j.get_name()):
+                self.assertDictEqual(j.counter, reference.get(type(j), default),
+                                     f'Job call pattern of job "{j.get_name()}" did not match reference')
+
     def test_scheduler_wave(self):
         class S(_Scheduler):
             NODES = {_Job1, _Job2, _Job3, _Job4, _JobA, _JobB, _JobC}
@@ -877,39 +887,29 @@ class LazySchedulerTestCase(unittest.TestCase):
 
         # Wave
         s.wave()
-        self._check_scheduler_wave_0(s)
+        self._check_scheduler(s, self.WAVE_0_REF)
 
         # Wave
         s.wave(wave=time.time(), root_nodes=s._root_nodes, root_action=NodeAction.PASS, policy=s._policy)
-        self._check_scheduler_wave_1(s)
+        self._check_scheduler(s, self.WAVE_1_REF)
 
         # Check data store calls
         # noinspection PyTypeChecker
         self._check_scheduler_datastore_calls(s)
 
-    def _check_scheduler_wave_0(self, scheduler):
-        for j in scheduler._graph:
-            with self.subTest(job=j.get_name()):
-                if isinstance(j, (_Job1, _JobB)):
-                    ref_counter = {'init': 1, 'visit': 2, 'submit': 1, 'schedule': 1}
-                elif isinstance(j, _Job4):
-                    ref_counter = {'init': 1, 'visit': 2}
-                else:
-                    ref_counter = {'init': 1, 'visit': 1}
-                self.assertDictEqual(j.counter, ref_counter,
-                                     'Job call pattern did not match expected pattern')
+    WAVE_0_REF: _REF_DICT_T = {
+        _Job1: {'init': 1, 'visit': 2, 'submit': 1, 'schedule': 1},
+        _Job4: {'init': 1, 'visit': 2},
+        _JobB: {'init': 1, 'visit': 2, 'submit': 1, 'schedule': 1},
+        None: {'init': 1, 'visit': 1},
+    }
 
-    def _check_scheduler_wave_1(self, scheduler):
-        for j in scheduler._graph:
-            with self.subTest(job=j.get_name()):
-                if isinstance(j, (_Job1, _JobB)):
-                    ref_counter = {'init': 1, 'visit': 3, 'submit': 1, 'schedule': 1}
-                elif isinstance(j, _Job4):
-                    ref_counter = {'init': 1, 'visit': 4}
-                else:
-                    ref_counter = {'init': 1, 'visit': 2}
-                self.assertDictEqual(j.counter, ref_counter,
-                                     'Job call pattern did not match expected pattern')
+    WAVE_1_REF: _REF_DICT_T = {
+        _Job1: {'init': 1, 'visit': 3, 'submit': 1, 'schedule': 1},
+        _Job4: {'init': 1, 'visit': 4},
+        _JobB: {'init': 1, 'visit': 3, 'submit': 1, 'schedule': 1},
+        None: {'init': 1, 'visit': 2},
+    }
 
     def _check_scheduler_datastore_calls(self, scheduler):
         self.assertListEqual(scheduler.data_store.method_calls,
@@ -937,19 +937,14 @@ class LazySchedulerTestCase(unittest.TestCase):
             s.run()
             self.assertEqual(s.testing_handled_requests, 0, 'Unexpected number of requests handled')
             self.assertEqual(s.testing_request_queue_qsize, 0, 'Request queue was not empty')
-            self._check_scheduler_run(s)
+            self._check_scheduler(s, self.RUN_REF)
 
-    def _check_scheduler_run(self, scheduler):
-        for j in scheduler._graph:
-            with self.subTest(job=j.get_name()):
-                if isinstance(j, (_Job1, _JobB)):
-                    ref_counter = {'init': 1, 'visit': _NUM_WAVES + 1, 'submit': 1, 'schedule': 1}
-                elif isinstance(j, _Job4):
-                    ref_counter = {'init': 1, 'visit': _NUM_WAVES * 2}
-                else:
-                    ref_counter = {'init': 1, 'visit': _NUM_WAVES}
-                self.assertDictEqual(j.counter, ref_counter,
-                                     'Job call pattern did not match expected pattern')
+    RUN_REF: _REF_DICT_T = {
+        _Job1: {'init': 1, 'visit': _NUM_WAVES + 1, 'submit': 1, 'schedule': 1},
+        _Job4: {'init': 1, 'visit': _NUM_WAVES * 2},
+        _JobB: {'init': 1, 'visit': _NUM_WAVES + 1, 'submit': 1, 'schedule': 1},
+        None: {'init': 1, 'visit': _NUM_WAVES},
+    }
 
     def test_scheduler_run_depth(self):
 
@@ -975,19 +970,16 @@ class LazySchedulerTestCase(unittest.TestCase):
             s.run()
             self.assertEqual(s.testing_handled_requests, 0, 'Unexpected number of requests handled')
             self.assertEqual(s.testing_request_queue_qsize, 0, 'Request queue was not empty')
-            self._check_scheduler_run_depth(s)
+            self._check_scheduler(s, self.RUN_DEPTH_REF)
 
-    def _check_scheduler_run_depth(self, scheduler):
-        for j in scheduler._graph:
-            with self.subTest(job=j.get_name()):
-                if isinstance(j, (_Job1, _JobB)):
-                    ref_counter = {'init': 1, 'visit': _NUM_WAVES + 1, 'submit': 1, 'schedule': 1}
-                elif isinstance(j, (_Job2, _Job3, _JobA)):
-                    ref_counter = {'init': 1, 'visit': _NUM_WAVES}
-                else:
-                    ref_counter = {'init': 1}
-                self.assertDictEqual(j.counter, ref_counter,
-                                     'Job call pattern did not match expected pattern')
+    RUN_DEPTH_REF: _REF_DICT_T = {
+        _Job1: {'init': 1, 'visit': _NUM_WAVES + 1, 'submit': 1, 'schedule': 1},
+        _Job2: {'init': 1, 'visit': _NUM_WAVES},
+        _Job3: {'init': 1, 'visit': _NUM_WAVES},
+        _JobA: {'init': 1, 'visit': _NUM_WAVES},
+        _JobB: {'init': 1, 'visit': _NUM_WAVES + 1, 'submit': 1, 'schedule': 1},
+        None: {'init': 1},
+    }
 
     def test_scheduler_run_start_depth(self):
 
@@ -1013,21 +1005,15 @@ class LazySchedulerTestCase(unittest.TestCase):
             s.run()
             self.assertEqual(s.testing_handled_requests, 0, 'Unexpected number of requests handled')
             self.assertEqual(s.testing_request_queue_qsize, 0, 'Request queue was not empty')
-            self._check_scheduler_run_start_depth(s)
+            self._check_scheduler(s, self.RUN_START_DEPTH_REF)
 
-    def _check_scheduler_run_start_depth(self, scheduler):
-        for j in scheduler._graph:
-            with self.subTest(job=j.get_name()):
-                if isinstance(j, (_Job1, _JobA)):
-                    ref_counter = {'init': 1}
-                elif isinstance(j, _JobB):
-                    ref_counter = {'init': 1, 'visit': _NUM_WAVES + 1, 'submit': 1, 'schedule': 1}
-                elif isinstance(j, _Job4):
-                    ref_counter = {'init': 1, 'visit': _NUM_WAVES * 2}
-                else:
-                    ref_counter = {'init': 1, 'visit': _NUM_WAVES}
-                self.assertDictEqual(j.counter, ref_counter,
-                                     'Job call pattern did not match expected pattern')
+    RUN_START_DEPTH_REF: _REF_DICT_T = {
+        _Job1: {'init': 1},
+        _Job4: {'init': 1, 'visit': _NUM_WAVES * 2},
+        _JobA: {'init': 1},
+        _JobB: {'init': 1, 'visit': _NUM_WAVES + 1, 'submit': 1, 'schedule': 1},
+        None: {'init': 1, 'visit': _NUM_WAVES},
+    }
 
     def _test_scheduler_controller(self, requests):
         class S(_Scheduler):
@@ -1073,27 +1059,17 @@ class LazySchedulerTestCase(unittest.TestCase):
 
         self.assertEqual(s.testing_handled_requests, len(requests), 'Unexpected number of requests handled')
         self.assertEqual(s.testing_request_queue_qsize, 0, 'Request queue was not empty')
-        self._check_scheduler_controller(s)
+        self._check_scheduler(s, self.CONTROLLER_REF)
 
-    def _check_scheduler_controller(self, scheduler):
-        for j in scheduler._graph:
-            with self.subTest(job=j.get_name()):
-                if isinstance(j, _Job1):
-                    ref_counter = {'init': 1, 'visit': _NUM_WAVES + 1, 'submit': 1, 'schedule': 1}
-                elif isinstance(j, (_Job2, _Job3)):
-                    ref_counter = {'init': 1, 'visit': _NUM_WAVES}
-                elif isinstance(j, _Job4):
-                    ref_counter = {'init': 1, 'visit': _NUM_WAVES * 2 + 1, 'submit': 1, 'schedule': 1}
-                elif isinstance(j, _JobA):
-                    ref_counter = {'init': 1, 'visit': _NUM_WAVES + 1, 'submit': 1, 'schedule': 1}
-                elif isinstance(j, _JobB):
-                    ref_counter = {'init': 1, 'visit': _NUM_WAVES + 1 + 1, 'submit': 1, 'schedule': 1}
-                elif isinstance(j, _JobC):
-                    ref_counter = {'init': 1, 'visit': _NUM_WAVES + 1 + 1}
-                else:
-                    self.fail('Statement should not be reachable')
-                self.assertDictEqual(j.counter, ref_counter,
-                                     'Job call pattern did not match expected pattern')
+    CONTROLLER_REF: _REF_DICT_T = {
+        _Job1: {'init': 1, 'visit': _NUM_WAVES + 1, 'submit': 1, 'schedule': 1},
+        _Job2: {'init': 1, 'visit': _NUM_WAVES},
+        _Job3: {'init': 1, 'visit': _NUM_WAVES},
+        _Job4: {'init': 1, 'visit': _NUM_WAVES * 2 + 1, 'submit': 1, 'schedule': 1},
+        _JobA: {'init': 1, 'visit': _NUM_WAVES + 1, 'submit': 1, 'schedule': 1},
+        _JobB: {'init': 1, 'visit': _NUM_WAVES + 1 + 1, 'submit': 1, 'schedule': 1},
+        _JobC: {'init': 1, 'visit': _NUM_WAVES + 1 + 1},
+    }
 
     def test_scheduler_controller_reversed(self):
         requests = [
@@ -1103,25 +1079,17 @@ class LazySchedulerTestCase(unittest.TestCase):
 
         self.assertEqual(s.testing_handled_requests, len(requests), 'Unexpected number of requests handled')
         self.assertEqual(s.testing_request_queue_qsize, 0, 'Request queue was not empty')
-        self._check_scheduler_controller_reversed(s)
+        self._check_scheduler(s, self.CONTROLLER_REVERSED_REF)
 
-    def _check_scheduler_controller_reversed(self, scheduler):
-        for j in scheduler._graph:
-            with self.subTest(job=j.get_name()):
-                if isinstance(j, _Job1):
-                    ref_counter = {'init': 1, 'visit': _NUM_WAVES + 1 + 2, 'submit': 1, 'schedule': 1}
-                elif isinstance(j, (_Job2, _Job3, _JobA)):
-                    ref_counter = {'init': 1, 'visit': _NUM_WAVES + 1}
-                elif isinstance(j, _Job4):
-                    ref_counter = {'init': 1, 'visit': _NUM_WAVES * 2 + 1, 'submit': 1, 'schedule': 1}
-                elif isinstance(j, _JobB):
-                    ref_counter = {'init': 1, 'visit': _NUM_WAVES + 1 + 2, 'submit': 2, 'schedule': 2}
-                elif isinstance(j, _JobC):
-                    ref_counter = {'init': 1, 'visit': _NUM_WAVES}
-                else:
-                    self.fail('Statement should not be reachable')
-                self.assertDictEqual(j.counter, ref_counter,
-                                     'Job call pattern did not match expected pattern')
+    CONTROLLER_REVERSED_REF: _REF_DICT_T = {
+        _Job1: {'init': 1, 'visit': _NUM_WAVES + 1 + 2, 'submit': 1, 'schedule': 1},
+        _Job2: {'init': 1, 'visit': _NUM_WAVES + 1},
+        _Job3: {'init': 1, 'visit': _NUM_WAVES + 1},
+        _Job4: {'init': 1, 'visit': _NUM_WAVES * 2 + 1, 'submit': 1, 'schedule': 1},
+        _JobA: {'init': 1, 'visit': _NUM_WAVES + 1},
+        _JobB: {'init': 1, 'visit': _NUM_WAVES + 1 + 2, 'submit': 2, 'schedule': 2},
+        _JobC: {'init': 1, 'visit': _NUM_WAVES},
+    }
 
     def test_scheduler_controller_reversed_sequential(self):
         requests = [
@@ -1132,7 +1100,7 @@ class LazySchedulerTestCase(unittest.TestCase):
 
         self.assertEqual(s.testing_handled_requests, len(requests), 'Unexpected number of requests handled')
         self.assertEqual(s.testing_request_queue_qsize, 0, 'Request queue was not empty')
-        self._check_scheduler_controller_reversed(s)
+        self._check_scheduler(s, self.CONTROLLER_REVERSED_REF)
 
     def test_scheduler_controller_start_depth(self):
         requests = [
@@ -1143,25 +1111,17 @@ class LazySchedulerTestCase(unittest.TestCase):
 
         self.assertEqual(s.testing_handled_requests, len(requests), 'Unexpected number of requests handled')
         self.assertEqual(s.testing_request_queue_qsize, 0, 'Request queue was not empty')
-        self._check_scheduler_controller_start_depth(s)
+        self._check_scheduler(s, self.CONTROLLER_START_DEPTH_REF)
 
-    def _check_scheduler_controller_start_depth(self, scheduler):
-        for j in scheduler._graph:
-            with self.subTest(job=j.get_name()):
-                if isinstance(j, _Job1):
-                    ref_counter = {'init': 1, 'visit': _NUM_WAVES + 1, 'submit': 1, 'schedule': 1}
-                elif isinstance(j, (_Job2, _Job3, _JobA)):
-                    ref_counter = {'init': 1, 'visit': _NUM_WAVES}
-                elif isinstance(j, _Job4):
-                    ref_counter = {'init': 1, 'visit': _NUM_WAVES * 2}
-                elif isinstance(j, _JobB):
-                    ref_counter = {'init': 1, 'visit': _NUM_WAVES + 1 + 2, 'submit': 1 + 1, 'schedule': 1 + 1}
-                elif isinstance(j, _JobC):
-                    ref_counter = {'init': 1, 'visit': _NUM_WAVES + 1 + 1}
-                else:
-                    self.fail('Statement should not be reachable')
-                self.assertDictEqual(j.counter, ref_counter,
-                                     'Job call pattern did not match expected pattern')
+    CONTROLLER_START_DEPTH_REF: _REF_DICT_T = {
+        _Job1: {'init': 1, 'visit': _NUM_WAVES + 1, 'submit': 1, 'schedule': 1},
+        _Job2: {'init': 1, 'visit': _NUM_WAVES},
+        _Job3: {'init': 1, 'visit': _NUM_WAVES},
+        _Job4: {'init': 1, 'visit': _NUM_WAVES * 2},
+        _JobA: {'init': 1, 'visit': _NUM_WAVES},
+        _JobB: {'init': 1, 'visit': _NUM_WAVES + 1 + 2, 'submit': 1 + 1, 'schedule': 1 + 1},
+        _JobC: {'init': 1, 'visit': _NUM_WAVES + 1 + 1},
+    }
 
     def test_scheduler_controller_foreign_key(self):
         test_data = [
@@ -1421,123 +1381,70 @@ class LazySchedulerTestCase(unittest.TestCase):
                                            'submit': num_submits, 'schedule': num_submits}
                     else:
                         self.fail('Unexpected job type encountered')
-                    self.assertDictEqual(n.counter, ref_counter,
-                                         'Node call pattern did not match expected pattern')
+                    self.assertDictEqual(n.counter, ref_counter, 'Node call pattern did not match expected pattern')
 
 
 class LazySchedulerReversedTestCase(LazySchedulerTestCase):
     POLICY = Policy.LAZY
     REVERSE_WAVE = True
 
-    def _check_scheduler_wave_0(self, scheduler):
-        for j in scheduler._graph:
-            with self.subTest(job=j.get_name()):
-                if isinstance(j, _Job1):
-                    ref_counter = {'init': 1, 'visit': 3, 'submit': 1, 'schedule': 1}
-                elif isinstance(j, _JobB):
-                    ref_counter = {'init': 1, 'visit': 2, 'submit': 1, 'schedule': 1}
-                else:
-                    ref_counter = {'init': 1, 'visit': 1}
-                self.assertDictEqual(j.counter, ref_counter,
-                                     'Job call pattern did not match expected pattern')
+    WAVE_0_REF: _REF_DICT_T = {
+        _Job1: {'init': 1, 'visit': 3, 'submit': 1, 'schedule': 1},
+        _JobB: {'init': 1, 'visit': 2, 'submit': 1, 'schedule': 1},
+        None: {'init': 1, 'visit': 1},
+    }
 
-    def _check_scheduler_wave_1(self, scheduler):
-        for j in scheduler._graph:
-            with self.subTest(job=j.get_name()):
-                if isinstance(j, _Job1):
-                    ref_counter = {'init': 1, 'visit': 5, 'submit': 1, 'schedule': 1}
-                elif isinstance(j, _JobB):
-                    ref_counter = {'init': 1, 'visit': 3, 'submit': 1, 'schedule': 1}
-                else:
-                    ref_counter = {'init': 1, 'visit': 2}
-                self.assertDictEqual(j.counter, ref_counter,
-                                     'Job call pattern did not match expected pattern')
+    WAVE_1_REF: _REF_DICT_T = {
+        _Job1: {'init': 1, 'visit': 5, 'submit': 1, 'schedule': 1},
+        _JobB: {'init': 1, 'visit': 3, 'submit': 1, 'schedule': 1},
+        None: {'init': 1, 'visit': 2},
+    }
 
-    def _check_scheduler_run(self, scheduler):
-        for j in scheduler._graph:
-            with self.subTest(job=j.get_name()):
-                if isinstance(j, _JobB):
-                    ref_counter = {'init': 1, 'visit': _NUM_WAVES + 1, 'submit': 1, 'schedule': 1}
-                elif isinstance(j, _Job1):
-                    ref_counter = {'init': 1, 'visit': _NUM_WAVES * 2 + 1, 'submit': 1, 'schedule': 1}
-                else:
-                    ref_counter = {'init': 1, 'visit': _NUM_WAVES}
-                self.assertDictEqual(j.counter, ref_counter,
-                                     'Job call pattern did not match expected pattern')
+    RUN_REF: _REF_DICT_T = {
+        _Job1: {'init': 1, 'visit': _NUM_WAVES * 2 + 1, 'submit': 1, 'schedule': 1},
+        _JobB: {'init': 1, 'visit': _NUM_WAVES + 1, 'submit': 1, 'schedule': 1},
+        None: {'init': 1, 'visit': _NUM_WAVES},
+    }
 
-    def _check_scheduler_run_depth(self, scheduler):
-        for j in scheduler._graph:
-            with self.subTest(job=j.get_name()):
-                if isinstance(j, (_Job2, _Job3, _Job4, _JobC)):
-                    ref_counter = {'init': 1, 'visit': _NUM_WAVES}
-                elif isinstance(j, _JobB):
-                    ref_counter = {'init': 1, 'visit': _NUM_WAVES + 1, 'submit': 1, 'schedule': 1}
-                else:
-                    ref_counter = {'init': 1}
-                self.assertDictEqual(j.counter, ref_counter,
-                                     'Job call pattern did not match expected pattern')
+    RUN_DEPTH_REF: _REF_DICT_T = {
+        _Job1: {'init': 1},
+        _JobA: {'init': 1},
+        _JobB: {'init': 1, 'visit': _NUM_WAVES + 1, 'submit': 1, 'schedule': 1},
+        None: {'init': 1, 'visit': _NUM_WAVES},
+    }
 
-    def _check_scheduler_run_start_depth(self, scheduler):
-        for j in scheduler._graph:
-            with self.subTest(job=j.get_name()):
-                if isinstance(j, _Job1):
-                    ref_counter = {'init': 1, 'visit': _NUM_WAVES * 2 + 1, 'submit': 1, 'schedule': 1}
-                elif isinstance(j, (_Job4, _JobC)):
-                    ref_counter = {'init': 1}
-                elif isinstance(j, _JobB):
-                    ref_counter = {'init': 1, 'visit': _NUM_WAVES + 1, 'submit': 1, 'schedule': 1}
-                else:
-                    ref_counter = {'init': 1, 'visit': _NUM_WAVES}
-                self.assertDictEqual(j.counter, ref_counter,
-                                     'Job call pattern did not match expected pattern')
+    RUN_START_DEPTH_REF: _REF_DICT_T = {
+        _Job1: {'init': 1, 'visit': _NUM_WAVES * 2 + 1, 'submit': 1, 'schedule': 1},
+        _Job4: {'init': 1},
+        _JobB: {'init': 1, 'visit': _NUM_WAVES + 1, 'submit': 1, 'schedule': 1},
+        _JobC: {'init': 1},
+        None: {'init': 1, 'visit': _NUM_WAVES},
+    }
 
-    def _check_scheduler_controller(self, scheduler):
-        for j in scheduler._graph:
-            with self.subTest(job=j.get_name()):
-                if isinstance(j, _Job1):
-                    ref_counter = {'init': 1, 'visit': (_NUM_WAVES + 1) * 2 + 1, 'submit': 1, 'schedule': 1}
-                elif isinstance(j, _Job4):
-                    ref_counter = {'init': 1, 'visit': _NUM_WAVES + 1, 'submit': 1, 'schedule': 1}
-                elif isinstance(j, (_JobA, _JobB)):
-                    ref_counter = {'init': 1, 'visit': _NUM_WAVES + 1 + 1, 'submit': 1, 'schedule': 1}
-                else:
-                    ref_counter = {'init': 1, 'visit': _NUM_WAVES + 1}
-                self.assertDictEqual(j.counter, ref_counter,
-                                     'Job call pattern did not match expected pattern')
+    CONTROLLER_REF: _REF_DICT_T = {
+        _Job1: {'init': 1, 'visit': (_NUM_WAVES + 1) * 2 + 1, 'submit': 1, 'schedule': 1},
+        _Job4: {'init': 1, 'visit': _NUM_WAVES + 1, 'submit': 1, 'schedule': 1},
+        _JobA: {'init': 1, 'visit': _NUM_WAVES + 1 + 1, 'submit': 1, 'schedule': 1},
+        _JobB: {'init': 1, 'visit': _NUM_WAVES + 1 + 1, 'submit': 1, 'schedule': 1},
+        None: {'init': 1, 'visit': _NUM_WAVES + 1},
+    }
 
-    def _check_scheduler_controller_reversed(self, scheduler):
-        for j in scheduler._graph:
-            with self.subTest(job=j.get_name()):
-                if isinstance(j, _Job1):
-                    ref_counter = {'init': 1, 'visit': _NUM_WAVES * 2 + 1 + 2, 'submit': 1, 'schedule': 1}
-                elif isinstance(j, (_Job2, _Job3, _JobA)):
-                    ref_counter = {'init': 1, 'visit': _NUM_WAVES + 1}
-                elif isinstance(j, _Job4):
-                    ref_counter = {'init': 1, 'visit': _NUM_WAVES + 1, 'submit': 1, 'schedule': 1}
-                elif isinstance(j, _JobB):
-                    ref_counter = {'init': 1, 'visit': _NUM_WAVES + 1 + 2, 'submit': 2, 'schedule': 2}
-                elif isinstance(j, _JobC):
-                    ref_counter = {'init': 1, 'visit': _NUM_WAVES}
-                else:
-                    self.fail('Statement should not be reachable')
-                self.assertDictEqual(j.counter, ref_counter,
-                                     'Job call pattern did not match expected pattern')
+    CONTROLLER_REVERSED_REF: _REF_DICT_T = {
+        _Job1: {'init': 1, 'visit': _NUM_WAVES * 2 + 1 + 2, 'submit': 1, 'schedule': 1},
+        _Job4: {'init': 1, 'visit': _NUM_WAVES + 1, 'submit': 1, 'schedule': 1},
+        _JobB: {'init': 1, 'visit': _NUM_WAVES + 1 + 2, 'submit': 2, 'schedule': 2},
+        _JobC: {'init': 1, 'visit': _NUM_WAVES},
+        None: {'init': 1, 'visit': _NUM_WAVES + 1},
+    }
 
-    def _check_scheduler_controller_start_depth(self, scheduler):
-        for j in scheduler._graph:
-            with self.subTest(job=j.get_name()):
-                if isinstance(j, _Job1):
-                    ref_counter = {'init': 1, 'visit': (_NUM_WAVES + 1) * 2 + 1, 'submit': 1, 'schedule': 1}
-                elif isinstance(j, (_Job2, _Job3)):
-                    ref_counter = {'init': 1, 'visit': _NUM_WAVES + 1, 'submit': 1, 'schedule': 1}
-                elif isinstance(j, _Job4):
-                    ref_counter = {'init': 1, 'visit': _NUM_WAVES}
-                elif isinstance(j, _JobB):
-                    ref_counter = {'init': 1, 'visit': _NUM_WAVES + 1 + 1, 'submit': 1, 'schedule': 1}
-                else:
-                    ref_counter = {'init': 1, 'visit': _NUM_WAVES + 1}
-                self.assertDictEqual(j.counter, ref_counter,
-                                     'Job call pattern did not match expected pattern')
+    CONTROLLER_START_DEPTH_REF: _REF_DICT_T = {
+        _Job1: {'init': 1, 'visit': (_NUM_WAVES + 1) * 2 + 1, 'submit': 1, 'schedule': 1},
+        _Job2: {'init': 1, 'visit': _NUM_WAVES + 1, 'submit': 1, 'schedule': 1},
+        _Job3: {'init': 1, 'visit': _NUM_WAVES + 1, 'submit': 1, 'schedule': 1},
+        _Job4: {'init': 1, 'visit': _NUM_WAVES},
+        _JobB: {'init': 1, 'visit': _NUM_WAVES + 1 + 1, 'submit': 1, 'schedule': 1},
+        None: {'init': 1, 'visit': _NUM_WAVES + 1},
+    }
 
 
 class GreedySchedulerTestCase(LazySchedulerTestCase):
@@ -1549,274 +1456,153 @@ class GreedySchedulerTestCase(LazySchedulerTestCase):
             # With a greedy policy, all jobs are reachable and the call to super will cause a test failure
             super(GreedySchedulerTestCase, self).test_scheduler_unreachable_jobs()
 
-    def _check_scheduler_wave_0(self, scheduler):
-        for j in scheduler._graph:
-            with self.subTest(job=j.get_name()):
-                if isinstance(j, (_Job1, _Job4, _JobB)):
-                    ref_counter = {'init': 1, 'visit': 2, 'submit': 1, 'schedule': 1}
-                elif isinstance(j, (_Job2, _Job3, _JobC)):
-                    ref_counter = {'init': 1, 'visit': 1, 'submit': 1, 'schedule': 1}
-                else:
-                    ref_counter = {'init': 1, 'visit': 1}
-                self.assertDictEqual(j.counter, ref_counter,
-                                     'Job call pattern did not match expected pattern')
+    WAVE_0_REF: _REF_DICT_T = {
+        _Job1: {'init': 1, 'visit': 2, 'submit': 1, 'schedule': 1},
+        _Job4: {'init': 1, 'visit': 2, 'submit': 1, 'schedule': 1},
+        _JobA: {'init': 1, 'visit': 1},
+        _JobB: {'init': 1, 'visit': 2, 'submit': 1, 'schedule': 1},
+        None: {'init': 1, 'visit': 1, 'submit': 1, 'schedule': 1},
+    }
 
-    def _check_scheduler_wave_1(self, scheduler):
-        for j in scheduler._graph:
-            with self.subTest(job=j.get_name()):
-                if isinstance(j, (_Job1, _JobB)):
-                    ref_counter = {'init': 1, 'visit': 3, 'submit': 1, 'schedule': 1}
-                elif isinstance(j, (_Job2, _Job3, _JobC)):
-                    ref_counter = {'init': 1, 'visit': 2, 'submit': 1, 'schedule': 1}
-                elif isinstance(j, _Job4):
-                    ref_counter = {'init': 1, 'visit': 4, 'submit': 1, 'schedule': 1}
-                else:
-                    ref_counter = {'init': 1, 'visit': 2}
-                self.assertDictEqual(j.counter, ref_counter,
-                                     'Job call pattern did not match expected pattern')
+    WAVE_1_REF: _REF_DICT_T = {
+        _Job1: {'init': 1, 'visit': 3, 'submit': 1, 'schedule': 1},
+        _Job4: {'init': 1, 'visit': 4, 'submit': 1, 'schedule': 1},
+        _JobA: {'init': 1, 'visit': 2},
+        _JobB: {'init': 1, 'visit': 3, 'submit': 1, 'schedule': 1},
+        None: {'init': 1, 'visit': 2, 'submit': 1, 'schedule': 1},
+    }
 
     def _check_scheduler_datastore_calls(self, scheduler):
         # Check data store calls (only jobs that are not meta-jobs perform a call)
         self.assertEqual(len(scheduler.data_store.method_calls), 3,
                          'Data store was called an unexpected number of times')
 
-    def _check_scheduler_controller(self, scheduler):
-        for j in scheduler._graph:
-            with self.subTest(job=j.get_name()):
-                if isinstance(j, _Job1):
-                    ref_counter = {'init': 1, 'visit': _NUM_WAVES + 1, 'submit': 1, 'schedule': 1}
-                elif isinstance(j, (_Job2, _Job3)):
-                    ref_counter = {'init': 1, 'visit': _NUM_WAVES, 'submit': 1, 'schedule': 1}
-                elif isinstance(j, _Job4):
-                    ref_counter = {'init': 1, 'visit': _NUM_WAVES * 2 + 1, 'submit': 1 + 1, 'schedule': 1 + 1}
-                elif isinstance(j, _JobA):
-                    ref_counter = {'init': 1, 'visit': _NUM_WAVES + 1, 'submit': 1, 'schedule': 1}
-                elif isinstance(j, _JobB):
-                    ref_counter = {'init': 1, 'visit': _NUM_WAVES + 1 + 1 + 1, 'submit': 1 + 1, 'schedule': 1 + 1}
-                elif isinstance(j, _JobC):
-                    ref_counter = {'init': 1, 'visit': _NUM_WAVES + 1 + 1, 'submit': 1 + 1, 'schedule': 1 + 1}
-                else:
-                    self.fail('Statement should not be reachable')
-                self.assertDictEqual(j.counter, ref_counter,
-                                     'Job call pattern did not match expected pattern')
+    CONTROLLER_REF: _REF_DICT_T = {
+        _Job1: {'init': 1, 'visit': _NUM_WAVES + 1, 'submit': 1, 'schedule': 1},
+        _Job2: {'init': 1, 'visit': _NUM_WAVES, 'submit': 1, 'schedule': 1},
+        _Job3: {'init': 1, 'visit': _NUM_WAVES, 'submit': 1, 'schedule': 1},
+        _Job4: {'init': 1, 'visit': _NUM_WAVES * 2 + 1, 'submit': 1 + 1, 'schedule': 1 + 1},
+        _JobA: {'init': 1, 'visit': _NUM_WAVES + 1, 'submit': 1, 'schedule': 1},
+        _JobB: {'init': 1, 'visit': _NUM_WAVES + 1 + 1 + 1, 'submit': 1 + 1, 'schedule': 1 + 1},
+        _JobC: {'init': 1, 'visit': _NUM_WAVES + 1 + 1, 'submit': 1 + 1, 'schedule': 1 + 1},
+    }
 
-    def _check_scheduler_controller_reversed(self, scheduler):
-        for j in scheduler._graph:
-            with self.subTest(job=j.get_name()):
-                if isinstance(j, _Job1):
-                    ref_counter = {'init': 1, 'visit': _NUM_WAVES + 1 + 3, 'submit': 2, 'schedule': 2}
-                elif isinstance(j, (_Job2, _Job3)):
-                    ref_counter = {'init': 1, 'visit': _NUM_WAVES + 1, 'submit': 2, 'schedule': 2}
-                elif isinstance(j, _Job4):
-                    ref_counter = {'init': 1, 'visit': _NUM_WAVES * 2 + 1, 'submit': 2, 'schedule': 2}
-                elif isinstance(j, _JobA):
-                    ref_counter = {'init': 1, 'visit': _NUM_WAVES + 1, 'submit': 1, 'schedule': 1}
-                elif isinstance(j, _JobB):
-                    ref_counter = {'init': 1, 'visit': _NUM_WAVES + 1 + 2, 'submit': 2, 'schedule': 2}
-                elif isinstance(j, _JobC):
-                    ref_counter = {'init': 1, 'visit': _NUM_WAVES, 'submit': 1, 'schedule': 1}
-                else:
-                    self.fail('Statement should not be reachable')
-                self.assertDictEqual(j.counter, ref_counter,
-                                     'Job call pattern did not match expected pattern')
+    CONTROLLER_REVERSED_REF: _REF_DICT_T = {
+        _Job1: {'init': 1, 'visit': _NUM_WAVES + 1 + 3, 'submit': 2, 'schedule': 2},
+        _Job2: {'init': 1, 'visit': _NUM_WAVES + 1, 'submit': 2, 'schedule': 2},
+        _Job3: {'init': 1, 'visit': _NUM_WAVES + 1, 'submit': 2, 'schedule': 2},
+        _Job4: {'init': 1, 'visit': _NUM_WAVES * 2 + 1, 'submit': 2, 'schedule': 2},
+        _JobA: {'init': 1, 'visit': _NUM_WAVES + 1, 'submit': 1, 'schedule': 1},
+        _JobB: {'init': 1, 'visit': _NUM_WAVES + 1 + 2, 'submit': 2, 'schedule': 2},
+        _JobC: {'init': 1, 'visit': _NUM_WAVES, 'submit': 1, 'schedule': 1},
+    }
 
-    def _check_scheduler_controller_start_depth(self, scheduler):
-        for j in scheduler._graph:
-            with self.subTest(job=j.get_name()):
-                if isinstance(j, _Job1):
-                    ref_counter = {'init': 1, 'visit': _NUM_WAVES + 1, 'submit': 1, 'schedule': 1}
-                elif isinstance(j, (_Job2, _Job3)):
-                    ref_counter = {'init': 1, 'visit': _NUM_WAVES, 'submit': 1, 'schedule': 1}
-                elif isinstance(j, _Job4):
-                    ref_counter = {'init': 1, 'visit': _NUM_WAVES * 2, 'submit': 1, 'schedule': 1}
-                elif isinstance(j, _JobA):
-                    ref_counter = {'init': 1, 'visit': _NUM_WAVES}
-                elif isinstance(j, _JobB):
-                    ref_counter = {'init': 1, 'visit': _NUM_WAVES + 1 + 1 + 1, 'submit': 1 + 1, 'schedule': 1 + 1}
-                elif isinstance(j, _JobC):
-                    ref_counter = {'init': 1, 'visit': _NUM_WAVES + 1 + 1, 'submit': 1 + 1, 'schedule': 1 + 1}
-                else:
-                    self.fail('Statement should not be reachable')
-                self.assertDictEqual(j.counter, ref_counter,
-                                     'Job call pattern did not match expected pattern')
+    CONTROLLER_START_DEPTH_REF: _REF_DICT_T = {
+        _Job1: {'init': 1, 'visit': _NUM_WAVES + 1, 'submit': 1, 'schedule': 1},
+        _Job2: {'init': 1, 'visit': _NUM_WAVES, 'submit': 1, 'schedule': 1},
+        _Job3: {'init': 1, 'visit': _NUM_WAVES, 'submit': 1, 'schedule': 1},
+        _Job4: {'init': 1, 'visit': _NUM_WAVES * 2, 'submit': 1, 'schedule': 1},
+        _JobA: {'init': 1, 'visit': _NUM_WAVES},
+        _JobB: {'init': 1, 'visit': _NUM_WAVES + 1 + 1 + 1, 'submit': 1 + 1, 'schedule': 1 + 1},
+        _JobC: {'init': 1, 'visit': _NUM_WAVES + 1 + 1, 'submit': 1 + 1, 'schedule': 1 + 1},
+    }
 
-    def _check_scheduler_run(self, scheduler):
-        for j in scheduler._graph:
-            with self.subTest(job=j.get_name()):
-                if isinstance(j, (_Job1, _JobB)):
-                    ref_counter = {'init': 1, 'visit': _NUM_WAVES + 1, 'submit': 1, 'schedule': 1}
-                elif isinstance(j, (_Job2, _Job3, _JobC)):
-                    ref_counter = {'init': 1, 'visit': _NUM_WAVES, 'submit': 1, 'schedule': 1}
-                elif isinstance(j, _Job4):
-                    ref_counter = {'init': 1, 'visit': _NUM_WAVES * 2, 'submit': 1, 'schedule': 1}
-                else:
-                    ref_counter = {'init': 1, 'visit': _NUM_WAVES}
-                self.assertDictEqual(j.counter, ref_counter,
-                                     'Job call pattern did not match expected pattern')
+    RUN_REF: _REF_DICT_T = {
+        _Job1: {'init': 1, 'visit': _NUM_WAVES + 1, 'submit': 1, 'schedule': 1},
+        _Job4: {'init': 1, 'visit': _NUM_WAVES * 2, 'submit': 1, 'schedule': 1},
+        _JobA: {'init': 1, 'visit': _NUM_WAVES},
+        _JobB: {'init': 1, 'visit': _NUM_WAVES + 1, 'submit': 1, 'schedule': 1},
+        None: {'init': 1, 'visit': _NUM_WAVES, 'submit': 1, 'schedule': 1},
+    }
 
-    def _check_scheduler_run_depth(self, scheduler):
-        for j in scheduler._graph:
-            with self.subTest(job=j.get_name()):
-                if isinstance(j, (_Job1, _JobB)):
-                    ref_counter = {'init': 1, 'visit': _NUM_WAVES + 1, 'submit': 1, 'schedule': 1}
-                elif isinstance(j, (_Job2, _Job3)):
-                    ref_counter = {'init': 1, 'visit': _NUM_WAVES, 'submit': 1, 'schedule': 1}
-                elif isinstance(j, _JobA):
-                    ref_counter = {'init': 1, 'visit': _NUM_WAVES}
-                else:
-                    ref_counter = {'init': 1}
-                self.assertDictEqual(j.counter, ref_counter,
-                                     'Job call pattern did not match expected pattern')
+    RUN_DEPTH_REF: _REF_DICT_T = {
+        _Job1: {'init': 1, 'visit': _NUM_WAVES + 1, 'submit': 1, 'schedule': 1},
+        _Job2: {'init': 1, 'visit': _NUM_WAVES, 'submit': 1, 'schedule': 1},
+        _Job3: {'init': 1, 'visit': _NUM_WAVES, 'submit': 1, 'schedule': 1},
+        _JobA: {'init': 1, 'visit': _NUM_WAVES},
+        _JobB: {'init': 1, 'visit': _NUM_WAVES + 1, 'submit': 1, 'schedule': 1},
+        None: {'init': 1},
+    }
 
-    def _check_scheduler_run_start_depth(self, scheduler):
-        for j in scheduler._graph:
-            with self.subTest(job=j.get_name()):
-                if isinstance(j, (_Job1, _JobA)):
-                    ref_counter = {'init': 1}
-                elif isinstance(j, _Job4):
-                    ref_counter = {'init': 1, 'visit': _NUM_WAVES * 2}
-                elif isinstance(j, _JobB):
-                    ref_counter = {'init': 1, 'visit': _NUM_WAVES + 1, 'submit': 1, 'schedule': 1}
-                elif isinstance(j, _JobC):
-                    ref_counter = {'init': 1, 'visit': _NUM_WAVES, 'submit': 1, 'schedule': 1}
-                else:
-                    ref_counter = {'init': 1, 'visit': _NUM_WAVES}
-                self.assertDictEqual(j.counter, ref_counter,
-                                     'Job call pattern did not match expected pattern')
+    RUN_START_DEPTH_REF: _REF_DICT_T = {
+        _Job2: {'init': 1, 'visit': _NUM_WAVES},
+        _Job3: {'init': 1, 'visit': _NUM_WAVES},
+        _Job4: {'init': 1, 'visit': _NUM_WAVES * 2},
+        _JobB: {'init': 1, 'visit': _NUM_WAVES + 1, 'submit': 1, 'schedule': 1},
+        _JobC: {'init': 1, 'visit': _NUM_WAVES, 'submit': 1, 'schedule': 1},
+        None: {'init': 1},
+    }
 
 
 class GreedySchedulerReversedTestCase(GreedySchedulerTestCase):
     POLICY = Policy.GREEDY
     REVERSE_WAVE = True
 
-    def _check_scheduler_wave_0(self, scheduler):
-        for j in scheduler._graph:
-            with self.subTest(job=j.get_name()):
-                if isinstance(j, _Job1):
-                    ref_counter = {'init': 1, 'visit': 2 + 1, 'submit': 1, 'schedule': 1}
-                elif isinstance(j, _JobA):
-                    ref_counter = {'init': 1, 'visit': 1, 'submit': 1, 'schedule': 1}
-                elif isinstance(j, _JobB):
-                    ref_counter = {'init': 1, 'visit': 2, 'submit': 1, 'schedule': 1}
-                else:
-                    ref_counter = {'init': 1, 'visit': 1}
-                self.assertDictEqual(j.counter, ref_counter,
-                                     'Job call pattern did not match expected pattern')
+    WAVE_0_REF: _REF_DICT_T = {
+        _Job1: {'init': 1, 'visit': 2 + 1, 'submit': 1, 'schedule': 1},
+        _JobA: {'init': 1, 'visit': 1, 'submit': 1, 'schedule': 1},
+        _JobB: {'init': 1, 'visit': 2, 'submit': 1, 'schedule': 1},
+        None: {'init': 1, 'visit': 1},
+    }
 
-    def _check_scheduler_wave_1(self, scheduler):
-        for j in scheduler._graph:
-            with self.subTest(job=j.get_name()):
-                if isinstance(j, _Job1):
-                    ref_counter = {'init': 1, 'visit': 3 + 2, 'submit': 1, 'schedule': 1}
-                elif isinstance(j, _JobA):
-                    ref_counter = {'init': 1, 'visit': 2, 'submit': 1, 'schedule': 1}
-                elif isinstance(j, _JobB):
-                    ref_counter = {'init': 1, 'visit': 3, 'submit': 1, 'schedule': 1}
-                else:
-                    ref_counter = {'init': 1, 'visit': 2}
-                self.assertDictEqual(j.counter, ref_counter,
-                                     'Job call pattern did not match expected pattern')
+    WAVE_1_REF: _REF_DICT_T = {
+        _Job1: {'init': 1, 'visit': 3 + 2, 'submit': 1, 'schedule': 1},
+        _JobA: {'init': 1, 'visit': 2, 'submit': 1, 'schedule': 1},
+        _JobB: {'init': 1, 'visit': 3, 'submit': 1, 'schedule': 1},
+        None: {'init': 1, 'visit': 2},
+    }
 
     def _check_scheduler_datastore_calls(self, scheduler):
         # Check data store calls (only jobs that are not meta-jobs perform a call)
         self.assertEqual(len(scheduler.data_store.method_calls), 2,
                          'Data store was called an unexpected number of times')
 
-    def _check_scheduler_controller(self, scheduler):
-        for j in scheduler._graph:
-            with self.subTest(job=j.get_name()):
-                if isinstance(j, _Job1):
-                    ref_counter = {'init': 1, 'visit': _NUM_WAVES * 2 + 1 + 2 + 1, 'submit': 2, 'schedule': 2}
-                elif isinstance(j, (_Job2, _Job3, _Job4)):
-                    ref_counter = {'init': 1, 'visit': _NUM_WAVES + 1, 'submit': 1, 'schedule': 1}
-                elif isinstance(j, _JobA):
-                    ref_counter = {'init': 1, 'visit': _NUM_WAVES + 1 + 1, 'submit': 2, 'schedule': 2}
-                elif isinstance(j, _JobB):
-                    ref_counter = {'init': 1, 'visit': _NUM_WAVES + 1 + 1, 'submit': 1, 'schedule': 1}
-                elif isinstance(j, _JobC):
-                    ref_counter = {'init': 1, 'visit': _NUM_WAVES + 1}
-                else:
-                    self.fail('Statement should not be reachable')
-                self.assertDictEqual(j.counter, ref_counter,
-                                     'Job call pattern did not match expected pattern')
+    CONTROLLER_REF: _REF_DICT_T = {
+        _Job1: {'init': 1, 'visit': _NUM_WAVES * 2 + 1 + 2 + 1, 'submit': 2, 'schedule': 2},
+        _JobA: {'init': 1, 'visit': _NUM_WAVES + 1 + 1, 'submit': 2, 'schedule': 2},
+        _JobB: {'init': 1, 'visit': _NUM_WAVES + 1 + 1, 'submit': 1, 'schedule': 1},
+        _JobC: {'init': 1, 'visit': _NUM_WAVES + 1},
+        None: {'init': 1, 'visit': _NUM_WAVES + 1, 'submit': 1, 'schedule': 1},
+    }
 
-    def _check_scheduler_controller_reversed(self, scheduler):
-        for j in scheduler._graph:
-            with self.subTest(job=j.get_name()):
-                if isinstance(j, _Job1):
-                    ref_counter = {'init': 1, 'visit': _NUM_WAVES * 2 + 1 + 2 + 1, 'submit': 2, 'schedule': 2}
-                elif isinstance(j, (_Job2, _Job3, _Job4)):
-                    ref_counter = {'init': 1, 'visit': _NUM_WAVES + 1, 'submit': 1, 'schedule': 1}
-                elif isinstance(j, _JobA):
-                    ref_counter = {'init': 1, 'visit': _NUM_WAVES + 1, 'submit': 2, 'schedule': 2}
-                elif isinstance(j, _JobB):
-                    ref_counter = {'init': 1, 'visit': _NUM_WAVES + 1 + 2, 'submit': 2, 'schedule': 2}
-                elif isinstance(j, _JobC):
-                    ref_counter = {'init': 1, 'visit': _NUM_WAVES}
-                else:
-                    self.fail('Statement should not be reachable')
-                self.assertDictEqual(j.counter, ref_counter,
-                                     'Job call pattern did not match expected pattern')
+    CONTROLLER_REVERSED_REF: _REF_DICT_T = {
+        _Job1: {'init': 1, 'visit': _NUM_WAVES * 2 + 1 + 2 + 1, 'submit': 2, 'schedule': 2},
+        _JobA: {'init': 1, 'visit': _NUM_WAVES + 1, 'submit': 2, 'schedule': 2},
+        _JobB: {'init': 1, 'visit': _NUM_WAVES + 1 + 2, 'submit': 2, 'schedule': 2},
+        _JobC: {'init': 1, 'visit': _NUM_WAVES},
+        None: {'init': 1, 'visit': _NUM_WAVES + 1, 'submit': 1, 'schedule': 1},
+    }
 
-    def _check_scheduler_controller_start_depth(self, scheduler):
-        for j in scheduler._graph:
-            with self.subTest(job=j.get_name()):
-                if isinstance(j, _Job1):
-                    ref_counter = {'init': 1, 'visit': _NUM_WAVES * 2 + 1 + 2 + 1, 'submit': 2, 'schedule': 2}
-                elif isinstance(j, (_Job2, _Job3, _JobA)):
-                    ref_counter = {'init': 1, 'visit': _NUM_WAVES + 1, 'submit': 1, 'schedule': 1}
-                elif isinstance(j, _Job4):
-                    ref_counter = {'init': 1, 'visit': _NUM_WAVES}
-                elif isinstance(j, _JobB):
-                    ref_counter = {'init': 1, 'visit': _NUM_WAVES + 1 + 1, 'submit': 1, 'schedule': 1}
-                elif isinstance(j, _JobC):
-                    ref_counter = {'init': 1, 'visit': _NUM_WAVES + 1}
-                else:
-                    self.fail('Statement should not be reachable')
-                self.assertDictEqual(j.counter, ref_counter,
-                                     'Job call pattern did not match expected pattern')
+    CONTROLLER_START_DEPTH_REF: _REF_DICT_T = {
+        _Job1: {'init': 1, 'visit': _NUM_WAVES * 2 + 1 + 2 + 1, 'submit': 2, 'schedule': 2},
+        _Job4: {'init': 1, 'visit': _NUM_WAVES},
+        _JobB: {'init': 1, 'visit': _NUM_WAVES + 1 + 1, 'submit': 1, 'schedule': 1},
+        _JobC: {'init': 1, 'visit': _NUM_WAVES + 1},
+        None: {'init': 1, 'visit': _NUM_WAVES + 1, 'submit': 1, 'schedule': 1},
+    }
 
-    def _check_scheduler_run(self, scheduler):
-        for j in scheduler._graph:
-            with self.subTest(job=j.get_name()):
-                if isinstance(j, _Job1):
-                    ref_counter = {'init': 1, 'visit': _NUM_WAVES * 2 + 1, 'submit': 1, 'schedule': 1}
-                elif isinstance(j, _JobA):
-                    ref_counter = {'init': 1, 'visit': _NUM_WAVES, 'submit': 1, 'schedule': 1}
-                elif isinstance(j, _JobB):
-                    ref_counter = {'init': 1, 'visit': _NUM_WAVES + 1, 'submit': 1, 'schedule': 1}
-                else:
-                    ref_counter = {'init': 1, 'visit': _NUM_WAVES}
-                self.assertDictEqual(j.counter, ref_counter,
-                                     'Job call pattern did not match expected pattern')
+    RUN_REF: _REF_DICT_T = {
+        _Job1: {'init': 1, 'visit': _NUM_WAVES * 2 + 1, 'submit': 1, 'schedule': 1},
+        _JobA: {'init': 1, 'visit': _NUM_WAVES, 'submit': 1, 'schedule': 1},
+        _JobB: {'init': 1, 'visit': _NUM_WAVES + 1, 'submit': 1, 'schedule': 1},
+        None: {'init': 1, 'visit': _NUM_WAVES},
+    }
 
-    def _check_scheduler_run_depth(self, scheduler):
-        for j in scheduler._graph:
-            with self.subTest(job=j.get_name()):
-                if isinstance(j, _JobB):
-                    ref_counter = {'init': 1, 'visit': _NUM_WAVES + 1, 'submit': 1, 'schedule': 1}
-                elif isinstance(j, (_Job2, _Job3, _Job4, _JobC)):
-                    ref_counter = {'init': 1, 'visit': _NUM_WAVES}
-                else:
-                    ref_counter = {'init': 1}
-                self.assertDictEqual(j.counter, ref_counter,
-                                     'Job call pattern did not match expected pattern')
+    RUN_DEPTH_REF: _REF_DICT_T = {
+        _Job1: {'init': 1},
+        _JobA: {'init': 1},
+        _JobB: {'init': 1, 'visit': _NUM_WAVES + 1, 'submit': 1, 'schedule': 1},
+        None: {'init': 1, 'visit': _NUM_WAVES},
+    }
 
-    def _check_scheduler_run_start_depth(self, scheduler):
-        for j in scheduler._graph:
-            with self.subTest(job=j.get_name()):
-                if isinstance(j, _Job1):
-                    ref_counter = {'init': 1, 'visit': _NUM_WAVES * 2 + 1, 'submit': 1, 'schedule': 1}
-                elif isinstance(j, (_Job4, _JobC)):
-                    ref_counter = {'init': 1}
-                elif isinstance(j, _JobA):
-                    ref_counter = {'init': 1, 'visit': _NUM_WAVES, 'submit': 1, 'schedule': 1}
-                elif isinstance(j, _JobB):
-                    ref_counter = {'init': 1, 'visit': _NUM_WAVES + 1, 'submit': 1, 'schedule': 1}
-                else:
-                    ref_counter = {'init': 1, 'visit': _NUM_WAVES}
-                self.assertDictEqual(j.counter, ref_counter,
-                                     'Job call pattern did not match expected pattern')
+    RUN_START_DEPTH_REF: _REF_DICT_T = {
+        _Job1: {'init': 1, 'visit': _NUM_WAVES * 2 + 1, 'submit': 1, 'schedule': 1},
+        _Job2: {'init': 1, 'visit': _NUM_WAVES},
+        _Job3: {'init': 1, 'visit': _NUM_WAVES},
+        _JobA: {'init': 1, 'visit': _NUM_WAVES, 'submit': 1, 'schedule': 1},
+        _JobB: {'init': 1, 'visit': _NUM_WAVES + 1, 'submit': 1, 'schedule': 1},
+        None: {'init': 1},
+    }
 
 
 class _CalJob0(CalibrationJob):
