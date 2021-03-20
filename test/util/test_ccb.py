@@ -30,6 +30,7 @@ class CcbTestCase(unittest.TestCase):
             'base3': (['y', 'fit'], {'foo_bar': None, 'bar': None, 'baz': 1}),
             'base4': (['y', 'fit'], {'foo_bar': True, 'baz': False}),
             'base5': (['y', "'fit'"], {'foo_bar': 'bar', 'baz': "'baz'"}),
+            'base6': (['y', 'fit'], {'foo_bar': 0, 'baz': 0.0}),
         }
 
         for base, (args, kwargs) in data.items():
@@ -41,7 +42,7 @@ class CcbTestCase(unittest.TestCase):
                     a = a.replace("'", "")
                     self.assertIn(f"'{a}'", cmd, 'Positional argument not found in command')
                 for k, v in kwargs.items():
-                    if v in {None, False}:
+                    if v is None or v is False:
                         self.assertNotIn(k, cmd, 'None or False valued argument found in command')
                     elif v is True:
                         self.assertIn(f'--{k.replace("_", "-")}', cmd, 'store_true argument not found in command')

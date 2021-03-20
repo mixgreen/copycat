@@ -29,7 +29,7 @@ def _generate_command(base_command: str, *args: str, **kwargs: typing.Any) -> st
     """
     # Convert underscores in arguments, remove single quotes from strings, discard None and False values
     kwargs = {a.replace('_', '-').replace("'", ""): v.replace("'", "") if isinstance(v, str) else v
-              for a, v in kwargs.items() if v not in {None, False}}
+              for a, v in kwargs.items() if v is not None and v is not False}
     # Convert to command argument format
     optional_arguments = (f'--{a}' if v is True else f"--{a} '{v}'" for a, v in kwargs.items())
     # Convert positional arguments
