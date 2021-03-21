@@ -1,0 +1,24 @@
+name: dax
+channels:
+  - http://build-mblab.duckdns.org/conda
+  - https://conda.m-labs.hk/artiq
+  - defaults
+  - conda-forge
+dependencies:
+  # DAX dependencies
+  - artiq
+  - sipyco
+  - numpy
+  - scipy
+  - pyvcd
+  - natsort
+  - pygit2
+  - matplotlib
+  - python-graphviz
+  - h5py
+  - networkx
+  # Packages required for testing
+  - pytest
+  - mypy
+  - pycodestyle
+  - flake8-artiq

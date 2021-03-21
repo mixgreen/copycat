@@ -13,21 +13,16 @@ stages:
   variables:
     CONDA_SCRIPT: "$HOME/miniconda.sh"
     CONDA_DIR: "$HOME/miniconda"
-    CONDA_PACKAGES: "artiq sipyco numpy scipy pyvcd natsort pygit2 matplotlib python-graphviz h5py networkx"
   before_script:
-    # Setup conda
+    # Setup Conda
     - apt-get -qq update; apt-get -qq -y install wget
     - wget -nv -O $CONDA_SCRIPT https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
     - bash $CONDA_SCRIPT -b -p $CONDA_DIR
     - source $CONDA_DIR/bin/activate
     - conda init
     - source ~/.bashrc
-    # Install and activate environment
-    - conda config --prepend channels https://conda.m-labs.hk/artiq
-    - conda config --append channels conda-forge
-    - conda config --prepend channels http://build-mblab.duckdns.org/conda
-    - echo $CONDA_PACKAGES
-    - conda create -y -n env $CONDA_PACKAGES
+    # Create and activate environment
+    - conda env create -n env -f $CONDA_ENV_FILE
     - conda activate env
 
 test_nix:
@@ -45,14 +40,14 @@ test_nix:
     - $NIX_CMD "coverage report"
     # Run build commands
     - nix build -f ./default.nix
-    - nix-shell ./shell.nix --run "python -c 'import dax; print(dax.__version__)'"
+    - nix-shell ./shell.nix --run "python3 -c 'import dax; print(dax.__version__)'"
 
 test_conda:
   extends: .conda_env
   stage: test
+  variables:
+    CONDA_ENV_FILE: "test/environment.yml"
   script:
-    # Install packages required for testing
-    - conda install -y pytest pycodestyle mypy flake8-artiq
     # Run test commands
     - python3 --version
     - mypy --version; mypy
