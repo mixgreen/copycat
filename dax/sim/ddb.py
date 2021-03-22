@@ -355,4 +355,6 @@ def _start_moninj_service() -> None:
     """
     import subprocess
     import sys
-    subprocess.Popen([sys.executable, '-m', 'dax.util.moninj', '--auto-close', '1'])
+    subprocess.Popen([sys.executable, '-m', 'dax.util.moninj', '--auto-close', '1'],
+                     stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                     close_fds=True, start_new_session=True, creationflags=getattr(subprocess, 'DETACHED_PROCESS', 0))
