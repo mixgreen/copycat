@@ -21,7 +21,7 @@ class AD53xxTestCase(unittest.TestCase):
     def test_conversion(self):
         for v_ref in [2.0, 5.0]:
             for _ in range(_NUM_SAMPLES):
-                v = self.rng.uniform(-2.0 * v_ref, 2.0 * v_ref)
+                v = self.rng.uniform(-2.0 * v_ref, 1.99 * v_ref)  # v < 2*v_ref
                 with self.subTest(v_ref=v_ref, v_in=v):
                     o = dax.sim.coredevice.ad53xx._mu_to_voltage(
                         artiq.coredevice.ad53xx.voltage_to_mu(v, vref=v_ref), vref=v_ref, offset_dacs=0x2000)
