@@ -1166,6 +1166,8 @@ class DaxScheduler(dax.base.system.DaxHasKey, abc.ABC):
     - :attr:`SYSTEM`: A DAX system type to enable additional logging of data
     - :attr:`CONTROLLER`: The scheduler controller name as defined in the device DB
     - :attr:`DEFAULT_SCHEDULING_POLICY`: The default scheduling policy
+    - :attr:`DEFAULT_WAVE_INTERVAL`: The default wave interval in seconds
+    - :attr:`DEFAULT_CLOCK_PERIOD`: The default clock period in seconds
     - :attr:`DEFAULT_REVERSE_WAVE`: The default value for the reverse wave flag
     - :attr:`DEFAULT_RESET_NODES`: The default value for the reset nodes flag
     - :attr:`DEFAULT_CANCEL_NODES`: The default value for the cancel nodes at exit flag
@@ -1185,6 +1187,10 @@ class DaxScheduler(dax.base.system.DaxHasKey, abc.ABC):
     CONTROLLER: typing.Optional[str] = None
     """Optional scheduler controller name, as defined in the device DB."""
 
+    DEFAULT_WAVE_INTERVAL: float = 60.0
+    """Default wave interval in seconds."""
+    DEFAULT_CLOCK_PERIOD: float = 0.5
+    """Default clock period in seconds."""
     DEFAULT_SCHEDULING_POLICY: Policy = Policy.LAZY
     """Default scheduling policy."""
     DEFAULT_REVERSE_WAVE: bool = False
@@ -1253,12 +1259,14 @@ class DaxScheduler(dax.base.system.DaxHasKey, abc.ABC):
                                                 artiq.experiment.BooleanValue(self.DEFAULT_REVERSE_WAVE),
                                                 tooltip='Reverse the wave direction when traversing the graph',
                                                 group='Scheduler')
-        self._wave_interval: int = self.get_argument('Wave interval',
-                                                     artiq.experiment.NumberValue(60, 's', min=1, step=1, ndecimals=0),
-                                                     tooltip='Interval to visit nodes',
-                                                     group='Scheduler')
+        self._wave_interval: float = self.get_argument('Wave interval',
+                                                       artiq.experiment.NumberValue(self.DEFAULT_WAVE_INTERVAL, 's',
+                                                                                    min=1.0, step=1.0),
+                                                       tooltip='Interval to visit nodes',
+                                                       group='Scheduler')
         self._clock_period: float = self.get_argument('Clock period',
-                                                      artiq.experiment.NumberValue(0.5, 's', min=0.1),
+                                                      artiq.experiment.NumberValue(self.DEFAULT_CLOCK_PERIOD, 's',
+                                                                                   min=0.1, step=0.1),
                                                       tooltip='Internal scheduler clock period',
                                                       group='Scheduler')
         if self.CONTROLLER is None:
@@ -1316,7 +1324,7 @@ class DaxScheduler(dax.base.system.DaxHasKey, abc.ABC):
             raise ValueError(f'The scheduler can not run in pipeline "{self._job_pipeline}"')
 
         # Check arguments
-        if self._wave_interval < 1:
+        if self._wave_interval < 1.0:
             raise ValueError('The chosen wave interval is too small')
         if self._clock_period < 0.1:
             raise ValueError('The chosen clock period is too small')
@@ -1763,7 +1771,9 @@ class DaxScheduler(dax.base.system.DaxHasKey, abc.ABC):
             'The provided system must be a subclass of DaxSystem or None'
         assert cls.CONTROLLER is None or isinstance(cls.CONTROLLER, str), 'Controller must be of type str or None'
         assert cls.CONTROLLER != 'scheduler', 'Controller can not be "scheduler" (aliases with the ARTIQ scheduler)'
-        # Check default policy, reverse, reset nodes flag, pipeline, and job priority
+        # Check default wave interval, clock period, policy, reverse, reset nodes flag, pipeline, and job priority
+        assert isinstance(cls.DEFAULT_WAVE_INTERVAL, float), 'Default wave interval must be of type float'
+        assert isinstance(cls.DEFAULT_CLOCK_PERIOD, float), 'Default clock period must be of type float'
         assert isinstance(cls.DEFAULT_SCHEDULING_POLICY, Policy), 'Default policy must be of type Policy'
         assert isinstance(cls.DEFAULT_REVERSE_WAVE, bool), 'Default reverse wave flag must be of type bool'
         assert isinstance(cls.DEFAULT_RESET_NODES, bool), 'Default reset nodes flag must be of type bool'
