@@ -23,5 +23,6 @@ in
         ps.sphinx_rtd_theme
       ]))
       pkgs.git  # Required to set the correct copyright year
+      pkgs.gnumake
     ];
   }
