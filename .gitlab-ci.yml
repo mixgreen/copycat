@@ -30,14 +30,14 @@ test_nix:
   stage: test
   coverage: '/^TOTAL.+?(\d+\.\d+\%)$/'
   variables:
-    NIX_CMD: "nix-shell test/shell.nix --run"
+    NIX_SHELL_FILE: "test/shell.nix"
   script:
     # Run test commands
-    - $NIX_CMD "python3 --version"
-    - $NIX_CMD "mypy --version; mypy"
-    - $NIX_CMD "flake8 --version; flake8 --no-untyped-args --no-untyped-return"
-    - $NIX_CMD "coverage --version; coverage run -m pytest -v -rs"
-    - $NIX_CMD "coverage report"
+    - python3 --version
+    - mypy --version; mypy
+    - flake8 --version; flake8 --no-untyped-args --no-untyped-return
+    - coverage --version; coverage run -m pytest -v -rs
+    - coverage report
     # Run build commands
     - nix build -f ./default.nix
     - nix-shell ./shell.nix --run "python3 -c 'import dax; print(dax.__version__)'"
@@ -58,10 +58,10 @@ pages:
   extends: .nix_env
   stage: test
   variables:
-    NIX_CMD: "nix-shell doc/shell.nix --run"
+    NIX_SHELL_FILE: "doc/shell.nix"
   script:
     # Generate documentation
-    - $NIX_CMD "cd doc; make html"
+    - make -C doc/ html
     - mv doc/build/html/ public/
   artifacts:
     paths:
