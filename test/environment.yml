@@ -21,4 +21,5 @@ dependencies:
   - pytest
   - mypy
   - pycodestyle
+  - flake8
   - flake8-artiq

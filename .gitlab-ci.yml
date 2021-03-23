@@ -35,7 +35,7 @@ test_nix:
     # Run test commands
     - python3 --version
     - mypy --version; mypy
-    - flake8 --version; flake8 --no-untyped-args --no-untyped-return
+    - flake8 --version; flake8
     - coverage --version; coverage run -m pytest -v -rs
     - coverage report
     # Run build commands
