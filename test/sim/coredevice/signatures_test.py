@@ -43,36 +43,96 @@ class CoredeviceSignatureTestCase(unittest.TestCase):
         (dax.sim.coredevice.zotino.Zotino, artiq.coredevice.zotino.Zotino),
     ]
 
-    def test_methods(self):
+    def test_functions(self):
         """Test if simulated coredevice drivers have the same public functions as ARTIQ coredevice drivers."""
-        for d, a in self.class_list:
-            with self.subTest('Class signature comparison', dax_class=d, artiq_class=a):
-                # Get function lists
-                d_m = [(n, f) for n, f in inspect.getmembers(d, inspect.isfunction) if not n.startswith('_')]  # DAX
-                a_m = [(n, f) for n, f in inspect.getmembers(a, inspect.isfunction) if not n.startswith('_')]  # ARTIQ
-                a_m_set = {n for n, _ in a_m}  # Set of real driver functions
+        for dax_cls, artiq_cls in self.class_list:
+            with self.subTest('Class signature comparison', dax_cls=dax_cls, artiq_cls=artiq_cls):
+                self._test_function_signatures(dax_cls=dax_cls, artiq_cls=artiq_cls)
 
-                # Verify if public functions are the same
-                self.assertGreaterEqual({n for n, _ in d_m}, a_m_set,
-                                        'Simulated driver class does not implement all functions of real driver class')
+    def _test_function_signatures(self, *, dax_cls, artiq_cls):
+        """This function does not use `subTest` to make sure exceptions fall through."""
 
-                # Filter DAX class function list to match the ARTIQ class function list
-                d_m = [(n, f) for n, f in d_m if n in a_m_set]
+        # Get function lists
+        dax_m = [(n, f) for n, f in inspect.getmembers(dax_cls, inspect.isfunction) if not n.startswith('_')]
+        artiq_m = [(n, f) for n, f in inspect.getmembers(artiq_cls, inspect.isfunction) if not n.startswith('_')]
+        artiq_m_set = {n for n, _ in artiq_m}  # Set of real driver functions
 
-                for d_f, a_f in zip((f for _, f in d_m), (f for _, f in a_m)):
-                    with self.subTest('Class function signature comparison',
-                                      dax_func=d_f.__qualname__, artiq_func=a_f.__qualname__):
-                        # Get function parameters
-                        d_p = set(inspect.signature(d_f).parameters.keys())
-                        a_p = set(inspect.signature(a_f).parameters.keys())
+        # Verify if public functions are the same
+        self.assertGreaterEqual({n for n, _ in dax_m}, artiq_m_set,
+                                f'Simulated driver class {dax_cls.__qualname__} does not implement all functions of '
+                                f'the ARTIQ driver class {artiq_cls.__qualname__}')
 
-                        # Verify parameters
-                        self.assertLessEqual(d_p, a_p, 'Simulated driver function signature requires more '
-                                                       'parameters than real driver class')
-                        if d_p < a_p:
-                            # Parameters are a strict subset, then kwargs must be included to accept other arguments
-                            self.assertIn('kwargs', d_p, 'Simulated driver function signature requires less parameters '
-                                                         'than real driver, but does not support kwargs')
+        # Filter DAX class function list to match the ARTIQ class function list
+        dax_m = [(n, f) for n, f in dax_m if n in artiq_m_set]
+
+        for dax_fn, artiq_fn in zip((f for _, f in dax_m), (f for _, f in artiq_m)):
+            # Get function signatures
+            dax_sig = inspect.signature(dax_fn)
+            artiq_sig = inspect.signature(artiq_fn)
+
+            # Get function parameters
+            dax_p = set(dax_sig.parameters.keys())
+            artiq_p = set(artiq_sig.parameters.keys())
+            # Take out kwargs
+            has_kwargs = 'kwargs' in dax_p
+            dax_p.discard('kwargs')
+
+            # Verify parameter existence
+            self.assertLessEqual(dax_p, artiq_p,
+                                 f'Simulated driver function signature {dax_fn.__qualname__} requires more '
+                                 f'parameters than the ARTIQ driver function {artiq_fn.__qualname__}')
+            if dax_p < artiq_p:
+                # Parameters are a strict subset, then kwargs must be included to accept other arguments
+                self.assertTrue(has_kwargs,
+                                f'Simulated driver function signature {dax_fn.__qualname__} requires less parameters '
+                                f'than the ARTIQ driver function {artiq_fn.__qualname__}, but does not support kwargs')
+
+    def test_verification(self):
+        # Classes match
+        for cls in [_MatchedClass0, _MatchedClass1]:
+            with self.subTest(cls=cls):
+                self._test_function_signatures(dax_cls=cls, artiq_cls=_ReferenceClass)
+
+        # Classes do not match
+        for cls in [_BadClass0, _BadClass1, _BadClass2]:
+            with self.subTest(cls=cls):
+                with self.assertRaises(self.failureException, msg='Class signature mismatch did not raise'):
+                    self._test_function_signatures(dax_cls=cls, artiq_cls=_ReferenceClass)
+
+
+class _ReferenceClass:
+    def foo(self, a, b):
+        """Function with reference signature."""
+        pass
+
+
+class _MatchedClass0:
+    def foo(self, a, b):
+        """Exact match with reference."""
+        pass
+
+
+class _MatchedClass1:
+    def foo(self, **kwargs):
+        """Missing parameters but with keyword arguments."""
+        pass
+
+
+class _BadClass0:
+    """Missing function"""
+    pass
+
+
+class _BadClass1:
+    def foo(self, a):
+        """Missing parameter."""
+        pass
+
+
+class _BadClass2:
+    def foo(self, a, b, z):
+        """Additional parameter."""
+        pass
 
 
 if __name__ == '__main__':
