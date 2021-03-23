@@ -16,7 +16,7 @@ class _ContextExperiment(HasEnvironment):
             self._append('enter')
 
         @kernel
-        def __exit__(self, exc_type, exc_val, exc_tb):  # noqa:ATQ306
+        def __exit__(self, exc_type, exc_val, exc_tb):
             self._append('exit')
 
         def _append(self, msg):
@@ -30,7 +30,7 @@ class _ContextExperiment(HasEnvironment):
 
     @kernel
     def multiple_item_context(self):
-        with self.context_a, self.context_b:  # noqa: ATQ901
+        with self.context_a, self.context_b:
             pass
 
     @kernel

@@ -97,22 +97,22 @@ class LedModuleTestCase(dax.sim.test_case.PeekTestCase):
     def test_pulse(self):
         s = self._construct_env()
         duration = 1.0
-        with parallel:  # noqa: ATQ102
+        with parallel:
             s.led.pulse(duration)
-            with sequential:  # noqa: ATQ102
+            with sequential:
                 self.expect(s.led.led[0], 'state', 1)
                 for d in [0.1] * 9:
-                    delay(d)  # noqa: ATQ101
+                    delay(d)
                     self.expect(s.led.led[0], 'state', 1)
-            with sequential:  # noqa: ATQ102
-                delay(duration)  # noqa: ATQ101
+            with sequential:
+                delay(duration)
                 self.expect(s.led.led[0], 'state', 0)
         self.expect(s.led.led[0], 'state', 0)
 
     def test_set_code(self):
         s = self._construct_env()
         for code in [1, 8, 5, 7, 0, 3, 5, 77, 34, 789, 234, 59, 68]:
-            delay_mu(1)  # noqa: ATQ101
+            delay_mu(1)
             s.led.set_code(code)
             self.expect(s.led.led[0], 'state', code % 2)
 

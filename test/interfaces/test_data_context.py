@@ -23,7 +23,7 @@ class DataContextInstance(dax.interfaces.data_context.DataContextInterface):
         self.open()
 
     @portable
-    def __exit__(self, exc_type, exc_val, exc_tb):  # noqa: ATQ306
+    def __exit__(self, exc_type, exc_val, exc_tb):
         self.close()
 
     @host_only

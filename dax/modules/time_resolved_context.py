@@ -443,7 +443,7 @@ class TimeResolvedContext(DaxModule):
         """
         self.open()
 
-    @portable
+    @portable  # noqa:ATQ306
     def __exit__(self, exc_type, exc_val, exc_tb):  # type: (typing.Any, typing.Any, typing.Any) -> None # noqa: ATQ306
         """Exit the context."""
         self.close()

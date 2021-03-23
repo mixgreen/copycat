@@ -522,7 +522,7 @@ class RtioBenchmarkModule(DaxModule):
         self.set_dataset('underflow_flag', underflow_flag)
         self.set_dataset('last_period', last_period)
 
-    @kernel
+    @kernel  # noqa:ATQ306
     def _spawn_dma_events(self, period: TFloat, num_samples: TInt32, num_events: TInt32,  # noqa: ATQ306
                           dma_handle_on, dma_handle_off):
         # Convert period to machine units

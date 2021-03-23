@@ -89,7 +89,7 @@ class ReentrantSafetyContext(DaxModule):
         # Increment in context counter
         self._in_context += 1
 
-    @portable
+    @portable  # noqa:ATQ306
     def __exit__(self, exc_type, exc_val, exc_tb):  # type: (typing.Any, typing.Any, typing.Any) -> None # noqa: ATQ306
         """Exit the safety context.
 

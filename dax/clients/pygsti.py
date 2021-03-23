@@ -220,7 +220,7 @@ class RandomizedBenchmarkingSQ(DaxClient, Experiment):
             # Perform host cleanup
             self.host_cleanup()
 
-    @kernel
+    @kernel  # noqa:ATQ306
     def _run_circuit_list(self, circuit_list):  # noqa: ATQ306
         try:
             # Device setup
@@ -254,7 +254,7 @@ class RandomizedBenchmarkingSQ(DaxClient, Experiment):
             # Device cleanup
             self.device_cleanup()
 
-    @kernel
+    @kernel  # noqa:ATQ306
     def _run_circuit(self, circuit):  # noqa: ATQ306
         # Guarantee slack
         self.core.break_realtime()
