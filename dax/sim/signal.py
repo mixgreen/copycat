@@ -6,7 +6,7 @@ import numpy as np
 import datetime
 
 import artiq.language.core
-from artiq.language.units import *
+from artiq.language.units import ns
 
 from dax.sim.device import DaxSimDevice
 from dax import __version__ as _dax_version
@@ -137,7 +137,7 @@ class VcdSignalManager(DaxSignalManager[_VS_T]):
     }
     """Dict to convert Python types to VCD types."""
 
-    def __init__(self, file_name: str, timescale: float = ns):
+    def __init__(self, file_name: str, timescale: float = 1 * ns):
         assert isinstance(file_name, str), 'Output file name must be of type str'
         assert isinstance(timescale, float), 'Timescale must be of type float'
         assert timescale > 0.0, 'Timescale must be > 0.0'

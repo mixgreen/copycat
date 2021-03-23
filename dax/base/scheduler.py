@@ -1685,19 +1685,17 @@ class DaxScheduler(dax.base.system.DaxHasKey, abc.ABC):
         if other_instances:
             # Wait until all other instances disappeared from the schedule
             self.logger.info(f'Waiting for {len(other_instances)} other instance(s) to terminate')
-            # The timeout counter
-            timeout = 20
 
-            while any(rid in self._scheduler.get_status() for rid in other_instances):
-                if timeout <= 0:
-                    # Timeout elapsed
-                    raise RuntimeError('Timeout while waiting for other instances to terminate')
+            for _ in range(20):
+                if all(rid not in self._scheduler.get_status() for rid in other_instances):
+                    # All other instances are finished
+                    break
                 else:
-                    # Update timeout counter
-                    timeout -= 1
-
-                # Sleep
-                time.sleep(0.5)
+                    # Sleep before trying again
+                    time.sleep(0.5)
+            else:
+                # Timeout elapsed
+                raise RuntimeError('Timeout while waiting for other instances to terminate')
 
             # Other instances were terminated
             self.logger.info('All other instances were terminated successfully')

@@ -4,8 +4,6 @@ import abc
 import typing
 import numpy as np
 
-from artiq.language.units import *  # noqa: F401
-
 __all__ = ['DaxTimeManager']
 
 _MU_T = np.int64
