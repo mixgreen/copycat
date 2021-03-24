@@ -43,6 +43,17 @@ class LedModuleTestCase(dax.sim.test_case.PeekTestCase):
     def _construct_env(self, **kwargs):
         return self.construct_env(_TestSystem, device_db=self._DEVICE_DB, build_kwargs=kwargs)
 
+    def test_num_led_constructor(self):
+        class TestLedModule(LedModule):
+            # noinspection PyMethodParameters
+            def build(self_, *args, **kwargs):
+                with self.assertRaises(TypeError, msg='Invalid number of led devices did not raise'):
+                    super(TestLedModule, self_).build(*args, **kwargs)
+
+        s = self._construct_env()
+        TestLedModule(s, 'a')
+        TestLedModule(s, 'b', *[f'led_{i}' for i in range(9)])
+
     def test_dax_init(self):
         s = self._construct_env(init_kernel=True)
         self.expect(s.led.led[0], 'state', 'x')

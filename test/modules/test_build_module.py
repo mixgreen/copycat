@@ -23,15 +23,15 @@ class BuildModuleTestCase(unittest.TestCase):
     """Test case that builds and initializes modules as a basic test."""
 
     _MODULES = {
-        dax.modules.beam_manager.BeamManager: dict(num_beams=2),
-        dax.modules.cpld_init.CpldInitModule: {},
+        dax.modules.beam_manager.BeamManager: ((), dict(num_beams=2)),
+        dax.modules.cpld_init.CpldInitModule: ((), {}),
         # HistogramContext not tested here due to system interface requirements
-        dax.modules.led.LedModule: {},
-        dax.modules.rpc_benchmark.RpcBenchmarkModule: {},
-        dax.modules.rtio_benchmark.RtioBenchmarkModule: dict(ttl_out='ttl0'),
-        dax.modules.rtio_benchmark.RtioLoopBenchmarkModule: dict(ttl_out='ttl0', ttl_in='ttl1'),
+        dax.modules.led.LedModule: (('led0',), {}),
+        dax.modules.rpc_benchmark.RpcBenchmarkModule: ((), {}),
+        dax.modules.rtio_benchmark.RtioBenchmarkModule: ((), dict(ttl_out='ttl0')),
+        dax.modules.rtio_benchmark.RtioLoopBenchmarkModule: ((), dict(ttl_out='ttl0', ttl_in='ttl1')),
         # SafetyContext not tested here due to build argument requirements
-        dax.modules.time_resolved_context.TimeResolvedContext: {},
+        dax.modules.time_resolved_context.TimeResolvedContext: ((), {}),
     }
     """List of module types and kwargs."""
 
@@ -44,15 +44,15 @@ class BuildModuleTestCase(unittest.TestCase):
         self.managers.close()
 
     def test_build_module(self):
-        for module_type, module_kwargs in self._MODULES.items():
+        for module_type, (module_args, module_kwargs) in self._MODULES.items():
             with self.subTest(module_type=module_type.__name__):
                 class _WrappedTestSystem(_TestSystem):
                     def build(self, *args: typing.Any, **kwargs: typing.Any) -> None:
                         super(_WrappedTestSystem, self).build()
-                        self.module = module_type(self, module_type.__name__, *args, **module_kwargs)
+                        self.module = module_type(self, module_type.__name__, *args, **kwargs)
 
                 # Create system
-                system = _WrappedTestSystem(self.managers, **module_kwargs)
+                system = _WrappedTestSystem(self.managers, *module_args, **module_kwargs)
                 self.assertIsInstance(system, DaxSystem)
 
                 # Initialize system
@@ -101,6 +101,15 @@ _DEVICE_DB = {
         'class': 'TTLInOut',
         'arguments': {'channel': 1},
     },
+
+    # LED
+    'led0': {
+        'type': 'local',
+        'module': 'artiq.coredevice.ttl',
+        'class': 'TTLOut',
+        'arguments': {'channel': 2},
+    },
+
 }
 
 if __name__ == '__main__':

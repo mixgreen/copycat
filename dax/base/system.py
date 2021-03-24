@@ -606,6 +606,7 @@ class DaxHasSystem(DaxHasKey, abc.ABC):
         """
 
         assert isinstance(key, str) and key, 'Key must be of type str and not empty'
+        assert isinstance(type_, type) or type_ is None, 'Type must be a type or None'
 
         # Debug message
         self.logger.debug(f'Requesting device "{key}"')

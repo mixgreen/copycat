@@ -17,7 +17,7 @@ class LedModule(DaxModule):
         :param init_kernel: Run initialization kernel during default module initialization
         """
         # Check arguments
-        if 1 > len(leds) > 8:
+        if not 1 <= len(leds) <= 8:
             raise TypeError("Number of LED's must be in the range [1..8]")
         assert all(isinstance(led, str) for led in leds), 'Provided LED keys must be of type str'
         assert isinstance(init_kernel, bool), 'Init kernel flag must be of type bool'

@@ -1165,6 +1165,7 @@ class DaxScheduler(dax.base.system.DaxHasKey, abc.ABC):
     - :attr:`ROOT_NODES`: A collection of node classes that are the root nodes, defaults to all entry nodes
     - :attr:`SYSTEM`: A DAX system type to enable additional logging of data
     - :attr:`CONTROLLER`: The scheduler controller name as defined in the device DB
+    - :attr:`TERMINATE_TIMEOUT`: The timeout for terminating other instances in seconds
     - :attr:`DEFAULT_SCHEDULING_POLICY`: The default scheduling policy
     - :attr:`DEFAULT_WAVE_INTERVAL`: The default wave interval in seconds
     - :attr:`DEFAULT_CLOCK_PERIOD`: The default clock period in seconds
@@ -1186,6 +1187,8 @@ class DaxScheduler(dax.base.system.DaxHasKey, abc.ABC):
     """Optional DAX system type, enables Influx DB logging if provided."""
     CONTROLLER: typing.Optional[str] = None
     """Optional scheduler controller name, as defined in the device DB."""
+    TERMINATE_TIMEOUT: float = 10.0
+    """Timeout for terminating other instances in seconds."""
 
     DEFAULT_WAVE_INTERVAL: float = 60.0
     """Default wave interval in seconds."""
@@ -1666,8 +1669,10 @@ class DaxScheduler(dax.base.system.DaxHasKey, abc.ABC):
         # Render the graph
         plot.render(view=self._view_graph)
 
-    def _terminate_running_instances(self) -> None:
+    def _terminate_running_instances(self, *, sleep_time: float = 0.5) -> None:
         """Terminate running instances of this scheduler."""
+        assert isinstance(sleep_time, float)
+        assert sleep_time > 0.0
 
         # Obtain the schedule with the expid objects
         schedule = {rid: status['expid'] for rid, status in self._scheduler.get_status().items()}
@@ -1686,13 +1691,13 @@ class DaxScheduler(dax.base.system.DaxHasKey, abc.ABC):
             # Wait until all other instances disappeared from the schedule
             self.logger.info(f'Waiting for {len(other_instances)} other instance(s) to terminate')
 
-            for _ in range(20):
+            for _ in range(round(self.TERMINATE_TIMEOUT / sleep_time)):
                 if all(rid not in self._scheduler.get_status() for rid in other_instances):
                     # All other instances are finished
                     break
                 else:
                     # Sleep before trying again
-                    time.sleep(0.5)
+                    time.sleep(sleep_time)
             else:
                 # Timeout elapsed
                 raise RuntimeError('Timeout while waiting for other instances to terminate')
@@ -1762,13 +1767,14 @@ class DaxScheduler(dax.base.system.DaxHasKey, abc.ABC):
         assert hasattr(cls, 'NODES'), 'No nodes were provided'
         assert isinstance(cls.NODES, collections.abc.Collection), 'The nodes attribute must be a collection'
         assert all(issubclass(node, Node) for node in cls.NODES), 'All nodes must be subclasses of Node'
-        # Check root nodes, system, and controller
+        # Check root nodes, system, controller, and terminate timeout
         assert isinstance(cls.ROOT_NODES, collections.abc.Collection), 'The root nodes attribute must be a collection'
         assert all(issubclass(node, Node) for node in cls.ROOT_NODES), 'All root nodes must be subclasses of Node'
         assert cls.SYSTEM is None or issubclass(cls.SYSTEM, dax.base.system.DaxSystem), \
             'The provided system must be a subclass of DaxSystem or None'
         assert cls.CONTROLLER is None or isinstance(cls.CONTROLLER, str), 'Controller must be of type str or None'
         assert cls.CONTROLLER != 'scheduler', 'Controller can not be "scheduler" (aliases with the ARTIQ scheduler)'
+        assert isinstance(cls.TERMINATE_TIMEOUT, float), 'Terminate timeout must be of type float'
         # Check default wave interval, clock period, policy, reverse, reset nodes flag, pipeline, and job priority
         assert isinstance(cls.DEFAULT_WAVE_INTERVAL, float), 'Default wave interval must be of type float'
         assert isinstance(cls.DEFAULT_CLOCK_PERIOD, float), 'Default clock period must be of type float'
