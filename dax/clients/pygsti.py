@@ -209,7 +209,9 @@ class RandomizedBenchmarkingSQ(DaxClient, Experiment):
                     raise TerminationRequested
 
                 # Send one partition to the core device
-                self._run_circuit_list(circuit_list)
+                self._circuit_list = circuit_list
+                self.update_kernel_invariants("_circuit_list")
+                self._run_circuit_list()
 
         except TerminationRequested:
             # Experiment was terminated
@@ -221,7 +223,7 @@ class RandomizedBenchmarkingSQ(DaxClient, Experiment):
             self.host_cleanup()
 
     @kernel  # noqa:ATQ306
-    def _run_circuit_list(self, circuit_list):  # noqa: ATQ306
+    def _run_circuit_list(self):  # noqa: ATQ306
         try:
             # Device setup
             self.device_setup()
@@ -230,7 +232,7 @@ class RandomizedBenchmarkingSQ(DaxClient, Experiment):
             t_next_pause_check = np.int64(now_mu() + self.core.seconds_to_mu(self._check_pause_timeout))
 
             # Iterate through circuits
-            for circuit in circuit_list:
+            for circuit in self._circuit_list:
                 with self._histogram_context:
                     # Schedule two circuits to improve performance (pipelining)
                     self._run_circuit(circuit)
