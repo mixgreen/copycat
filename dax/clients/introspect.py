@@ -1,7 +1,7 @@
 import typing
 
 from dax.experiment import *
-from dax.util.introspect import GraphvizBase, ComponentGraphviz, RelationGraphviz
+from dax.util.introspect import GraphvizBase, ComponentGraphviz, RelationGraphviz, CompoundGraphviz
 
 __all__ = ['Introspect']
 
@@ -14,20 +14,26 @@ class Introspect(DaxClient, Experiment):
     """Disable DAX init."""
 
     GRAPHS: typing.Dict[str, typing.List[typing.Tuple[type, typing.Dict[str, typing.Any]]]] = {
-        'All': [
+        'Common graphs': [
+            (ComponentGraphviz, {}),
+            (RelationGraphviz, {}),
+        ],
+        'All graphs': [
             (ComponentGraphviz, {}),
             (ComponentGraphviz, {'engine': 'fdp'}),
-            (RelationGraphviz, {})
+            (RelationGraphviz, {}),
+            (CompoundGraphviz, {}),
         ],
         'Component graph': [(ComponentGraphviz, {})],
         'Component graph (fdp)': [(ComponentGraphviz, {'engine': 'fdp'})],
         'Relation graph': [(RelationGraphviz, {})],
+        'Compound graph': [(CompoundGraphviz, {})],
     }
     """Dict with available graph types."""
 
     def build(self) -> None:  # type: ignore
         # Add arguments
-        self._graph_types = self.get_argument('Graph', EnumerationValue(list(self.GRAPHS), default='All'))
+        self._graph_types = self.get_argument('Graph', EnumerationValue(list(self.GRAPHS), default='Common graphs'))
         self._view = self.get_argument('View result', BooleanValue(True))
 
         # Graph arguments

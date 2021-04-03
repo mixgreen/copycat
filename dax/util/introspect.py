@@ -6,13 +6,13 @@ import logging
 import dax.base.system
 from dax.util.output import get_base_path
 
-__all__ = ['GraphvizBase', 'ComponentGraphviz', 'RelationGraphviz']
+__all__ = ['GraphvizBase', 'ComponentGraphviz', 'RelationGraphviz', 'CompoundGraphviz']
 
 
 def _get_attributes(o: typing.Any) -> typing.Generator[typing.Any, None, None]:
     """Get a generator over attributes of an object, excluding class-private attributes."""
     for attr in dir(o):
-        if attr[0:2] != '__':
+        if not attr.startswith('__'):
             try:
                 yield getattr(o, attr)
             except AttributeError:
@@ -181,14 +181,20 @@ class GraphvizBase(graphviz.Digraph):
                 graph.edge(s.get_system_key(), child.get_system_key(), **self._module_edge_attr)
 
     def _add_service_system_edges(self, graph: graphviz.Digraph,
-                                  services: typing.Sequence[dax.base.system.DaxService]) -> None:
+                                  services: typing.Sequence[dax.base.system.DaxService],
+                                  *,
+                                  system: typing.Optional[dax.base.system.DaxSystem] = None,
+                                  **kwargs: str) -> None:
         """Add service to system edges.
 
         :param graph: The graph object
         :param services: The sequence of services
+        :param system: Optional reference to the system, used to add invisible edges between services and the system
+        :param kwargs: Additional keyword arguments for the edges
         """
         assert isinstance(graph, graphviz.Digraph)
         assert isinstance(services, collections.abc.Sequence)
+        assert isinstance(system, dax.base.system.DaxSystem) or system is None
 
         for s in services:
             # Inspect children of this service for modules
@@ -202,14 +208,20 @@ class GraphvizBase(graphviz.Digraph):
 
             for module in modules:
                 # Add edge to connect service to module
-                graph.edge(module.get_system_key(), s.get_system_key(), dir='back', **self._cluster_edge_attr)
+                graph.edge(s.get_system_key(), module.get_system_key(), **kwargs, **self._cluster_edge_attr)
+
+                if system is not None:
+                    # Add invisible edge to the system to enforce vertical alignment
+                    graph.edge(s.get_system_key(), system.get_system_key(), style='invis')
 
     def _add_system_service_edges(self, graph: graphviz.Digraph,
-                                  module: dax.base.system.DaxModuleBase) -> None:
+                                  module: dax.base.system.DaxModuleBase,
+                                  **kwargs: str) -> None:
         """Recursive function to add system to service edges.
 
         :param graph: The graph object
         :param module: The top module to start the recursion
+        :param kwargs: Additional keyword arguments for the edges
         """
         assert isinstance(graph, graphviz.Digraph)
         assert isinstance(module, dax.base.system.DaxModuleBase)
@@ -222,13 +234,14 @@ class GraphvizBase(graphviz.Digraph):
 
             for attr in attr_services:
                 # Add edge
-                graph.edge(module.get_system_key(), attr.get_system_key(), style='dashed', **self._cluster_edge_attr)
+                graph.edge(attr.get_system_key(), module.get_system_key(), dir='back',
+                           **kwargs, **self._cluster_edge_attr)
 
         # Inspect children of this module for modules
         child_modules = [child for child in module.children if isinstance(child, dax.base.system.DaxModuleBase)]
         for child in child_modules:
             # Recursive call
-            self._add_system_service_edges(graph, child)
+            self._add_system_service_edges(graph, child, **kwargs)
 
 
 class ComponentGraphviz(GraphvizBase):
@@ -259,15 +272,14 @@ class ComponentGraphviz(GraphvizBase):
                                            graph_attr={'label': 'Services'})
         # Add all services
         self._add_services(service_cluster, services, to_service_edges=True)
+        # Add service modules
+        self._add_service_modules(service_cluster, services)
 
         # System cluster
         system_cluster = graphviz.Digraph(name='cluster_system',
                                           graph_attr={'label': 'System'})
         # Add the system
         self._add_modules(system_cluster, system, to_module_edges=True)
-
-        # Add service modules
-        self._add_service_modules(service_cluster, services)
 
         # Add clusters to this graph
         self.subgraph(system_cluster)
@@ -301,20 +313,66 @@ class RelationGraphviz(GraphvizBase):
         services = system.registry.get_service_list()
         # Service cluster
         service_cluster = graphviz.Digraph(name='cluster_services',
-                                           graph_attr={'label': 'Services', 'labelloc': 'b'})
+                                           graph_attr={'label': 'Services'})
         # Add all services
         self._add_services(service_cluster, services, to_service_edges=False)
 
         # System cluster
         system_cluster = graphviz.Digraph(name='cluster_system',
-                                          graph_attr={'label': 'System'})
+                                          graph_attr={'label': 'System', 'labelloc': 'b'})
         # Add the system
         self._add_modules(system_cluster, system, to_module_edges=False)
 
         # Add inter-cluster edges
         self._add_service_system_edges(self, services)
-        self._add_system_service_edges(self, system)
+        self._add_system_service_edges(self, system, style='dashed')
 
         # Add clusters to this graph
         self.subgraph(system_cluster)
         self.subgraph(service_cluster)
+
+
+class CompoundGraphviz(GraphvizBase):
+    """Component and relation graph class."""
+
+    def __init__(self, system: dax.base.system.DaxSystem, **kwargs: typing.Any):
+        """Create a new compound Graphviz object.
+
+        :param system: The system to visualize
+        :param kwargs: Keyword arguments for :class:`GraphvizBase` and the Graphviz parent class
+        """
+        assert isinstance(system, dax.base.system.DaxSystem), 'System must be a DAX system'
+
+        # Set default arguments
+        kwargs.setdefault('engine', 'dot')
+        kwargs.setdefault('name', 'compound_graph')
+        kwargs.setdefault('directory', str(get_base_path(system.get_device('scheduler'))))
+        graph_attr = kwargs.setdefault('graph_attr', {})
+        graph_attr.setdefault('splines', 'spline')
+        graph_attr.setdefault('compound', 'true')  # Required for inter-cluster edges
+        graph_attr.setdefault('ranksep', '2.0')  # Vertical spacing for better edge visibility
+
+        # Call super
+        super(CompoundGraphviz, self).__init__(**kwargs)
+
+        # List of all service objects
+        services = system.registry.get_service_list()
+        # Service cluster
+        service_cluster = graphviz.Digraph(name='cluster_services',
+                                           graph_attr={'label': 'Services'})
+        # Add all services
+        self._add_services(service_cluster, services, to_service_edges=True)
+
+        # System cluster
+        system_cluster = graphviz.Digraph(name='cluster_system',
+                                          graph_attr={'label': 'System', 'labelloc': 'b'})
+        # Add the system
+        self._add_modules(system_cluster, system, to_module_edges=True)
+
+        # Add inter-cluster edges
+        self._add_service_system_edges(self, services, system=system, style='dashed')
+        self._add_system_service_edges(self, system, style='dashed')
+
+        # Add clusters to this graph
+        self.subgraph(service_cluster)
+        self.subgraph(system_cluster)
