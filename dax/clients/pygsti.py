@@ -79,7 +79,7 @@ class RandomizedBenchmarkingSQ(DaxClient, Experiment):
         assert isinstance(self.QUBIT_LABELS, collections.abc.Sequence), 'Qubit labels must be a sequence'
         assert all(isinstance(label, str) for label in self.QUBIT_LABELS), 'All qubit labels must be of type str'
         assert isinstance(self.MAX_CIRCUIT_DEPTH, int), 'Max circuit depth must be of type int'
-        assert self.MAX_CIRCUIT_DEPTH > 0, 'Max circuit depth must be greater than zero'
+        assert self.MAX_CIRCUIT_DEPTH > 2, 'Max circuit depth must be greater than two'
         assert is_kernel(self.device_setup), 'device_setup() must be a kernel function'
         assert is_kernel(self.device_cleanup), 'device_cleanup() must be a kernel function'
         assert not is_kernel(self.host_setup), 'host_setup() can not be a kernel function'
@@ -90,8 +90,10 @@ class RandomizedBenchmarkingSQ(DaxClient, Experiment):
         if not self._operation_interfaces:
             raise LookupError('No operation interfaces were found')
 
-        # Calculate available circuit depths
-        self._available_circuit_depths = {str(2 ** n): n for n in range(int(np.log2(self.MAX_CIRCUIT_DEPTH)) + 1)}
+        # Calculate available circuit depths (PyGSTi Clifford RB has an inverse circuit, which doubles the
+        # number of gates per circuit, and also converts Clifford gates to native gates, which makes number of
+        # gates variable.  Hence, we decrease the maximum number of gates allowed)
+        self._available_circuit_depths = {str(2 ** n): n for n in range(int(np.log2(self.MAX_CIRCUIT_DEPTH)) - 1)}
 
         # Add general arguments
         self._operation_interface: str = self.get_argument('Operation interface',
