@@ -2,6 +2,7 @@ import numpy as np
 import typing
 import collections.abc
 import itertools
+import natsort
 
 try:
     # pyGSTi is an optional dependency
@@ -73,13 +74,17 @@ class RandomizedBenchmarkingSQ(DaxClient, Experiment):
     QUBIT_LABELS: typing.Sequence[str] = ['Q0']
     """Qubit labels for pyGSTi analysis."""
     MAX_CIRCUIT_DEPTH: int = 2 ** 14
-    """The maximum circuit depth available (preferably a power of 2), mostly a memory limitation."""
+    """The maximum circuit depth available (preferably a power of 2)."""
+    DEFAULT_PARTITION_SIZE: int = 0
+    """Default partition size, to limit the size of kernels (zero for no limit)."""
 
     def build(self) -> None:  # type: ignore
         assert isinstance(self.QUBIT_LABELS, collections.abc.Sequence), 'Qubit labels must be a sequence'
         assert all(isinstance(label, str) for label in self.QUBIT_LABELS), 'All qubit labels must be of type str'
         assert isinstance(self.MAX_CIRCUIT_DEPTH, int), 'Max circuit depth must be of type int'
         assert self.MAX_CIRCUIT_DEPTH > 1, 'Max circuit depth must be greater than one'
+        assert isinstance(self.DEFAULT_PARTITION_SIZE, int), 'Default partition size must be of type int'
+        assert self.DEFAULT_PARTITION_SIZE >= 0, 'Default partition size must be greater or equal to zero'
         assert is_kernel(self.device_setup), 'device_setup() must be a kernel function'
         assert is_kernel(self.device_cleanup), 'device_cleanup() must be a kernel function'
         assert not is_kernel(self.host_setup), 'host_setup() can not be a kernel function'
@@ -92,7 +97,7 @@ class RandomizedBenchmarkingSQ(DaxClient, Experiment):
 
         # Calculate available circuit depths (PyGSTi Clifford RB has an inverse circuit, which can double the
         # number of gates per circuit, and also converts Clifford gates to native gates, which makes number of
-        # gates variable.  Hence, we decrease the maximum number of gates allowed to half.)
+        # gates variable.)
         self._available_circuit_depths = {str(2 ** n): n for n in range(int(np.log2(self.MAX_CIRCUIT_DEPTH)))}
 
         # Add general arguments
@@ -100,9 +105,9 @@ class RandomizedBenchmarkingSQ(DaxClient, Experiment):
                                                            EnumerationValue(sorted(self._operation_interfaces)),
                                                            tooltip='The operation interface to use for benchmarking')
         self._max_depth: int = self.get_argument('Max depth',
-                                                 EnumerationValue(sorted(self._available_circuit_depths)),
-                                                 tooltip='Max circuit depth, automatically generates every power '
-                                                         'of 2 below this value as well')
+                                                 EnumerationValue(natsort.natsorted(self._available_circuit_depths)),
+                                                 tooltip='Max circuit depth (excluding inversion), automatically '
+                                                         'generates every power of 2 below this value as well')
         self._num_circuits: int = self.get_argument('Number of circuits',
                                                     NumberValue(default=10, min=1, ndecimals=0, step=1),
                                                     tooltip='Number of circuits to sample from')
@@ -115,6 +120,10 @@ class RandomizedBenchmarkingSQ(DaxClient, Experiment):
         self.add_arguments()
 
         # Advanced arguments
+        self._target_qubit: int = self.get_argument('Target qubit',
+                                                    NumberValue(default=0, min=0, ndecimals=0, step=1),
+                                                    group='Advanced',
+                                                    tooltip='Target qubit to address')
         self._gate_delay: float = self.get_argument('Gate delay',
                                                     NumberValue(default=1 * us, unit='us', min=0 * us, step=1 * us,
                                                                 ndecimals=1),
@@ -129,7 +138,13 @@ class RandomizedBenchmarkingSQ(DaxClient, Experiment):
                                                                          step=1 * s),
                                                              group='Advanced',
                                                              tooltip='Minimum time between consecutive pause checks')
-        self.update_kernel_invariants('_gate_delay', '_check_pause_timeout')
+        self._partition_size: int = self.get_argument('Partition size',
+                                                      NumberValue(default=self.DEFAULT_PARTITION_SIZE, min=0,
+                                                                  ndecimals=0, step=1),
+                                                      group='Advanced',
+                                                      tooltip='Maximum partition size as number of gates '
+                                                              '(0 for no partition size limitation)')
+        self.update_kernel_invariants('_target_qubit', '_gate_delay', '_check_pause_timeout')
 
         # pyGSTi arguments
         self._citerations: int = self.get_argument('Citerataions',
@@ -195,11 +210,18 @@ class RandomizedBenchmarkingSQ(DaxClient, Experiment):
                         for c_list in self._exp_design.circuit_lists for c in c_list]
         # Partition circuit list
         self.logger.debug('Partitioning circuits')
-        self._partitions = _partition_circuit_list(all_circuits, self.MAX_CIRCUIT_DEPTH)
+        if self._partition_size == 0:
+            self._partitions = [all_circuits]
+        else:
+            self._partitions = _partition_circuit_list(all_circuits, self._partition_size)
         self.logger.debug(f'Number of circuit partitions: {len(self._partitions)}')
 
     def run(self):
         """Entry point of the experiment."""
+
+        # Check if the target qubit is in range
+        if not 0 <= self._target_qubit < self._operation.num_qubits:
+            raise ValueError(f'Target qubit is out of range (number of qubits: {self._operation.num_qubits})')
 
         # Set realtime
         self._operation.set_realtime(self._real_time)
@@ -279,7 +301,7 @@ class RandomizedBenchmarkingSQ(DaxClient, Experiment):
             delay(self._gate_delay)
 
             # Run gate
-            gate(0)
+            gate(np.int32(self._target_qubit))
 
         # Measure state
         self._operation.m_z_all()
