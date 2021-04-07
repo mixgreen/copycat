@@ -132,6 +132,12 @@ class RandomizedBenchmarkingSQ(DaxClient, Experiment):
         self.update_kernel_invariants('_gate_delay', '_check_pause_timeout')
 
         # pyGSTi arguments
+        self._citerations: int = self.get_argument('Citerataions',
+                                                   NumberValue(default=20, min=1, ndecimals=0, step=1),
+                                                   group='pyGSTi',
+                                                   tooltip='Number of compiling iterations in pyGSTi. Lower number '
+                                                           'can improve compiling time, at the cost of potentially'
+                                                           'less efficiently compiled circuits. pyGSTi default is 20.')
         self._verbosity: int = self.get_argument('Verbosity',
                                                  NumberValue(default=0, min=0, ndecimals=0, step=1),
                                                  group='pyGSTi',
@@ -180,7 +186,8 @@ class RandomizedBenchmarkingSQ(DaxClient, Experiment):
                                          construct_models=('clifford',), verbosity=self._verbosity)
         self.logger.debug('Creating pyGSTi protocol')
         self._exp_design = pygsti.protocols.CliffordRBDesign(pspec, circuit_depths, self._num_circuits,
-                                                             qubit_labels=self.QUBIT_LABELS, verbosity=self._verbosity)
+                                                             qubit_labels=self.QUBIT_LABELS, verbosity=self._verbosity,
+                                                             citerations=self._citerations)
 
         # Convert experiment design to circuit list
         self.logger.debug('Converting circuits')
