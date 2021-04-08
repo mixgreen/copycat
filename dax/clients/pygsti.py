@@ -17,7 +17,6 @@ from dax.experiment import *
 from dax.modules.hist_context import HistogramContext, HistogramAnalyzer
 from dax.interfaces.operation import OperationInterface
 from dax.interfaces.gate import GateInterface
-from dax.interfaces.detection import DetectionInterface
 from dax.util.artiq import is_kernel
 from dax.util.output import get_base_path
 
@@ -35,15 +34,15 @@ def _get_gates(circuit: str, available_gates: typing.Dict[str, __G_T], separator
         raise KeyError(f'Gate "{e}" is not available according to the dictionary!') from None
 
 
-def _partition_circuit_list(circuit_list: typing.Sequence[typing.Sequence[__G_T]],
-                            max_partition_size: int) -> typing.Sequence[typing.Sequence[typing.Sequence[__G_T]]]:
+def _partition_circuit_list(circuit_list: typing.List[typing.List[__G_T]],
+                            max_partition_size: int) -> typing.List[typing.List[typing.List[__G_T]]]:
     """Partition circuit list based on max size the hardware can handle."""
-    partitions: typing.List[typing.List[typing.Sequence[__G_T]]] = [[]]
+    partitions: typing.List[typing.List[typing.List[__G_T]]] = [[]]
 
     for circuit in circuit_list:
         circuit_size = len(circuit)
         if circuit_size > max_partition_size:
-            raise ValueError(f'Single circuit of size {circuit_size} too large')
+            raise ValueError(f'Single circuit of size {circuit_size} exceeds the maximum partition size')
         elif circuit_size + sum(len(p) for p in partitions[-1]) <= max_partition_size:
             partitions[-1].append(circuit)
         else:
@@ -104,7 +103,7 @@ class RandomizedBenchmarkingSQ(DaxClient, Experiment):
         self._operation_interface: str = self.get_argument('Operation interface',
                                                            EnumerationValue(sorted(self._operation_interfaces)),
                                                            tooltip='The operation interface to use for benchmarking')
-        self._max_depth: int = self.get_argument('Max depth',
+        self._max_depth: str = self.get_argument('Max depth',
                                                  EnumerationValue(natsort.natsorted(self._available_circuit_depths)),
                                                  tooltip='Max circuit depth (excluding inversion), automatically '
                                                          'generates every power of 2 below this value as well')
@@ -125,14 +124,12 @@ class RandomizedBenchmarkingSQ(DaxClient, Experiment):
                                                     group='Advanced',
                                                     tooltip='Target qubit to address')
         self._gate_delay: float = self.get_argument('Gate delay',
-                                                    NumberValue(default=1 * us, unit='us', min=0 * us, step=1 * us,
-                                                                ndecimals=1),
+                                                    NumberValue(default=0 * us, unit='us', min=0 * us, step=1 * us),
                                                     group='Advanced',
-                                                    tooltip='Delay time between gates')
+                                                    tooltip='Add additional delay time between gates')
         self._real_time: bool = self.get_argument('Realtime gates', BooleanValue(True),
                                                   group='Advanced',
-                                                  tooltip='Limit delay between gates to configured latency and DDS '
-                                                          'latency only')
+                                                  tooltip='Compensate device configuration latencies for gates')
         self._check_pause_timeout: float = self.get_argument('Check pause timeout',
                                                              NumberValue(default=3 * s, unit='s', min=0 * s,
                                                                          step=1 * s),
@@ -166,7 +163,7 @@ class RandomizedBenchmarkingSQ(DaxClient, Experiment):
                                                         group='Plot',
                                                         tooltip='Histograms will be saved as PDF files')
 
-    def prepare(self):
+    def prepare(self) -> None:
         try:
             # Try to use pyGSTi
             version = pygsti.__version__
@@ -180,7 +177,6 @@ class RandomizedBenchmarkingSQ(DaxClient, Experiment):
         # Obtain system components
         self._operation = self._operation_interfaces[self._operation_interface]
         self._histogram_context = self.registry.find_module(HistogramContext)
-        self._detect = self.registry.find_interface(DetectionInterface)
         self.update_kernel_invariants('_operation', '_histogram_context')
 
         # Get the scheduler
@@ -199,7 +195,7 @@ class RandomizedBenchmarkingSQ(DaxClient, Experiment):
         self.logger.debug('Creating pyGSTi processor spec')
         pspec = pygsti.obj.ProcessorSpec(nQubits=1, gate_names=available_gates_list, qubit_labels=self.QUBIT_LABELS,
                                          construct_models=('clifford',), verbosity=self._verbosity)
-        self.logger.debug('Creating pyGSTi protocol')
+        self.logger.info('Creating pyGSTi protocol...')
         self._exp_design = pygsti.protocols.CliffordRBDesign(pspec, circuit_depths, self._num_circuits,
                                                              qubit_labels=self.QUBIT_LABELS, verbosity=self._verbosity,
                                                              citerations=self._citerations)
@@ -214,9 +210,11 @@ class RandomizedBenchmarkingSQ(DaxClient, Experiment):
             self._partitions = [all_circuits]
         else:
             self._partitions = _partition_circuit_list(all_circuits, self._partition_size)
-        self.logger.debug(f'Number of circuit partitions: {len(self._partitions)}')
+        self.logger.info(f'Number of circuits = {len(all_circuits)}, number of partitions = {len(self._partitions)}')
+        # Initialize circuit counter
+        self._circuit_count = 0
 
-    def run(self):
+    def run(self) -> None:
         """Entry point of the experiment."""
 
         # Check if the target qubit is in range
@@ -234,14 +232,15 @@ class RandomizedBenchmarkingSQ(DaxClient, Experiment):
             # Perform host setup
             self.host_setup()
 
-            for circuit_list in self._partitions:
+            for i, circuit_list in enumerate(self._partitions):
                 if self._scheduler.check_pause():
                     # This experiment can not be paused and will be terminated instead
                     raise TerminationRequested
 
-                # Send one partition to the core device
+                # Transfer one partition to the core device
                 self._circuit_list = circuit_list
                 self.update_kernel_invariants("_circuit_list")
+                self.logger.info(f'Running partition {i + 1}/{len(self._partitions)}')
                 self._run_circuit_list()
 
         except TerminationRequested:
@@ -264,6 +263,9 @@ class RandomizedBenchmarkingSQ(DaxClient, Experiment):
 
             # Iterate through circuits
             for circuit in self._circuit_list:
+                # Message user
+                self._circuit_msg()
+
                 with self._histogram_context:
                     # Schedule two circuits to improve performance (pipelining)
                     self._run_circuit(circuit)
@@ -306,15 +308,20 @@ class RandomizedBenchmarkingSQ(DaxClient, Experiment):
         # Measure state
         self._operation.m_z_all()
 
-    def analyze(self):
+    @rpc(flags={'async'})
+    def _circuit_msg(self):  # type: () -> None
+        # Update circuit counter
+        self._circuit_count += 1
+        self.logger.info(f'  Running circuit {self._circuit_count}/{sum(len(p) for p in self._partitions)}')
+
+    def analyze(self) -> None:
         # Create Histogram Analyzer
         h = HistogramAnalyzer(self._histogram_context)
 
         # Create RB dataset
         ds = pygsti.objects.DataSet(outcomeLabels=['0', '1'])
-        threshold = self._detect.get_state_detection_threshold()
         for i, circuit in enumerate(itertools.chain.from_iterable(self._exp_design.circuit_lists)):
-            one = HistogramAnalyzer.histogram_to_one_count(h.histograms['histogram'][0][i], threshold)
+            one = HistogramAnalyzer.histogram_to_one_count(h.histograms['histogram'][0][i])
             ds.add_count_dict(circuit, {'0': self._num_samples - one, '1': one})
         ds.done_adding_data()
         protocol_data = pygsti.protocols.ProtocolData(self._exp_design, ds)

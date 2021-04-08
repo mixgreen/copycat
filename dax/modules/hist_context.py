@@ -691,8 +691,12 @@ class HistogramAnalyzer:
 
             if state_detection_threshold is not None:
                 self.state_detection_threshold = state_detection_threshold  # Store state detection threshold
+            try:
+                state_detection_threshold = -1 if state_detection_threshold is None else state_detection_threshold
                 self.probabilities = {k: self.histograms_to_probabilities(h, state_detection_threshold)
                                       for k, h in self.histograms.items()}
+            except TypeError:
+                pass  # Could not obtain probabilities without a provided state detection threshold
             self.mean_counts = {k: self.histograms_to_mean_counts(h) for k, h in self.histograms.items()}
             self.stdev_counts = {k: self.histograms_to_stdev_counts(h) for k, h in self.histograms.items()}
 
@@ -705,29 +709,36 @@ class HistogramAnalyzer:
     """Helper functions"""
 
     @classmethod
-    def histogram_to_one_count(cls, counter: typing.Counter[_DATA_T], state_detection_threshold: int) -> int:
+    def histogram_to_one_count(cls, counter: typing.Counter[_DATA_T], state_detection_threshold: int = -1) -> int:
         """Helper function to count the number of one measurements in a histogram.
 
         This function works correct for both binary measurements and detection counts.
         For detection counts, counts *greater than* the state detection threshold are considered to be in state one.
 
         :param counter: The ``Counter`` object representing the histogram
-        :param state_detection_threshold: The state detection threshold to use
+        :param state_detection_threshold: The state detection threshold to use (optional)
         :return: The number of one measurements
         """
         assert isinstance(state_detection_threshold, int), 'State detection threshold must be of type int'
 
-        # Count the number of one measurements, works both for binary measurements and detection counts
-        return sum(f for c, f in counter.items() if c is True or c > state_detection_threshold)
+        if state_detection_threshold < 0:
+            if not all(isinstance(c, bool) for c in counter):
+                raise TypeError('All measurements must be binary when no state detection threshold is given')
+
+            # Count the number of one measurements, works only for binary measurements
+            return sum(f for c, f in counter.items() if c is True)
+        else:
+            # Count the number of one measurements, works both for binary measurements and detection counts
+            return sum(f for c, f in counter.items() if c is True or c > state_detection_threshold)
 
     @classmethod
-    def histogram_to_probability(cls, counter: typing.Counter[_DATA_T], state_detection_threshold: int) -> float:
+    def histogram_to_probability(cls, counter: typing.Counter[_DATA_T], state_detection_threshold: int = -1) -> float:
         """Helper function to convert a histogram to an individual state probability.
 
         Counts *greater than* the state detection threshold are considered to be in state one.
 
         :param counter: The ``Counter`` object representing the histogram
-        :param state_detection_threshold: The state detection threshold to use
+        :param state_detection_threshold: The state detection threshold to use (optional)
         :return: The state probability as a float
         """
         # Obtain number of one measurements
@@ -739,14 +750,14 @@ class HistogramAnalyzer:
 
     @classmethod
     def histograms_to_probabilities(cls, histograms: typing.Sequence[typing.Sequence[collections.Counter]],
-                                    state_detection_threshold: int) -> np.ndarray:
+                                    state_detection_threshold: int = -1) -> np.ndarray:
         """Convert histograms to individual state probabilities based on a state detection threshold.
 
         Histograms are provided as a 2D array of ``Counter`` objects.
         The first dimension is the channel, the second dimension is the sequence of counters.
 
         :param histograms: The input histograms
-        :param state_detection_threshold: The detection threshold
+        :param state_detection_threshold: The state detection threshold to use (optional)
         :return: Array of probabilities with the same shape as the input histograms
         """
         # Calculate the probabilities

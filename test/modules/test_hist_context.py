@@ -504,6 +504,28 @@ class HistogramAnalyzerTestCase(unittest.TestCase):
                 self.assertEqual(HistogramAnalyzer.histogram_to_one_count(d, threshold), r,
                                  'Histogram to one count incorrect')
 
+    def test_histogram_to_one_count_threshold_error(self):
+        # No threshold provided, still works with binary data
+        data = collections.Counter([False, True])
+        ref = 1
+        self.assertEqual(HistogramAnalyzer.histogram_to_one_count(data), ref)
+        self.assertEqual(HistogramAnalyzer.histogram_to_one_count(data, -1), ref)
+        self.assertEqual(HistogramAnalyzer.histogram_to_one_count(data, -100), ref)
+
+        # No threshold provided, fails with integer data
+        data_list = [
+            (collections.Counter([3]), 0),
+            (collections.Counter([5]), 1),
+            (collections.Counter([1]), 0),
+            (collections.Counter([4]), 1),
+            (collections.Counter([0, 4]), 1),
+            # Mixing bool and int counts is not expected to happen, but should still fail
+            (collections.Counter([False, True, 0, 4]), 2),
+        ]
+        for data, ref in data_list:
+            with self.assertRaises(TypeError, msg='Lack of threshold did not cause exception'):
+                self.assertEqual(HistogramAnalyzer.histogram_to_one_count(data), ref)
+
     def test_histogram_to_probability(self):
         data = [(collections.Counter([3]), 0.0),
                 (collections.Counter([5]), 1.0),
