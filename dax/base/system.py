@@ -26,6 +26,7 @@ import dax.base.exceptions
 import dax.base.interface
 import dax.sim.ddb
 import dax.sim.device
+import dax.util.logging
 
 __all__ = ['DaxModule', 'DaxSystem', 'DaxService',
            'DaxClient', 'dax_client_factory']
@@ -88,7 +89,9 @@ class DaxBase(artiq.language.environment.HasEnvironment, abc.ABC):
         """
 
         # Logger object
+        dax.util.logging.decorate_logger_class(logging.getLoggerClass())
         self.__logger: logging.Logger = logging.getLogger(self.get_identifier())
+        self.update_kernel_invariants('logger')
 
         # Build
         self.logger.debug('Starting build...')
@@ -106,6 +109,8 @@ class DaxBase(artiq.language.environment.HasEnvironment, abc.ABC):
     @property
     def logger(self) -> logging.Logger:
         """Get the logger of this object.
+
+        The logging functions are decorated as async RPC functions and can be called from kernels.
 
         :return: The logger object
         """
@@ -495,7 +500,7 @@ class DaxHasSystem(DaxHasKey, abc.ABC):
     def registry(self) -> DaxNameRegistry:
         """Get the DAX registry.
 
-        :return: The logger object
+        :return: The registry object
         """
         return self.__registry
 
@@ -786,7 +791,7 @@ class DaxSystem(DaxModuleBase):
     def registry(self) -> DaxNameRegistry:
         """Get the DAX registry.
 
-        :return: The logger object
+        :return: The registry object
         """
         return self.__registry
 

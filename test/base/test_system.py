@@ -18,6 +18,8 @@ import dax.base.exceptions
 import dax.base.interface
 from dax.util.artiq import get_managers
 
+import test.util.test_logging
+
 """Device DB for testing"""
 
 _DEVICE_DB = {
@@ -216,6 +218,12 @@ class DaxHelpersTestCase(unittest.TestCase):
         # See https://github.com/numpy/numpy/issues/2776 for more information
         a = np.zeros(4)
         self.assertIsInstance(a, collections.abc.Sequence, 'numpy ndarray is not considered an abstract sequence')
+
+    def test_async_rpc_logger(self):
+        # Test if logger is async rpc and kernel invariant
+        s = _TestSystem(self.managers)
+        self.assertTrue(test.util.test_logging.is_rpc_logger(s.logger))
+        self.assertIn('logger', s.kernel_invariants)
 
 
 class DaxNameRegistryTestCase(unittest.TestCase):
@@ -788,12 +796,12 @@ class DaxBaseTestCase(unittest.TestCase):
                 return 'identifier'
 
         b = Base(self.managers)
-        self.assertFalse(hasattr(b, 'kernel_invariants'), 'kernel_invariants attribute found when not expected')
+        base_kernel_invariants = {'logger'}
+        self.assertSetEqual(b.kernel_invariants, base_kernel_invariants)
 
         keys = {'foo', 'bar', 'foobar'}
         b.update_kernel_invariants(*keys)
-        self.assertTrue(hasattr(b, 'kernel_invariants'))
-        self.assertSetEqual(b.kernel_invariants, keys)
+        self.assertSetEqual(b.kernel_invariants, keys | base_kernel_invariants)
 
 
 class DaxHasKeyTestCase(unittest.TestCase):

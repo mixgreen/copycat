@@ -44,41 +44,37 @@ class ArtiqTestCase(unittest.TestCase):
                 env = artiq.experiment.EnvExperiment(managers)
                 self.assertEqual(env.get_dataset(key), value, 'Retrieved dataset did not match earlier set value')
 
+    def _test_decorator_classifier(self, fn, name, *, undecorated=False, kernel_=False, rpc_=False, rpc_async=False,
+                                   portable_=False, host_only_=False, **kwargs):
+        function_list = [
+            (self._undecorated_func, undecorated, 'Undecorated'),
+            (self._kernel_func, kernel_, 'Kernel'),
+            (self._rpc_func, rpc_, 'RPC'),
+            (self._rpc_async_func, rpc_async, 'Async RPC'),
+            (self._portable_func, portable_, 'Portable'),
+            (self._host_only_func, host_only_, 'Host only'),
+        ]
+        for test_function, ref, test_name in function_list:
+            self.assertEqual(fn(test_function, **kwargs), ref, f'{test_name} function wrongly classified by {name}')
+
     def test_is_kernel(self):
-        self.assertFalse(dax.util.artiq.is_kernel(self._undecorated_func),
-                         'Undecorated function wrongly marked as a kernel function')
-        self.assertFalse(dax.util.artiq.is_kernel(self._rpc_func),
-                         'RPC function wrongly marked as a kernel function')
-        self.assertFalse(dax.util.artiq.is_kernel(self._portable_func),
-                         'Portable function wrongly marked as a kernel function')
-        self.assertTrue(dax.util.artiq.is_kernel(self._kernel_func),
-                        'Kernel function not marked as a kernel function')
-        self.assertFalse(dax.util.artiq.is_kernel(self._host_only_func),
-                         'Host only function wrongly marked as a kernel function')
+        self._test_decorator_classifier(dax.util.artiq.is_kernel, 'is_kernel()', kernel_=True)
 
     def test_is_portable(self):
-        self.assertFalse(dax.util.artiq.is_portable(self._undecorated_func),
-                         'Undecorated function wrongly marked as a portable function')
-        self.assertFalse(dax.util.artiq.is_portable(self._rpc_func),
-                         'RPC function wrongly marked as a portable function')
-        self.assertTrue(dax.util.artiq.is_portable(self._portable_func),
-                        'Portable function not marked as a portable function')
-        self.assertFalse(dax.util.artiq.is_portable(self._kernel_func),
-                         'Kernel function wrongly marked as a portable function')
-        self.assertFalse(dax.util.artiq.is_portable(self._host_only_func),
-                         'Host only function wrongly marked as a portable function')
+        self._test_decorator_classifier(dax.util.artiq.is_portable, 'is_portable()', portable_=True)
 
     def test_is_host_only(self):
-        self.assertFalse(dax.util.artiq.is_host_only(self._undecorated_func),
-                         'Undecorated function wrongly marked as a host only function')
-        self.assertFalse(dax.util.artiq.is_host_only(self._rpc_func),
-                         'RPC function wrongly marked as a host only function')
-        self.assertFalse(dax.util.artiq.is_host_only(self._portable_func),
-                         'Portable function wrongly marked as a host only function')
-        self.assertFalse(dax.util.artiq.is_host_only(self._kernel_func),
-                         'Kernel function wrongly marked as a host only function')
-        self.assertTrue(dax.util.artiq.is_host_only(self._host_only_func),
-                        'Host only function not marked as a host only function')
+        self._test_decorator_classifier(dax.util.artiq.is_host_only, 'is_host_only()', host_only_=True)
+
+    def test_is_rpc(self):
+        self._test_decorator_classifier(dax.util.artiq.is_rpc, 'is_rpc()', rpc_=True, rpc_async=True)
+
+    def test_is_async_rpc(self):
+        self._test_decorator_classifier(dax.util.artiq.is_rpc, 'is_rpc() (async)', rpc_async=True, flags={'async'})
+
+    def test_is_decorated(self):
+        self._test_decorator_classifier(dax.util.artiq.is_decorated, 'is_decorated()',
+                                        kernel_=True, rpc_=True, rpc_async=True, portable_=True, host_only_=True)
 
     def test_process_arguments(self):
         arguments = {'foo': 1,
@@ -383,6 +379,10 @@ class ArtiqTestCase(unittest.TestCase):
 
     @rpc
     def _rpc_func(self):
+        pass
+
+    @rpc(flags={'async'})
+    def _rpc_async_func(self):
         pass
 
     @portable

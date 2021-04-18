@@ -64,7 +64,7 @@ class _TestProgram(dax.base.program.DaxProgram, artiq.experiment.Experiment):
 
 
 class DaxProgramTestCase(unittest.TestCase):
-    EXPECTED_KERNEL_INVARIANTS = {'core', 'q', 'data_context'}
+    EXPECTED_KERNEL_INVARIANTS = {'logger', 'core', 'q', 'data_context'}
 
     def setUp(self) -> None:
         self.managers = get_managers(enable_dax_sim(ddb=_DEVICE_DB, enable=True, logging_level=30,

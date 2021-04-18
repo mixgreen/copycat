@@ -49,6 +49,14 @@ dax.util.introspect module
     :undoc-members:
     :show-inheritance:
 
+dax.util.logging module
+-----------------------
+
+.. automodule:: dax.util.logging
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 dax.util.matplotlib\_backend module
 -----------------------------------
 

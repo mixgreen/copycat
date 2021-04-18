@@ -36,6 +36,10 @@ def rpc(flags: typing.Set[str]) -> typing.Callable[[__FN_T], __FN_T]: ...
 
 
 @typing.overload
+def rpc(arg: __FN_T, flags: typing.Set[str]) -> __FN_T: ...
+
+
+@typing.overload
 def portable(arg: __FN_T) -> __FN_T: ...
 
 
