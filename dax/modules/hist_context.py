@@ -195,24 +195,11 @@ class HistogramContext(DaxModule, DataContextInterface):
         # Update the dataset key
         self._dataset_key = self._default_dataset_key if key is None else self._units_fmt.vformat(key, args, kwargs)
 
-    @portable
-    def __enter__(self):  # type: () -> None
-        """Enter the histogram context.
-
-        Entering the histogram context will prepare the target dataset and clear the buffer.
-        Optionally, this context can be configured using the :func:`config` function before entering the context.
-        """
-        self.open()
-
-    @portable  # noqa:ATQ306
-    def __exit__(self, exc_type, exc_val, exc_tb):  # type: (typing.Any, typing.Any, typing.Any) -> None # noqa: ATQ306
-        """Exit the histogram context."""
-        self.close()
-
     @rpc(flags={'async'})
     def open(self):  # type: () -> None
-        """Enter the histogram context manually.
+        """Open the histogram context.
 
+        Opening the histogram context will prepare the target dataset and clear the buffer.
         Optionally, this context can be configured using the :func:`config` function.
 
         This function can be used to manually enter the histogram context.
@@ -232,7 +219,7 @@ class HistogramContext(DaxModule, DataContextInterface):
 
     @rpc(flags={'async'})
     def close(self):  # type: () -> None
-        """Exit the histogram context manually.
+        """Close the histogram context.
 
         This function can be used to manually exit the histogram context.
         We strongly recommend to use the ``with`` statement instead.

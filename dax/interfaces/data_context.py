@@ -1,6 +1,8 @@
 import abc
 import typing
 
+from artiq.language import portable
+
 from dax.base.interface import DaxInterface
 import dax.util.artiq
 
@@ -35,16 +37,17 @@ class DataContextInterface(DaxInterface, abc.ABC):
 
         :raises DataContextError: Raised if the data context was not entered
         """
+        pass
 
-    @abc.abstractmethod
+    @portable
     def __enter__(self):  # type: () -> None
-        """Enter the data context."""
-        pass
+        """Enter the data context (see :func:`open`)."""
+        self.open()
 
-    @abc.abstractmethod
-    def __exit__(self, exc_type, exc_val, exc_tb):  # type: (typing.Any, typing.Any, typing.Any) -> None
-        """Exit the data context."""
-        pass
+    @portable  # noqa:ATQ306
+    def __exit__(self, exc_type, exc_val, exc_tb):  # type: (typing.Any, typing.Any, typing.Any) -> None  # noqa:ATQ306
+        """Exit the data context (see :func:`close`)."""
+        self.close()
 
     @abc.abstractmethod
     def get_raw(self) -> typing.Sequence[typing.Sequence[typing.Sequence[int]]]:
