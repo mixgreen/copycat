@@ -1149,10 +1149,10 @@ class SchedulerController:
 
 
 class DaxScheduler(dax.base.system.DaxHasKey, abc.ABC):
-    """DAX scheduler class to inherit from.
+    """DAX scheduler class to inherit.
 
     Users only have to override class attributes to create a scheduling definition.
-    The scheduler subclass must also inherit from the ARTIQ :class:`Experiment` or
+    The scheduler subclass must also inherit the ARTIQ :class:`Experiment` or
     :class:`EnvExperiment` class to make the scheduler available as an ARTIQ experiment.
 
     The following attributes must be overridden:

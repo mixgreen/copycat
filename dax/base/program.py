@@ -15,7 +15,7 @@ class DaxProgram(dax.base.system.DaxBase, abc.ABC):
     """Base class for DAX programs.
 
     DAX programs are generic experiments that can be dynamically linked to a DAX system.
-    Normally, a DAX program would also inherit from the ARTIQ :class:`Experiment` or :class:`EnvExperiment`
+    Normally, a DAX program would also inherit the ARTIQ :class:`Experiment` or :class:`EnvExperiment`
     class and implement the :func:`prepare`, :func:`run`, and :func:`analyze` functions to
     define an execution flow. Additionally, a :func:`build` function can be implemented.
 

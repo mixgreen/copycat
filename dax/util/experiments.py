@@ -46,7 +46,7 @@ class Barrier(artiq.experiment.EnvExperiment):
 
         Note that submitting the barrier experiment does not pause the current experiment.
 
-        :param environment: An object which inherits from ARTIQ HasEnvironment, required to get the ARTIQ scheduler
+        :param environment: An object which inherits ARTIQ :class:`HasEnvironment`, required to get the ARTIQ scheduler
         :param pipeline: The pipeline to submit to, default to the current pipeline
         """
         assert isinstance(environment, artiq.experiment.HasEnvironment), \

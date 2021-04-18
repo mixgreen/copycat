@@ -1466,7 +1466,7 @@ class DaxSystemTestCase(unittest.TestCase):
                 # Set flag
                 self.base_build_was_called = True
 
-        # SomeBaseClass also inherits from HasEnvironment, making it higher in the MRO than HasEnvironment itself
+        # SomeBaseClass also inherits HasEnvironment, making it higher in the MRO than HasEnvironment itself
         class SuperTestSystem(_TestSystem, SomeBaseClass):
             def build(self, *args, **kwargs):
                 # Call super
@@ -1569,7 +1569,7 @@ class DaxClientTestCase(unittest.TestCase):
             def run(self) -> None:
                 pass
 
-        with self.assertRaises(TypeError, msg='Decorated client class does not inherit from Experiment'):
+        with self.assertRaises(TypeError, msg='Decorated client class does not inherit Experiment'):
             dax_client_factory(Client)
 
     def test_load_super(self):

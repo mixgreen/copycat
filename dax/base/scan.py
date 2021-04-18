@@ -103,7 +103,7 @@ class _ScanProductGenerator:
 class DaxScan(dax.base.system.DaxBase, abc.ABC):
     """Scanning class for standardized scanning functionality.
 
-    Users can inherit from this class to implement their scanning experiments.
+    Users can inherit this class to implement their scanning experiments.
     The first step is to build the scan by overriding the :func:`build_scan` function.
     Use the :func:`add_scan` function to add normal ARTIQ scannables to this scan object.
     Static scans can be added using the :func:`add_static_scan` function.

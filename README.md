@@ -3,9 +3,10 @@
 Duke ARTIQ Extensions (DAX).
 
 DAX is a library that extends the capabilities of [ARTIQ](https://github.com/m-labs/artiq)
-while maintaining a vanilla ARTIQ experience. The goal of the project is to provide a framework for modular system
-organization and to improve usability by automating common functionality. Users can implement their system and
-components using the DAX framework and combine it with generic components and utilities provided by DAX.
+while maintaining a vanilla ARTIQ experience. The goal of the project is to provide a framework that enables the
+development of modular and transparently layered software for current state-of-the-art and future-generation quantum
+control systems. Users can implement software for their system using the DAX framework and combine it with shared
+components and utilities provided by DAX.
 
 Projects related to DAX:
 

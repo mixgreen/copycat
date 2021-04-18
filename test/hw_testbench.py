@@ -188,7 +188,7 @@ _LOCK_KEY: str = 'dax_hw_tb_lock'
 class TestBenchCase(unittest.TestCase):
     """An extension of the :class:`unittest.TestCase` class which facilitates device testing.
 
-    Users can inherit from this class to create their own device/hardware test cases.
+    Users can inherit this class to create their own device/hardware test cases.
     It has predefined :func:`setUp` and :func:`tearDown` functions for resource handling.
     The :func:`construct_env` function can be used to construct test environment classes.
     """

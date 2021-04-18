@@ -958,7 +958,7 @@ class DaxClient(DaxHasSystem, abc.ABC):
 
     Clients are template experiments that will later be joined with a user-provided system.
     When the template is instantiated, the client identifies itself as the system,
-    just like a regular experiment that inherits from a system would do.
+    just like a regular experiment that inherits a system would do.
     Though the client is actually a child of the system and therefore does not share
     a namespace with the system.
 
@@ -966,7 +966,7 @@ class DaxClient(DaxHasSystem, abc.ABC):
     This decorator creates a factory function that allows users to provide their system
     to be used with this experiment template.
 
-    Normally, a concrete client would inherit from the ARTIQ :class:`Experiment` or :class:`EnvExperiment`
+    Normally, a concrete client would inherit the ARTIQ :class:`Experiment` or :class:`EnvExperiment`
     class and implement the :func:`prepare`, :func:`run`, and :func:`analyze` functions to
     define an execution flow. Additionally, a :func:`build` function can be implemented to
     provide a user interface for configuring the client.
@@ -1148,7 +1148,7 @@ class DaxNameRegistry:
         results: typing.Dict[str, DaxNameRegistry.__M_T] = {k: m for k, m in self._modules.items()
                                                             if isinstance(m, type_)}
 
-        # Return the list with results
+        # Return the dict with results
         return results
 
     def get_module_key_list(self) -> typing.List[str]:
@@ -1259,7 +1259,7 @@ class DaxNameRegistry:
         # Search for all registered devices matching the type
         results = {k for k, (device, _) in self._devices.items() if isinstance(device, type_)}
 
-        # Return the list with results
+        # Return the dict with results
         return results
 
     def get_device_key_list(self) -> typing.List[str]:
@@ -1426,7 +1426,7 @@ class DaxNameRegistry:
         results = {itf.get_system_key(): typing.cast(DaxNameRegistry.__I_T, itf)
                    for itf in iterator if isinstance(itf, type_)}
 
-        # Return the list with results
+        # Return the dict with results
         return results
 
 
@@ -1440,7 +1440,7 @@ class DaxDataStore:
 
     The base DAX data store does not store anything and can be used
     as a placeholder object since it is not an abstract base class.
-    Other DAX data store classes can inherit from this class and
+    Other DAX data store classes can inherit this class and
     override the :func:`set`, :func:`mutate`, and :func:`append` methods.
     """
 
@@ -1498,7 +1498,7 @@ class DaxDataStoreInfluxDb(DaxDataStore):
                  system_class: typing.Type[DaxSystem]):
         """Create a new DAX data store that uses an Influx DB backend.
 
-        :param environment: An object which inherits from ARTIQ HasEnvironment
+        :param environment: An object which inherits ARTIQ :class:`HasEnvironment`
         :param system_class: The DAX system class this data store identifies itself with
         """
 

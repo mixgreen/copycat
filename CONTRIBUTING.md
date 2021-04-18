@@ -7,8 +7,9 @@ Hence, the rolling release branch is `master`.
 
 We recommend the following naming conventions for branches:
 
-- `feature/*` for developing new features.
+- `feature/*` for developing new features and refactoring.
 - `fix/*` for bug fixes.
+- `release/*` for preparing releases.
 
 ## Testing
 

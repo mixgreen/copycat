@@ -22,7 +22,7 @@ _logger: logging.Logger = logging.getLogger(__name__)
 class PeekTestCase(unittest.TestCase):
     """An extension of the :class:`unittest.TestCase` class with functions for peek-testing.
 
-    Users can inherit from this class to create their own test cases,
+    Users can inherit this class to create their own test cases,
     similar as someone would make test cases for normal software.
     This class behaves like a normal :class:`unittest.TestCase` class but has a few extra functions
     that are useful for peek-testing of a simulated ARTIQ environment.

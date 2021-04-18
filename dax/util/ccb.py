@@ -308,7 +308,7 @@ def get_ccb_tool(environment: HasEnvironment) -> CcbTool:
     The CCB tool is a wrapper around the ARTIQ CCB object that allows users to conveniently
     create standard applets using straight-forward functions.
 
-    :param environment: An object which inherits from ARTIQ HasEnvironment, required to get the ARTIQ CCB object
+    :param environment: An object which inherits ARTIQ :class:`HasEnvironment`, required to get the ARTIQ CCB object
     :return: The CCB tool object
     """
     assert isinstance(environment, HasEnvironment), 'The given environment must be of type HasEnvironment'

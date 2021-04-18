@@ -14,6 +14,7 @@
 
 import os
 import sys
+import datetime
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.pardir, os.pardir)))
 from dax import __version__ as dax_version  # noqa: E402
@@ -21,8 +22,8 @@ from dax import __version__ as dax_version  # noqa: E402
 # -- Project information -----------------------------------------------------
 
 project = 'DAX'
-copyright = '2020, Duke University'
 author = 'Duke University'
+copyright = f'{datetime.date.today().year}, {author}'
 
 # The short X.Y version
 version = dax_version.split('+', 1)[0]
