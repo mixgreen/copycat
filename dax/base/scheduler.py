@@ -932,8 +932,7 @@ class CalibrationJob(BaseJob):
                         self._calibration_exp.run()
                     except dax.base.exceptions.FailedCalibrationError as fce:
                         self.logger.exception(fce)
-                        dax.util.experiments.Barrier.submit(self, pipeline=self._scheduler.pipeline_name)
-                        dax.util.artiq.pause_strict_priority(self._scheduler)
+                        self._submit_barrier()
                     else:
                         self.logger.info('Calibration succeeded')
                         self._cal_analyze = True
@@ -942,8 +941,7 @@ class CalibrationJob(BaseJob):
                 except Exception:
                     if cls.GREEDY_FAILURE:
                         self.logger.exception('Uncaught exception')
-                        dax.util.experiments.Barrier.submit(self, pipeline=self._scheduler.pipeline_name)
-                        dax.util.artiq.pause_strict_priority(self._scheduler)
+                        self._submit_barrier()
                     else:
                         raise
                 finally:
@@ -955,6 +953,12 @@ class CalibrationJob(BaseJob):
                     self._check_exp.analyze()
                 if self._cal_analyze:
                     self._calibration_exp.analyze()
+
+            def _submit_barrier(self) -> None:
+                # Ensure the priority of the barrier is higher than the priority of the current experiment
+                priority = self._scheduler.priority + dax.util.experiments.Barrier.PRIORITY
+                dax.util.experiments.Barrier.submit(self, pipeline=self._scheduler.pipeline_name, priority=priority)
+                dax.util.artiq.pause_strict_priority(self._scheduler)
 
         # Return the meta experiment class and its name
         return MetaExp, cls._meta_exp_name()
