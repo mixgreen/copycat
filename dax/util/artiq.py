@@ -17,7 +17,7 @@ import artiq.frontend.artiq_run  # type: ignore
 __all__ = ['is_kernel', 'is_portable', 'is_host_only', 'is_rpc', 'is_decorated',
            'process_arguments', 'get_managers', 'ClonedDatasetManager', 'clone_managers', 'isolate_managers']
 
-# Workaround required for Python<=3.8
+# Workaround required for Python<3.9
 if typing.TYPE_CHECKING:
     _TD_T = tempfile.TemporaryDirectory[str]  # Type for a temporary directory
 else:
@@ -27,7 +27,7 @@ else:
 class _TemporaryDirectory(_TD_T):
     """Custom :class:`TemporaryDirectory` class."""
 
-    _refs: typing.List[_TemporaryDirectory] = []
+    _refs: typing.ClassVar[typing.List[_TemporaryDirectory]] = []
     """List of references to instances of this class."""
 
     def __init__(self, *args: typing.Any, **kwargs: typing.Any):
@@ -123,7 +123,7 @@ def is_decorated(func: typing.Any) -> bool:
 def _convert_argument(argument: typing.Any) -> typing.Any:
     """Convert a single argument."""
     if isinstance(argument, artiq.language.scan.ScanObject):
-        return argument.describe()  # type: ignore[attr-defined]
+        return argument.describe()
     else:
         # No conversion required
         return argument
@@ -275,9 +275,9 @@ class ClonedDatasetManager(artiq.master.worker_db.DatasetManager):
     from the existing ARTIQ dataset manager.
     """
 
-    _CLONE_DICT_KEY: str = '_dataset_mgr_clones_'
+    _CLONE_DICT_KEY: typing.ClassVar[str] = '_dataset_mgr_clones_'
     """The attribute key of the clone dictionary attached to the existing ARTIQ dataset manager."""
-    _CLONE_KEY_FORMAT: str = 'sub_experiment/{index}'
+    _CLONE_KEY_FORMAT: typing.ClassVar[str] = 'sub_experiment/{index}'
     """The key format for cloned datasets, which is used for the HDF5 group name."""
 
     def __init__(self, dataset_mgr: artiq.master.worker_db.DatasetManager, *,

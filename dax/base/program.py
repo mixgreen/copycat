@@ -35,6 +35,10 @@ class DaxProgram(dax.base.system.DaxBase, abc.ABC):
     The device DB is empty, arguments are not shared with the DAX system, and datasets are isolated.
     """
 
+    __core: artiq.coredevice.core.Core
+    __q: dax.interfaces.operation.OperationInterface
+    __data_context: dax.interfaces.data_context.DataContextInterface
+
     def __init__(self, managers_or_parent: typing.Any,
                  *args: typing.Any,
                  core: artiq.coredevice.core.Core,
@@ -55,9 +59,9 @@ class DaxProgram(dax.base.system.DaxBase, abc.ABC):
         super(DaxProgram, self).__init__(managers_or_parent, *args, **kwargs)
 
         # Store attributes after ``build()``
-        self.__core: artiq.coredevice.core.Core = core
-        self.__q: dax.interfaces.operation.OperationInterface = operation
-        self.__data_context: dax.interfaces.data_context.DataContextInterface = data_context
+        self.__core = core
+        self.__q = operation
+        self.__data_context = data_context
         # Update kernel invariants
         self.update_kernel_invariants('core', 'q', 'data_context')
 

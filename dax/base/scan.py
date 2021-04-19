@@ -19,6 +19,14 @@ __all__ = ['DaxScan', 'DaxScanReader']
 _KEY_RE: typing.Pattern[str] = re.compile(r'[a-zA-Z_]\w*')
 """Regex for matching valid keys."""
 
+_S_T = typing.Union[ScanObject, typing.Sequence[typing.Any]]  # Scan object type
+
+# Workaround required for Python<3.9
+if typing.TYPE_CHECKING:
+    _SD_T = collections.OrderedDict[str, _S_T]  # Scan dict type
+else:
+    _SD_T = collections.OrderedDict
+
 
 def _is_valid_key(key: str) -> bool:
     """Return true if the given key is valid."""
@@ -32,10 +40,16 @@ class _ScanProductGenerator:
     This class is inspired by the ARTIQ MultiScanManager class.
     """
 
+    _keys: typing.Sequence[str]
+    _scans: typing.Sequence[_S_T]
+    _enable_index: bool
+
     class _ScanItem:
+        kernel_invariants: typing.Set[str]
+
         def __init__(self, **kwargs: typing.Any):
             # Mark all attributes as kernel invariant
-            self.kernel_invariants: typing.Set[str] = set(kwargs)
+            self.kernel_invariants = set(kwargs)
 
         def __repr__(self) -> str:
             """Return a string representation of this object."""
@@ -58,23 +72,23 @@ class _ScanProductGenerator:
             for k, v in kwargs.items():
                 setattr(self, k, np.int32(v))
 
-    def __init__(self, *scans: typing.Tuple[str, typing.Iterable[typing.Any]],
-                 enable_index: bool = True):
+    def __init__(self, scans: _SD_T, *, enable_index: bool = True):
         """Create a new scan product generator.
 
         The ``enable_index`` parameter can be used to disable index objects,
         potentially reducing the memory footprint of the scan.
 
         :param scans: A list of tuples with the key and values of the scan
-        :param enable_index: If false, empty index objects are returned
+        :param enable_index: If :const:`False`, empty index objects are returned
         """
+        assert isinstance(scans, collections.OrderedDict), 'Scans must be of type OrderedDict'
         assert isinstance(enable_index, bool), 'The enable index flag must be of type bool'
 
         # Unpack scan tuples
-        self._keys, self._scans = tuple(zip(*scans))
-
+        self._keys = list(scans.keys())
+        self._scans = list(scans.values())
         # Store enable index flag
-        self._enable_index: bool = enable_index
+        self._enable_index = enable_index
 
     def _point_generator(self) -> typing.Iterator[ScanPoint]:
         """Returns a generator for scan points."""
@@ -155,27 +169,35 @@ class DaxScan(dax.base.system.DaxBase, abc.ABC):
     in the :attr:`SCAN_ARGS_KEY` and :attr:`SCAN_KWARGS_KEY` attributes.
     """
 
-    INFINITE_SCAN_ARGUMENT: bool = True
+    INFINITE_SCAN_ARGUMENT: typing.ClassVar[bool] = True
     """Flag to enable the infinite scan argument."""
-    INFINITE_SCAN_DEFAULT: bool = False
+    INFINITE_SCAN_DEFAULT: typing.ClassVar[bool] = False
     """Default setting of the infinite scan."""
 
-    ENABLE_SCAN_INDEX: bool = True
+    ENABLE_SCAN_INDEX: typing.ClassVar[bool] = True
     """Flag to enable the index argument in the run_point() function."""
 
-    SCAN_GROUP: str = 'scan'
+    SCAN_GROUP: typing.ClassVar[str] = 'scan'
     """The group name for archiving data."""
-    SCAN_KEY_FORMAT: str = SCAN_GROUP + '/{key}'
+    SCAN_KEY_FORMAT: typing.ClassVar[str] = SCAN_GROUP + '/{key}'
     """Dataset key format for archiving independent scans."""
-    SCAN_PRODUCT_GROUP: str = 'product'
+    SCAN_PRODUCT_GROUP: typing.ClassVar[str] = 'product'
     """The sub-group name for archiving product data."""
-    SCAN_PRODUCT_KEY_FORMAT: str = f'{SCAN_GROUP}/{SCAN_PRODUCT_GROUP}/{{key}}'
+    SCAN_PRODUCT_KEY_FORMAT: typing.ClassVar[str] = f'{SCAN_GROUP}/{SCAN_PRODUCT_GROUP}/{{key}}'
     """Dataset key format for archiving scan products."""
 
-    SCAN_ARGS_KEY: str = 'scan_args'
+    SCAN_ARGS_KEY: typing.ClassVar[str] = 'scan_args'
     """:func:`build` keyword argument for positional arguments passed to :func:`build_scan`."""
-    SCAN_KWARGS_KEY: str = 'scan_kwargs'
+    SCAN_KWARGS_KEY: typing.ClassVar[str] = 'scan_kwargs'
     """:func:`build` keyword argument for keyword arguments passed to :func:`build_scan`."""
+
+    core: artiq.coredevice.core.Core
+    __in_build: bool
+    _dax_scan_scannables: _SD_T
+    _dax_scan_scheduler: typing.Any
+    _dax_scan_infinite: bool
+    _dax_scan_elements: typing.List[typing.Any]
+    _dax_scan_index: np.int32
 
     def build(self, *args: typing.Any, **kwargs: typing.Any) -> None:
         """Build the scan object using the :func:`build_scan` function.
@@ -210,14 +232,14 @@ class DaxScan(dax.base.system.DaxBase, abc.ABC):
         super(DaxScan, self).build(*args, **kwargs)
 
         # Collection of scannables
-        self._dax_scan_scannables: collections.OrderedDict[str, typing.Iterable[typing.Any]] = collections.OrderedDict()
+        self._dax_scan_scannables = collections.OrderedDict()
 
         # The scheduler object
-        self._dax_scan_scheduler: typing.Any = self.get_device('scheduler')
+        self._dax_scan_scheduler = self.get_device('scheduler')
 
         # Build this scan (no args or kwargs available)
         self.logger.debug('Building scan')
-        self.__in_build: bool = True
+        self.__in_build = True
         # noinspection PyArgumentList
         self.build_scan(*scan_args, **scan_kwargs)  # type: ignore[call-arg]
         self.__in_build = False
@@ -225,14 +247,12 @@ class DaxScan(dax.base.system.DaxBase, abc.ABC):
         # Confirm we have a core attribute
         if not hasattr(self, 'core'):
             raise AttributeError('DaxScan could not find a "core" attribute')
-        if typing.TYPE_CHECKING:
-            self.core: artiq.coredevice.core.Core  # Type annotation for core attribute
 
         if self.INFINITE_SCAN_ARGUMENT:
             # Add an argument for infinite scan
-            self._dax_scan_infinite: bool = self.get_argument('Infinite scan', BooleanValue(self.INFINITE_SCAN_DEFAULT),
-                                                              group='DAX.scan',
-                                                              tooltip='Loop infinitely over the scan points')
+            self._dax_scan_infinite = self.get_argument('Infinite scan', BooleanValue(self.INFINITE_SCAN_DEFAULT),
+                                                        group='DAX.scan',
+                                                        tooltip='Loop infinitely over the scan points')
         else:
             # If infinite scan argument is disabled, the value is always the default one
             self._dax_scan_infinite = self.INFINITE_SCAN_DEFAULT
@@ -413,9 +433,8 @@ class DaxScan(dax.base.system.DaxBase, abc.ABC):
 
         # Make the scan elements
         if self._dax_scan_scannables:
-            self._dax_scan_elements: typing.List[typing.Any] = list(
-                _ScanProductGenerator(*self._dax_scan_scannables.items(),  # type: ignore[arg-type]
-                                      enable_index=self.ENABLE_SCAN_INDEX))
+            self._dax_scan_elements = list(_ScanProductGenerator(self._dax_scan_scannables,
+                                                                 enable_index=self.ENABLE_SCAN_INDEX))
         else:
             self._dax_scan_elements = []
         self.update_kernel_invariants('_dax_scan_elements')
@@ -438,7 +457,7 @@ class DaxScan(dax.base.system.DaxBase, abc.ABC):
                              [getattr(point, key) for point, _ in self._dax_scan_elements], archive=True)
 
         # Index of current scan element
-        self._dax_scan_index: np.int32 = np.int32(0)
+        self._dax_scan_index = np.int32(0)
 
         try:
             # Call the host enter code
@@ -588,6 +607,13 @@ class DaxScanReader:
     as the cartesian product of all scannables.
     """
 
+    keys: typing.List[str]
+    """A list of keys for which scan data is available."""
+    scannables: typing.Dict[str, typing.List[typing.Any]]
+    """A dict which for each key contains the list of values."""
+    scan_points: typing.Dict[str, typing.List[typing.Any]]
+    """A dict which for each key contains the list of scan points."""
+
     def __init__(self, source: typing.Union[DaxScan, str, h5py.File], *,
                  hdf5_group: typing.Optional[str] = None):
         """Create a new DAX scan reader object.
@@ -604,9 +630,9 @@ class DaxScanReader:
 
         if isinstance(source, DaxScan):
             # Get data from scan object
-            self.scannables: typing.Dict[str, typing.List[typing.Any]] = source.get_scannables()
-            self.scan_points: typing.Dict[str, typing.List[typing.Any]] = source.get_scan_points()
-            self.keys: typing.List[str] = list(self.scannables.keys())
+            self.scannables = source.get_scannables()
+            self.scan_points = source.get_scan_points()
+            self.keys = list(self.scannables.keys())
 
         elif isinstance(source, h5py.File):
             # Construct HDF5 group name

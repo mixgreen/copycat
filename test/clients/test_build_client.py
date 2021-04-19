@@ -23,6 +23,7 @@ import dax.clients.system_benchmark
 
 import test.interfaces.test_operation
 import test.interfaces.test_data_context
+import test.helpers
 
 
 def _get_managers(**kwargs):
@@ -78,7 +79,7 @@ class BuildClientTestCase(unittest.TestCase):
         (dax.clients.program.ProgramClient, {'file': ''}, False),
         (dax.clients.pygsti.RandomizedBenchmarkingSQ, {
             'Operation interface': _TestSystem.SYS_NAME,
-            'Max depth': '128',
+            'Max depth': '1',
         }, False),
         (dax.clients.rpc_benchmark.RpcBenchmarkLatency, {}, True),
         (dax.clients.rpc_benchmark.RpcBenchmarkAsyncThroughput, {}, True),
@@ -121,6 +122,9 @@ class BuildClientTestCase(unittest.TestCase):
                         client.prepare()
                         # Initialize system
                         self.assertIsNone(system.dax_init())
+
+                    # Test kernel invariants
+                    test.helpers.test_system_kernel_invariants(self, client)
 
     def test_build_custom_clients(self) -> None:
         for client_type, kwargs in self._CUSTOM_CLIENTS:

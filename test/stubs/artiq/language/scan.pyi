@@ -8,7 +8,14 @@ __all__ = ["ScanObject",
 
 
 class ScanObject:
-    ...
+    def __iter__(self) -> typing.Iterator[typing.Any]:
+        ...
+
+    def __len__(self) -> int:
+        ...
+
+    def describe(self) -> typing.Dict[str, typing.Any]:
+        ...
 
 
 # Type variable for generics in scan classes

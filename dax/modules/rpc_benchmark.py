@@ -1,5 +1,6 @@
-import numpy as np
+import typing
 import timeit
+import numpy as np
 
 from dax.experiment import *
 
@@ -10,10 +11,10 @@ class RpcBenchmarkModule(DaxModule):
     """Module to benchmark RPC performance."""
 
     # System keys
-    LATENCY_HOST_CORE_HOST_KEY: str = 'latency_host_core_host'
-    LATENCY_CORE_HOST_CORE_KEY: str = 'latency_core_host_core'
-    LATENCY_CORE_HOST_CORE_ASYNC_KEY: str = 'latency_core_host_core_async'
-    ASYNC_REQUEST_PERIOD_KEY: str = 'async_request_period'
+    LATENCY_HOST_CORE_HOST_KEY: typing.ClassVar[str] = 'latency_host_core_host'
+    LATENCY_CORE_HOST_CORE_KEY: typing.ClassVar[str] = 'latency_core_host_core'
+    LATENCY_CORE_HOST_CORE_ASYNC_KEY: typing.ClassVar[str] = 'latency_core_host_core_async'
+    ASYNC_REQUEST_PERIOD_KEY: typing.ClassVar[str] = 'async_request_period'
 
     def build(self) -> None:  # type: ignore
         """Build the RPC benchmark module."""

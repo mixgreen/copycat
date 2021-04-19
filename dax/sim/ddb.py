@@ -150,7 +150,7 @@ def enable_dax_sim(ddb: typing.Dict[str, typing.Any], *,
         enable = config.getboolean(_CONFIG_SECTION, 'enable')
 
     if enable:
-        # Log that dax.sim was enabled
+        # Log that DAX.sim was enabled
         _logger.info('DAX simulation enabled in device DB')
 
         if DAX_SIM_CONFIG_KEY not in ddb:

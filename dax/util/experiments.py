@@ -19,9 +19,9 @@ class Barrier(artiq.experiment.EnvExperiment):
     using the scheduler of the current environment.
     """
 
-    PRIORITY: int = 100
+    PRIORITY: typing.ClassVar[int] = 100
     """Scheduling priority of the barrier."""
-    CLOCK_PERIOD: float = 0.5
+    CLOCK_PERIOD: typing.ClassVar[float] = 0.5
     """Internal clock period to check for pause conditions."""
 
     def build(self) -> None:  # type: ignore
@@ -72,13 +72,13 @@ class SetDataset(artiq.experiment.EnvExperiment):
     When importing this class directly into the global namespace, it will be recognized by ARTIQ as an experiment.
     """
 
-    _UNITS: typing.Dict[str, float] = {unit: getattr(artiq.experiment, unit)
-                                       for unit in ['ps', 'ns', 'us', 'ms', 's',
-                                                    'mHz', 'Hz', 'kHz', 'MHz', 'GHz',
-                                                    'dB',
-                                                    'uV', 'mV', 'V', 'kV',
-                                                    'uA', 'mA', 'A',
-                                                    'uW', 'mW', 'W']}
+    _UNITS: typing.ClassVar[typing.Dict[str, float]] = {unit: getattr(artiq.experiment, unit)
+                                                        for unit in ['ps', 'ns', 'us', 'ms', 's',
+                                                                     'mHz', 'Hz', 'kHz', 'MHz', 'GHz',
+                                                                     'dB',
+                                                                     'uV', 'mV', 'V', 'kV',
+                                                                     'uA', 'mA', 'A',
+                                                                     'uW', 'mW', 'W']}
     """Dict with all units."""
 
     def build(self) -> None:  # type: ignore
@@ -115,5 +115,4 @@ class SetDataset(artiq.experiment.EnvExperiment):
         # Evaluate value
         value: typing.Any = eval(self.value, g, {})
         # Set dataset
-        self.set_dataset(self.key, value,
-                         broadcast=True, persist=self.persist, archive=False)
+        self.set_dataset(self.key, value, broadcast=True, persist=self.persist, archive=False)

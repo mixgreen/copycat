@@ -8,7 +8,7 @@ __all__ = ['GTKWaveSaveGenerator']
 class GTKWaveSaveGenerator(DaxClient, Experiment):
     """GTKWave save file generator."""
 
-    DAX_INIT: bool = False
+    DAX_INIT = False
     """Disable DAX init."""
 
     def prepare(self) -> None:

@@ -5,6 +5,10 @@ from dax.sim.signal import get_signal_manager, DaxSignalManager
 
 
 class _GenericBase:
+    _attr_name: typing.Optional[str]
+    _signal_manager: DaxSignalManager[typing.Any]
+    _signal_call: typing.Any
+    _signal_function: typing.Any
 
     def __init__(self, attr_name: typing.Optional[str],
                  signal_manager: DaxSignalManager[typing.Any],

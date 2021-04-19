@@ -6,7 +6,7 @@ __all__ = ['list_to_int32', 'list_to_int64']
 
 
 @portable
-def list_to_int32(measurements: TList(TInt32)) -> TInt32:  # type: ignore
+def list_to_int32(measurements: TList(TInt32)) -> TInt32:  # type: ignore[valid-type]
     """Convert a list of measurement results to an ``int32``.
 
     **Note that the 32th element of the list can flip the sign due to the usage of a signed data type**.
@@ -31,7 +31,7 @@ def list_to_int32(measurements: TList(TInt32)) -> TInt32:  # type: ignore
 
 
 @portable
-def list_to_int64(measurements: TList(TInt32)) -> TInt64:  # type: ignore
+def list_to_int64(measurements: TList(TInt32)) -> TInt64:  # type: ignore[valid-type]
     """Convert a list of measurement results to an ``int64``.
 
     **Note that the 64th element of the list can flip the sign due to the usage of a signed data type**.

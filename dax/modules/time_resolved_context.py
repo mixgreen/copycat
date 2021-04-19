@@ -14,7 +14,7 @@ from dax.util.units import UnitsFormatter
 
 __all__ = ['TimeResolvedContext', 'TimeResolvedAnalyzer', 'TimeResolvedContextError']
 
-# Workaround required for Python<=3.8
+# Workaround required for Python<3.9
 if typing.TYPE_CHECKING:
     _TD_T = typing.Dict[str, typing.Union[typing.Sequence[float],
                                           typing.Sequence[typing.Sequence[float]]]]  # Type for a trace dict
@@ -90,23 +90,38 @@ class TimeResolvedContext(DaxModule):
     This module can be used as a sub-module of a service.
     """
 
-    PLOT_RESULT_KEY_FORMAT: str = 'plot.{base}.time_resolved_context.result'
+    PLOT_RESULT_KEY_FORMAT: typing.ClassVar[str] = 'plot.{base}.time_resolved_context.result'
     """Dataset name for plotting latest result graph (Y-axis)."""
-    PLOT_TIME_KEY_FORMAT: str = 'plot.{base}.time_resolved_context.time'
+    PLOT_TIME_KEY_FORMAT: typing.ClassVar[str] = 'plot.{base}.time_resolved_context.time'
     """Dataset name for plotting latest result graph (X-axis)."""
-    PLOT_NAME: str = 'time resolved detection'
+    PLOT_NAME: typing.ClassVar[str] = 'time resolved detection'
     """Name of the plot applet."""
-    PLOT_GROUP_FORMAT: str = '{base}.time_resolved_context'
+    PLOT_GROUP_FORMAT: typing.ClassVar[str] = '{base}.time_resolved_context'
     """Group to which the plot applets belong."""
 
-    DATASET_GROUP: str = 'time_resolved_context'
+    DATASET_GROUP: typing.ClassVar[str] = 'time_resolved_context'
     """The group name for archiving data."""
-    DATASET_KEY_FORMAT: str = DATASET_GROUP + '/{dataset_key}/{index}/{column}'
+    DATASET_KEY_FORMAT: typing.ClassVar[str] = DATASET_GROUP + '/{dataset_key}/{index}/{column}'
     """Format string for sub-dataset keys."""
-    DEFAULT_DATASET_KEY: str = 'time_resolved'
+    DEFAULT_DATASET_KEY: typing.ClassVar[str] = 'time_resolved'
     """The default name of the output dataset in archive."""
-    DATASET_COLUMNS: typing.Tuple[str, ...] = ('width', 'time', 'result')
+    DATASET_COLUMNS: typing.ClassVar[typing.Tuple[str, ...]] = ('width', 'time', 'result')
     """Column names of data within each sub-dataset."""
+
+    _default_dataset_key: str
+    _units_fmt: UnitsFormatter
+    _in_context: np.int32
+    _buffer_data: typing.List[typing.Tuple[typing.Sequence[typing.Sequence[int]], float]]
+    _buffer_meta: typing.List[typing.Tuple[float, float, float]]
+    _cache: typing.Dict[str, typing.List[_TD_T]]
+    _plot_result_data: typing.List[typing.Sequence[float]]
+    _plot_time_data: typing.List[float]
+    _dataset_key: str
+    _plot_base_key: str
+    _open_datasets: typing.Counter[str]
+    _plot_result_key: str
+    _plot_time_key: str
+    _plot_group: str
 
     def build(self, *,  # type: ignore
               default_dataset_key: typing.Optional[str] = None, plot_base_key: str = 'dax') -> None:
@@ -124,45 +139,42 @@ class TimeResolvedContext(DaxModule):
         assert isinstance(plot_base_key, str), 'Plot base key must be of type str'
 
         # Store default dataset key
-        if default_dataset_key is None:
-            self._default_dataset_key: str = self.DEFAULT_DATASET_KEY
-        else:
-            self._default_dataset_key = default_dataset_key
+        self._default_dataset_key = self.DEFAULT_DATASET_KEY if default_dataset_key is None else default_dataset_key
 
         # Get CCB tool
         self._ccb = get_ccb_tool(self)
         # Get scheduler
         self._scheduler = self.get_device('scheduler')
         # Units formatter
-        self._units_fmt: UnitsFormatter = UnitsFormatter()
+        self._units_fmt = UnitsFormatter()
 
         # By default we are not in context
-        self._in_context: np.int32 = np.int32(0)
+        self._in_context = np.int32(0)
         # The count buffer (buffer appending is a bit faster than dict operations)
-        self._buffer_data: typing.List[typing.Tuple[typing.Sequence[typing.Sequence[int]], float]] = []
-        self._buffer_meta: typing.List[typing.Tuple[float, float, float]] = []
+        self._buffer_data = []
+        self._buffer_meta = []
 
         # Cache for processed data
-        self._cache: typing.Dict[str, typing.List[_TD_T]] = {}
+        self._cache = {}
 
         # Local plot data (required for extending the plot datasets efficiently)
-        self._plot_result_data: typing.List[typing.Sequence[float]] = []
-        self._plot_time_data: typing.List[float] = []
+        self._plot_result_data = []
+        self._plot_time_data = []
 
         # Target dataset key
-        self._dataset_key: str = self._default_dataset_key
+        self._dataset_key = self._default_dataset_key
         # Store plot base key
-        self._plot_base_key: str = plot_base_key
+        self._plot_base_key = plot_base_key
         # Datasets that are initialized with a counter, which represents the length of the data
-        self._open_datasets: typing.Counter[str] = collections.Counter()
+        self._open_datasets = collections.Counter()
 
     def init(self) -> None:
         # Generate plot keys
         base: str = self._plot_base_key.format(scheduler=self._scheduler)
-        self._plot_result_key: str = self.PLOT_RESULT_KEY_FORMAT.format(base=base)
-        self._plot_time_key: str = self.PLOT_TIME_KEY_FORMAT.format(base=base)
+        self._plot_result_key = self.PLOT_RESULT_KEY_FORMAT.format(base=base)
+        self._plot_time_key = self.PLOT_TIME_KEY_FORMAT.format(base=base)
         # Generate applet plot group
-        self._plot_group: str = self.PLOT_GROUP_FORMAT.format(base=base)
+        self._plot_group = self.PLOT_GROUP_FORMAT.format(base=base)
 
     def post_init(self) -> None:
         pass
@@ -635,7 +647,7 @@ class TimeResolvedAnalyzer:
     and the second dimension are the values.
     """
 
-    PLOT_FILE_FORMAT: str = '{key}_{index}'
+    PLOT_FILE_FORMAT: typing.ClassVar[str] = '{key}_{index}'
     """File name format for plot files."""
 
     def __init__(self, source: typing.Union[DaxSystem, TimeResolvedContext, str, h5py.File], *,

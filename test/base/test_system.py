@@ -19,6 +19,7 @@ import dax.base.interface
 from dax.util.artiq import get_managers
 
 import test.util.test_logging
+import test.helpers
 
 """Device DB for testing"""
 
@@ -799,6 +800,9 @@ class DaxBaseTestCase(unittest.TestCase):
         base_kernel_invariants = {'logger'}
         self.assertSetEqual(b.kernel_invariants, base_kernel_invariants)
 
+        # Test kernel invariant presence (before adding additional kernel invariants)
+        test.helpers.test_kernel_invariants(self, b)
+
         keys = {'foo', 'bar', 'foobar'}
         b.update_kernel_invariants(*keys)
         self.assertSetEqual(b.kernel_invariants, keys | base_kernel_invariants)
@@ -839,6 +843,9 @@ class DaxHasKeyTestCase(unittest.TestCase):
         key = 'key.name'
         parent_ = HasKeyParent(self.managers, name=name, system_key=key)
         child = HasKey(parent_, name=name, system_key=key, parent=parent_)
+
+        # Test kernel invariants
+        test.helpers.test_kernel_invariants(self, parent_)
 
         for hk in [parent_, child]:
             with self.subTest(has_key_object=hk):
@@ -939,6 +946,9 @@ class DaxHasSystemTestCase(unittest.TestCase):
         key = 'key.name'
         parent_ = HasSystemParent(self.managers, name=name, system_key=key)
         child = HasSystem(parent_, name=name, system_key=key, parent=parent_)
+
+        # Test kernel invariants
+        test.helpers.test_system_kernel_invariants(self, parent_)
 
         for hk in [parent_, child]:
             with self.subTest(has_key_object=hk):
@@ -1456,6 +1466,10 @@ class DaxSystemTestCase(unittest.TestCase):
     def tearDown(self) -> None:
         # Close managers
         self.managers.close()
+
+    def test_kernel_invariants(self):
+        # Test kernel invariants
+        test.helpers.test_system_kernel_invariants(self, self.system)
 
     def test_dax_init(self):
         # Call DAX init

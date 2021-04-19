@@ -41,10 +41,12 @@ def _generate_command(base_command: str, *args: str, **kwargs: typing.Any) -> st
 class CcbTool:
     """Wrapper around ARTIQ CCB object providing more convenient functions."""
 
-    ARTIQ_APPLET = '${artiq_applet}'
+    ARTIQ_APPLET: typing.ClassVar[str] = '${artiq_applet}'
     """The ARTIQ applet variable which can be used in CCB commands."""
-    DAX_APPLET = '${python} -m dax_applets.'
+    DAX_APPLET: typing.ClassVar[str] = '${python} -m dax_applets.'
     """The DAX applet starting command which can be used in CCB commands."""
+
+    __ccb: typing.Any
 
     def __init__(self, ccb: typing.Any):
         """Construct a new CCB tool.
@@ -53,7 +55,7 @@ class CcbTool:
         """
 
         # Store the CCB object
-        self.__ccb: typing.Any = ccb
+        self.__ccb = ccb
 
     @property
     def ccb(self) -> typing.Any:

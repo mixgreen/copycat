@@ -1,3 +1,5 @@
+import typing
+
 import artiq.coredevice.urukul  # type: ignore
 import artiq.coredevice.ad9910  # type: ignore
 import artiq.coredevice.ad9912  # type: ignore
@@ -16,10 +18,15 @@ class CpldInitModule(DaxModule):
     the attenuation settings are loaded to the device driver.
     """
 
-    DEVICE_TYPES = (artiq.coredevice.ad9910.AD9910,
-                    artiq.coredevice.ad9912.AD9912,
-                    artiq.coredevice.suservo.SUServo,)
+    DEVICE_TYPES: typing.ClassVar[typing.Tuple[type, ...]] = (
+        artiq.coredevice.ad9910.AD9910,
+        artiq.coredevice.ad9912.AD9912,
+        artiq.coredevice.suservo.SUServo,
+    )
     """Devices types that use Urukul CPLD."""
+
+    _interval: float
+    _init_kernel: bool
 
     def build(self, *,  # type: ignore
               interval: float = 5 * us, check_registered_devices: bool = True, init_kernel: bool = True) -> None:
@@ -34,10 +41,10 @@ class CpldInitModule(DaxModule):
         assert isinstance(init_kernel, bool), 'Init kernel flag must be of type bool'
 
         # Store attributes
-        self._interval: float = interval
+        self._interval = interval
         self.update_kernel_invariants('_interval')
         self.logger.debug(f'Interval set to {dax.util.units.time_to_str(self._interval)}')
-        self._init_kernel: bool = init_kernel
+        self._init_kernel = init_kernel
         self.logger.debug(f'Init kernel: {self._init_kernel}')
 
         if check_registered_devices:

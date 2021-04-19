@@ -13,6 +13,8 @@ import dax.modules.rpc_benchmark
 import dax.modules.rtio_benchmark
 import dax.modules.time_resolved_context
 
+import test.helpers
+
 
 class _TestSystem(DaxSystem):
     SYS_ID = 'unittest_system'
@@ -54,19 +56,10 @@ class BuildModuleTestCase(unittest.TestCase):
                 # Create system
                 system = _WrappedTestSystem(self.managers, *module_args, **module_kwargs)
                 self.assertIsInstance(system, DaxSystem)
-
                 # Initialize system
                 self.assertIsNone(system.dax_init())
-
-                # Test module kernel invariants
-                for m in system.registry.get_module_list():
-                    self._test_kernel_invariants(m)
-
-    def _test_kernel_invariants(self, component: dax.base.system.DaxHasSystem):
-        # Test kernel invariants of this component
-        for k in component.kernel_invariants:
-            self.assertTrue(hasattr(component, k), f'Name "{k}" of "{component.get_system_key()}" was marked '
-                                                   f'kernel invariant, but this attribute does not exist')
+                # Test kernel invariants
+                test.helpers.test_system_kernel_invariants(self, system)
 
 
 _DEVICE_DB = {

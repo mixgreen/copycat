@@ -43,6 +43,11 @@ class _Config:
 
 
 class EdgeCounter(DaxSimDevice):
+    counter_max: int
+    _input_freq: float
+    _input_stdev: float
+    _count_buffer: typing.Deque[typing.Tuple[np.int64, int]]
+    _prev_config: typing.Optional[_Config]
 
     def __init__(self, dmgr: typing.Any, gateware_width: int = 31,
                  input_freq: float = 0.0, input_stdev: float = 0.0, seed: typing.Optional[int] = None,
@@ -61,17 +66,17 @@ class EdgeCounter(DaxSimDevice):
         super(EdgeCounter, self).__init__(dmgr, **kwargs)
 
         # From ARTIQ code
-        self.counter_max: int = (1 << (gateware_width - 1)) - 1
+        self.counter_max = (1 << (gateware_width - 1)) - 1
 
         # Store simulation settings
-        self._input_freq: float = input_freq
-        self._input_stdev: float = input_stdev
+        self._input_freq = input_freq
+        self._input_stdev = input_stdev
         self._rng = random.Random(seed)
 
         # Buffers to store counts
-        self._count_buffer: typing.Deque[typing.Tuple[np.int64, int]] = collections.deque()
+        self._count_buffer = collections.deque()
         # Single buffer to match set_config() calls
-        self._prev_config: typing.Optional[_Config] = None
+        self._prev_config = None
 
         # Register signals
         self._signal_manager = get_signal_manager()

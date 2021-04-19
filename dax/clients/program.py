@@ -60,17 +60,27 @@ class ProgramClient(DaxClient, Experiment):
 
     MANAGERS_KWARG = 'managers'
 
-    DEFAULT_OPERATION_KEY: typing.Optional[str] = None
+    DEFAULT_OPERATION_KEY: typing.ClassVar[typing.Optional[str]] = None
     """Key of the default operation interface."""
-    DEFAULT_DATA_CONTEXT_KEY: typing.Optional[str] = None
+    DEFAULT_DATA_CONTEXT_KEY: typing.ClassVar[typing.Optional[str]] = None
     """Key of the default data context interface."""
+
+    _managers: typing.Any
+    _file: str
+    _class: str
+    _arguments: str
+    _operation_key: str
+    _data_context_key: str
+    _operation: dax.interfaces.operation.OperationInterface
+    _data_context: dax.interfaces.data_context.DataContextInterface
+    _program: Experiment
 
     def build(self, managers: typing.Any) -> None:  # type: ignore
         assert isinstance(self.DEFAULT_OPERATION_KEY, (str, type(None))), 'Key must be of type str or None'
         assert isinstance(self.DEFAULT_DATA_CONTEXT_KEY, (str, type(None))), 'Key must be of type str or None'
 
         # Store reference to ARTIQ managers
-        self._managers: typing.Any = managers
+        self._managers = managers
 
         # Search for interfaces
         self._operation_interfaces = self.registry.search_interfaces(
@@ -87,17 +97,17 @@ class ProgramClient(DaxClient, Experiment):
         default_data_context_key = _get_default_argument(self._data_context_interfaces, self.DEFAULT_DATA_CONTEXT_KEY)
 
         # Obtain arguments
-        self._file: str = self.get_argument(
+        self._file = self.get_argument(
             'file', StringValue(), tooltip='File containing the program to run or an archive with a main.py file')
-        self._class: str = self.get_argument(
+        self._class = self.get_argument(
             'class', StringValue(''), tooltip='Class name of the program to run (optional)')
-        self._arguments: str = self.get_argument(
+        self._arguments = self.get_argument(
             'arguments', StringValue(''), tooltip='Command-line arguments (format: `[KEY=PYON_VALUE ...]`)')
-        self._operation_key: str = self.get_argument(
+        self._operation_key = self.get_argument(
             'operation',
             EnumerationValue(sorted(self._operation_interfaces), default=default_operation_key),
             tooltip='The operation interface to use')
-        self._data_context_key: str = self.get_argument(
+        self._data_context_key = self.get_argument(
             'data_context',
             EnumerationValue(sorted(self._data_context_interfaces), default=default_data_context_key),
             tooltip='The data context interface to use')
@@ -126,8 +136,7 @@ class ProgramClient(DaxClient, Experiment):
             raise TypeError(f'Class "{self._file}:{self._class}" is not a DAX program')
 
         # Get interfaces
-        self._operation: dax.interfaces.operation.OperationInterface = self._operation_interfaces[self._operation_key]
-        self._data_context: dax.interfaces.data_context.DataContextInterface
+        self._operation = self._operation_interfaces[self._operation_key]
         self._data_context = self._data_context_interfaces[self._data_context_key]
 
         # Parse arguments
@@ -145,7 +154,7 @@ class ProgramClient(DaxClient, Experiment):
 
         # Build the program
         self.logger.info(f'Building program "{self._class}"')
-        self._program: Experiment = program_cls(
+        self._program = program_cls(
             dax.util.artiq.isolate_managers(self._managers, name='program', arguments=arguments),
             core=self.core,
             operation=self._operation,

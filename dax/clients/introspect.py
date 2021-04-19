@@ -10,7 +10,7 @@ __all__ = ['Introspect']
 class Introspect(DaxClient, Experiment):
     """System introspection tool."""
 
-    DAX_INIT: bool = False
+    DAX_INIT = False
     """Disable DAX init."""
 
     GRAPHS: typing.Dict[str, typing.List[typing.Tuple[type, typing.Dict[str, typing.Any]]]] = {

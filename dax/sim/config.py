@@ -9,11 +9,13 @@ from dax.util.output import get_file_name
 __all__ = ['DaxSimConfig']
 
 _logger: logging.Logger = logging.getLogger(__package__)
-"""The logger for this file and the root logger for dax.sim."""
+"""The logger for this file and the root logger for DAX.sim."""
 
 
 class DaxSimConfig:
     """Virtual device class that configures the simulation through the device DB."""
+
+    __output_enabled: bool
 
     def __init__(self, dmgr: typing.Any, *,
                  logging_level: typing.Union[int, str], output: str,
@@ -22,7 +24,7 @@ class DaxSimConfig:
         assert isinstance(output, str), 'Output must be of type str'
         assert isinstance(signal_mgr_kwargs, dict), 'Signal manager kwargs must be of type dict'
 
-        # Set the dax.sim logging level and report that simulation is enabled
+        # Set the DAX.sim logging level and report that simulation is enabled
         _logger.setLevel(logging_level)
         _logger.info(f'DAX.sim enabled ({_dax_version})')
 

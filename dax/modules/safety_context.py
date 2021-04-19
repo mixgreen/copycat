@@ -33,8 +33,12 @@ class ReentrantSafetyContext(DaxModule):
 
     __CB_T = typing.Callable[[], None]  # Callback function type
 
-    EXCEPTION_TYPE: type = SafetyContextError
+    EXCEPTION_TYPE: typing.ClassVar[type] = SafetyContextError
     """The exception type raised (must be a subclass of :class:`SafetyContextError`)."""
+
+    _exit_error: bool
+    _exit_error_msg: str
+    _in_context: np.int32
 
     def build(self, *, enter_cb: __CB_T, exit_cb: __CB_T, exit_error: bool = False) -> None:  # type: ignore
         """Build the safety context module.
@@ -58,12 +62,12 @@ class ReentrantSafetyContext(DaxModule):
         self.update_kernel_invariants('_enter_cb', '_exit_cb')
 
         # Store exit error flag and custom error message
-        self._exit_error: bool = exit_error
-        self._exit_error_msg: str = f'Safety context "{self.get_name()}" has been exited more times than entered'
+        self._exit_error = exit_error
+        self._exit_error_msg = f'Safety context "{self.get_name()}" has been exited more times than entered'
         self.update_kernel_invariants('_exit_error', '_exit_error_msg')
 
         # By default we are not in context
-        self._in_context: np.int32 = np.int32(0)  # This variable is NOT kernel invariant
+        self._in_context = np.int32(0)  # This variable is NOT kernel invariant
 
     def init(self) -> None:
         pass
@@ -125,6 +129,8 @@ class SafetyContext(ReentrantSafetyContext):
     :attr:`EXCEPTION_TYPE` can be overridden if desired.
     """
 
+    _enter_err_msg: str
+
     def build(self, **kwargs: typing.Any) -> None:  # type: ignore
         """Build the safety context module."""
 
@@ -132,7 +138,7 @@ class SafetyContext(ReentrantSafetyContext):
         super(SafetyContext, self).build(**kwargs)
 
         # Store custom error message
-        self._enter_err_msg: str = f'Safety context "{self.get_name()}" is non-reentrant'
+        self._enter_err_msg = f'Safety context "{self.get_name()}" is non-reentrant'
         self.update_kernel_invariants('_enter_err_msg')
 
     @portable

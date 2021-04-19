@@ -9,7 +9,7 @@ __all__ = ['RpcBenchmarkLatency', 'RpcBenchmarkAsyncThroughput']
 class RpcBenchmarkLatency(DaxClient, Experiment):
     """RPC latency benchmark."""
 
-    DAX_INIT: bool = False
+    DAX_INIT = False
     """Disable DAX init."""
 
     def build(self) -> None:  # type: ignore
@@ -40,7 +40,7 @@ class RpcBenchmarkLatency(DaxClient, Experiment):
 class RpcBenchmarkAsyncThroughput(DaxClient, Experiment):
     """Async RPC throughput benchmark."""
 
-    DAX_INIT: bool = False
+    DAX_INIT = False
     """Disable DAX init."""
 
     def build(self) -> None:  # type: ignore

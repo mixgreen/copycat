@@ -213,23 +213,27 @@ class _Request:
     start_depth: int
 
 
-# Workaround required for Python<=3.8
+# Workaround required for Python<3.9
 if typing.TYPE_CHECKING:
-    __RQ_T = asyncio.Queue[_Request]  # Type variable for the request queue
+    _RQ_T = asyncio.Queue[_Request]  # Type for the request queue
 else:
-    __RQ_T = asyncio.Queue
+    _RQ_T = asyncio.Queue
 
 
 class Node(dax.base.system.DaxHasKey, abc.ABC):
     """Abstract node class for the scheduler."""
 
-    INTERVAL: typing.Optional[str] = None
+    INTERVAL: typing.ClassVar[typing.Optional[str]] = None
     """Interval to run this node, defaults to no interval."""
-    DEPENDENCIES: typing.Collection[typing.Type[Node]] = []
+    DEPENDENCIES: typing.ClassVar[typing.Collection[typing.Type[Node]]] = []
     """Collection of node dependencies."""
 
-    _LAST_SUBMIT_KEY: str = 'last_submit'
+    _LAST_SUBMIT_KEY: typing.ClassVar[str] = 'last_submit'
     """Key to store the last submit timestamp."""
+
+    _dependencies: typing.FrozenSet[typing.Type[Node]]
+    _interval: float
+    _next_submit: float
 
     def __init__(self, managers_or_parent: DaxScheduler,
                  *args: typing.Any, **kwargs: typing.Any):
@@ -261,7 +265,7 @@ class Node(dax.base.system.DaxHasKey, abc.ABC):
         """Build the node object."""
 
         # Process dependencies
-        self._dependencies: typing.FrozenSet[typing.Type[Node]] = frozenset(self.DEPENDENCIES)
+        self._dependencies = frozenset(self.DEPENDENCIES)
         if len(self._dependencies) < len(self.DEPENDENCIES):
             self.logger.warning('Duplicate dependencies were dropped')
 
@@ -271,7 +275,7 @@ class Node(dax.base.system.DaxHasKey, abc.ABC):
         # Convert the interval
         if self.is_timed():
             # Convert the interval string
-            self._interval: float = _str_to_time(typing.cast(str, self.INTERVAL))
+            self._interval = _str_to_time(typing.cast(str, self.INTERVAL))
             # Check the value
             if self._interval > 0.0:
                 self.logger.info(f'Interval set to {self._interval:.0f} second(s)')
@@ -293,7 +297,7 @@ class Node(dax.base.system.DaxHasKey, abc.ABC):
             self.logger.debug('Initializing timed node')
             if reset:
                 # Reset the node by resetting the next submit time
-                self._next_submit: float = time.time()
+                self._next_submit = time.time()
                 self.logger.debug('Node reset requested')
             else:
                 # Try to obtain the last submit time
@@ -404,21 +408,25 @@ class Node(dax.base.system.DaxHasKey, abc.ABC):
 class BaseJob(Node, abc.ABC):
     """Base class for jobs."""
 
-    LOG_LEVEL: int = logging.WARNING
+    LOG_LEVEL: typing.ClassVar[int] = logging.WARNING
     """The log level for the experiment."""
-    PIPELINE: typing.Optional[str] = None
+    PIPELINE: typing.ClassVar[typing.Optional[str]] = None
     """The pipeline to submit this job to, defaults to the pipeline assigned by the scheduler."""
-    PRIORITY: int = 0
+    PRIORITY: typing.ClassVar[int] = 0
     """Job priority relative to the base job priority of the scheduler."""
-    FLUSH: bool = False
+    FLUSH: typing.ClassVar[bool] = False
     """The flush flag when submitting a job."""
-    REPOSITORY: bool = True
+    REPOSITORY: typing.ClassVar[bool] = True
     """True if the given file(s) is (are) in the experiment repository."""
 
-    _RID_LIST_KEY: str = 'rid_list'
+    _RID_LIST_KEY: typing.ClassVar[str] = 'rid_list'
     """Key to store every submitted RID."""
-    _ARGUMENTS_HASH_KEY: str = 'arguments_hash'
+    _ARGUMENTS_HASH_KEY: typing.ClassVar[str] = 'arguments_hash'
     """Key to store the last arguments hash."""
+
+    _pipeline: str
+    _last_rid: int
+    _rid_list_key: str
 
     def build(self) -> None:  # type: ignore
         # Check log level, pipeline, priority, flush, and repository
@@ -443,14 +451,14 @@ class BaseJob(Node, abc.ABC):
         # Check parameters
         assert isinstance(reset, bool)
         # Extract arguments
-        self._pipeline: str = kwargs['job_pipeline'] if self.PIPELINE is None else self.PIPELINE
+        self._pipeline = kwargs['job_pipeline'] if self.PIPELINE is None else self.PIPELINE
         assert isinstance(self._pipeline, str) and self._pipeline
 
         # Initialize last RID to a non-existing value
-        self._last_rid: int = -1
+        self._last_rid = -1
 
         # Initialize RID list
-        self._rid_list_key: str = self.get_system_key(self._RID_LIST_KEY)
+        self._rid_list_key = self.get_system_key(self._RID_LIST_KEY)
         self.set_dataset(self._rid_list_key, [])  # Archive only
 
         # Calculate the argument hash
@@ -513,13 +521,16 @@ class Job(BaseJob):
     Optionally, users can override the :func:`build_job` method to add configurable arguments.
     """
 
-    FILE: typing.Optional[str] = None
+    FILE: typing.ClassVar[typing.Optional[str]] = None
     """File containing the experiment (by default relative from the `repository` directory,
     see :attr:`BaseJob.REPOSITORY`)."""
-    CLASS_NAME: typing.Optional[str] = None
+    CLASS_NAME: typing.ClassVar[typing.Optional[str]] = None
     """Class name of the experiment."""
     ARGUMENTS: typing.Dict[str, typing.Any] = {}
     """The experiment arguments."""
+
+    _arguments: typing.Dict[str, typing.Any]
+    _expid: typing.Dict[str, typing.Any]
 
     def build(self) -> None:  # type: ignore
         """Build the job object.
@@ -541,17 +552,21 @@ class Job(BaseJob):
         # Build this job
         self.build_job()
         # Process the arguments
-        self._arguments: typing.Dict[str, typing.Any] = dax.util.artiq.process_arguments(self.ARGUMENTS)
+        self._arguments = dax.util.artiq.process_arguments(self.ARGUMENTS)
 
         if self.FILE is not None and not self.REPOSITORY:
             # Expand file
-            self.FILE = os.path.expanduser(self.FILE)
-            assert os.path.isabs(self.FILE), 'The given file must be an absolute path'
+            expanded_file: str = os.path.expanduser(self.FILE)
+            if not os.path.isabs(expanded_file):
+                raise ValueError('The given file must be an absolute path')
+            file: typing.Optional[str] = expanded_file
+        else:
+            file = self.FILE
 
         # Construct an expid for this job
         if not self.is_meta():
-            self._expid: typing.Dict[str, typing.Any] = {
-                'file': self.FILE,
+            self._expid = {
+                'file': file,
                 'class_name': self.CLASS_NAME,
                 'arguments': self._arguments,
                 'log_level': self.LOG_LEVEL,
@@ -609,20 +624,23 @@ class Trigger(Node):
     - :attr:`Node.DEPENDENCIES`: A collection of node classes on which this trigger depends
     """
 
-    NODES: typing.Collection[typing.Type[Node]] = []
+    NODES: typing.ClassVar[typing.Collection[typing.Type[Node]]] = []
     """Collection of nodes to trigger."""
-    ACTION: NodeAction = NodeAction.FORCE
+    ACTION: typing.ClassVar[NodeAction] = NodeAction.FORCE
     """The root node action of this trigger."""
-    POLICY: typing.Optional[Policy] = None
+    POLICY: typing.ClassVar[typing.Optional[Policy]] = None
     """The scheduling policy of this trigger."""
-    REVERSE: typing.Optional[bool] = None
+    REVERSE: typing.ClassVar[typing.Optional[bool]] = None
     """The reverse wave flag for this trigger."""
-    PRIORITY: typing.Optional[int] = None
+    PRIORITY: typing.ClassVar[typing.Optional[int]] = None
     """The job priority of this trigger."""
-    DEPTH: int = -1
+    DEPTH: typing.ClassVar[int] = -1
     """Maximum recursion depth (:const:`-1` for infinite recursion depth)."""
-    START_DEPTH: int = 0
+    START_DEPTH: typing.ClassVar[int] = 0
     """Depth to start visiting nodes (:const:`0` to start at the root nodes)."""
+
+    _nodes: typing.Set[str]
+    _request_queue: _RQ_T
 
     def build(self) -> None:  # type: ignore
         # Check nodes, action, policy, and reverse flag
@@ -636,7 +654,7 @@ class Trigger(Node):
         assert isinstance(self.START_DEPTH, int), 'Start depth must be of type int'
 
         # Assemble the collection of node names
-        self._nodes: typing.Set[str] = {node.get_name() for node in self.NODES}
+        self._nodes = {node.get_name() for node in self.NODES}
         if len(self._nodes) < len(self.NODES):
             self.logger.warning('Duplicate nodes were dropped')
 
@@ -645,7 +663,7 @@ class Trigger(Node):
 
     def init(self, *, reset: bool, **kwargs: typing.Any) -> None:
         # Extract attributes
-        self._request_queue: __RQ_T = kwargs['request_queue']
+        self._request_queue = kwargs['request_queue']
         assert isinstance(self._request_queue, asyncio.Queue)
 
         # Call super
@@ -728,37 +746,39 @@ class CalibrationJob(BaseJob):
       those :class:`Job`\\ s will not be submitted as they are not taken into account by the 'Optimus' algorithm.
     """
 
-    CHECK_FILE: str
+    CHECK_FILE: typing.ClassVar[str]
     """File containing the check experiment."""
-    CALIBRATION_FILE: str
+    CALIBRATION_FILE: typing.ClassVar[str]
     """File containing the calibration experiment."""
-    CHECK_CLASS_NAME: str
+    CHECK_CLASS_NAME: typing.ClassVar[str]
     """Class name of check experiment."""
-    CALIBRATION_CLASS_NAME: str
+    CALIBRATION_CLASS_NAME: typing.ClassVar[str]
     """Class name of calibration experiment."""
     CHECK_ARGUMENTS: typing.Dict[str, typing.Any] = {}
     """The experiment arguments."""
     CALIBRATION_ARGUMENTS: typing.Dict[str, typing.Any] = {}
     """The experiment arguments."""
-    CALIBRATION_TIMEOUT: typing.Optional[str] = None
+    CALIBRATION_TIMEOUT: typing.ClassVar[typing.Optional[str]] = None
     """Calibration timeout period. This is should be used instead of :attr:`Node.INTERVAL`."""
-    GREEDY_FAILURE: bool = True
+    GREEDY_FAILURE: typing.ClassVar[bool] = True
     """Whether or not to fail 'greedily'. In other words, if an experiment fails due to an uncaught exception (not a
      calibration exception), whether to schedule the :class:`dax.util.experiments.Barrier` experiment to prevent
      other experiments from executing. Defaults to :const:`True`. If :const:`False`, the experiment in question will
      fail and the rest of the scheduled experiments will be unaffected."""
 
     # Public so that meta exp can access them
-    LAST_CAL_KEY: str = 'last_calibration'
+    LAST_CAL_KEY: typing.ClassVar[str] = 'last_calibration'
     """Key to store the last time the calibration was successfully run."""
-    LAST_CHECK_KEY: str = 'last_check'
+    LAST_CHECK_KEY: typing.ClassVar[str] = 'last_check'
     """Key to store the last time `check_data` passed."""
-    DIAGNOSE_FLAG_KEY: str = 'diagnose'
+    DIAGNOSE_FLAG_KEY: typing.ClassVar[str] = 'diagnose'
     """Key to store a flag that tells experiment to run diagnose instead of maintain (i.e. skip ``check_state``)."""
 
-    _META_EXP_FILE: str
+    _META_EXP_FILE: typing.ClassVar[str]
     """Path to the file that the meta experiment is inserted into. Should only be written to via the decorator calling
     ``build_meta_exp()``."""
+
+    _expid: typing.Dict[str, typing.Any]
 
     @classmethod
     def _meta_exp_name(cls) -> str:
@@ -774,6 +794,17 @@ class CalibrationJob(BaseJob):
         class MetaExp(dax.base.system.DaxBase, artiq.experiment.Experiment):  # pragma: no cover
             """The generated meta-experiment class."""
 
+            _controller_key: str
+            _my_dataset_keys: typing.Dict[str, str]
+            _dep_dataset_keys: typing.Dict[str, typing.Dict[str, str]]
+            _timeout: float
+            _check_exp: typing.Any
+            _check_exception: typing.Optional[Exception]
+            _check_analyze: bool
+            _cal_analyze: bool
+            _cal_cls: typing.Any
+            _calibration_exp: typing.Any
+
             def __init__(self, managers_or_parent: typing.Any, *args: typing.Any, **kwargs: typing.Any):
                 _, _, argument_mgr, _ = managers_or_parent
                 check_managers = dax.util.artiq.clone_managers(
@@ -786,30 +817,29 @@ class CalibrationJob(BaseJob):
                     name=f'{cls.CALIBRATION_CLASS_NAME}_{{index}}',
                     arguments=argument_mgr.unprocessed_arguments.pop('calibration')
                 )
-                self._controller_key: str = argument_mgr.unprocessed_arguments.pop('controller_key')
-                self._my_dataset_keys: typing.Dict[str, str] = argument_mgr.unprocessed_arguments.pop('my_dataset_keys')
-                self._dep_dataset_keys: typing.Dict[str, typing.Dict[str, str]] = \
-                    argument_mgr.unprocessed_arguments.pop('dep_dataset_keys')
-                self._timeout: float = argument_mgr.unprocessed_arguments.pop('timeout')
+                self._controller_key = argument_mgr.unprocessed_arguments.pop('controller_key')
+                self._my_dataset_keys = argument_mgr.unprocessed_arguments.pop('my_dataset_keys')
+                self._dep_dataset_keys = argument_mgr.unprocessed_arguments.pop('dep_dataset_keys')
+                self._timeout = argument_mgr.unprocessed_arguments.pop('timeout')
                 check_file = argument_mgr.unprocessed_arguments.pop('check_file')
                 cal_file = argument_mgr.unprocessed_arguments.pop('calibration_file')
                 check_mod = artiq.tools.file_import(check_file, prefix='')
                 cal_mod = artiq.tools.file_import(cal_file, prefix='')
                 check_cls = artiq.tools.get_experiment(check_mod, cls.CHECK_CLASS_NAME)
-                self._cal_cls: typing.Any = artiq.tools.get_experiment(cal_mod, cls.CALIBRATION_CLASS_NAME)
+                self._cal_cls = artiq.tools.get_experiment(cal_mod, cls.CALIBRATION_CLASS_NAME)
                 # need the HasEnvironment constructor as well as the usual Experiment methods
                 assert issubclass(check_cls, artiq.experiment.HasEnvironment)
                 assert issubclass(self._cal_cls, artiq.experiment.HasEnvironment)
                 # mypy/python doesn't support "intersection" style typing (yet), so just have to use typing.Any
                 try:
-                    self.check_exp: typing.Any = check_cls(check_managers)
+                    self._check_exp = check_cls(check_managers)
                 except Exception as e:
-                    self._check_exception: typing.Optional[Exception] = e
+                    self._check_exception = e
                 else:
                     self._check_exception = None
                 # flags for analyze phase
-                self._check_analyze: bool = False
-                self._cal_analyze: bool = False
+                self._check_analyze = False
+                self._cal_analyze = False
                 # call super at the end (instead of beginning) so that we can do the above arg pre-processing
                 # before the sub-experiments are built
                 super(MetaExp, self).__init__(managers_or_parent, *args, **kwargs)
@@ -860,7 +890,7 @@ class CalibrationJob(BaseJob):
                 # vs. putting this call in run()
                 if self._check_exception is None:
                     try:
-                        self.check_exp.prepare()
+                        self._check_exp.prepare()
                     except Exception as e:
                         self._check_exception = e
 
@@ -877,7 +907,7 @@ class CalibrationJob(BaseJob):
                         if self._check_exception is not None:
                             raise self._check_exception
                         self._check_analyze = True
-                        self.check_exp.run()
+                        self._check_exp.run()
                     except dax.base.exceptions.BadDataError:
                         self.logger.info('Bad data, triggering diagnose wave')
                         for name, key_dict in self._dep_dataset_keys.items():
@@ -897,9 +927,9 @@ class CalibrationJob(BaseJob):
 
                     # calibrate
                     try:
-                        self.calibration_exp: typing.Any = self._cal_cls(self._cal_managers)
-                        self.calibration_exp.prepare()
-                        self.calibration_exp.run()
+                        self._calibration_exp = self._cal_cls(self._cal_managers)
+                        self._calibration_exp.prepare()
+                        self._calibration_exp.run()
                     except dax.base.exceptions.FailedCalibrationError as fce:
                         self.logger.exception(fce)
                         dax.util.experiments.Barrier.submit(self, pipeline=self._scheduler.pipeline_name)
@@ -922,9 +952,9 @@ class CalibrationJob(BaseJob):
 
             def analyze(self) -> None:
                 if self._check_analyze:
-                    self.check_exp.analyze()
+                    self._check_exp.analyze()
                 if self._cal_analyze:
-                    self.calibration_exp.analyze()
+                    self._calibration_exp.analyze()
 
         # Return the meta experiment class and its name
         return MetaExp, cls._meta_exp_name()
@@ -1036,7 +1066,7 @@ class CalibrationJob(BaseJob):
         }
 
         # Construct an expid for this job
-        self._expid: typing.Dict[str, typing.Any] = {
+        self._expid = {
             'file': self._META_EXP_FILE,
             'class_name': self._meta_exp_name(),
             'arguments': self._arguments,
@@ -1083,7 +1113,10 @@ def create_calibration(cls: typing.Type[__CJ_T]) -> typing.Type[__CJ_T]:
 class SchedulerController:
     """Scheduler controller class, which exposes an external interface to a running DAX scheduler."""
 
-    def __init__(self, scheduler: DaxScheduler, request_queue: __RQ_T):
+    _scheduler: DaxScheduler
+    _request_queue: _RQ_T
+
+    def __init__(self, scheduler: DaxScheduler, request_queue: _RQ_T):
         """Create a new scheduler controller.
 
         :param scheduler: The scheduler that spawned this controller
@@ -1092,8 +1125,8 @@ class SchedulerController:
         assert isinstance(scheduler, DaxScheduler), 'Scheduler must be of type DaxScheduler'
 
         # Store a reference to the scheduler and the request queue
-        self._scheduler: DaxScheduler = scheduler
-        self._request_queue: __RQ_T = request_queue
+        self._scheduler = scheduler
+        self._request_queue = request_queue
 
     async def submit(self, *nodes: str,
                      action: str = str(NodeAction.FORCE),
@@ -1176,36 +1209,55 @@ class DaxScheduler(dax.base.system.DaxHasKey, abc.ABC):
     - :attr:`DEFAULT_JOB_PRIORITY`: The baseline priority for jobs submitted by this scheduler
     """
 
-    NAME: str
+    NAME: typing.ClassVar[str]
     """Scheduler name, used as top key."""
-    NODES: typing.Collection[typing.Type[Node]]
+    NODES: typing.ClassVar[typing.Collection[typing.Type[Node]]]
     """The collection of node classes."""
 
-    ROOT_NODES: typing.Collection[typing.Type[Node]] = []
+    ROOT_NODES: typing.ClassVar[typing.Collection[typing.Type[Node]]] = []
     """The collection of root nodes, all entry nodes if not provided."""
-    SYSTEM: typing.Optional[typing.Type[dax.base.system.DaxSystem]] = None
+    SYSTEM: typing.ClassVar[typing.Optional[typing.Type[dax.base.system.DaxSystem]]] = None
     """Optional DAX system type, enables Influx DB logging if provided."""
-    CONTROLLER: typing.Optional[str] = None
+    CONTROLLER: typing.ClassVar[typing.Optional[str]] = None
     """Optional scheduler controller name, as defined in the device DB."""
-    TERMINATE_TIMEOUT: float = 10.0
+    TERMINATE_TIMEOUT: typing.ClassVar[float] = 10.0
     """Timeout for terminating other instances in seconds."""
 
-    DEFAULT_WAVE_INTERVAL: float = 60.0
+    DEFAULT_WAVE_INTERVAL: typing.ClassVar[float] = 60.0
     """Default wave interval in seconds."""
-    DEFAULT_CLOCK_PERIOD: float = 0.5
+    DEFAULT_CLOCK_PERIOD: typing.ClassVar[float] = 0.5
     """Default clock period in seconds."""
-    DEFAULT_SCHEDULING_POLICY: Policy = Policy.LAZY
+    DEFAULT_SCHEDULING_POLICY: typing.ClassVar[Policy] = Policy.LAZY
     """Default scheduling policy."""
-    DEFAULT_REVERSE_WAVE: bool = False
+    DEFAULT_REVERSE_WAVE: typing.ClassVar[bool] = False
     """Default value for the reverse wave flag."""
-    DEFAULT_RESET_NODES: bool = False
+    DEFAULT_RESET_NODES: typing.ClassVar[bool] = False
     """Default value for the reset nodes flag."""
-    DEFAULT_CANCEL_NODES: bool = False
+    DEFAULT_CANCEL_NODES: typing.ClassVar[bool] = False
     """Default value for the cancel nodes at exit flag."""
-    DEFAULT_JOB_PIPELINE: str = 'main'
+    DEFAULT_JOB_PIPELINE: typing.ClassVar[str] = 'main'
     """Default pipeline to submit jobs to."""
-    DEFAULT_JOB_PRIORITY: int = 0
+    DEFAULT_JOB_PRIORITY: typing.ClassVar[int] = 0
     """Default baseline priority to submit jobs."""
+
+    __data_store: dax.base.system.DaxDataStore
+    _nodes: typing.Dict[typing.Type[Node], Node]
+    _node_name_map: typing.Dict[str, Node]
+    _policy_arg: str
+    _reverse: bool
+    _wave_interval: float
+    _clock_period: float
+    _enable_controller: bool
+    _reset_nodes: bool
+    _cancel_nodes: bool
+    _job_pipeline: str
+    _job_priority: int
+    _reduce_graph: bool
+    _view_graph: bool
+    _policy: Policy
+    _graph: nx.DiGraph[Node]
+    _graph_reversed: nx.DiGraph[Node]
+    _root_nodes: typing.Set[Node]
 
     def __init__(self, managers_or_parent: typing.Any,
                  *args: typing.Any, **kwargs: typing.Any):
@@ -1241,39 +1293,39 @@ class DaxScheduler(dax.base.system.DaxHasKey, abc.ABC):
             self.__data_store = dax.base.system.DaxDataStoreInfluxDb.get_instance(self, self.SYSTEM)
         else:
             # No data store configured
-            self.__data_store: dax.base.system.DaxDataStore = dax.base.system.DaxDataStore()
+            self.__data_store = dax.base.system.DaxDataStore()
 
         # Create the node objects
-        self._nodes: typing.Dict[typing.Type[Node], Node] = {node: node(self) for node in set(self.NODES)}
+        self._nodes = {node: node(self) for node in set(self.NODES)}
         self.logger.debug(f'Created {len(self._nodes)} node(s)')
         if len(self._nodes) < len(self.NODES):
             self.logger.warning('Duplicate nodes were dropped')
         # Store a map from node names to nodes
-        self._node_name_map: typing.Dict[str, Node] = {node.get_name(): node for node in self._nodes.values()}
+        self._node_name_map = {node.get_name(): node for node in self._nodes.values()}
 
         # Scheduling arguments
         default_scheduling_policy: str = str(self.DEFAULT_SCHEDULING_POLICY)
-        self._policy_arg: str = self.get_argument('Scheduling policy',
-                                                  artiq.experiment.EnumerationValue(sorted(str(p) for p in Policy),
-                                                                                    default=default_scheduling_policy),
-                                                  tooltip='Scheduling policy',
-                                                  group='Scheduler')
-        self._reverse: bool = self.get_argument('Reverse wave',
-                                                artiq.experiment.BooleanValue(self.DEFAULT_REVERSE_WAVE),
-                                                tooltip='Reverse the wave direction when traversing the graph',
+        self._policy_arg = self.get_argument('Scheduling policy',
+                                             artiq.experiment.EnumerationValue(sorted(str(p) for p in Policy),
+                                                                               default=default_scheduling_policy),
+                                             tooltip='Scheduling policy',
+                                             group='Scheduler')
+        self._reverse = self.get_argument('Reverse wave',
+                                          artiq.experiment.BooleanValue(self.DEFAULT_REVERSE_WAVE),
+                                          tooltip='Reverse the wave direction when traversing the graph',
+                                          group='Scheduler')
+        self._wave_interval = self.get_argument('Wave interval',
+                                                artiq.experiment.NumberValue(self.DEFAULT_WAVE_INTERVAL, 's',
+                                                                             min=1.0, step=1.0),
+                                                tooltip='Interval to visit nodes',
                                                 group='Scheduler')
-        self._wave_interval: float = self.get_argument('Wave interval',
-                                                       artiq.experiment.NumberValue(self.DEFAULT_WAVE_INTERVAL, 's',
-                                                                                    min=1.0, step=1.0),
-                                                       tooltip='Interval to visit nodes',
-                                                       group='Scheduler')
-        self._clock_period: float = self.get_argument('Clock period',
-                                                      artiq.experiment.NumberValue(self.DEFAULT_CLOCK_PERIOD, 's',
-                                                                                   min=0.1, step=0.1),
-                                                      tooltip='Internal scheduler clock period',
-                                                      group='Scheduler')
+        self._clock_period = self.get_argument('Clock period',
+                                               artiq.experiment.NumberValue(self.DEFAULT_CLOCK_PERIOD, 's',
+                                                                            min=0.1, step=0.1),
+                                               tooltip='Internal scheduler clock period',
+                                               group='Scheduler')
         if self.CONTROLLER is None:
-            self._enable_controller: bool = False
+            self._enable_controller = False
         else:
             self._enable_controller = self.get_argument('Enable controller',
                                                         artiq.experiment.BooleanValue(True),
@@ -1281,33 +1333,33 @@ class DaxScheduler(dax.base.system.DaxHasKey, abc.ABC):
                                                         group='Scheduler')
 
         # Node arguments
-        self._reset_nodes: bool = self.get_argument('Reset nodes',
-                                                    artiq.experiment.BooleanValue(self.DEFAULT_RESET_NODES),
-                                                    tooltip='Reset the node states at scheduler startup',
-                                                    group='Nodes')
-        self._cancel_nodes: bool = self.get_argument('Cancel nodes at exit',
-                                                     artiq.experiment.BooleanValue(self.DEFAULT_CANCEL_NODES),
-                                                     tooltip='Cancel the submit action of nodes during scheduler exit',
-                                                     group='Nodes')
-        self._job_pipeline: str = self.get_argument('Job pipeline',
-                                                    artiq.experiment.StringValue(self.DEFAULT_JOB_PIPELINE),
-                                                    tooltip='Default pipeline to submit jobs to',
-                                                    group='Nodes')
-        self._job_priority: int = self.get_argument('Job priority',
-                                                    artiq.experiment.NumberValue(self.DEFAULT_JOB_PRIORITY,
-                                                                                 step=1, ndecimals=0),
-                                                    tooltip='Baseline job priority',
-                                                    group='Nodes')
+        self._reset_nodes = self.get_argument('Reset nodes',
+                                              artiq.experiment.BooleanValue(self.DEFAULT_RESET_NODES),
+                                              tooltip='Reset the node states at scheduler startup',
+                                              group='Nodes')
+        self._cancel_nodes = self.get_argument('Cancel nodes at exit',
+                                               artiq.experiment.BooleanValue(self.DEFAULT_CANCEL_NODES),
+                                               tooltip='Cancel the submit action of nodes during scheduler exit',
+                                               group='Nodes')
+        self._job_pipeline = self.get_argument('Job pipeline',
+                                               artiq.experiment.StringValue(self.DEFAULT_JOB_PIPELINE),
+                                               tooltip='Default pipeline to submit jobs to',
+                                               group='Nodes')
+        self._job_priority = self.get_argument('Job priority',
+                                               artiq.experiment.NumberValue(self.DEFAULT_JOB_PRIORITY,
+                                                                            step=1, ndecimals=0),
+                                               tooltip='Baseline job priority',
+                                               group='Nodes')
 
         # Graph arguments
-        self._reduce_graph: bool = self.get_argument('Reduce graph',
-                                                     artiq.experiment.BooleanValue(True),
-                                                     tooltip='Use transitive reduction of the dependency graph',
-                                                     group='Dependency graph')
-        self._view_graph: bool = self.get_argument('View graph',
-                                                   artiq.experiment.BooleanValue(False),
-                                                   tooltip='View the dependency graph at startup',
-                                                   group='Dependency graph')
+        self._reduce_graph = self.get_argument('Reduce graph',
+                                               artiq.experiment.BooleanValue(True),
+                                               tooltip='Use transitive reduction of the dependency graph',
+                                               group='Dependency graph')
+        self._view_graph = self.get_argument('View graph',
+                                             artiq.experiment.BooleanValue(False),
+                                             tooltip='View the dependency graph at startup',
+                                             group='Dependency graph')
 
         # Call super and forward arguments, for compatibility with other libraries
         # noinspection PyArgumentList
@@ -1335,7 +1387,7 @@ class DaxScheduler(dax.base.system.DaxHasKey, abc.ABC):
             raise ValueError('The wave interval is too small compared to the clock period')
 
         # Obtain the scheduling policy
-        self._policy: Policy = Policy.from_str(self._policy_arg)
+        self._policy = Policy.from_str(self._policy_arg)
         # Process the graph
         self._process_graph()
 
@@ -1352,7 +1404,7 @@ class DaxScheduler(dax.base.system.DaxHasKey, abc.ABC):
         """Async entry point for the scheduler."""
 
         # Create a request queue
-        request_queue: __RQ_T = asyncio.Queue()
+        request_queue: _RQ_T = asyncio.Queue()
 
         if self._enable_controller:
             # Run the scheduler and the controller
@@ -1361,7 +1413,7 @@ class DaxScheduler(dax.base.system.DaxHasKey, abc.ABC):
             # Only run the scheduler
             await self._run_scheduler(request_queue=request_queue)
 
-    async def _run_scheduler_and_controller(self, *, request_queue: __RQ_T) -> None:
+    async def _run_scheduler_and_controller(self, *, request_queue: _RQ_T) -> None:
         """Coroutine for running the scheduler and the controller."""
 
         # Create the controller and the server objects
@@ -1382,7 +1434,7 @@ class DaxScheduler(dax.base.system.DaxHasKey, abc.ABC):
             self.logger.debug('Stopping the scheduler controller')
             await server.stop()
 
-    async def _run_scheduler(self, *, request_queue: __RQ_T) -> None:
+    async def _run_scheduler(self, *, request_queue: _RQ_T) -> None:
         """Coroutine for running the scheduler"""
 
         # Initialize all nodes
@@ -1451,7 +1503,7 @@ class DaxScheduler(dax.base.system.DaxHasKey, abc.ABC):
                 for node in self._graph:
                     node.cancel()
 
-    async def _run_request_handler(self, *, request_queue: __RQ_T) -> None:
+    async def _run_request_handler(self, *, request_queue: _RQ_T) -> None:
         """Coroutine for the request handler."""
 
         while True:
@@ -1603,7 +1655,7 @@ class DaxScheduler(dax.base.system.DaxHasKey, abc.ABC):
         self.logger.debug(f'Nodes: {", ".join(sorted(self._node_name_map))}')
 
         # Create the dependency graph
-        self._graph: nx.DiGraph[Node] = nx.DiGraph()
+        self._graph = nx.DiGraph()
         self._graph.add_nodes_from(self._nodes.values())
         try:
             self._graph.add_edges_from(((node, self._nodes[d])
@@ -1627,12 +1679,12 @@ class DaxScheduler(dax.base.system.DaxHasKey, abc.ABC):
             self._graph = nx.algorithms.transitive_reduction(self._graph)
 
         # Store reversed graph
-        self._graph_reversed: nx.DiGraph[Node] = self._graph.reverse(copy=False)
+        self._graph_reversed = self._graph.reverse(copy=False)
 
         if self.ROOT_NODES:
             try:
                 # Get the root nodes
-                self._root_nodes: typing.Set[Node] = {self._nodes[node] for node in self.ROOT_NODES}
+                self._root_nodes = {self._nodes[node] for node in self.ROOT_NODES}
             except KeyError as e:
                 raise KeyError(f'Root node "{e.args[0].get_name()}" is not in the node set') from None
             else:
@@ -1790,58 +1842,68 @@ class DaxScheduler(dax.base.system.DaxHasKey, abc.ABC):
 class _DaxSchedulerClient(dax.base.system.DaxBase, artiq.experiment.Experiment):
     """A client experiment class for a scheduler."""
 
-    SCHEDULER_NAME: str
+    SCHEDULER_NAME: typing.ClassVar[str]
     """The name of the scheduler."""
-    NODE_NAMES: typing.List[str]
+    NODE_NAMES: typing.ClassVar[typing.List[str]]
     """A List with the names of the nodes."""
-    CONTROLLER_KEY: str
+    CONTROLLER_KEY: typing.ClassVar[str]
     """Key of the scheduler controller."""
 
-    _NODE_ACTION_NAMES: typing.List[str] = sorted(str(a) for a in NodeAction)
+    _NODE_ACTION_NAMES: typing.ClassVar[typing.List[str]] = sorted(str(a) for a in NodeAction)
     """A list with node action names."""
-    _SCHEDULER_SETTING: str = '<Scheduler setting>'
+    _SCHEDULER_SETTING: typing.ClassVar[str] = '<Scheduler setting>'
     """The option for using the scheduler setting."""
-    _POLICY_NAMES: typing.List[str] = [_SCHEDULER_SETTING] + sorted(str(p) for p in Policy)
+    _POLICY_NAMES: typing.ClassVar[typing.List[str]] = [_SCHEDULER_SETTING] + sorted(str(p) for p in Policy)
     """A list with policy names."""
-    _REVERSE_DICT: typing.Dict[str, typing.Optional[bool]] = {_SCHEDULER_SETTING: None, 'False': False, 'True': True}
+    _REVERSE_DICT: typing.ClassVar[typing.Dict[str, typing.Optional[bool]]] = {
+        _SCHEDULER_SETTING: None, 'False': False, 'True': True}
     """A dict with reverse wave flag names and values."""
+
+    _node: str
+    _action: str
+    _policy: str
+    _reverse: str
+    _priority: int
+    _depth: int
+    _start_depth: int
+    _block: bool
+    _dax_scheduler: SchedulerController
 
     def build(self) -> None:  # type: ignore
         # Set default scheduling options for the client
         self.set_default_scheduling(pipeline_name=f'_{self.SCHEDULER_NAME}')
 
         # Arguments
-        self._node: str = self.get_argument('Node',
-                                            artiq.experiment.EnumerationValue(self.NODE_NAMES),
-                                            tooltip='Node to submit')
-        self._action: str = self.get_argument('Action',
-                                              artiq.experiment.EnumerationValue(self._NODE_ACTION_NAMES,
-                                                                                default=str(NodeAction.FORCE)),
-                                              tooltip='Initial node action')
-        self._policy: str = self.get_argument('Policy',
-                                              artiq.experiment.EnumerationValue(self._POLICY_NAMES,
-                                                                                default=self._SCHEDULER_SETTING),
-                                              tooltip='Scheduling policy')
-        self._reverse: str = self.get_argument('Reverse',
-                                               artiq.experiment.EnumerationValue(sorted(self._REVERSE_DICT),
-                                                                                 default=self._SCHEDULER_SETTING),
-                                               tooltip='Reverse the wave direction when traversing the graph')
-        self._priority: int = self.get_argument('Priority',
-                                                artiq.experiment.NumberValue(0, step=1, ndecimals=0),
-                                                tooltip='Baseline job priority')
-        self._depth: int = self.get_argument('Depth',
-                                             artiq.experiment.NumberValue(-1, min=-1, step=1, ndecimals=0),
-                                             tooltip='Maximum recursion depth (`-1` for infinite recursion depth)')
-        self._start_depth: int = self.get_argument('Start depth',
-                                                   artiq.experiment.NumberValue(0, min=0, step=1, ndecimals=0),
-                                                   tooltip='Depth to start visiting nodes '
-                                                           '(`0` to start at the root nodes)')
-        self._block: bool = self.get_argument('Block',
-                                              artiq.experiment.BooleanValue(True),
-                                              tooltip='Block until the request was handled')
+        self._node = self.get_argument('Node',
+                                       artiq.experiment.EnumerationValue(self.NODE_NAMES),
+                                       tooltip='Node to submit')
+        self._action = self.get_argument('Action',
+                                         artiq.experiment.EnumerationValue(self._NODE_ACTION_NAMES,
+                                                                           default=str(NodeAction.FORCE)),
+                                         tooltip='Initial node action')
+        self._policy = self.get_argument('Policy',
+                                         artiq.experiment.EnumerationValue(self._POLICY_NAMES,
+                                                                           default=self._SCHEDULER_SETTING),
+                                         tooltip='Scheduling policy')
+        self._reverse = self.get_argument('Reverse',
+                                          artiq.experiment.EnumerationValue(sorted(self._REVERSE_DICT),
+                                                                            default=self._SCHEDULER_SETTING),
+                                          tooltip='Reverse the wave direction when traversing the graph')
+        self._priority = self.get_argument('Priority',
+                                           artiq.experiment.NumberValue(0, step=1, ndecimals=0),
+                                           tooltip='Baseline job priority')
+        self._depth = self.get_argument('Depth',
+                                        artiq.experiment.NumberValue(-1, min=-1, step=1, ndecimals=0),
+                                        tooltip='Maximum recursion depth (`-1` for infinite recursion depth)')
+        self._start_depth = self.get_argument('Start depth',
+                                              artiq.experiment.NumberValue(0, min=0, step=1, ndecimals=0),
+                                              tooltip='Depth to start visiting nodes (`0` to start at the root nodes)')
+        self._block = self.get_argument('Block',
+                                        artiq.experiment.BooleanValue(True),
+                                        tooltip='Block until the request was handled')
 
         # Get the DAX scheduler controller
-        self._dax_scheduler: SchedulerController = self.get_device(self.CONTROLLER_KEY)
+        self._dax_scheduler = self.get_device(self.CONTROLLER_KEY)
         # Get the ARTIQ scheduler
         self._scheduler = self.get_device('scheduler')
 

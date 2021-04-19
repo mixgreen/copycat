@@ -14,25 +14,32 @@ from dax.util.units import time_to_str
 
 __all__ = ['PmtMonitor', 'MultiPmtMonitor']
 
+# Workaround required for Python<3.9
+if typing.TYPE_CHECKING:
+    _C_T = collections.OrderedDict[str, float]  # Count scales type
+else:
+    _C_T = collections.OrderedDict
+
 
 class _PmtMonitorBase(DaxClient, Experiment, abc.ABC):
     """Base PMT monitor class."""
 
-    APPLET_GROUP: str
+    APPLET_GROUP: typing.ClassVar[str]
     """Group of the applet."""
-    DEFAULT_DATASET: str
+    DEFAULT_DATASET: typing.ClassVar[str]
     """Default dataset for output."""
-    DEFAULT_BUFFER_SIZE: int = 1
+    DEFAULT_BUFFER_SIZE: typing.ClassVar[int] = 1
     """Default buffer size in samples."""
-    MAX_BUFFER_SIZE: int = 32
+    MAX_BUFFER_SIZE: typing.ClassVar[int] = 32
     """Maximum buffer size in samples."""
 
-    _RAW_COUNT: str = '<Raw counts>'
+    _RAW_COUNT: typing.ClassVar[str] = '<Raw counts>'
     """Count scale key for raw count (i.e. no scaling)."""
-    _COUNT_SCALES = collections.OrderedDict([(_RAW_COUNT, -1.0)], GHz=GHz, MHz=MHz, kHz=kHz, Hz=Hz, mHz=mHz)
+    _COUNT_SCALES: typing.ClassVar[_C_T] = collections.OrderedDict(
+        [(_RAW_COUNT, -1.0)], GHz=GHz, MHz=MHz, kHz=kHz, Hz=Hz, mHz=mHz)
     """Scales that can be used for the Y-axis."""
 
-    DAX_INIT: bool = False
+    DAX_INIT = False
     """Disable DAX init."""
 
     def build(self) -> None:  # type: ignore
@@ -76,12 +83,10 @@ class _PmtMonitorBase(DaxClient, Experiment, abc.ABC):
                                                   tooltip='Buffer size in number of samples')
         self.count_scale_label: str = self.get_argument('PMT count scale',
                                                         EnumerationValue(list(self._COUNT_SCALES), default='kHz'),
-                                                        tooltip='Scaling factor for the PMT counts graph '
-                                                                '(requires applet restart)')
+                                                        tooltip='Scaling factor for the PMT counts graph')
         self.sliding_window: int = self.get_argument('Data window size',
                                                      NumberValue(default=120 * s, unit='s', min=0, ndecimals=0, step=1),
-                                                     tooltip='Data window size (use 0 for infinite window size) '
-                                                             '(requires applet restart)')
+                                                     tooltip='Data window size (use 0 for infinite window size)')
         self.update_kernel_invariants('detection_window', 'buffer_size')
 
         # Add extra arguments
@@ -100,8 +105,7 @@ class _PmtMonitorBase(DaxClient, Experiment, abc.ABC):
         self.dataset_key: str = self.get_argument('Dataset key',
                                                   StringValue(default=self.DEFAULT_DATASET),
                                                   group='Dataset',
-                                                  tooltip='Dataset key to which plotting data will be written '
-                                                          '(requires applet restart)')
+                                                  tooltip='Dataset key to which plotting data will be written')
 
         # Applet specific arguments
         self.create_applet: bool = self.get_argument('Create applet',
@@ -152,8 +156,6 @@ class _PmtMonitorBase(DaxClient, Experiment, abc.ABC):
             self.y_scalar = 1.0
 
     def run(self) -> None:
-        # NOTE: there is no dax_init() in this experiment!
-
         # Initial value is reset to an empty list or try to obtain the previous value defaulting to an empty list
         init_value = [] if self.reset_data else self.get_dataset(self.dataset_key, default=[], archive=False)
         self.logger.debug('Appending to previous data' if init_value else 'Starting with empty list')
@@ -304,12 +306,12 @@ class PmtMonitor(_PmtMonitorBase):
     APPLET_GROUP = 'dax.pmt_monitor'
     DEFAULT_DATASET = 'plot.dax.pmt_monitor'
 
-    NUM_DIGITS_BIG_NUMBER: int = 5
+    NUM_DIGITS_BIG_NUMBER: typing.ClassVar[int] = 5
     """Number of digits to display for the big number applet."""
 
-    _PLOT_XY: str = 'Plot XY'
+    _PLOT_XY: typing.ClassVar[str] = 'Plot XY'
     """Key for plot XY applet type."""
-    _BIG_NUMBER: str = 'Big number'
+    _BIG_NUMBER: typing.ClassVar[str] = 'Big number'
     """Key for big number applet type."""
 
     def _add_arguments_internal(self) -> None:
@@ -328,7 +330,7 @@ class PmtMonitor(_PmtMonitorBase):
                                                   tooltip='PMT channel to monitor')
         self.applet_type: str = self.get_argument('Applet type',
                                                   EnumerationValue(list(self._applet_types), self._PLOT_XY),
-                                                  tooltip='Choose an applet type (requires applet restart)')
+                                                  tooltip='Choose an applet type')
         self.update_kernel_invariants('pmt_channel')
 
     def _create_applet(self, *args: typing.Any, **kwargs: typing.Any) -> None:
@@ -370,7 +372,7 @@ class MultiPmtMonitor(_PmtMonitorBase):
     APPLET_GROUP = 'dax.multi_pmt_monitor'
     DEFAULT_DATASET = 'plot.dax.multi_pmt_monitor'
 
-    TITLES: typing.Sequence[typing.Optional[str]] = []
+    TITLES: typing.ClassVar[typing.Sequence[typing.Optional[str]]] = []
     """A sequence of applet titles when using separate applets."""
 
     def _add_arguments_internal(self) -> None:

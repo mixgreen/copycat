@@ -13,19 +13,24 @@ from dax.sim.signal import get_signal_manager
 class _DMARecordContext:
     """DMA recording class, which is used as a context handler."""
 
+    _core: typing.Any
+    _name: str
+    _record_signal: typing.Any
+    _duration: np.int64
+
     def __init__(self, core: typing.Any, name: str, record_signal: typing.Any):
         assert isinstance(name, str)
 
         # Store attributes
-        self._core: typing.Any = core
-        self._name: str = name
+        self._core = core
+        self._name = name
 
         # Signals
         self._signal_manager = get_signal_manager()
-        self._record_signal: typing.Any = record_signal
+        self._record_signal = record_signal
 
         # Duration will be recorded using enter and exit
-        self._duration: np.int64 = np.int64(0)
+        self._duration = np.int64(0)
 
     @property
     def core(self) -> typing.Any:
@@ -57,13 +62,16 @@ class _DMARecordContext:
 class _DMAHandle:
     """DMA handle class."""
 
+    _recording: _DMARecordContext
+    _epoch: int
+
     def __init__(self, dma_recording: _DMARecordContext, epoch: int):
         assert isinstance(dma_recording, _DMARecordContext)
         assert isinstance(epoch, int) and epoch > 0
 
         # Store attributes
-        self._recording: _DMARecordContext = dma_recording
-        self._epoch: int = epoch
+        self._recording = dma_recording
+        self._epoch = epoch
 
     @property
     def recording(self) -> _DMARecordContext:
@@ -75,21 +83,26 @@ class _DMAHandle:
 
 
 class CoreDMA(DaxSimDevice):
+    _epoch: int
+    _dma_traces: typing.Dict[str, _DMARecordContext]
+    _dma_record: typing.Any
+    _dma_play: typing.Any
+    _dma_play_name: typing.Any
 
     def __init__(self, dmgr: typing.Any, **kwargs: typing.Any):
         # Call super
         super(CoreDMA, self).__init__(dmgr, **kwargs)
 
         # Initialize epoch to zero
-        self._epoch: int = 0
+        self._epoch = 0
         # Dict for DMA traces
-        self._dma_traces: typing.Dict[str, _DMARecordContext] = {}
+        self._dma_traces = {}
 
         # Register signal
         self._signal_manager = get_signal_manager()
-        self._dma_record: typing.Any = self._signal_manager.register(self, 'record', str)
-        self._dma_play: typing.Any = self._signal_manager.register(self, 'play', object)
-        self._dma_play_name: typing.Any = self._signal_manager.register(self, 'play_name', str)
+        self._dma_record = self._signal_manager.register(self, 'record', str)
+        self._dma_play = self._signal_manager.register(self, 'play', object)
+        self._dma_play_name = self._signal_manager.register(self, 'play_name', str)
 
     @kernel
     def record(self, name):  # type: (str) -> _DMARecordContext

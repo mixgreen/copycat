@@ -27,7 +27,7 @@ class GTKWSaveGenerator:
     base code and the simulation backend.
     """
 
-    _CONVERT_TYPE: typing.Dict[type, str] = {
+    _CONVERT_TYPE: typing.ClassVar[typing.Dict[type, str]] = {
         bool: 'hex',
         int: 'dec',
         np.int32: 'dec',
@@ -115,4 +115,5 @@ class GTKWSaveGenerator:
         with gtkw.group(device, closed=False):
             for s, t, size in signals:
                 vector = '' if size is None or size == 1 else f'[{size - 1}:0]'
+                # noinspection PyTypeChecker
                 gtkw.trace(f'{device}.{s}{vector}', datafmt=cls._CONVERT_TYPE[t])

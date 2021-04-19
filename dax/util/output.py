@@ -60,6 +60,9 @@ def get_base_path(scheduler: typing.Any) -> pathlib.Path:
 class BaseFileNameGenerator:
     """A file name generator that generates file names in a base path."""
 
+    _base_path: pathlib.Path
+    _unique: bool
+
     def __init__(self, base: typing.Union[str, pathlib.Path] = '', *,
                  unique: bool = False):
         """Create a new base file name generator.
@@ -71,8 +74,8 @@ class BaseFileNameGenerator:
         assert isinstance(unique, bool)
 
         # Store attributes
-        self._base_path: pathlib.Path = pathlib.Path(base) if isinstance(base, str) else base
-        self._unique: bool = unique
+        self._base_path = pathlib.Path(base) if isinstance(base, str) else base
+        self._unique = unique
 
     def _generate_file_name(self, name: str, ext: typing.Optional[str], *,
                             count: int = 0) -> pathlib.Path:

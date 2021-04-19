@@ -130,13 +130,15 @@ class UnitsFormatter(string.Formatter):
     - ``'{!w}'``, conversion to watt
     """
 
+    _precision: int
+
     def __init__(self, *, precision: int = 6):
         """Create a new units string formatter object.
 
         :param precision: The number of digits displayed after the decimal point
         """
         assert isinstance(precision, int) and precision >= 0, 'Precision must be equal or greater than zero'
-        self._precision: int = precision
+        self._precision = precision
 
     def convert_field(self, value: typing.Any, conversion: str) -> typing.Any:
         if conversion == 't':

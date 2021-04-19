@@ -12,6 +12,8 @@ from dax.base.system import DaxSystem
 from dax.util.artiq import get_managers
 from dax.util.output import temp_dir
 
+import test.helpers
+
 
 class _MockSystem(DaxSystem):
     SYS_ID = 'test_system'
@@ -214,6 +216,24 @@ class Scan1TestCase(unittest.TestCase):
     def tearDown(self) -> None:
         # Close managers
         self.managers.close()
+
+    def test_kernel_invariants(self):
+        test.helpers.test_system_kernel_invariants(self, self.scan)
+
+    def test_kernel_invariants_scan_elements(self):
+        self.scan.run()
+
+        num_scannables = len(self.scan.get_scannables())
+
+        for p, i in self.scan._dax_scan_elements:
+            self.assertEqual(len(p.kernel_invariants), num_scannables)
+            test.helpers.test_kernel_invariants(self, p)
+
+            if self.scan.ENABLE_SCAN_INDEX:
+                self.assertEqual(len(i.kernel_invariants), num_scannables)
+                test.helpers.test_kernel_invariants(self, i)
+            else:
+                self.assertEqual(len(i.kernel_invariants), 0)
 
     def test_is_infinite(self):
         self.assertFalse(self.scan.is_infinite_scan, 'Scan reported incorrectly it was infinite')

@@ -70,11 +70,11 @@ class RandomizedBenchmarkingSQ(DaxClient, Experiment):
     confuse the Python import machinery due to module name aliasing.
     """
 
-    QUBIT_LABELS: typing.Sequence[str] = ['Q0']
+    QUBIT_LABELS: typing.ClassVar[typing.Sequence[str]] = ['Q0']
     """Qubit labels for pyGSTi analysis."""
-    MAX_CIRCUIT_DEPTH: int = 2 ** 14
+    MAX_CIRCUIT_DEPTH: typing.ClassVar[int] = 2 ** 14
     """The maximum circuit depth available (preferably a power of 2)."""
-    DEFAULT_PARTITION_SIZE: int = 0
+    DEFAULT_PARTITION_SIZE: typing.ClassVar[int] = 0
     """Default partition size, to limit the size of kernels (zero for no limit)."""
 
     def build(self) -> None:  # type: ignore

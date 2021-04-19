@@ -18,17 +18,23 @@ class BeamManager(DaxModule):
     are shared over an ion chain using mirrors for targeting.
     """
 
-    NO_BEAM: np.int32 = np.int32(-1)
+    NO_BEAM: typing.ClassVar[np.int32] = np.int32(-1)
     """Constant value for no beam."""
 
     class _BeamConfig:
         """Class that holds the configuration/state of a beam."""
 
+        target: np.int32
+        state: bool
+
         def __init__(self):
             # Initially we assume the beam is not targeted
-            self.target: np.int32 = BeamManager.NO_BEAM
+            self.target = BeamManager.NO_BEAM
             # We assume beams are initially off
-            self.state: bool = False
+            self.state = False
+
+    _num_beams: np.int32
+    _beam_config: typing.List[_BeamConfig]
 
     def build(self, *, num_beams: typing.Union[int, np.integer]):  # type: ignore
         """Build the beam manager object.
@@ -38,7 +44,7 @@ class BeamManager(DaxModule):
         assert isinstance(num_beams, (int, np.integer)) and num_beams > 0, 'Number of beams must be of type int and > 0'
 
         # Store attributes
-        self._num_beams: np.int32 = np.int32(num_beams)
+        self._num_beams = np.int32(num_beams)
         self.logger.debug(f'Number of beams: {self._num_beams}')
         self.update_kernel_invariants('_num_beams')
 
@@ -46,7 +52,7 @@ class BeamManager(DaxModule):
         self.update_kernel_invariants('NO_BEAM')
 
         # Current beam configurations
-        self._beam_config: typing.List[BeamManager._BeamConfig] = [self._BeamConfig() for _ in range(num_beams)]
+        self._beam_config = [self._BeamConfig() for _ in range(num_beams)]
         self.update_kernel_invariants('_beam_config')
 
     def init(self):

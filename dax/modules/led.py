@@ -10,6 +10,8 @@ __all__ = ['LedModule']
 class LedModule(DaxModule):
     """Module to control user LED's."""
 
+    _init_kernel: bool
+
     def build(self, *leds: str, init_kernel: bool = False) -> None:  # type: ignore
         """Build the LED module.
 
@@ -23,7 +25,7 @@ class LedModule(DaxModule):
         assert isinstance(init_kernel, bool), 'Init kernel flag must be of type bool'
 
         # Store attributes
-        self._init_kernel: bool = init_kernel
+        self._init_kernel = init_kernel
         self.logger.debug(f'Init kernel: {self._init_kernel}')
 
         # LED array

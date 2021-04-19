@@ -28,20 +28,27 @@ class GraphvizBase(graphviz.Digraph):
 
     __A_T = typing.Dict[str, str]  # Type of attribute dicts
 
-    MODULE_EDGE_K: float = 0.8
+    MODULE_EDGE_K: typing.ClassVar[float] = 0.8
     """The default module edge spring constant."""
-    MODULE_EDGE_LEN: float = 0.3
+    MODULE_EDGE_LEN: typing.ClassVar[float] = 0.3
     """The default module edge length in inch."""
-    SYSTEM_EDGE_LEN: float = 1.5
+    SYSTEM_EDGE_LEN: typing.ClassVar[float] = 1.5
     """The default system edge length in inch."""
 
-    SERVICE_EDGE_K: float = 0.7
+    SERVICE_EDGE_K: typing.ClassVar[float] = 0.7
     """The default service edge spring constant."""
-    SERVICE_EDGE_LEN: float = 0.7
+    SERVICE_EDGE_LEN: typing.ClassVar[float] = 0.7
     """The default service edge length in inch."""
 
-    CLUSTER_EDGE_LEN: float = 2.5
+    CLUSTER_EDGE_LEN: typing.ClassVar[float] = 2.5
     """The default cluster edge length in inch."""
+
+    _module_node_attr: __A_T
+    _module_edge_attr: __A_T
+    _system_edge_attr: __A_T
+    _service_node_attr: __A_T
+    _service_edge_attr: __A_T
+    _cluster_edge_attr: __A_T
 
     def __init__(self, *,
                  module_edge_k: float = MODULE_EDGE_K,
@@ -68,19 +75,19 @@ class GraphvizBase(graphviz.Digraph):
         assert isinstance(service_edge_len, float), 'Service edge len must be of type float'
         assert isinstance(cluster_edge_len, float), 'Cluster edge len must be of type float'
 
-        self._module_node_attr: GraphvizBase.__A_T = {'color': 'blue'}
+        self._module_node_attr = {'color': 'blue'}
         """Node attributes for modules."""
-        self._module_edge_attr: GraphvizBase.__A_T = {'K': str(module_edge_k), 'len': str(module_edge_len)}
+        self._module_edge_attr = {'K': str(module_edge_k), 'len': str(module_edge_len)}
         """Edge attributes for modules."""
-        self._system_edge_attr: GraphvizBase.__A_T = {'len': str(system_edge_len)}
+        self._system_edge_attr = {'len': str(system_edge_len)}
         """Edge attributes for the system."""
 
-        self._service_node_attr: GraphvizBase.__A_T = {'color': 'red'}
+        self._service_node_attr = {'color': 'red'}
         """Node attributes for services."""
-        self._service_edge_attr: GraphvizBase.__A_T = {'K': str(service_edge_k), 'len': str(service_edge_len)}
+        self._service_edge_attr = {'K': str(service_edge_k), 'len': str(service_edge_len)}
         """Edge attributes for services."""
 
-        self._cluster_edge_attr: GraphvizBase.__A_T = {'len': str(cluster_edge_len)}
+        self._cluster_edge_attr = {'len': str(cluster_edge_len)}
         """Edge attributes for inter-cluster edges."""
 
         # Call super

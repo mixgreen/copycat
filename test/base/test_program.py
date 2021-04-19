@@ -11,6 +11,7 @@ from dax.sim import enable_dax_sim
 
 import test.interfaces.test_operation
 import test.interfaces.test_data_context
+import test.helpers
 
 _DEVICE_DB: typing.Dict[str, typing.Any] = {
     'core': {
@@ -85,6 +86,8 @@ class DaxProgramTestCase(unittest.TestCase):
         self.assertSetEqual(program.kernel_invariants, self.EXPECTED_KERNEL_INVARIANTS)
         self.assertIn(_TestProgram.__name__, program.get_identifier())
         dax.interfaces.operation.validate_interface(program.q)
+        test.helpers.test_system_kernel_invariants(self, system)
+        test.helpers.test_kernel_invariants(self, program)
 
     def test_isolated_link(self):
         # Create isolated managers
@@ -100,6 +103,8 @@ class DaxProgramTestCase(unittest.TestCase):
         self.assertSetEqual(program.kernel_invariants, self.EXPECTED_KERNEL_INVARIANTS)
         self.assertIn(_TestProgram.__name__, program.get_identifier())
         dax.interfaces.operation.validate_interface(program.q)
+        test.helpers.test_system_kernel_invariants(self, system)
+        test.helpers.test_kernel_invariants(self, program)
 
         # Return program for other tests
         return program

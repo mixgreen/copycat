@@ -64,7 +64,7 @@ class OperationInterface(GateInterface, abc.ABC):
         pass
 
     @abc.abstractmethod
-    def store_measurements(self, qubits: TList(TInt32)):  # type: ignore
+    def store_measurements(self, qubits: TList(TInt32)):  # type: ignore[valid-type]
         """Store the binary measurement results of the given qubits in the archive.
 
         This function must be used inside a :class:`dax.interfaces.data_context.DataContextInterface` context.

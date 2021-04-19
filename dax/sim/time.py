@@ -13,9 +13,12 @@ _MU_T = np.int64
 class _TimeContext(abc.ABC):
     """Abstract time context class."""
 
+    _current_time: _MU_T
+    _block_duration: _MU_T
+
     def __init__(self, current_time: _MU_T):
-        self._current_time: _MU_T = current_time
-        self._block_duration: _MU_T = _MU_T(0)
+        self._current_time = current_time
+        self._block_duration = _MU_T(0)
 
     @property
     def current_time(self) -> _MU_T:
@@ -47,6 +50,11 @@ class _ParallelTimeContext(_TimeContext):
 
 
 class DaxTimeManager:
+    """DAX time manager class."""
+
+    _ref_period: float
+    _stack: typing.List[_TimeContext]
+
     def __init__(self, ref_period: float):
         assert isinstance(ref_period, float), 'Reference period must be of type float'
 
@@ -55,10 +63,10 @@ class DaxTimeManager:
             raise ValueError('The reference period must be larger than zero')
 
         # Store reference period
-        self._ref_period: float = ref_period
+        self._ref_period = ref_period
 
         # Initialize time context stack
-        self._stack: typing.List[_TimeContext] = [_SequentialTimeContext(_MU_T(0))]
+        self._stack = [_SequentialTimeContext(_MU_T(0))]
 
     """Helper functions"""
 

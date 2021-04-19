@@ -29,10 +29,11 @@ class PeekTestCase(unittest.TestCase):
     Users are allowed to combine regular unittest constructs with peek-testing features.
     """
 
-    DEFAULT_DEVICE_DB: str = 'device_db.py'
+    DEFAULT_DEVICE_DB: typing.ClassVar[str] = 'device_db.py'
     """The path of the default device DB used to construct environments."""
 
     __E_T = typing.TypeVar('__E_T', bound=HasEnvironment)  # Type variable for environment
+    __signal_manager: PeekSignalManager
 
     def construct_env(self, env_class: typing.Type[__E_T], *,
                       device_db: typing.Union[str, typing.Dict[str, typing.Any], None] = None,
@@ -103,7 +104,7 @@ class PeekTestCase(unittest.TestCase):
 
         # Store the new signal manager
         _logger.debug('Retrieving peek signal manager')
-        self.__signal_manager: PeekSignalManager = typing.cast(PeekSignalManager, get_signal_manager())
+        self.__signal_manager = typing.cast(PeekSignalManager, get_signal_manager())
         assert isinstance(self.__signal_manager, PeekSignalManager), 'Did not obtained correct signal manager type'
 
         # Return the environment

@@ -79,6 +79,11 @@ _ARTIQ_VIRTUAL_DEVICES: typing.Set[str] = {'scheduler', 'ccb'}
 class DaxBase(artiq.language.environment.HasEnvironment, abc.ABC):
     """Base class for all DAX base classes."""
 
+    kernel_invariants: typing.Set[str]
+    """Set of kernel invariant attributes."""
+
+    __logger: logging.Logger
+
     def __init__(self, managers_or_parent: typing.Any,
                  *args: typing.Any, **kwargs: typing.Any):
         """Initialize DAX base.
@@ -90,7 +95,7 @@ class DaxBase(artiq.language.environment.HasEnvironment, abc.ABC):
 
         # Logger object
         dax.util.logging.decorate_logger_class(logging.getLoggerClass())
-        self.__logger: logging.Logger = logging.getLogger(self.get_identifier())
+        self.__logger = logging.getLogger(self.get_identifier())
         self.update_kernel_invariants('logger')
 
         # Build
@@ -131,7 +136,7 @@ class DaxBase(artiq.language.environment.HasEnvironment, abc.ABC):
         # Get kernel invariants using getattr() such that we do not overwrite a user-defined variable
         kernel_invariants: typing.Set[str] = getattr(self, 'kernel_invariants', set())
         # Update the set with the given keys
-        self.kernel_invariants: typing.Set[str] = kernel_invariants | {*keys}
+        self.kernel_invariants = kernel_invariants | {*keys}
 
     @abc.abstractmethod
     def get_identifier(self) -> str:
@@ -148,8 +153,9 @@ class DaxBase(artiq.language.environment.HasEnvironment, abc.ABC):
 class DaxHasKey(DaxBase, abc.ABC):
     """Intermediate base class for DAX classes that have a key."""
 
-    __KEY_ATTRIBUTES: typing.Tuple[str, ...] = ('data_store',)
-    """Attribute names of key objects created in build() or inherited from parents."""
+    __name: str
+    __system_key: str
+    __data_store: DaxDataStore
 
     def __init__(self, managers_or_parent: typing.Any, *args: typing.Any,
                  name: str, system_key: str, **kwargs: typing.Any):
@@ -172,20 +178,21 @@ class DaxHasKey(DaxBase, abc.ABC):
             raise ValueError(f'Invalid system key "{system_key}" for class "{self.__class__.__name__}"')
 
         # Store constructor arguments as attributes
-        self.__name: str = name
-        self.__system_key: str = system_key
+        self.__name = name
+        self.__system_key = system_key
 
         # Call super, which will result in a call to build()
         super(DaxHasKey, self).__init__(managers_or_parent, *args, **kwargs)
 
         # Verify that all key attributes are available
-        if not all(hasattr(self, n) for n in self.__KEY_ATTRIBUTES):  # hasattr() checks properties too
+        key_attributes: typing.List[str] = ['data_store']
+        if not all(hasattr(self, n) for n in key_attributes):  # hasattr() checks properties too
             msg: str = 'Missing key attributes (super.build() was probably not called)'
             self.logger.error(msg)
             raise AttributeError(msg)
 
         # Make key attributes kernel invariants
-        self.update_kernel_invariants(*self.__KEY_ATTRIBUTES)
+        self.update_kernel_invariants(*key_attributes)
 
     @property
     def data_store(self) -> DaxDataStore:
@@ -202,7 +209,7 @@ class DaxHasKey(DaxBase, abc.ABC):
         """
         try:
             # Take attributes from parent
-            self.__data_store: DaxDataStore = parent.data_store
+            self.__data_store = parent.data_store
         except AttributeError:
             parent.logger.exception('Missing key attributes (super.build() was probably not called)')
             raise
@@ -442,11 +449,10 @@ class DaxHasSystem(DaxHasKey, abc.ABC):
     """Intermediate base class for DAX classes that are dependent on a DAX system."""
 
     __D_T = typing.TypeVar('__D_T')  # Device type verification
-
-    __CORE_DEVICES: typing.Tuple[str, ...] = ('core', 'core_dma', 'core_cache')
-    """Attribute names of core devices."""
-    __CORE_ATTRIBUTES: typing.Tuple[str, ...] = __CORE_DEVICES + ('registry',)
-    """Attribute names of core objects created in build() or inherited from parents."""
+    __core: artiq.coredevice.core.Core
+    __core_dma: artiq.coredevice.dma.CoreDMA
+    __core_cache: artiq.coredevice.cache.CoreCache
+    __registry: DaxNameRegistry
 
     def __init__(self, managers_or_parent: typing.Any, *args: typing.Any,
                  name: str, system_key: str, **kwargs: typing.Any):
@@ -464,13 +470,15 @@ class DaxHasSystem(DaxHasKey, abc.ABC):
                                            name=name, system_key=system_key, **kwargs)
 
         # Verify that all core attributes are available
-        if not all(hasattr(self, n) for n in self.__CORE_ATTRIBUTES):  # hasattr() checks properties too
+        core_devices: typing.List[str] = ['core', 'core_dma', 'core_cache']
+        core_attributes: typing.List[str] = core_devices + ['registry']
+        if not all(hasattr(self, n) for n in core_attributes):  # hasattr() checks properties too
             msg: str = 'Missing core attributes (super.build() was probably not called)'
             self.logger.error(msg)
             raise AttributeError(msg)
 
         # Make core devices kernel invariants
-        self.update_kernel_invariants(*self.__CORE_DEVICES)
+        self.update_kernel_invariants(*core_devices)
 
     @property
     def core(self) -> artiq.coredevice.core.Core:
@@ -511,10 +519,10 @@ class DaxHasSystem(DaxHasKey, abc.ABC):
         """
         try:
             # Take core attributes from parent
-            self.__core: artiq.coredevice.core.Core = parent.core
-            self.__core_dma: artiq.coredevice.dma.CoreDMA = parent.core_dma
-            self.__core_cache: artiq.coredevice.cache.CoreCache = parent.core_cache
-            self.__registry: DaxNameRegistry = parent.registry
+            self.__core = parent.core
+            self.__core_dma = parent.core_dma
+            self.__core_cache = parent.core_cache
+            self.__registry = parent.registry
         except AttributeError:
             parent.logger.exception('Missing core attributes (super.build() was probably not called)')
             raise
@@ -723,29 +731,36 @@ class DaxModule(DaxModuleBase, abc.ABC):
 class DaxSystem(DaxModuleBase):
     """Base class for DAX systems, which is a top-level module."""
 
-    SYS_ID: str
+    SYS_ID: typing.ClassVar[str]
     """Identifier of the system."""
-    SYS_VER: int
+    SYS_VER: typing.ClassVar[int]
     """Version of the system."""
 
-    SYS_NAME: str = 'system'
+    SYS_NAME: typing.ClassVar[str] = 'system'
     """System name, used as top key for modules."""
-    SYS_SERVICES: str = 'services'
+    SYS_SERVICES: typing.ClassVar[str] = 'services'
     """System services, used as top key for services."""
 
-    CORE_KEY: str = 'core'
+    CORE_KEY: typing.ClassVar[str] = 'core'
     """Key of the core device."""
-    CORE_DMA_KEY: str = 'core_dma'
+    CORE_DMA_KEY: typing.ClassVar[str] = 'core_dma'
     """Key of the core DMA device."""
-    CORE_CACHE_KEY: str = 'core_cache'
+    CORE_CACHE_KEY: typing.ClassVar[str] = 'core_cache'
     """Key of the core cache device."""
-    CORE_LOG_KEY: typing.Optional[str] = 'core_log'
+    CORE_LOG_KEY: typing.ClassVar[typing.Optional[str]] = 'core_log'
     """Key of the core log controller."""
-    DAX_INFLUX_DB_KEY: typing.Optional[str] = 'dax_influx_db'
+    DAX_INFLUX_DB_KEY: typing.ClassVar[typing.Optional[str]] = 'dax_influx_db'
     """Key of the DAX Influx DB controller."""
 
-    DAX_INIT_TIME_KEY: str = 'dax_init_time'
+    DAX_INIT_TIME_KEY: typing.ClassVar[str] = 'dax_init_time'
     """DAX initialization time system dataset key."""
+
+    __core: artiq.coredevice.core.Core
+    __core_dma: artiq.coredevice.dma.CoreDMA
+    __core_cache: artiq.coredevice.cache.CoreCache
+    __registry: DaxNameRegistry
+    __data_store: DaxDataStore
+    __dax_sim_enabled: bool
 
     def __init__(self, managers_or_parent: typing.Any,
                  *args: typing.Any, **kwargs: typing.Any):
@@ -826,14 +841,14 @@ class DaxSystem(DaxModuleBase):
         self.logger.debug(f'DAX version {_dax_version}')
 
         # Create registry
-        self.__registry: DaxNameRegistry = DaxNameRegistry(self)
+        self.__registry = DaxNameRegistry(self)
 
         try:
             # Get the virtual simulation configuration device
             self.get_device(dax.sim.ddb.DAX_SIM_CONFIG_KEY)
         except KeyError:
             # Simulation disabled
-            self.__sim_enabled: bool = False
+            self.__sim_enabled = False
         except artiq.master.worker_db.DeviceError:
             # Error while initializing simulation
             self.logger.exception('Failed to initialize DAX simulation')
@@ -846,10 +861,9 @@ class DaxSystem(DaxModuleBase):
             self.update_kernel_invariants('dax_sim_enabled')
 
         # Core devices
-        self.__core: artiq.coredevice.core.Core = self.get_device(self.CORE_KEY, artiq.coredevice.core.Core)
-        self.__core_dma: artiq.coredevice.dma.CoreDMA = self.get_device(self.CORE_DMA_KEY, artiq.coredevice.dma.CoreDMA)
-        self.__core_cache: artiq.coredevice.cache.CoreCache = self.get_device(self.CORE_CACHE_KEY,
-                                                                              artiq.coredevice.cache.CoreCache)
+        self.__core = self.get_device(self.CORE_KEY, artiq.coredevice.core.Core)
+        self.__core_dma = self.get_device(self.CORE_DMA_KEY, artiq.coredevice.dma.CoreDMA)
+        self.__core_cache = self.get_device(self.CORE_CACHE_KEY, artiq.coredevice.cache.CoreCache)
 
         if self.CORE_LOG_KEY is not None:
             # Verify existence of core log controller
@@ -866,7 +880,7 @@ class DaxSystem(DaxModuleBase):
         # Instantiate the data store
         if self.DAX_INFLUX_DB_KEY is not None:
             # Create an Influx DB data store
-            self.__data_store: DaxDataStore = DaxDataStoreInfluxDb.get_instance(self, type(self))
+            self.__data_store = DaxDataStoreInfluxDb.get_instance(self, type(self))
         else:
             # No data store configured
             self.__data_store = DaxDataStore()
@@ -922,7 +936,7 @@ def _validate_system_class(system_class: typing.Type[DaxSystem]) -> None:
 class DaxService(DaxHasSystem, abc.ABC):
     """Base class for system services."""
 
-    SERVICE_NAME: str
+    SERVICE_NAME: typing.ClassVar[str]
     """The unique name of this service."""
 
     def __init__(self, managers_or_parent: typing.Union[DaxSystem, DaxService],
@@ -980,9 +994,9 @@ class DaxClient(DaxHasSystem, abc.ABC):
     The decorator will make sure all classes are build in the correct order.
     """
 
-    DAX_INIT: bool = True
+    DAX_INIT: typing.ClassVar[bool] = True
     """Flag if dax_init() should run for this client."""
-    MANAGERS_KWARG: typing.Optional[str] = None
+    MANAGERS_KWARG: typing.ClassVar[typing.Optional[str]] = None
     """Pass the ARTIQ managers as a keyword argument to the :func:`build()` function."""
 
     def __init__(self, managers_or_parent: DaxSystem,
@@ -1023,6 +1037,11 @@ class DaxNameRegistry:
     __M_T = typing.TypeVar('__M_T', bound=DaxModuleBase)  # Module base type variable
     __S_T = typing.TypeVar('__S_T', bound=DaxService)  # Service type variable
     __I_T = typing.TypeVar('__I_T', bound=dax.base.interface.DaxInterface)  # Interface type variable
+    _sys_services_key: str
+    _device_db: typing.Dict[str, typing.Any]
+    _devices: typing.Dict[str, typing.Tuple[typing.Any, DaxHasSystem]]
+    _modules: typing.Dict[str, DaxModuleBase]
+    _services: typing.Dict[str, DaxService]
 
     def __init__(self, system: DaxSystem):
         """Create a new DAX name registry.
@@ -1037,16 +1056,16 @@ class DaxNameRegistry:
             raise ValueError(f'Invalid system services key "{system.SYS_SERVICES}"')
 
         # Store system services key
-        self._sys_services_key: str = system.SYS_SERVICES  # Access attribute directly
+        self._sys_services_key = system.SYS_SERVICES  # Access attribute directly
         # Store device DB
-        self._device_db: typing.Dict[str, typing.Any] = system.get_device_db()
+        self._device_db = system.get_device_db()
 
-        # A dict containing registered modules
-        self._modules: typing.Dict[str, DaxModuleBase] = {}
         # A dict containing registered devices
-        self._devices: typing.Dict[str, typing.Tuple[typing.Any, DaxHasSystem]] = {}
+        self._devices = {}
+        # A dict containing registered modules
+        self._modules = {}
         # A dict containing registered services
-        self._services: typing.Dict[str, DaxService] = {}
+        self._services = {}
 
     @property
     def device_db(self) -> typing.Mapping[str, typing.Any]:
@@ -1449,10 +1468,12 @@ class DaxDataStore:
     override the :func:`set`, :func:`mutate`, and :func:`append` methods.
     """
 
+    _logger: logging.Logger
+
     def __init__(self) -> None:
         """Construct a new DAX data store object."""
         # Create a logger object
-        self._logger: logging.Logger = logging.getLogger(f'{self.__module__}.{self.__class__.__name__}')
+        self._logger = logging.getLogger(f'{self.__module__}.{self.__class__.__name__}')
 
     @artiq.language.core.rpc(flags={'async'})
     def set(self, key, value):  # type: (str, typing.Any) -> None
@@ -1494,10 +1515,15 @@ class DaxDataStoreInfluxDb(DaxDataStore):
     __FD_T = typing.Dict[str, __F_T]  # Field dict type variable
     __P_T = typing.Dict[str, typing.Union[str, __FD_T]]  # Point type variable
 
-    _FIELD_TYPES: typing.Tuple[type, ...] = (bool, float, int, np.integer, str)
+    _FIELD_TYPES: typing.ClassVar[typing.Tuple[type, ...]] = (bool, float, int, np.integer, str)
     """Legal field types (Python types) for Influx DB."""
-    _NP_FIELD_TYPES: typing.List[type] = [np.integer, np.floating, np.bool_, np.character]
+    _NP_FIELD_TYPES: typing.ClassVar[typing.List[type]] = [np.integer, np.floating, np.bool_, np.character]
     """Legal field types (Numpy types) for Influx DB."""
+
+    _sys_id: str
+    _index_table: typing.Dict[str, int]
+    _base_tags: __FD_T
+    _base_fields: __FD_T
 
     def __init__(self, environment: artiq.language.environment.HasEnvironment,
                  system_class: typing.Type[DaxSystem]):
@@ -1525,17 +1551,17 @@ class DaxDataStoreInfluxDb(DaxDataStore):
         self._get_driver(environment, system_class.DAX_INFLUX_DB_KEY)
 
         # Store values that will be used for data points later
-        self._sys_id: str = system_class.SYS_ID
+        self._sys_id = system_class.SYS_ID
         # Initialize index table for the append function, required to emulate appending behavior
-        self._index_table: typing.Dict[str, int] = {}
+        self._index_table = {}
 
         # Prepare base tags
-        self._base_tags: DaxDataStoreInfluxDb.__FD_T = {
+        self._base_tags = {
             'system_version': str(system_class.SYS_VER),  # Convert int version to str since tags are strings
         }
 
         # Prepare base fields
-        self._base_fields: DaxDataStoreInfluxDb.__FD_T = {
+        self._base_fields = {
             'rid': int(scheduler.rid),
             'pipeline_name': str(scheduler.pipeline_name),
             'priority': int(scheduler.priority),
@@ -1778,10 +1804,12 @@ def dax_client_factory(c: typing.Type[__DCF_C_T]) -> typing.Callable[[typing.Typ
             first and loading the client class afterwards using the system as the parent.
             """
 
+            __system: DaxSystem
+
             def __init__(self, managers_or_parent: typing.Any,
                          *args: typing.Any, **kwargs: typing.Any):
                 # Create the system
-                self.__system: DaxSystem = system_type(managers_or_parent, *system_args, **system_kwargs)
+                self.__system = system_type(managers_or_parent, *system_args, **system_kwargs)
 
                 if self.MANAGERS_KWARG is not None:
                     # Pass ARTIQ managers as a keyword argument

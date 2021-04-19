@@ -8,6 +8,7 @@ Note that the MonInj dummy service does not implement the SiPyCo interface and i
 not implemented as an ARTIQ controller.
 """
 
+import typing
 import logging
 import asyncio
 
@@ -33,10 +34,14 @@ class MonInjDummyService:
     MonInj dummy service instead of periodically raising exceptions.
     """
 
-    ARTIQ_HELLO: bytes = b"ARTIQ moninj\n"
+    ARTIQ_HELLO: typing.ClassVar[bytes] = b"ARTIQ moninj\n"
     """Hello message from ARTIQ dashboard."""
-    DEFAULT_PORT: int = 1383
+    DEFAULT_PORT: typing.ClassVar[int] = 1383
     """The default port used by the MonInj dummy service."""
+
+    _host: str
+    _port: int
+    _auto_close: int
 
     def __init__(self, host: str, port: int, auto_close: int = 0):
         """Instantiate a new MonInj dummy service.
@@ -53,9 +58,9 @@ class MonInjDummyService:
         assert auto_close >= 0, 'Auto close must be greater or equal to 0'
 
         # Store attributes
-        self._host: str = host
-        self._port: int = port
-        self._auto_close: int = auto_close
+        self._host = host
+        self._port = port
+        self._auto_close = auto_close
 
         if self._auto_close:
             _logger.debug(f'Server is configured to automatically close after {self._auto_close} connection(s)')

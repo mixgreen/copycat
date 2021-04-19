@@ -39,39 +39,56 @@ class HistogramContext(DaxModule, DataContextInterface):
     "input parameters".
     """
 
-    HISTOGRAM_PLOT_KEY_FORMAT: str = 'plot.{base}.histogram_context.histogram'
+    HISTOGRAM_PLOT_KEY_FORMAT: typing.ClassVar[str] = 'plot.{base}.histogram_context.histogram'
     """Dataset name for plotting latest histogram."""
-    HISTOGRAM_PLOT_NAME: str = 'histogram'
+    HISTOGRAM_PLOT_NAME: typing.ClassVar[str] = 'histogram'
     """Name of the histogram plot applet."""
 
-    PROBABILITY_PLOT_KEY_FORMAT: str = 'plot.{base}.histogram_context.probability'
+    PROBABILITY_PLOT_KEY_FORMAT: typing.ClassVar[str] = 'plot.{base}.histogram_context.probability'
     """Dataset name for plotting latest individual probability graph."""
-    PROBABILITY_PLOT_NAME: str = 'probability'
+    PROBABILITY_PLOT_NAME: typing.ClassVar[str] = 'probability'
     """Name of the individual probability plot applet."""
 
-    MEAN_COUNT_PLOT_KEY_FORMAT: str = 'plot.{base}.histogram_context.mean_count'
+    MEAN_COUNT_PLOT_KEY_FORMAT: typing.ClassVar[str] = 'plot.{base}.histogram_context.mean_count'
     """Dataset name for plotting latest mean count graph."""
-    STDEV_COUNT_PLOT_KEY_FORMAT: str = 'plot.{base}.histogram_context.stdev_count'
+    STDEV_COUNT_PLOT_KEY_FORMAT: typing.ClassVar[str] = 'plot.{base}.histogram_context.stdev_count'
     """Dataset name for plotting standard deviation on latest mean count graph."""
-    MEAN_COUNT_PLOT_NAME: str = 'mean count'
+    MEAN_COUNT_PLOT_NAME: typing.ClassVar[str] = 'mean count'
     """Name of the mean count plot applet."""
 
-    STATE_PROBABILITY_PLOT_KEY_FORMAT: str = 'plot.{base}.histogram_context.state_probability'
+    STATE_PROBABILITY_PLOT_KEY_FORMAT: typing.ClassVar[str] = 'plot.{base}.histogram_context.state_probability'
     """Dataset name for plotting latest full state probability graph."""
-    STATE_PROBABILITY_PLOT_NAME: str = 'state_probability'
+    STATE_PROBABILITY_PLOT_NAME: typing.ClassVar[str] = 'state_probability'
     """Name of the full state probability plot applet."""
 
-    PLOT_GROUP_FORMAT: str = '{base}.histogram_context'
+    PLOT_GROUP_FORMAT: typing.ClassVar[str] = '{base}.histogram_context'
     """Group to which the plot applets belong."""
 
-    DATASET_GROUP: str = 'histogram_context'
+    DATASET_GROUP: typing.ClassVar[str] = 'histogram_context'
     """The group name for archiving histogram data."""
-    RAW_DATASET_GROUP: str = 'raw'
+    RAW_DATASET_GROUP: typing.ClassVar[str] = 'raw'
     """The group name for archiving raw data."""
-    DATASET_KEY_FORMAT: str = f'{DATASET_GROUP}/{{dataset_key}}/{RAW_DATASET_GROUP}/{{index}}'
+    DATASET_KEY_FORMAT: typing.ClassVar[str] = f'{DATASET_GROUP}/{{dataset_key}}/{RAW_DATASET_GROUP}/{{index}}'
     """Format string for raw sub-dataset keys."""
-    DEFAULT_DATASET_KEY: str = 'histogram'
+    DEFAULT_DATASET_KEY: typing.ClassVar[str] = 'histogram'
     """The default dataset key of the output sub-datasets."""
+
+    _default_dataset_key: str
+    _units_fmt: UnitsFormatter
+    _in_context: np.int32
+    _buffer: typing.List[typing.Sequence[_DATA_T]]
+    _first_close: bool
+    _raw_cache: typing.Dict[str, typing.List[typing.Sequence[typing.Sequence[_DATA_T]]]]
+    _histogram_cache: typing.Dict[str, typing.List[typing.Sequence[typing.Counter[_DATA_T]]]]
+    _dataset_key: str
+    _plot_base_key: str
+    _open_datasets: typing.Counter[str]
+    _histogram_plot_key: str
+    _probability_plot_key: str
+    _mean_count_plot_key: str
+    _stdev_count_plot_key: str
+    _state_probability_plot_key: str
+    _plot_group: str
 
     def build(self, *,  # type: ignore
               default_dataset_key: typing.Optional[str] = None, plot_base_key: str = 'dax') -> None:
@@ -90,7 +107,7 @@ class HistogramContext(DaxModule, DataContextInterface):
 
         # Store default dataset key
         if default_dataset_key is None:
-            self._default_dataset_key: str = self.DEFAULT_DATASET_KEY
+            self._default_dataset_key = self.DEFAULT_DATASET_KEY
         else:
             self._default_dataset_key = default_dataset_key
 
@@ -99,37 +116,37 @@ class HistogramContext(DaxModule, DataContextInterface):
         # Get scheduler
         self._scheduler = self.get_device('scheduler')
         # Units formatter
-        self._units_fmt: UnitsFormatter = UnitsFormatter()
+        self._units_fmt = UnitsFormatter()
 
         # By default we are not in context
-        self._in_context: np.int32 = np.int32(0)
+        self._in_context = np.int32(0)
         # The count buffer (buffer appending is a bit faster than dict operations)
-        self._buffer: typing.List[typing.Sequence[_DATA_T]] = []
+        self._buffer = []
         # Flag for the first call to close()
-        self._first_close: bool = True
+        self._first_close = True
 
         # Cache for raw data
-        self._raw_cache: typing.Dict[str, typing.List[typing.Sequence[typing.Sequence[_DATA_T]]]] = {}
+        self._raw_cache = {}
         # Cache for histogram data
-        self._histogram_cache: typing.Dict[str, typing.List[typing.Sequence[typing.Counter[_DATA_T]]]] = {}
+        self._histogram_cache = {}
 
         # Target dataset key
-        self._dataset_key: str = self._default_dataset_key
+        self._dataset_key = self._default_dataset_key
         # Store plot base key
-        self._plot_base_key: str = plot_base_key
+        self._plot_base_key = plot_base_key
         # Open datasets stored as counters, which represent the length of the data
-        self._open_datasets: typing.Counter[str] = collections.Counter()
+        self._open_datasets = collections.Counter()
 
     def init(self) -> None:
         # Generate plot keys
         base: str = self._plot_base_key.format(scheduler=self._scheduler)
-        self._histogram_plot_key: str = self.HISTOGRAM_PLOT_KEY_FORMAT.format(base=base)
-        self._probability_plot_key: str = self.PROBABILITY_PLOT_KEY_FORMAT.format(base=base)
-        self._mean_count_plot_key: str = self.MEAN_COUNT_PLOT_KEY_FORMAT.format(base=base)
-        self._stdev_count_plot_key: str = self.STDEV_COUNT_PLOT_KEY_FORMAT.format(base=base)
-        self._state_probability_plot_key: str = self.STATE_PROBABILITY_PLOT_KEY_FORMAT.format(base=base)
+        self._histogram_plot_key = self.HISTOGRAM_PLOT_KEY_FORMAT.format(base=base)
+        self._probability_plot_key = self.PROBABILITY_PLOT_KEY_FORMAT.format(base=base)
+        self._mean_count_plot_key = self.MEAN_COUNT_PLOT_KEY_FORMAT.format(base=base)
+        self._stdev_count_plot_key = self.STDEV_COUNT_PLOT_KEY_FORMAT.format(base=base)
+        self._state_probability_plot_key = self.STATE_PROBABILITY_PLOT_KEY_FORMAT.format(base=base)
         # Generate applet plot group
-        self._plot_group: str = self.PLOT_GROUP_FORMAT.format(base=base)
+        self._plot_group = self.PLOT_GROUP_FORMAT.format(base=base)
 
     def post_init(self) -> None:
         # Obtain the state detection threshold
@@ -593,13 +610,13 @@ class HistogramAnalyzer:
     based on a given detection threshold.
     """
 
-    HISTOGRAM_PLOT_FILE_FORMAT: str = '{key}_{index}'
+    HISTOGRAM_PLOT_FILE_FORMAT: typing.ClassVar[str] = '{key}_{index}'
     """File name format for histogram plot files."""
-    PROBABILITY_PLOT_FILE_FORMAT: str = '{key}_probability'
+    PROBABILITY_PLOT_FILE_FORMAT: typing.ClassVar[str] = '{key}_probability'
     """File name format for individual state probability plot files."""
-    MEAN_COUNT_PLOT_FILE_FORMAT: str = '{key}_mean_count'
+    MEAN_COUNT_PLOT_FILE_FORMAT: typing.ClassVar[str] = '{key}_mean_count'
     """File name format for mean count plot files."""
-    STATE_PROBABILITY_PLOT_FILE_FORMAT: str = '{key}_state_probability'
+    STATE_PROBABILITY_PLOT_FILE_FORMAT: typing.ClassVar[str] = '{key}_state_probability'
     """File name format for full state probability plot files."""
 
     def __init__(self, source: typing.Union[DaxSystem, HistogramContext, str, h5py.File],

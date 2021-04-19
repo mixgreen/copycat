@@ -8,7 +8,7 @@ from artiq.language.core import *
 import artiq.coredevice.core
 
 from dax.sim.device import DaxSimDevice
-from dax.sim.signal import get_signal_manager
+from dax.sim.signal import get_signal_manager, DaxSignalManager
 from dax.sim.ddb import DAX_SIM_CONFIG_KEY
 from dax.sim.time import DaxTimeManager
 from dax.sim.coredevice.comm_kernel import CommKernelDummy
@@ -32,8 +32,12 @@ class BaseCore(DaxSimDevice):
     for testing device drivers without a full ARTIQ environment.
     """
 
-    RESET_TIME_MU: np.int64 = np.int64(125000)
+    RESET_TIME_MU: typing.ClassVar[np.int64] = np.int64(125000)
     """The reset time in machine units."""
+
+    _ref_period: float
+    _ref_multiplier: int
+    _coarse_ref_period: float
 
     def __init__(self, dmgr: typing.Any = None,
                  ref_period: float = 1e-9, ref_multiplier: int = 8,
@@ -49,9 +53,9 @@ class BaseCore(DaxSimDevice):
         super(BaseCore, self).__init__(dmgr, _core=self, **kwargs)
 
         # Store arguments
-        self._ref_period: float = ref_period
-        self._ref_multiplier: int = ref_multiplier
-        self._coarse_ref_period: float = self._ref_period * self._ref_multiplier
+        self._ref_period = ref_period
+        self._ref_multiplier = ref_multiplier
+        self._coarse_ref_period = self._ref_period * self._ref_multiplier
 
         # Setup dummy comm object
         self._comm = CommKernelDummy()
@@ -152,6 +156,16 @@ class Core(BaseCore):
     Hence, the compilation feature is currently not very useful.
     """
 
+    _sim_config: DaxSimConfig
+    _file_name_generator: BaseFileNameGenerator
+    _signal_manager: DaxSignalManager[typing.Any]
+    _reset_signal: typing.Any
+    _level: int
+    _context_switch_counter: int
+    _func_counter: typing.Counter[typing.Any]
+    _func_time: typing.Counter[typing.Any]
+    _compiler: typing.Optional[artiq.coredevice.core.Core]
+
     # noinspection PyShadowingBuiltins
     def __init__(self, dmgr: typing.Any, ref_period: float, ref_multiplier: int = 8,
                  compile: bool = False, **kwargs: typing.Any):
@@ -163,7 +177,7 @@ class Core(BaseCore):
 
         # Get the virtual simulation configuration device, which will configure the simulation
         # DAX system already initializes the virtual sim config device, this is a fallback
-        self._sim_config: DaxSimConfig = dmgr.get(DAX_SIM_CONFIG_KEY)
+        self._sim_config = dmgr.get(DAX_SIM_CONFIG_KEY)
 
         # Call super
         super(Core, self).__init__(dmgr, ref_period=ref_period, ref_multiplier=ref_multiplier, **kwargs)
@@ -174,28 +188,28 @@ class Core(BaseCore):
         # Get file name generator (explicitly in constructor to not obtain file name too late)
         if self._sim_config.output_enabled:
             # Requesting the generator creates the parent directory, only create if output is enabled
-            self._file_name_generator: BaseFileNameGenerator = FileNameGenerator(self._device_manager.get('scheduler'))
+            self._file_name_generator = FileNameGenerator(self._device_manager.get('scheduler'))
         else:
             # For completeness, set a base file name generator if output is disabled
             self._file_name_generator = BaseFileNameGenerator()
 
         # Get the signal manager and register signals
         self._signal_manager = get_signal_manager()
-        self._reset_signal: typing.Any = self._signal_manager.register(self, 'reset', bool, size=1)
+        self._reset_signal = self._signal_manager.register(self, 'reset', bool, size=1)
 
         # Set initial call nesting level to zero
-        self._level: int = 0
+        self._level = 0
 
         # Counter for context switches
-        self._context_switch_counter: int = 0
+        self._context_switch_counter = 0
         # Counting dicts for function call profiling
-        self._func_counter: typing.Counter[typing.Any] = collections.Counter()
-        self._func_time: typing.Counter[typing.Any] = collections.Counter()
+        self._func_counter = collections.Counter()
+        self._func_time = collections.Counter()
 
         # Configure compiler
         if compile:
             core_kwargs = {k: v for k, v in kwargs.items() if k in {'target'}}
-            self._compiler: typing.Optional[artiq.coredevice.core.Core] = artiq.coredevice.core.Core(
+            self._compiler = artiq.coredevice.core.Core(
                 {}, host=None, ref_period=ref_period, ref_multiplier=ref_multiplier, **core_kwargs)
             # Set the compiler's device manager core to reference its own core
             self._compiler.dmgr[self.key] = self._compiler

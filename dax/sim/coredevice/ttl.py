@@ -62,6 +62,12 @@ class TTLInOut(TTLOut):
         FALLING = 2
         BOTH = 3
 
+    _input_freq: float
+    _input_stdev: float
+    _input_prob: float
+    _edge_buffer: typing.Deque[np.int64]
+    _sample_buffer: typing.Deque[np.int32]
+
     def __init__(self, dmgr: typing.Any,
                  input_freq: float = 0.0, input_stdev: float = 0.0, input_prob: float = 0.5,
                  seed: typing.Optional[int] = None, **kwargs: typing.Any):
@@ -81,16 +87,16 @@ class TTLInOut(TTLOut):
         super(TTLInOut, self).__init__(dmgr, **kwargs)
 
         # Store simulation settings
-        self._input_freq: float = input_freq
-        self._input_stdev: float = input_stdev
-        self._input_prob: float = input_prob
+        self._input_freq = input_freq
+        self._input_stdev = input_stdev
+        self._input_prob = input_prob
 
         # Random number generator for generating values
         self._rng = random.Random(seed)
 
         # Buffers to store simulated events
-        self._edge_buffer: typing.Deque[np.int64] = collections.deque()
-        self._sample_buffer: typing.Deque[np.int32] = collections.deque()
+        self._edge_buffer = collections.deque()
+        self._sample_buffer = collections.deque()
 
         # Register signals
         self._direction = self._signal_manager.register(self, 'direction', bool, size=1)

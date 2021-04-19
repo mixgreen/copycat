@@ -17,6 +17,7 @@ from dax.util.artiq import get_managers
 from dax.util.output import temp_dir
 
 from test.environment import CI_ENABLED
+import test.helpers
 
 
 class _MockDetectionModule(DaxModule, DetectionInterface):
@@ -413,15 +414,8 @@ class HistogramContextTestCase(unittest.TestCase):
         self.h.disable_all_plots()
 
     def test_kernel_invariants(self):
-        # Test module kernel invariants
-        for m in self.s.registry.get_module_list():
-            self._test_kernel_invariants(m)
-
-    def _test_kernel_invariants(self, component: dax.base.system.DaxHasSystem):
-        # Test kernel invariants of this component
-        for k in component.kernel_invariants:
-            self.assertTrue(hasattr(component, k), f'Name "{k}" of "{component.get_system_key()}" was marked '
-                                                   f'kernel invariant, but this attribute does not exist')
+        # Test kernel invariants
+        test.helpers.test_system_kernel_invariants(self, self.s)
 
 
 class HistogramAnalyzerTestCase(unittest.TestCase):

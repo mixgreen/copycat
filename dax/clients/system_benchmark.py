@@ -19,7 +19,7 @@ __all__ = ['SystemBenchmarkDaxInit', 'SystemBenchmarkDaxInitProfile', 'SystemBen
 class SystemBenchmarkDaxInit(DaxClient, Experiment):
     """DAX system initialization benchmark."""
 
-    DAX_INIT: bool = False
+    DAX_INIT = False
     """Disable DAX init."""
 
     def build(self) -> None:  # type: ignore
@@ -78,7 +78,7 @@ class SystemBenchmarkDaxInit(DaxClient, Experiment):
 class SystemBenchmarkDaxInitProfile(DaxClient, Experiment):
     """DAX system initialization profiler."""
 
-    DAX_INIT: bool = False
+    DAX_INIT = False
     """Disable DAX init."""
 
     SORT_KEYS = [k.value for k in pstats.SortKey]  # type: ignore[attr-defined]
@@ -129,11 +129,11 @@ class _SystemBenchmarkBuildProfile(EnvExperiment):
     SORT_KEYS = [k.value for k in pstats.SortKey]  # type: ignore[attr-defined]
     """Profile stats sort keys."""
 
-    SYSTEM_TYPE: typing.Type[DaxSystem]
+    SYSTEM_TYPE: typing.ClassVar[typing.Type[DaxSystem]]
     """System type to profile."""
-    SYSTEM_ARGS: typing.Sequence[typing.Any]
+    SYSTEM_ARGS: typing.ClassVar[typing.Sequence[typing.Any]]
     """Positional arguments for building the system."""
-    SYSTEM_KWARGS: typing.Dict[str, typing.Any]
+    SYSTEM_KWARGS: typing.ClassVar[typing.Dict[str, typing.Any]]
     """Keyword arguments for building the system."""
 
     def build(self) -> None:  # type: ignore

@@ -13,10 +13,17 @@ class RtioBenchmarkModule(DaxModule):
     """Module to benchmark the RTIO output system."""
 
     # System keys
-    EVENT_PERIOD_KEY: str = 'event_period'
-    EVENT_BURST_KEY: str = 'event_burst'
-    DMA_EVENT_PERIOD_KEY: str = 'dma_event_period'
-    LATENCY_CORE_RTIO_KEY: str = 'latency_core_rtio'
+    EVENT_PERIOD_KEY: typing.ClassVar[str] = 'event_period'
+    EVENT_BURST_KEY: typing.ClassVar[str] = 'event_burst'
+    DMA_EVENT_PERIOD_KEY: typing.ClassVar[str] = 'dma_event_period'
+    LATENCY_CORE_RTIO_KEY: typing.ClassVar[str] = 'latency_core_rtio'
+
+    event_period: float
+    event_burst: float
+    _dma_enabled: bool
+    _dma_burst_name: str
+    _max_burst: int
+    _init_kernel: bool
 
     def build(self, *,  # type: ignore
               ttl_out: str, dma: bool = False, max_burst: int = 10000, init_kernel: bool = True) -> None:
@@ -32,10 +39,10 @@ class RtioBenchmarkModule(DaxModule):
         assert isinstance(init_kernel, bool), 'Init kernel flag must be of type bool'
 
         # Store attributes
-        self._dma_enabled: bool = dma
-        self._dma_burst_name: str = self.get_system_key('burst')
-        self._max_burst: int = max(max_burst, 0)
-        self._init_kernel: bool = init_kernel
+        self._dma_enabled = dma
+        self._dma_burst_name = self.get_system_key('burst')
+        self._max_burst = max(max_burst, 0)
+        self._init_kernel = init_kernel
         self.logger.debug(f'Init kernel: {self._init_kernel}')
         self.update_kernel_invariants('_dma_enabled', '_dma_burst_name', '_max_burst')
 
@@ -55,9 +62,6 @@ class RtioBenchmarkModule(DaxModule):
         # Load parameters
         self.setattr_dataset_sys(self.EVENT_PERIOD_KEY)
         self.setattr_dataset_sys(self.EVENT_BURST_KEY)
-        # Prototypes to assist type checkers
-        self.event_period: float
-        self.event_burst: float
 
         # Update DMA enabled flag
         self._dma_enabled = self._dma_enabled and self.hasattr(self.EVENT_PERIOD_KEY, self.EVENT_BURST_KEY)
@@ -678,13 +682,13 @@ class RtioLoopBenchmarkModule(RtioBenchmarkModule):
     """Module to benchmark the RTIO system with a looped connection."""
 
     # System keys
-    INPUT_BUFFER_SIZE_KEY: str = 'input_buffer_size'
-    LATENCY_RTIO_RTIO_KEY: str = 'latency_rtio_rtio'
-    LATENCY_RTIO_CORE_KEY: str = 'latency_rtio_core'
-    LATENCY_RTT_KEY: str = 'latency_rtt'  # Round-trip-time from RTIO input to RTIO output
+    INPUT_BUFFER_SIZE_KEY: typing.ClassVar[str] = 'input_buffer_size'
+    LATENCY_RTIO_RTIO_KEY: typing.ClassVar[str] = 'latency_rtio_rtio'
+    LATENCY_RTIO_CORE_KEY: typing.ClassVar[str] = 'latency_rtio_core'
+    LATENCY_RTT_KEY: typing.ClassVar[str] = 'latency_rtt'  # Round-trip-time from RTIO input to RTIO output
 
-    # Fixed edge delay time
-    EDGE_DELAY: float = 1 * us
+    EDGE_DELAY: typing.ClassVar[float] = 1 * us
+    """Fixed edge delay time."""
 
     def build(self, *, ttl_in: str, **kwargs: typing.Any) -> None:  # type: ignore
         """Build the RTIO loop benchmark module.

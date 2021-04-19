@@ -126,7 +126,7 @@ class VcdSignalManager(DaxSignalManager[_VS_T]):
     # Dict of registered signals type
     __RS_T = typing.Dict[DaxSimDevice, typing.List[typing.Tuple[str, type, typing.Optional[int]]]]
 
-    _CONVERT_TYPE: typing.Dict[type, str] = {
+    _CONVERT_TYPE: typing.ClassVar[typing.Dict[type, str]] = {
         bool: 'reg',
         int: 'integer',
         np.int32: 'integer',
@@ -137,13 +137,17 @@ class VcdSignalManager(DaxSignalManager[_VS_T]):
     }
     """Dict to convert Python types to VCD types."""
 
+    _timescale: float
+    _event_buffer: typing.List[typing.Tuple[typing.Union[int, np.int64], _VS_T, _VV_T]]
+    _registered_signals: __RS_T
+
     def __init__(self, file_name: str, timescale: float = 1 * ns):
         assert isinstance(file_name, str), 'Output file name must be of type str'
         assert isinstance(timescale, float), 'Timescale must be of type float'
         assert timescale > 0.0, 'Timescale must be > 0.0'
 
         # Store timescale
-        self._timescale: float = timescale
+        self._timescale = timescale
 
         # Open file
         self._vcd_file = open(file_name, mode='w')
@@ -157,9 +161,9 @@ class VcdSignalManager(DaxSignalManager[_VS_T]):
                                          version=_dax_version)
 
         # Create event buffer to support reverting time
-        self._event_buffer: typing.List[typing.Tuple[typing.Union[int, np.int64], _VS_T, _VV_T]] = []
+        self._event_buffer = []
         # Create a registered signals data structure
-        self._registered_signals: VcdSignalManager.__RS_T = {}
+        self._registered_signals = {}
 
     def register(self, scope: DaxSimDevice, name: str, type_: _VT_T, *,
                  size: typing.Optional[int] = None, init: _VV_T = None) -> _VS_T:
@@ -250,7 +254,7 @@ class SignalNotSet(metaclass=_Meta):
 class PeekSignalManager(DaxSignalManager[_PS_T]):
     """Peek signal manager."""
 
-    _CONVERT_TYPE: typing.Dict[type, _PT_T] = {
+    _CONVERT_TYPE: typing.ClassVar[typing.Dict[type, _PT_T]] = {
         bool: bool,
         int: int,
         np.int32: int,
@@ -261,7 +265,7 @@ class PeekSignalManager(DaxSignalManager[_PS_T]):
     }
     """Dict to convert Python types to peek signal manager internal types."""
 
-    _CHECK_TYPE: typing.Dict[_PT_T, typing.Union[type, typing.Tuple[type, ...]]] = {
+    _CHECK_TYPE: typing.ClassVar[typing.Dict[_PT_T, typing.Union[type, typing.Tuple[type, ...]]]] = {
         bool: bool,
         int: (int, np.integer),
         float: float,
@@ -270,7 +274,7 @@ class PeekSignalManager(DaxSignalManager[_PS_T]):
     }
     """Dict to convert internal types to peek signal manager type-checking types."""
 
-    _SPECIAL_VALUES: typing.Dict[_PT_T, typing.Set[typing.Any]] = {
+    _SPECIAL_VALUES: typing.ClassVar[typing.Dict[_PT_T, typing.Set[typing.Any]]] = {
         bool: {'x', 'X', 'z', 'Z', 0, 1},  # Also matches NumPy int and float
         int: {'x', 'X', 'z', 'Z'},
         float: set(),
@@ -279,9 +283,11 @@ class PeekSignalManager(DaxSignalManager[_PS_T]):
     }
     """Dict with special allowed values for internal types."""
 
+    _event_buffer: _PD_T
+
     def __init__(self) -> None:
         # Registered devices and buffer for signals/events
-        self._event_buffer: _PD_T = {}
+        self._event_buffer = {}
 
     def register(self, scope: DaxSimDevice, name: str, type_: _PT_T, *,
                  size: typing.Optional[int] = None, init: _PV_T = None) -> _PS_T:

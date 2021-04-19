@@ -171,7 +171,7 @@ class _JobA(_Job):
 
 class _Scheduler(DaxScheduler):
     NAME = 'test_scheduler'
-    NODES: typing.Set[typing.Type[dax.base.scheduler.Node]] = set()
+    NODES = []  # type: ignore[var-annotated]
 
     def __init__(self, *args, **kwargs):
         # Mock data store

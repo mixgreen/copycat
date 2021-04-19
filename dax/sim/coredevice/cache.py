@@ -8,6 +8,7 @@ from dax.sim.device import DaxSimDevice
 
 class CoreCache(DaxSimDevice):
     __V_T = typing.List[typing.Union[int, np.integer]]  # Cache value type
+    _cache: typing.Dict[str, __V_T]
 
     def __init__(self, dmgr: typing.Any,
                  cache: typing.Optional[typing.Dict[str, __V_T]] = None,
@@ -27,7 +28,7 @@ class CoreCache(DaxSimDevice):
         super(CoreCache, self).__init__(dmgr, **kwargs)
 
         # Cache
-        self._cache: typing.Dict[str, CoreCache.__V_T] = {} if cache is None else cache.copy()
+        self._cache = {} if cache is None else cache.copy()
 
     @kernel
     def get(self, key):  # type: (str) -> __V_T
