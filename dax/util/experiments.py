@@ -20,7 +20,7 @@ class Barrier(artiq.experiment.EnvExperiment):
     """
 
     PRIORITY: typing.ClassVar[int] = 100
-    """Scheduling priority of the barrier."""
+    """Default scheduling priority of the barrier."""
     CLOCK_PERIOD: typing.ClassVar[float] = 0.5
     """Internal clock period to check for pause conditions."""
 
@@ -41,17 +41,20 @@ class Barrier(artiq.experiment.EnvExperiment):
 
     @classmethod
     @artiq.experiment.host_only
-    def submit(cls, environment: artiq.experiment.HasEnvironment, *, pipeline: typing.Optional[str] = None) -> None:
+    def submit(cls, environment: artiq.experiment.HasEnvironment, *,
+               pipeline: typing.Optional[str] = None, priority: typing.Optional[int] = None) -> None:
         """Submit this barrier experiment to the ARTIQ scheduler.
 
         Note that submitting the barrier experiment does not pause the current experiment.
 
         :param environment: An object which inherits ARTIQ :class:`HasEnvironment`, required to get the ARTIQ scheduler
         :param pipeline: The pipeline to submit to, default to the current pipeline
+        :param priority: The priority of the barrier experiment (optional)
         """
         assert isinstance(environment, artiq.experiment.HasEnvironment), \
             'The given environment must be of type HasEnvironment'
         assert isinstance(pipeline, str) or pipeline is None, 'The given pipeline must be None or of type str'
+        assert isinstance(priority, int) or priority is None, 'The given priority must be None or of type int'
 
         # Construct expid
         expid: typing.Dict[str, typing.Any] = {
@@ -62,7 +65,8 @@ class Barrier(artiq.experiment.EnvExperiment):
         }
 
         # Submit this class to the scheduler
-        environment.get_device('scheduler').submit(pipeline_name=pipeline, expid=expid, priority=cls.PRIORITY)
+        environment.get_device('scheduler').submit(pipeline_name=pipeline, expid=expid,
+                                                   priority=cls.PRIORITY if priority is None else priority)
 
 
 class SetDataset(artiq.experiment.EnvExperiment):
