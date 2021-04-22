@@ -87,7 +87,7 @@ class SystemBenchmarkDaxInitProfile(DaxClient, Experiment):
     def build(self) -> None:  # type: ignore
         # Arguments
         self.sort_stats = self.get_argument('Sort stats',
-                                            EnumerationValue(self.SORT_KEYS, 'cumulative'),
+                                            EnumerationValue(self.SORT_KEYS, default='cumulative'),
                                             tooltip='Sort the txt output based on the given key')
         self.strip_dirs = self.get_argument('Strip dirs',
                                             BooleanValue(False),
@@ -139,7 +139,7 @@ class _SystemBenchmarkBuildProfile(EnvExperiment):
     def build(self) -> None:  # type: ignore
         # Arguments
         self.sort_stats = self.get_argument('Sort stats',
-                                            EnumerationValue(self.SORT_KEYS, 'cumulative'),
+                                            EnumerationValue(self.SORT_KEYS, default='cumulative'),
                                             tooltip='Sort the txt output based on the given key')
         self.strip_dirs = self.get_argument('Strip dirs',
                                             BooleanValue(False),

@@ -5,6 +5,7 @@ import tempfile
 import typing
 import weakref
 import time
+import collections.abc
 
 import artiq.language.core
 import artiq.language.environment
@@ -14,7 +15,7 @@ import artiq.master.worker_impl  # type: ignore
 import artiq.master.databases
 import artiq.frontend.artiq_run  # type: ignore
 
-__all__ = ['is_kernel', 'is_portable', 'is_host_only', 'is_rpc', 'is_decorated',
+__all__ = ['is_kernel', 'is_portable', 'is_host_only', 'is_rpc', 'is_decorated', 'DefaultEnumerationValue',
            'process_arguments', 'get_managers', 'ClonedDatasetManager', 'clone_managers', 'isolate_managers']
 
 # Workaround required for Python<3.9
@@ -118,6 +119,29 @@ def is_decorated(func: typing.Any) -> bool:
     :return: :const:`True` if the given function is decorated with an ARTIQ decorator
     """
     return getattr(func, 'artiq_embedded', None) is not None
+
+
+__NoDefault = artiq.language.environment.NoDefault  # Typing helper
+
+
+class DefaultEnumerationValue(artiq.language.environment.EnumerationValue):
+    """Extension of the ARTIQ :class:`EnumerationValue` class with an automatic default if there is only one choice."""
+
+    def __init__(self, choices: typing.Sequence[str],
+                 default: typing.Union[str, typing.Type[__NoDefault]] = artiq.language.environment.NoDefault):
+        """Create a new enumeration value.
+
+        :param choices: A sequence of strings with the choices
+        :param default: Optional default choice
+        """
+        assert isinstance(choices, collections.abc.Sequence), 'Choices must be a sequence'
+
+        if default is artiq.language.environment.NoDefault and len(choices) == 1:
+            # No default and only one choice, take the single choice as the default
+            default = choices[0]
+
+        # Call super
+        super(DefaultEnumerationValue, self).__init__(choices, default=default)
 
 
 def _convert_argument(argument: typing.Any) -> typing.Any:

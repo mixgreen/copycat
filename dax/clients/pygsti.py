@@ -17,7 +17,7 @@ from dax.experiment import *
 from dax.modules.hist_context import HistogramContext, HistogramAnalyzer
 from dax.interfaces.operation import OperationInterface
 from dax.interfaces.gate import GateInterface
-from dax.util.artiq import is_kernel
+from dax.util.artiq import is_kernel, DefaultEnumerationValue
 from dax.util.output import get_base_path
 
 __all__ = ['RandomizedBenchmarkingSQ']
@@ -76,6 +76,8 @@ class RandomizedBenchmarkingSQ(DaxClient, Experiment):
     """The maximum circuit depth available (preferably a power of 2)."""
     DEFAULT_PARTITION_SIZE: typing.ClassVar[int] = 0
     """Default partition size, to limit the size of kernels (zero for no limit)."""
+    DEFAULT_OPERATION_KEY: typing.ClassVar[typing.Union[str, typing.Type[NoDefault]]] = NoDefault
+    """Key of the default operation interface."""
 
     def build(self) -> None:  # type: ignore
         assert isinstance(self.QUBIT_LABELS, collections.abc.Sequence), 'Qubit labels must be a sequence'
@@ -84,6 +86,7 @@ class RandomizedBenchmarkingSQ(DaxClient, Experiment):
         assert self.MAX_CIRCUIT_DEPTH > 1, 'Max circuit depth must be greater than one'
         assert isinstance(self.DEFAULT_PARTITION_SIZE, int), 'Default partition size must be of type int'
         assert self.DEFAULT_PARTITION_SIZE >= 0, 'Default partition size must be greater or equal to zero'
+        assert isinstance(self.DEFAULT_OPERATION_KEY, str) or self.DEFAULT_OPERATION_KEY is NoDefault
         assert is_kernel(self.device_setup), 'device_setup() must be a kernel function'
         assert is_kernel(self.device_cleanup), 'device_cleanup() must be a kernel function'
         assert not is_kernel(self.host_setup), 'host_setup() can not be a kernel function'
@@ -100,19 +103,20 @@ class RandomizedBenchmarkingSQ(DaxClient, Experiment):
         self._available_circuit_depths = {str(2 ** n): n for n in range(int(np.log2(self.MAX_CIRCUIT_DEPTH)))}
 
         # Add general arguments
-        self._operation_interface: str = self.get_argument('Operation interface',
-                                                           EnumerationValue(sorted(self._operation_interfaces)),
-                                                           tooltip='The operation interface to use for benchmarking')
-        self._max_depth: str = self.get_argument('Max depth',
-                                                 EnumerationValue(natsort.natsorted(self._available_circuit_depths)),
-                                                 tooltip='Max circuit depth (excluding inversion), automatically '
-                                                         'generates every power of 2 below this value as well')
-        self._num_circuits: int = self.get_argument('Number of circuits',
-                                                    NumberValue(default=10, min=1, ndecimals=0, step=1),
-                                                    tooltip='Number of circuits to sample from')
-        self._num_samples: int = self.get_argument('Number of samples',
-                                                   NumberValue(default=100, min=1, ndecimals=0, step=1),
-                                                   tooltip='Number of samples per circuit')
+        self._operation_interface: str = self.get_argument(
+            'Operation interface',
+            DefaultEnumerationValue(sorted(self._operation_interfaces), default=self.DEFAULT_OPERATION_KEY),
+            tooltip='The operation interface to use for benchmarking')
+        self._max_depth: str = self.get_argument(
+            'Max depth', EnumerationValue(natsort.natsorted(self._available_circuit_depths)),
+            tooltip='Max circuit depth (excluding inversion), automatically generates every power of 2 below '
+                    'this value as well')
+        self._num_circuits: int = self.get_argument(
+            'Number of circuits', NumberValue(default=10, min=1, ndecimals=0, step=1),
+            tooltip='Number of circuits to sample from')
+        self._num_samples: int = self.get_argument(
+            'Number of samples', NumberValue(default=100, min=1, ndecimals=0, step=1),
+            tooltip='Number of samples per circuit')
         self.update_kernel_invariants('_num_samples')
 
         # Add user arguments

@@ -329,7 +329,7 @@ class PmtMonitor(_PmtMonitorBase):
                                                               ndecimals=0),
                                                   tooltip='PMT channel to monitor')
         self.applet_type: str = self.get_argument('Applet type',
-                                                  EnumerationValue(list(self._applet_types), self._PLOT_XY),
+                                                  EnumerationValue(list(self._applet_types), default=self._PLOT_XY),
                                                   tooltip='Choose an applet type')
         self.update_kernel_invariants('pmt_channel')
 

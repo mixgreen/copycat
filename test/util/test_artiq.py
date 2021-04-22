@@ -76,6 +76,24 @@ class ArtiqTestCase(unittest.TestCase):
         self._test_decorator_classifier(dax.util.artiq.is_decorated, 'is_decorated()',
                                         kernel_=True, rpc_=True, rpc_async=True, portable_=True, host_only_=True)
 
+    def test_default_enumeration_value(self):
+        data = [
+            ([], artiq.experiment.NoDefault, None),
+            (['foo'], artiq.experiment.NoDefault, 'foo'),
+            (['foo'], 'foo', 'foo'),
+            (['foo', 'bar'], artiq.experiment.NoDefault, None),
+            (['foo', 'bar'], 'bar', 'bar'),
+        ]
+
+        for choices, default, returned_default in data:
+            e = dax.util.artiq.DefaultEnumerationValue(choices, default)
+            self.assertListEqual(e.choices, choices)
+            if returned_default is None:
+                with self.assertRaises(artiq.experiment.DefaultMissing):
+                    e.default()
+            else:
+                self.assertEqual(e.default(), returned_default)
+
     def test_process_arguments(self):
         arguments = {'foo': 1,
                      'range': artiq.experiment.RangeScan(1, 10, 9),

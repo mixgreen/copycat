@@ -77,10 +77,7 @@ class BuildClientTestCase(unittest.TestCase):
         (dax.clients.pmt_monitor.PmtMonitor, {}, True),
         (dax.clients.pmt_monitor.MultiPmtMonitor, {}, True),
         (dax.clients.program.ProgramClient, {'file': ''}, False),
-        (dax.clients.pygsti.RandomizedBenchmarkingSQ, {
-            'Operation interface': _TestSystem.SYS_NAME,
-            'Max depth': '1',
-        }, False),
+        (dax.clients.pygsti.RandomizedBenchmarkingSQ, {'Max depth': '1'}, False),
         (dax.clients.rpc_benchmark.RpcBenchmarkLatency, {}, True),
         (dax.clients.rpc_benchmark.RpcBenchmarkAsyncThroughput, {}, True),
         (dax.clients.rtio_benchmark.RtioBenchmarkEventThroughput, {}, True),

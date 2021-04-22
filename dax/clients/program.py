@@ -10,7 +10,7 @@ import argparse
 import artiq.tools
 
 # No wildcard import to prevent aliasing with ``types``
-from dax.experiment import DaxClient, dax_client_factory, Experiment, StringValue, EnumerationValue, NoDefault
+from dax.experiment import DaxClient, dax_client_factory, Experiment, StringValue, NoDefault
 
 import dax.base.program
 import dax.util.artiq
@@ -23,21 +23,6 @@ __all__ = ['ProgramClient']
 
 def _import_file(file_name: str) -> types.ModuleType:
     return artiq.tools.file_import(file_name, prefix='dax_program_client_')
-
-
-def _get_default_argument(collection: typing.Collection[str],
-                          default: typing.Optional[str]) -> typing.Union[str, typing.Type[NoDefault]]:
-    if default is not None:
-        # Return the given default
-        assert default in collection, f'Key "{default}" is not in {collection}'
-        return default
-    else:
-        if len(collection) == 1:
-            # Return the only item in the collection
-            return next(iter(collection))
-        else:
-            # No default could be decided
-            return NoDefault
 
 
 @dax_client_factory
@@ -60,9 +45,9 @@ class ProgramClient(DaxClient, Experiment):
 
     MANAGERS_KWARG = 'managers'
 
-    DEFAULT_OPERATION_KEY: typing.ClassVar[typing.Optional[str]] = None
+    DEFAULT_OPERATION_KEY: typing.ClassVar[typing.Union[str, typing.Type[NoDefault]]] = NoDefault
     """Key of the default operation interface."""
-    DEFAULT_DATA_CONTEXT_KEY: typing.ClassVar[typing.Optional[str]] = None
+    DEFAULT_DATA_CONTEXT_KEY: typing.ClassVar[typing.Union[str, typing.Type[NoDefault]]] = NoDefault
     """Key of the default data context interface."""
 
     _managers: typing.Any
@@ -76,8 +61,8 @@ class ProgramClient(DaxClient, Experiment):
     _program: Experiment
 
     def build(self, *, managers: typing.Any) -> None:  # type: ignore
-        assert isinstance(self.DEFAULT_OPERATION_KEY, (str, type(None))), 'Key must be of type str or None'
-        assert isinstance(self.DEFAULT_DATA_CONTEXT_KEY, (str, type(None))), 'Key must be of type str or None'
+        assert isinstance(self.DEFAULT_OPERATION_KEY, str) or self.DEFAULT_OPERATION_KEY is NoDefault
+        assert isinstance(self.DEFAULT_DATA_CONTEXT_KEY, str) or self.DEFAULT_DATA_CONTEXT_KEY is NoDefault
 
         # Store reference to ARTIQ managers
         self._managers = managers
@@ -92,10 +77,6 @@ class ProgramClient(DaxClient, Experiment):
         if not self._data_context_interfaces:
             raise LookupError('No data context interfaces available')
 
-        # Get defaults
-        default_operation_key = _get_default_argument(self._operation_interfaces, self.DEFAULT_OPERATION_KEY)
-        default_data_context_key = _get_default_argument(self._data_context_interfaces, self.DEFAULT_DATA_CONTEXT_KEY)
-
         # Obtain arguments
         self._file = self.get_argument(
             'file', StringValue(), tooltip='File containing the program to run or an archive with a main.py file')
@@ -104,12 +85,12 @@ class ProgramClient(DaxClient, Experiment):
         self._arguments = self.get_argument(
             'arguments', StringValue(''), tooltip='Command-line arguments (format: `[KEY=PYON_VALUE ...]`)')
         self._operation_key = self.get_argument(
-            'operation',
-            EnumerationValue(sorted(self._operation_interfaces), default=default_operation_key),
+            'operation', dax.util.artiq.DefaultEnumerationValue(sorted(self._operation_interfaces),
+                                                                default=self.DEFAULT_OPERATION_KEY),
             tooltip='The operation interface to use')
         self._data_context_key = self.get_argument(
-            'data_context',
-            EnumerationValue(sorted(self._data_context_interfaces), default=default_data_context_key),
+            'data_context', dax.util.artiq.DefaultEnumerationValue(sorted(self._data_context_interfaces),
+                                                                   default=self.DEFAULT_DATA_CONTEXT_KEY),
             tooltip='The data context interface to use')
 
         # Add custom arguments
