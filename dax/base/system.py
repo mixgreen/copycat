@@ -72,7 +72,7 @@ _CWD_COMMIT: typing.Optional[str] = _get_cwd_commit()
 
 del _get_cwd_commit  # Remove one-time function
 
-_ARTIQ_VIRTUAL_DEVICES: typing.Set[str] = {'scheduler', 'ccb'}
+_ARTIQ_VIRTUAL_DEVICES: typing.FrozenSet[str] = frozenset(['scheduler', 'ccb'])
 """ARTIQ virtual devices."""
 
 
@@ -1452,6 +1452,44 @@ class DaxNameRegistry:
 
         # Return the dict with results
         return results
+
+    def is_independent(self, *components: DaxHasSystem) -> bool:
+        """Test if components are independent.
+
+        Two components are independent if they can be controlled in parallel without the risk of
+        conflicting device control. The following rules apply:
+
+        - Zero or a single component is always independent.
+        - For multiple components, only modules can be independent.
+        - Modules are independent if none is a submodule of an other
+
+        :param components: DAX components part of this system such as modules and services
+        :return: :const:`True` if the components are independent
+        """
+        if not all(isinstance(c, DaxHasSystem) for c in components):
+            raise ValueError('One or more components are not DAX components that can be tested for independence')
+        system_components = set(self._modules.values()) | set(self._services.values())
+        if not all(c in system_components for c in components):
+            raise ValueError('One or more components are not part of the system served by this registry')
+
+        if len(components) <= 1:
+            # A single component is always independent
+            return True
+        elif any(not isinstance(c, DaxModule) for c in components):
+            # Everything that is not a module is by definition not independent
+            return False
+        else:
+            # Get the keys
+            keys: typing.List[str] = [c.get_system_key() for c in components]
+
+            while keys:
+                current_key = keys.pop()
+                if any(k.startswith(current_key) or current_key.startswith(k) for k in keys):
+                    # One module is a submodule of the other, so not independent
+                    return False
+            else:
+                # Not matches were found, modules must be independent
+                return True
 
 
 class DaxDataStore:

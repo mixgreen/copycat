@@ -5,7 +5,8 @@ import os
 import pygit2  # type: ignore
 import collections.abc
 import typing
-from unittest.mock import MagicMock, call
+import itertools
+from unittest.mock import Mock, call
 
 from artiq.experiment import HasEnvironment, Experiment
 import artiq.coredevice.edge_counter
@@ -82,7 +83,7 @@ class _TestSystem(DaxSystem):
     SYS_VER = 0
 
     def __init__(self, *args, **kwargs):
-        self._data_store = MagicMock(spec=dax.base.system.DaxDataStore)
+        self._data_store = Mock(spec=dax.base.system.DaxDataStore)
         super(_TestSystem, self).__init__(*args, **kwargs)
 
     @property
@@ -349,6 +350,44 @@ class DaxNameRegistryTestCase(unittest.TestCase):
         self.assertIs(r.find_interface(_TestInterface), itf, 'Find interface did not return expected object')
         self.assertDictEqual(r.search_interfaces(_TestInterface), {itf.get_system_key(): itf},
                              'Search interfaces did not return expected result')
+
+    def test_is_independent(self):
+        # Test system
+        s = _TestSystem(self.managers)
+        # Registry
+        r = s.registry
+        # Add modules and services
+        m0 = _TestModule(s, 'm0')
+        m00 = _TestModule(m0, 'm')
+        m000 = _TestModule(m00, 'm')
+        m1 = _TestModule(s, 'm1')
+        s0 = _TestService(s)
+        component_list = [s, m0, m00, m000, m1, s0]
+
+        zero_components = [((), True)]  # Zero components is always independent
+        one_component = [((c,), True) for c in component_list]  # Single component is always independent
+        sys_component = [((s, c), False) for c in component_list]  # Nothing is independent with the system
+        service_component = [((s0, c), False) for c in component_list]  # Nothing is independent with a service
+        m1_component = [((m1, c), True) for c in [m0, m00, m000]]  # m1 is independent from m0*
+        m0_mix = [(c, False) for c in itertools.product([m0, m00, m000], [m0, m00, m000])]
+
+        for components, ref in itertools.chain(
+                zero_components, one_component, sys_component, service_component, m1_component, m0_mix):
+            with self.subTest(components=components, ref=ref):
+                self.assertEqual(r.is_independent(*components), ref)
+                self.assertEqual(r.is_independent(*reversed(components)), ref)
+
+    def test_is_independent_exceptions(self):
+        # Test systems
+        s0 = _TestSystem(self.managers)
+        s1 = _TestSystem(self.managers)
+        # Add modules and services
+        m0 = _TestModule(s0, 'm0')
+        m1 = _TestModule(s1, 'm1')
+
+        for s, m in zip([s0, s1], [m1, m0]):
+            with self.assertRaises(ValueError):
+                s.registry.is_independent(m)
 
 
 class DaxDataStoreInfluxDbTestCase(unittest.TestCase):
