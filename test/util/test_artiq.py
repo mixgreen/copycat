@@ -155,6 +155,12 @@ class ArtiqTestCase(unittest.TestCase):
             with self.assertRaises(LookupError, msg='Non-unique name did not raise'):
                 dax.util.artiq.ClonedDatasetManager(managers.dataset_mgr, name=name)
 
+    def test_cloned_dataset_manager_artiq_name(self):
+        with dax.util.artiq.get_managers() as managers:
+            for name in ['datasets', 'archive']:
+                with self.assertRaises(ValueError):
+                    dax.util.artiq.ClonedDatasetManager(managers.dataset_mgr, name=name)
+
     def test_cloned_dataset_manager_dataset_db(self):
         with dax.util.artiq.get_managers() as managers:
             d = {}

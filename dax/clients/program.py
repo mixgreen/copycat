@@ -75,7 +75,7 @@ class ProgramClient(DaxClient, Experiment):
     _data_context: dax.interfaces.data_context.DataContextInterface
     _program: Experiment
 
-    def build(self, managers: typing.Any) -> None:  # type: ignore
+    def build(self, *, managers: typing.Any) -> None:  # type: ignore
         assert isinstance(self.DEFAULT_OPERATION_KEY, (str, type(None))), 'Key must be of type str or None'
         assert isinstance(self.DEFAULT_DATA_CONTEXT_KEY, (str, type(None))), 'Key must be of type str or None'
 

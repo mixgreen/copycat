@@ -300,8 +300,9 @@ class ClonedDatasetManager(artiq.master.worker_db.DatasetManager):
         assert isinstance(name, str) or name is None, 'Name must be of type str or None'
 
         if isinstance(dataset_mgr, ClonedDatasetManager):
-            # Raise when recursion is detected
             raise TypeError('Dataset managers can not be cloned recursively')
+        if name in {'datasets', 'archive'}:
+            raise ValueError('Name can not be the same as the standard group names used by ARTIQ')
 
         # Initialize this clone
         super(ClonedDatasetManager, self).__init__(dataset_mgr.ddb if dataset_db is None else dataset_db)

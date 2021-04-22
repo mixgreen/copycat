@@ -15,7 +15,7 @@ import numpy as np
 import networkx as nx
 import textwrap
 import io
-from unittest.mock import MagicMock, call
+from unittest.mock import Mock, call
 
 from artiq.language.scan import *
 from artiq.experiment import TerminationRequested, NumberValue
@@ -175,7 +175,7 @@ class _Scheduler(DaxScheduler):
 
     def __init__(self, *args, **kwargs):
         # Mock data store
-        self._data_store = MagicMock(spec=dax.base.system.DaxDataStore)
+        self._data_store = Mock(spec=dax.base.system.DaxDataStore)
         # Variable for testing purposes
         self.testing_handled_requests = 0
         # Call super
