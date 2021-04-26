@@ -1986,6 +1986,7 @@ class OptimusCalibrationTestCase(unittest.TestCase):
             def sub_init(x):
                 d_.clear()
                 d_.update(x)
+                # note: this is not a real exception - it's a hack to break out of the Subscriber _receive_cr loop
                 raise ConnectionError
 
             async def subscribe():
@@ -2010,6 +2011,7 @@ class OptimusCalibrationTestCase(unittest.TestCase):
             # noinspection PyUnusedLocal
             def sub_mod(mod):
                 if len(d_) <= 1:  # Also raise if there is no experiment in the schedule
+                    # note: this is not a real exception - it's a hack to break out of the Subscriber _receive_cr loop
                     raise Exception('This exception is just used to exit the subscriber')
 
             async def subscribe():
