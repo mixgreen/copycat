@@ -32,12 +32,18 @@ class _PmtMonitorBase(DaxClient, Experiment, abc.ABC):
     """Default buffer size in samples."""
     MAX_BUFFER_SIZE: typing.ClassVar[int] = 32
     """Maximum buffer size in samples."""
+    DATA_CLEANUP_THRESHOLD_MULTIPLIER: typing.ClassVar[int] = 12
+    """Data cleanup will occur when the number of samples exceeds the window size multiplied by this value."""
+    DATA_CLEANUP_PRESERVE_MULTIPLIER: typing.ClassVar[int] = 2
+    """Data cleanup will preserve the number of samples in a window multiplied by this value."""
 
     _RAW_COUNT: typing.ClassVar[str] = '<Raw counts>'
     """Count scale key for raw count (i.e. no scaling)."""
     _COUNT_SCALES: typing.ClassVar[_C_T] = collections.OrderedDict(
         [(_RAW_COUNT, -1.0)], GHz=GHz, MHz=MHz, kHz=kHz, Hz=Hz, mHz=mHz)
     """Scales that can be used for the Y-axis."""
+    _DATASET_KWARGS: typing.Dict[str, typing.Any] = {'broadcast': True, 'archive': False}
+    """Keyword arguments for setting the dataset with monitoring values."""
 
     DAX_INIT = False
     """Disable DAX init."""
@@ -50,6 +56,12 @@ class _PmtMonitorBase(DaxClient, Experiment, abc.ABC):
         assert isinstance(self.MAX_BUFFER_SIZE, int), 'Maximum buffer size must be of type int'
         assert self.MAX_BUFFER_SIZE > 0, 'Maximum buffer size must be greater than zero'
         assert self.DEFAULT_BUFFER_SIZE <= self.MAX_BUFFER_SIZE, 'Default buffer size greater than the max buffer size'
+        assert isinstance(self.DATA_CLEANUP_THRESHOLD_MULTIPLIER, int), \
+            'Data cleanup threshold multiplier must be of type int'
+        assert self.DATA_CLEANUP_THRESHOLD_MULTIPLIER > 0, 'Data cleanup threshold multiplier must be greater than zero'
+        assert isinstance(self.DATA_CLEANUP_PRESERVE_MULTIPLIER, int), \
+            'Data cleanup preserve multiplier must be of type int'
+        assert self.DATA_CLEANUP_PRESERVE_MULTIPLIER > 0, 'Data cleanup preserve multiplier must be greater than zero'
         assert is_kernel(self.device_setup), 'device_setup() must be a kernel function'
         assert is_kernel(self.device_cleanup), 'device_cleanup() must be a kernel function'
         assert not is_kernel(self.host_setup), 'host_setup() can not be a kernel function'
@@ -102,6 +114,11 @@ class _PmtMonitorBase(DaxClient, Experiment, abc.ABC):
                                                          BooleanValue(default=False),
                                                          group='Dataset',
                                                          tooltip='Clear old data when resuming from a pause')
+        self.auto_data_cleanup: bool = self.get_argument('Automatic data cleanup',
+                                                         BooleanValue(default=True),
+                                                         group='Dataset',
+                                                         tooltip='Clean data outside the window periodically (does not '
+                                                                 'clean data if data window size is infinite)')
         self.dataset_key: str = self.get_argument('Dataset key',
                                                   StringValue(default=self.DEFAULT_DATASET),
                                                   group='Dataset',
@@ -148,6 +165,21 @@ class _PmtMonitorBase(DaxClient, Experiment, abc.ABC):
                                                          self.core.ref_multiplier))
         self.update_kernel_invariants('detection_delay_mu')
 
+        if self.sliding_window > 0:
+            # Calculate window size in samples
+            self.window_size_samples: int = round(self.sliding_window / (self.detection_window + self.detection_delay))
+        else:
+            # Disable sliding window
+            self.window_size_samples = 0
+
+        if self.auto_data_cleanup and self.window_size_samples > 0:
+            # Calculate threshold for data cleanup
+            self.data_cleanup_threshold: int = self.window_size_samples * self.DATA_CLEANUP_THRESHOLD_MULTIPLIER
+        else:
+            # Disable automatic data cleanup
+            self.auto_data_cleanup = False
+            self.data_cleanup_threshold = 0
+
         if self.count_scale_label != self._RAW_COUNT:
             # Pre-calculate Y-scalar
             self.y_scalar: float = 1.0 / self.detection_window / self._COUNT_SCALES[self.count_scale_label]
@@ -157,24 +189,31 @@ class _PmtMonitorBase(DaxClient, Experiment, abc.ABC):
 
     def run(self) -> None:
         # Initial value is reset to an empty list or try to obtain the previous value defaulting to an empty list
-        init_value = [] if self.reset_data else self.get_dataset(self.dataset_key, default=[], archive=False)
-        self.logger.debug('Appending to previous data' if init_value else 'Starting with empty list')
+        if self.reset_data:
+            self.logger.debug('Starting with empty dataset')
+            self._data: typing.List[typing.Any] = []
+        else:
+            previous_data = self.get_dataset(self.dataset_key, default=[], archive=False)
+            if isinstance(previous_data, list):
+                self.logger.debug('Appending to previous dataset')
+                self._data = previous_data
+            else:
+                self.logger.debug('Previous dataset invalid, starting with empty dataset')
+                self._data = []
 
-        # Set the result datasets to the correct mode
-        dataset_kwargs: typing.Dict[str, bool] = {'broadcast': True, 'archive': False}
-        self.set_dataset(self.dataset_key, init_value, **dataset_kwargs)
+        # Set the result datasets
+        self.set_dataset(self.dataset_key, self._data, **self._DATASET_KWARGS)
+
+        # Log messages from the prepare phase
+        if self.window_size_samples > 0:
+            self.logger.debug(f'Window size set to {self.window_size_samples} sample(s)')
+        self.logger.debug(f'Automatic data cleanup: {self.auto_data_cleanup}')
 
         if self.create_applet:
+            # Construct X-label
             if self.sliding_window > 0:
-                # Calculate window size in samples
-                window_size_samples: int = round(self.sliding_window / (self.detection_window + self.detection_delay))
-                self.logger.debug(f'Window size set to {window_size_samples} sample(s)')
-                # Construct X-label
                 x_label: str = f'Window size: {time_to_str(self.sliding_window, precision=0)}'
             else:
-                # No sliding window
-                window_size_samples = 0
-                # Construct X-label
                 x_label = 'Sample'
 
             # Create the applet Y-label
@@ -185,7 +224,7 @@ class _PmtMonitorBase(DaxClient, Experiment, abc.ABC):
 
             # Create the applet
             self._create_applet(self.dataset_key, group=self.APPLET_GROUP, update_delay=self.applet_update_delay,
-                                sliding_window=window_size_samples, x_label=x_label, y_label=y_label)
+                                sliding_window=self.window_size_samples, x_label=x_label, y_label=y_label)
 
         try:
             # Only stop when termination is requested
@@ -205,7 +244,8 @@ class _PmtMonitorBase(DaxClient, Experiment, abc.ABC):
 
                 if self.reset_data_resume:
                     # Reset dataset when resuming
-                    self.set_dataset(self.dataset_key, [], **dataset_kwargs)
+                    self._data = []
+                    self.set_dataset(self.dataset_key, self._data, **self._DATASET_KWARGS)
 
         except TerminationRequested:
             # Experiment was terminated, gracefully end the experiment
@@ -247,6 +287,18 @@ class _PmtMonitorBase(DaxClient, Experiment, abc.ABC):
             self.core.reset()
             # Device cleanup
             self.device_cleanup()
+
+    def store(self, data: typing.Any) -> None:
+        # Append data
+        self._data.append(data)
+
+        if self.auto_data_cleanup and len(self._data) > self.data_cleanup_threshold:
+            # Cleanup data
+            self._data = self._data[-self.window_size_samples * self.DATA_CLEANUP_PRESERVE_MULTIPLIER:]
+            self.set_dataset(self.dataset_key, self._data, **self._DATASET_KWARGS)
+        else:
+            # Append to dataset
+            self.append_to_dataset(self.dataset_key, data)
 
     @abc.abstractmethod
     def _detect(self) -> None:
@@ -359,10 +411,10 @@ class PmtMonitor(_PmtMonitorBase):
 
     @rpc(flags={'async'})
     def _store(self, count):  # type: (int) -> None
-        # Calculate value to store
-        value = count * self.y_scalar
-        # Append data to datasets
-        self.append_to_dataset(self.dataset_key, value)
+        # Calculate data to store
+        data = count * self.y_scalar
+        # Store data
+        self.store(data)
 
 
 @dax_client_factory
@@ -423,7 +475,7 @@ class MultiPmtMonitor(_PmtMonitorBase):
 
     @rpc(flags={'async'})
     def _store(self, counts):  # type: (typing.List[int]) -> None
-        # Calculate value to store
-        value = [c * self.y_scalar for c in counts]
-        # Append data to datasets
-        self.append_to_dataset(self.dataset_key, value)
+        # Calculate data to store
+        data = [c * self.y_scalar for c in counts]
+        # Store data
+        self.store(data)
