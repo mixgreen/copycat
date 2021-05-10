@@ -1396,9 +1396,16 @@ class DaxScheduler(dax.base.system.DaxHasKey, abc.ABC):
         self._process_graph()
 
         # Render the dependency graph
+        self.logger.debug('Rendering graph')
         self._render_graph()
         # Terminate other instances of this scheduler
-        self._terminate_running_instances()
+        self.logger.info('Terminating other scheduler instances...')
+        terminated_instances = dax.util.artiq.terminate_running_instances(self._scheduler,
+                                                                          timeout=self.TERMINATE_TIMEOUT)
+        if terminated_instances:
+            self.logger.info(f'Terminated instances with RID: {terminated_instances}')
+        else:
+            self.logger.info('No other scheduler instances found')
 
     def run(self) -> None:
         """Entry point for the scheduler."""
@@ -1486,7 +1493,7 @@ class DaxScheduler(dax.base.system.DaxHasKey, abc.ABC):
 
         except artiq.experiment.TerminationRequested:
             # Scheduler terminated
-            self.logger.info('Scheduler was terminated')
+            self.logger.info(f'Scheduler with RID {self._scheduler.rid} was terminated')
 
         finally:
             # Cancel the request handler task
@@ -1725,42 +1732,6 @@ class DaxScheduler(dax.base.system.DaxHasKey, abc.ABC):
         # Render the graph
         plot.render(view=self._view_graph)
 
-    def _terminate_running_instances(self, *, sleep_time: float = 0.5) -> None:
-        """Terminate running instances of this scheduler."""
-        assert isinstance(sleep_time, float)
-        assert sleep_time > 0.0
-
-        # Obtain the schedule with the expid objects
-        schedule = {rid: status['expid'] for rid, status in self._scheduler.get_status().items()}
-        # Filter schedule to find other instances of this scheduler
-        other_instances = [rid for rid, expid in schedule.items()
-                           if expid['file'] == self._scheduler.expid['file']
-                           and expid['class_name'] == self._scheduler.expid['class_name']
-                           and rid != self._scheduler.rid]
-
-        # Request termination of other instances
-        for rid in other_instances:
-            self.logger.info(f'Terminating other scheduler instance with RID {rid}')
-            self._scheduler.request_termination(rid)
-
-        if other_instances:
-            # Wait until all other instances disappeared from the schedule
-            self.logger.info(f'Waiting for {len(other_instances)} other instance(s) to terminate')
-
-            for _ in range(round(self.TERMINATE_TIMEOUT / sleep_time)):
-                if all(rid not in self._scheduler.get_status() for rid in other_instances):
-                    # All other instances are finished
-                    break
-                else:
-                    # Sleep before trying again
-                    time.sleep(sleep_time)
-            else:
-                # Timeout elapsed
-                raise RuntimeError('Timeout while waiting for other instances to terminate')
-
-            # Other instances were terminated
-            self.logger.info('All other instances were terminated successfully')
-
     def _get_controller_details(self) -> typing.Tuple[str, int]:
         """Get the scheduler controller details from the device DB and verify the details."""
 
@@ -1831,6 +1802,7 @@ class DaxScheduler(dax.base.system.DaxHasKey, abc.ABC):
         assert cls.CONTROLLER is None or isinstance(cls.CONTROLLER, str), 'Controller must be of type str or None'
         assert cls.CONTROLLER != 'scheduler', 'Controller can not be "scheduler" (aliases with the ARTIQ scheduler)'
         assert isinstance(cls.TERMINATE_TIMEOUT, float), 'Terminate timeout must be of type float'
+        assert cls.TERMINATE_TIMEOUT >= 0.0, 'Terminate timeout must be greater or equal to zero'
         # Check default wave interval, clock period, policy, reverse, reset nodes flag, pipeline, and job priority
         assert isinstance(cls.DEFAULT_WAVE_INTERVAL, float), 'Default wave interval must be of type float'
         assert isinstance(cls.DEFAULT_CLOCK_PERIOD, float), 'Default clock period must be of type float'

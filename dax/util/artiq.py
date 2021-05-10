@@ -16,7 +16,8 @@ import artiq.master.databases
 import artiq.frontend.artiq_run  # type: ignore
 
 __all__ = ['is_kernel', 'is_portable', 'is_host_only', 'is_rpc', 'is_decorated', 'DefaultEnumerationValue',
-           'process_arguments', 'get_managers', 'ClonedDatasetManager', 'clone_managers', 'isolate_managers']
+           'process_arguments', 'get_managers', 'ClonedDatasetManager', 'clone_managers', 'isolate_managers',
+           'pause_strict_priority', 'terminate_running_instances']
 
 # Workaround required for Python<3.9
 if typing.TYPE_CHECKING:
@@ -534,7 +535,10 @@ def pause_strict_priority(scheduler: typing.Any, *,
     :param polling_period: How often to poll (in seconds) when waiting for experiments to prepare
     """
     assert isinstance(polling_period, (float, int)), 'Polling period must be of type float or int'
-    assert polling_period >= 0, 'Polling period must greater or equal to zero'
+
+    # Validate parameters
+    if polling_period < 0:
+        raise ValueError('Polling period must greater or equal to zero')
 
     # Get a set of all other experiments with a higher priority than the current experiment
     try:
@@ -560,5 +564,64 @@ def pause_strict_priority(scheduler: typing.Any, *,
             scheduler.pause()
             # Keep waiting recursively for other experiments
             pause_strict_priority(scheduler)
+
+    except AttributeError:
+        raise TypeError(f'Incorrect scheduler instance provided: {type(scheduler)}') from None
+
+
+@artiq.language.core.host_only
+def terminate_running_instances(scheduler: typing.Any, *,
+                                timeout: typing.Union[float, int] = 10.0,
+                                polling_period: typing.Union[float, int] = 0.5) -> typing.List[int]:
+    """Terminate running instances of identical experiments given a scheduler.
+
+    This function searches for experiments with the same file and class name as the experiment associated with
+    the given scheduler and requests termination for these experiments.
+    Experiments that are added to the schedule after this function is called are not considered.
+
+    :param scheduler: The instance of the ARTIQ scheduler virtual device associated with the current experiment
+    :param timeout: Maximum waiting time (in seconds) for all other experiment instances to terminate
+    :param polling_period: How often to poll (in seconds) when waiting for experiments to terminate
+    :return: RID list of experiments that were terminated
+    :raises RuntimeError: Raised in case of a timeout
+    """
+    assert isinstance(timeout, (float, int)), 'Timeout must be of type float or int'
+    assert isinstance(polling_period, (float, int)), 'Polling period must be of type float or int'
+
+    # Validate parameters
+    if timeout < 0:
+        raise ValueError('Timeout must greater or equal to zero')
+    if polling_period < 0:
+        raise ValueError('Polling period must greater or equal to zero')
+
+    try:
+        # Obtain the schedule with the expid objects
+        schedule = {int(rid): status['expid'] for rid, status in scheduler.get_status().items()}
+        # Filter schedule to find other instances of this scheduler
+        other_instances = [rid for rid, expid in schedule.items()
+                           if expid['file'] == scheduler.expid['file']
+                           and expid['class_name'] == scheduler.expid['class_name']
+                           and rid != scheduler.rid]
+
+        # Request termination of other instances
+        for rid in other_instances:
+            scheduler.request_termination(rid)
+
+        if other_instances:
+            # Wait until all other instances disappeared from the schedule
+            for _ in range(max(round(timeout / polling_period), 1)):
+                if all(rid not in scheduler.get_status() for rid in other_instances):
+                    # All other instances are finished
+                    break
+                else:
+                    # Sleep before trying again
+                    time.sleep(polling_period)
+            else:
+                # Timeout elapsed
+                raise RuntimeError('Timeout while waiting for other instances to terminate')
+
+        # Return the RID list
+        return other_instances
+
     except AttributeError:
         raise TypeError(f'Incorrect scheduler instance provided: {type(scheduler)}') from None
