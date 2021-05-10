@@ -438,7 +438,18 @@ class MultiPmtMonitor(_PmtMonitorBase):
                                                         BooleanValue(False),
                                                         tooltip='Create a separate applet for each PMT')
 
+        # Channels
+        self.enabled_channels: typing.List[bool] = [
+            self.get_argument(f'Channel {i}', BooleanValue(True), group='Channels',
+                              tooltip=f'Enable monitoring for channel {i}')
+            for i in range(len(self.pmt_array))]
+        self.update_kernel_invariants('enabled_channels')
+
     def _create_applet(self, *args: typing.Any, **kwargs: typing.Any) -> None:
+        if all(not c for c in self.enabled_channels):
+            self.logger.warning('No channels were enabled, no applet will be started')
+            return
+
         # Modify keyword arguments
         kwargs.setdefault('plot_names', 'PMT')
         kwargs.setdefault('markers_only', True)
@@ -452,10 +463,12 @@ class MultiPmtMonitor(_PmtMonitorBase):
 
             # Create separate applets for each channel using multi-plot XY
             for i, t in zip(range(len(self.pmt_array)), titles):
-                self.ccb.plot_xy_multi(f'pmt_{i}', *args, index=i, title=t, **kwargs)
+                if self.enabled_channels[i]:
+                    self.ccb.plot_xy_multi(f'pmt_{i}', *args, index=i, title=t, **kwargs)
         else:
             # Plot all data using multi-plot XY
-            self.ccb.plot_xy_multi('plot_all', *args, **kwargs)
+            index = [i for i, c in enumerate(self.enabled_channels) if c]
+            self.ccb.plot_xy_multi('plot_all', *args, index=index, **kwargs)
 
     @kernel
     def _detect(self):  # type: () -> None

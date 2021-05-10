@@ -1,6 +1,7 @@
 import typing
+import collections.abc
 
-from artiq.experiment import HasEnvironment
+from artiq.language.environment import HasEnvironment
 
 __all__ = ['get_ccb_tool']
 
@@ -27,13 +28,53 @@ def _generate_command(base_command: str, *args: str, **kwargs: typing.Any) -> st
     :param kwargs: Optional arguments
     :return: The command string
     """
-    # Convert underscores in arguments, remove single quotes from strings, discard None and False values
-    kwargs = {a.replace('_', '-').replace("'", ""): v.replace("'", "") if isinstance(v, str) else v
-              for a, v in kwargs.items() if v is not None and v is not False}
-    # Convert to command argument format
-    optional_arguments = (f'--{a}' if v is True else f"--{a} '{v}'" for a, v in kwargs.items())
-    # Convert positional arguments
-    positional_arguments = (f"'{a}'" for a in args)
+
+    def process_str(s: str) -> str:
+        s = s.replace("'", "")  # Remove single quotes from strings
+        return f"'{s}'"  # Escape string with single quotes
+
+    def filter_value(v: typing.Any, *, nested: bool = False) -> bool:
+        """Filter argument values."""
+        if v is None or v is False:
+            return False  # Discard None and False values (flags)
+        elif isinstance(v, str):
+            return bool(v)  # Discard empty strings
+        elif isinstance(v, collections.abc.Collection):
+            if nested:
+                raise ValueError('Multi-dimensional collections as values are not supported')
+            return bool(v)  # Discard empty collections
+        else:
+            return True
+
+    def convert_arg(a: str) -> str:
+        """Convert argument names."""
+        if "'" in a:
+            raise ValueError('Single quotes are not allowed in positional argument names')
+        return a.replace('_', '-')  # Convert underscores to dashes
+
+    def convert_value(v: typing.Any) -> typing.Any:
+        """Convert argument values."""
+        if isinstance(v, str):
+            return process_str(v)
+        elif isinstance(v, collections.abc.Collection):
+            return [convert_value(e) for e in v if filter_value(e, nested=True)]  # Recursively process collections
+        else:
+            return v
+
+    def to_optional_argparse_str(a: str, v: typing.Any) -> str:
+        if v is True:
+            return f'--{a}'  # Flag
+        elif isinstance(v, collections.abc.Collection) and not isinstance(v, str):
+            return f"--{a} {' '.join(f'{e}' for e in v)}"
+        else:
+            return f"--{a} {v}"
+
+    # Filter and convert optional arguments
+    kwargs = {convert_arg(a): convert_value(v) for a, v in kwargs.items() if filter_value(v)}
+    # Convert optional arguments to argparse strings
+    optional_arguments = (to_optional_argparse_str(a, v) for a, v in kwargs.items())
+    # Convert positional arguments to argparse strings
+    positional_arguments = (process_str(a) for a in args)
     # Return final command
     return f"{base_command} {' '.join(positional_arguments)} {' '.join(optional_arguments)}"
 
@@ -189,7 +230,7 @@ class CcbTool:
                       error: typing.Optional[str] = None,
                       v_lines: typing.Optional[str] = None,
                       h_lines: typing.Optional[str] = None,
-                      index: typing.Optional[int] = None,
+                      index: typing.Union[None, int, typing.Collection[int]] = None,
                       sliding_window: typing.Optional[int] = None,
                       plot_names: typing.Optional[str] = None,
                       markers_only: typing.Optional[bool] = None,
@@ -207,7 +248,7 @@ class CcbTool:
         :param error: Error dataset (multiple graphs)
         :param v_lines: Vertical lines dataset
         :param h_lines: Horizontal lines dataset
-        :param index: The index of the results to plot (default plots all)
+        :param index: A single or multiple indices of the results to plot (default plots all)
         :param sliding_window: Set size of the sliding window, or :const:`None` to disable
         :param plot_names: Base names of the plots (numbered automatically, formatting with ``'{index}'`` possible)
         :param markers_only: Only plot markers and no lines between them
@@ -227,7 +268,7 @@ class CcbTool:
         self.create_applet(name, command, group=group)
 
     def plot_hist(self, name: str, y: str, *,
-                  index: typing.Optional[int] = None,
+                  index: typing.Union[None, int, typing.Collection[int]] = None,
                   plot_names: typing.Optional[str] = None,
                   title: typing.Optional[str] = None,
                   x_label: typing.Optional[str] = None,
@@ -239,7 +280,7 @@ class CcbTool:
 
         :param name: Name of the applet
         :param y: Histogram dataset
-        :param index: The index of the results to plot (default plots all)
+        :param index: A single or multiple indices of the results to plot (default plots all)
         :param plot_names: Base names of the plots (numbered automatically, formatting with ``'{index}'`` possible)
         :param title: Graph title
         :param x_label: X-axis label

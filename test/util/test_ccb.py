@@ -25,33 +25,33 @@ class CcbTestCase(unittest.TestCase):
         from dax.util.ccb import _generate_command
 
         data = {
-            'base1': (['y'], {'foo_bar': 'bar', 'baz': None}),
-            'base2': (['y'], {'foo_bar': 1.5, 'baz': 'bar'}),
-            'base3': (['y', 'fit'], {'foo_bar': None, 'bar': None, 'baz': 1}),
-            'base4': (['y', 'fit'], {'foo_bar': True, 'baz': False}),
-            'base5': (['y', "'fit'"], {'foo_bar': 'bar', 'baz': "'baz'"}),
-            'base6': (['y', 'fit'], {'foo_bar': 0, 'baz': 0.0}),
+            'base1': (['y'], {'foo_bar': 'bar_', 'baz': None}, "'y' --foo-bar 'bar_'"),
+            'base2': (['y'], {'foo_bar': 1.5, 'baz': '"bar"'}, "'y' --foo-bar 1.5 --baz '\"bar\"'"),
+            'base3': (['y', 'fit'], {'foo_bar': None, 'bar': None, 'baz': 1}, "'y' 'fit' --baz 1"),
+            'base4': (['y', 'fit'], {'foo_bar': True, 'baz': False}, "'y' 'fit' --foo-bar"),
+            'base5': (['y', "'fit'"], {'foo_bar': 'bar', 'baz': "'baz'"}, "'y' 'fit' --foo-bar 'bar' --baz 'baz'"),
+            'base6': (['y', 'fit'], {'foo_bar': 0, 'baz': 0.0}, "'y' 'fit' --foo-bar 0 --baz 0.0"),
+            'base7': (['y'], {'foo_bar': ['a', 'b'], 'baz': [0, 1, 2, 3]}, "'y' --foo-bar 'a' 'b' --baz 0 1 2 3"),
+        }
+
+        for base, (args, kwargs, ref) in data.items():
+            with self.subTest(base_cmd=base, args=args, kwargs=kwargs, ref=ref):
+                cmd = _generate_command(base, *args, **kwargs)
+                self.assertEqual(cmd, f"{base} {ref}")
+
+    def test_generate_command_fail(self):
+        # noinspection PyProtectedMember
+        from dax.util.ccb import _generate_command
+
+        data = {
+            'base1': (['y'], {"foo_'bar": 'bar_', 'baz': None}),  # Single quote in optional argument name
+            'base7': (['y'], {'baz': [[0, 1, 2, 3]]}),  # Nested list
         }
 
         for base, (args, kwargs) in data.items():
             with self.subTest(base_cmd=base, args=args, kwargs=kwargs):
-                cmd = _generate_command(base, *args, **kwargs)
-                self.assertTrue(cmd.startswith(base), 'Command does not start with base command')
-                self.assertNotIn('_', cmd, 'Underscores not filtered out of command')
-                for a in args:
-                    a = a.replace("'", "")
-                    self.assertIn(f"'{a}'", cmd, 'Positional argument not found in command')
-                for k, v in kwargs.items():
-                    if v is None or v is False:
-                        self.assertNotIn(k, cmd, 'None or False valued argument found in command')
-                    elif v is True:
-                        self.assertIn(f'--{k.replace("_", "-")}', cmd, 'store_true argument not found in command')
-                        self.assertNotIn('True', cmd, 'True string found in command')
-                    else:
-                        self.assertIn(f'--{k.replace("_", "-")}', cmd, 'Argument not found in command')
-                        if isinstance(v, str):
-                            v = v.replace("'", "")
-                        self.assertIn(f"'{v}'", cmd, 'Argument value not found in command')
+                with self.assertRaises(ValueError):
+                    _generate_command(base, *args, **kwargs)
 
     def test_ccb_tool(self):
         with get_managers() as managers:

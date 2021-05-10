@@ -6,7 +6,7 @@ import subprocess
 import time
 
 import artiq.master.worker_db
-from artiq.experiment import HasEnvironment
+from artiq.language.environment import HasEnvironment
 
 import dax.util.artiq
 
