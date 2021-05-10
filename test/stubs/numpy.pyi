@@ -45,11 +45,9 @@ float_ = float
 bool_ = bool
 
 # Type variable for element types
-__E_T = typing.TypeVar('__E_T', bool, int, float, int32, int64, typing.Sequence[bool], typing.Sequence[int],
-                       typing.Sequence[float], typing.Sequence[int32], typing.Sequence[int64])
+__E_T = typing.TypeVar('__E_T', bool, int, float, typing.Sequence[bool], typing.Sequence[int], typing.Sequence[float])
 # Type variable for argument types
-__A_T = typing.TypeVar('__A_T', bool, int, float, int32, int64, typing.Sequence[bool], typing.Sequence[int],
-                       typing.Sequence[float], typing.Sequence[int32], typing.Sequence[int64])
+__A_T = typing.TypeVar('__A_T', bool, int, float, typing.Sequence[bool], typing.Sequence[int], typing.Sequence[float])
 __AXIS_T = typing.Union[None, int, typing.Tuple[int, ...]]
 __SHAPE_TUPLE_T = typing.Tuple[int, ...]
 __SHAPE_T = typing.Union[int, __SHAPE_TUPLE_T]

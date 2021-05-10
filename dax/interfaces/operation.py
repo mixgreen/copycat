@@ -117,7 +117,7 @@ def validate_interface(interface: OperationInterface, *, num_qubits: typing.Opti
     :param interface: The operation interface object
     :param num_qubits: The exact number of qubits in the system (optional)
     :return: :const:`True`, to allow usage of this function in an ``assert`` statement
-    :raise TypeError: Raised if validation failed
+    :raises TypeError: Raised if validation failed
     """
     if not isinstance(interface, OperationInterface):
         raise TypeError('The provided interface is not of type OperationInterface')

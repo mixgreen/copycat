@@ -68,7 +68,7 @@ def validate_interface(data_context: DataContextInterface) -> bool:
 
     :param data_context: The data context interface object
     :return: :const:`True`, to allow usage of this function in an ``assert`` statement
-    :raise TypeError: Raised if validation failed
+    :raises TypeError: Raised if validation failed
     """
     if not isinstance(data_context, DataContextInterface):
         raise TypeError('The provided interface is not of type DataContextInterface')

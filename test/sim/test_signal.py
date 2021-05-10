@@ -129,7 +129,7 @@ class VcdSignalManagerEventTestCase(unittest.TestCase):
             # Python hash(0) == hash(0.0), see https://docs.python.org/3/library/functions.html#hash
             self.sys.ttl1._state: [0.0, 1.0],  # bool, side effect of Python hash()
             self.sys.ec._count: [0, 1, 'x', 'X', 'z', 'Z', True, False, 99, -34, np.int32(655), np.int64(7)],  # int
-            self.sys.ad9912._freq: [1.7, -8.2, 7.7, np.float(300), np.float_(200)],  # float
+            self.sys.ad9912._freq: [1.7, -8.2, 7.7, np.float_(300), np.float_(200)],  # float
             self.sys.core_dma._dma_record: ['foo', 'bar', None, ''],  # str
             self.sys.core_dma._dma_play: [True],  # object
         }
