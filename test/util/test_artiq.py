@@ -389,8 +389,36 @@ class ArtiqTestCase(unittest.TestCase):
                 # noinspection PyMethodParameters
                 def run(self_):
                     dax.util.artiq.pause_strict_priority(self_.scheduler)
+                    dax.util.artiq.pause_strict_priority(self_.scheduler, polling_period=0)
                     with self.assertRaises(TypeError, msg='Wrong scheduler object did not raise'):
                         dax.util.artiq.pause_strict_priority(self_.core)
+                    with self.assertRaises(ValueError, msg='Negative polling period did not raise'):
+                        dax.util.artiq.terminate_running_instances(self_.scheduler, polling_period=-1)
+
+            # Create the main experiment
+            exp = TestExperiment(managers)
+            exp.run()
+
+    def test_terminate_running_instances(self):
+        # Must be host only
+        self.assertTrue(dax.util.artiq.is_host_only(dax.util.artiq.terminate_running_instances))
+
+        with dax.util.artiq.get_managers() as managers:
+            class TestExperiment(artiq.experiment.EnvExperiment):
+                def build(self):
+                    self.core = self.get_device('core')
+                    self.scheduler = self.get_device('scheduler')
+
+                # noinspection PyMethodParameters
+                def run(self_):
+                    dax.util.artiq.terminate_running_instances(self_.scheduler)
+                    dax.util.artiq.terminate_running_instances(self_.scheduler, timeout=0, polling_period=0)
+                    with self.assertRaises(TypeError, msg='Wrong scheduler object did not raise'):
+                        dax.util.artiq.terminate_running_instances(self_.core)
+                    with self.assertRaises(ValueError, msg='Negative timeout did not raise'):
+                        dax.util.artiq.terminate_running_instances(self_.scheduler, timeout=-1)
+                    with self.assertRaises(ValueError, msg='Negative polling period did not raise'):
+                        dax.util.artiq.terminate_running_instances(self_.scheduler, polling_period=-1)
 
             # Create the main experiment
             exp = TestExperiment(managers)
