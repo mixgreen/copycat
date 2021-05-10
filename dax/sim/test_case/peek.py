@@ -5,7 +5,8 @@ import collections.abc
 import warnings
 import numpy as np
 
-from artiq.experiment import HasEnvironment, now_mu
+from artiq.language.environment import HasEnvironment
+from artiq.language.core import now_mu
 from artiq.master.databases import device_db_from_file
 
 from dax.util.artiq import get_managers
