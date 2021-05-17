@@ -6,6 +6,7 @@ import textwrap
 import dax.sim.ddb
 from dax.sim.ddb import enable_dax_sim, DAX_SIM_CONFIG_KEY
 from dax.util.output import temp_dir
+from dax.util.configparser import get_dax_config
 
 
 class DdbTestCase(unittest.TestCase):
@@ -133,6 +134,8 @@ class DdbTestCase(unittest.TestCase):
     def setUp(self) -> None:
         # Always make a deep copy at the start to make sure we do not mutate the dict
         self.DEVICE_DB = copy.deepcopy(self.DEVICE_DB)
+        # Clear DAX config parser cache
+        get_dax_config(clear_cache=True)
 
     def test_disable(self):
         self.assertDictEqual(enable_dax_sim(copy.deepcopy(self.DEVICE_DB), enable=False, logging_level=logging.WARNING,
@@ -235,15 +238,18 @@ class DdbTestCase(unittest.TestCase):
         for cfg_file in ['.dax', 'setup.cfg']:
             with temp_dir():
                 for dax_enable in [True, False]:
+                    # Write configuration
                     with open(cfg_file, mode='w') as f:
                         f.write(textwrap.dedent(cfg.format(str(dax_enable).lower())))
+                    # Clear DAX config parser cache
+                    get_dax_config(clear_cache=True)
 
                     ddb = enable_dax_sim(copy.deepcopy(self.DEVICE_DB),
                                          logging_level=logging.WARNING, moninj_service=False)
                     if dax_enable:
-                        self.assertIn(DAX_SIM_CONFIG_KEY, ddb, 'DAX.sim was unintentionally enabled')
+                        self.assertIn(DAX_SIM_CONFIG_KEY, ddb, 'DAX.sim was not enabled')
                     else:
-                        self.assertNotIn(DAX_SIM_CONFIG_KEY, ddb, 'DAX.sim was not enabled')
+                        self.assertNotIn(DAX_SIM_CONFIG_KEY, ddb, 'DAX.sim was unintentionally enabled')
 
     def test_cfg_precedence(self):
         cfg = """
@@ -252,16 +258,19 @@ class DdbTestCase(unittest.TestCase):
         """
         with temp_dir():
             for dax_enable, setup_enable in ((a, b) for a in range(2) for b in range(2)):
+                # Write configuration
                 with open('.dax', mode='w') as f:
                     f.write(textwrap.dedent(cfg.format(dax_enable)))
                 with open('setup.cfg', mode='w') as f:
                     f.write(textwrap.dedent(cfg.format(setup_enable)))
+                # Clear DAX config parser cache
+                get_dax_config(clear_cache=True)
 
                 ddb = enable_dax_sim(copy.deepcopy(self.DEVICE_DB), logging_level=logging.WARNING, moninj_service=False)
                 if dax_enable:
-                    self.assertIn(DAX_SIM_CONFIG_KEY, ddb, 'DAX.sim was unintentionally enabled')
+                    self.assertIn(DAX_SIM_CONFIG_KEY, ddb, 'DAX.sim was not enabled')
                 else:
-                    self.assertNotIn(DAX_SIM_CONFIG_KEY, ddb, 'DAX.sim was not enabled')
+                    self.assertNotIn(DAX_SIM_CONFIG_KEY, ddb, 'DAX.sim was unintentionally enabled')
 
     def test_cfg_localhost(self):
         localhost = '127.0.0.1'
@@ -270,8 +279,12 @@ class DdbTestCase(unittest.TestCase):
         localhost = {localhost}
         """
         with temp_dir():
+            # Write configuration
             with open('.dax', mode='w') as f:
                 f.write(textwrap.dedent(cfg))
+            # Clear DAX config parser cache
+            get_dax_config(clear_cache=True)
+
             self.test_mutate_entries(localhost=localhost)
             self.test_core_address(localhost=localhost)
 
@@ -282,8 +295,12 @@ class DdbTestCase(unittest.TestCase):
         core_device = {core_device}
         """
         with temp_dir():
+            # Write configuration
             with open('.dax', mode='w') as f:
                 f.write(textwrap.dedent(cfg))
+            # Clear DAX config parser cache
+            get_dax_config(clear_cache=True)
+
             self.test_core_address(ddb=self.DEVICE_DB_FOO_CORE, core_device=core_device)
 
             with self.assertRaises(KeyError, msg='Non-existing core device key did not raise'):
@@ -298,8 +315,11 @@ class DdbTestCase(unittest.TestCase):
         config_class = {config_class}
         """
         with temp_dir():
+            # Write configuration
             with open('.dax', mode='w') as f:
                 f.write(textwrap.dedent(cfg))
+            # Clear DAX config parser cache
+            get_dax_config(clear_cache=True)
 
             self.test_sim_config_device(config_module=config_module, config_class=config_class)
 
@@ -318,8 +338,11 @@ class DdbTestCase(unittest.TestCase):
             [dax.sim.{device}]
             {args_str}
             """
+            # Write configuration
             with open('.dax', mode='w') as f:
                 f.write(cfg)
+            # Clear DAX config parser cache
+            get_dax_config(clear_cache=True)
 
             ddb = enable_dax_sim(copy.deepcopy(self.DEVICE_DB), enable=True, logging_level=logging.WARNING,
                                  moninj_service=False)
@@ -333,6 +356,10 @@ class DdbTestCase(unittest.TestCase):
                 [dax.sim.core]
                 compile = {compile_flag}
                 """
+                # Write configuration
                 with open('.dax', mode='w') as f:
                     f.write(textwrap.dedent(cfg))
+                # Clear DAX config parser cache
+                get_dax_config(clear_cache=True)
+
                 self.test_core_compile_flag(compile_flag=compile_flag)

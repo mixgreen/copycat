@@ -3,10 +3,11 @@ from __future__ import annotations  # Postponed evaluation of annotations
 import logging
 import importlib
 import typing
-import configparser
 import dataclasses
 
 import sipyco.pyon  # type: ignore
+
+import dax.util.configparser
 
 __all__ = ['DAX_SIM_CONFIG_KEY', 'enable_dax_sim']
 
@@ -26,8 +27,6 @@ _GENERIC_DEVICE: typing.Dict[str, str] = {
 _SIMULATION_ARGS: typing.List[str] = ['--simulation', '--no-localhost-bind']
 """The simulation options/arguments to add to controllers."""
 
-_CONFIG_FILES: typing.List[str] = ['setup.cfg', '.dax']
-"""Configuration file locations in reverse order of priority."""
 _CONFIG_SECTION: str = 'dax.sim'
 """The section in the configuration file used by DAX.sim."""
 
@@ -41,7 +40,7 @@ class _ConfigData:
     coredevice_packages: typing.List[str]
     core_device: str
     localhost: str
-    _config: configparser.ConfigParser
+    _config: dax.util.configparser.DaxConfigParser
 
     def get_args(self, key: str) -> typing.Dict[str, typing.Any]:
         """Get additional simulation arguments provided through the config file.
@@ -58,9 +57,8 @@ class _ConfigData:
             return {}
 
     @classmethod
-    def create(cls, config: configparser.ConfigParser) -> _ConfigData:
+    def create(cls, config: dax.util.configparser.DaxConfigParser) -> _ConfigData:
         """Create a configuration dataclass given a config parser."""
-        assert isinstance(config, configparser.ConfigParser)
 
         # Get coredevice packages
         coredevice_packages: typing.List[str] = config.get(_CONFIG_SECTION, 'coredevice_packages', fallback='').split()
@@ -88,8 +86,8 @@ def enable_dax_sim(ddb: typing.Dict[str, typing.Any], *,
 
     The simulation can be configured through the function parameters or by using the
     configuration files. If given, function parameters are always prioritized over
-    configuration file parameters. The possible configuration files in order of
-    priority currently are ``.dax`` and ``setup.cfg``.
+    configuration file parameters. The possible configuration files are listed in
+    the class variable :attr:`dax.util.configparser.DaxConfigParser.CONFIG_FILES`.
 
     The following options can currently be set through the configuration files
     using the section ``[dax.sim]``:
@@ -133,16 +131,14 @@ def enable_dax_sim(ddb: typing.Dict[str, typing.Any], *,
     # Set the logging level to the given value
     _logger.setLevel(logging_level)
 
-    # Read configuration file
-    _logger.debug('Reading configuration file')
-    config: configparser.ConfigParser = configparser.ConfigParser()
-    # noinspection PyTypeHints
-    config.optionxform = str  # type: ignore[assignment] # Make option names case sensitive
+    # Get configuration file
+    _logger.debug('Obtaining configuration')
+    config: dax.util.configparser.DaxConfigParser = dax.util.configparser.get_dax_config()
 
-    if not config.read(_CONFIG_FILES) and enable is None:
+    if not config.used_config_files and enable is None:
         # No files were successfully read but one or more fields require a configuration file
         _logger.error(f'Could not find a configuration file at any of the following '
-                      f'locations: {", ".join(_CONFIG_FILES)}')
+                      f'locations: {", ".join(config.CONFIG_FILES)}')
         raise FileNotFoundError('Configuration file not found')
 
     if enable is None:

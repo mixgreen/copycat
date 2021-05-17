@@ -16,6 +16,16 @@ dax.util.ccb module
     :members:
     :undoc-members:
     :show-inheritance:
+    :ignore-module-all:
+
+dax.util.configparser module
+----------------------------
+
+.. automodule:: dax.util.configparser
+    :members:
+    :undoc-members:
+    :show-inheritance:
+    :ignore-module-all:
 
 dax.util.convert module
 -----------------------
