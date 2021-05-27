@@ -22,7 +22,7 @@ class CcbTestCase(unittest.TestCase):
 
     def test_generate_command(self):
         # noinspection PyProtectedMember
-        from dax.util.ccb import _generate_command
+        from dax.util.ccb import generate_command
 
         data = {
             'base1': (['y'], {'foo_bar': 'bar_', 'baz': None}, "'y' --foo-bar 'bar_'"),
@@ -36,12 +36,12 @@ class CcbTestCase(unittest.TestCase):
 
         for base, (args, kwargs, ref) in data.items():
             with self.subTest(base_cmd=base, args=args, kwargs=kwargs, ref=ref):
-                cmd = _generate_command(base, *args, **kwargs)
+                cmd = generate_command(base, *args, **kwargs)
                 self.assertEqual(cmd, f"{base} {ref}")
 
     def test_generate_command_fail(self):
         # noinspection PyProtectedMember
-        from dax.util.ccb import _generate_command
+        from dax.util.ccb import generate_command
 
         data = {
             'base1': (['y'], {"foo_'bar": 'bar_', 'baz': None}),  # Single quote in optional argument name
@@ -51,7 +51,7 @@ class CcbTestCase(unittest.TestCase):
         for base, (args, kwargs) in data.items():
             with self.subTest(base_cmd=base, args=args, kwargs=kwargs):
                 with self.assertRaises(ValueError):
-                    _generate_command(base, *args, **kwargs)
+                    generate_command(base, *args, **kwargs)
 
     def test_ccb_tool(self):
         with get_managers() as managers:
@@ -64,7 +64,7 @@ class CcbTestCase(unittest.TestCase):
             self.assertIsNone(ccb.plot_xy('name', 'key'))
             self.assertIsNone(ccb.plot_xy_multi('name', 'key'))
             self.assertIsNone(ccb.plot_hist('name', 'key'))
-            self.assertIsNone(ccb.plot_hist_artiq('name', 'key'))
+            self.assertIsNone(ccb.plot_hist_multi('name', 'key'))
             self.assertIsNone(ccb.plot_xy_hist('name', 'key', 'key', 'key'))
             self.assertIsNone(ccb.disable_applet('name'))
             self.assertIsNone(ccb.disable_applet_group('group'))

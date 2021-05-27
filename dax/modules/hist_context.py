@@ -335,7 +335,7 @@ class HistogramContext(DaxModule, DataContextInterface):
         kwargs.setdefault('y_label', 'Frequency')
         kwargs.setdefault('title', f'RID {self._scheduler.rid}')
         # Plot
-        self._ccb.plot_hist(self.HISTOGRAM_PLOT_NAME, self._histogram_plot_key, group=self._plot_group, **kwargs)
+        self._ccb.plot_hist_multi(self.HISTOGRAM_PLOT_NAME, self._histogram_plot_key, group=self._plot_group, **kwargs)
 
     @rpc(flags={'async'})
     def plot_probability(self, **kwargs):  # type: (typing.Any) -> None
