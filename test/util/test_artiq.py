@@ -86,7 +86,7 @@ class ArtiqTestCase(unittest.TestCase):
         ]
 
         for choices, default, returned_default in data:
-            e = dax.util.artiq.DefaultEnumerationValue(choices, default)
+            e = dax.util.artiq.default_enumeration_value(choices, default)
             self.assertListEqual(e.choices, choices)
             if returned_default is None:
                 with self.assertRaises(artiq.experiment.DefaultMissing):

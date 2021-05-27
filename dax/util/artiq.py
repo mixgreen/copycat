@@ -15,7 +15,8 @@ import artiq.master.worker_impl  # type: ignore
 import artiq.master.databases
 import artiq.frontend.artiq_run  # type: ignore
 
-__all__ = ['is_kernel', 'is_portable', 'is_host_only', 'is_rpc', 'is_decorated', 'DefaultEnumerationValue',
+__all__ = ['is_kernel', 'is_portable', 'is_host_only', 'is_rpc', 'is_decorated',
+           'default_enumeration_value',
            'process_arguments', 'get_managers', 'ClonedDatasetManager', 'clone_managers', 'isolate_managers',
            'pause_strict_priority', 'terminate_running_instances']
 
@@ -125,24 +126,27 @@ def is_decorated(func: typing.Any) -> bool:
 __NoDefault = artiq.language.environment.NoDefault  # Typing helper
 
 
-class DefaultEnumerationValue(artiq.language.environment.EnumerationValue):
-    """Extension of the ARTIQ :class:`EnumerationValue` class with an automatic default if there is only one choice."""
+def default_enumeration_value(
+        choices: typing.Sequence[str],
+        default: typing.Union[str, typing.Type[__NoDefault]] = artiq.language.environment.NoDefault
+) -> artiq.language.environment.EnumerationValue:
+    """Create a new ARTIQ :class:`EnumerationValue` object with an automatic default if there is only one choice.
 
-    def __init__(self, choices: typing.Sequence[str],
-                 default: typing.Union[str, typing.Type[__NoDefault]] = artiq.language.environment.NoDefault):
-        """Create a new enumeration value.
+    The ARTIQ GUI can not recognize unknown argument types.
+    Hence, we created this helper function instead of a subclass.
 
-        :param choices: A sequence of strings with the choices
-        :param default: Optional default choice
-        """
-        assert isinstance(choices, collections.abc.Sequence), 'Choices must be a sequence'
+    :param choices: A sequence of strings with the choices
+    :param default: Optional default choice
+    :return: An ARTIQ :class:`EnumerationValue` object
+    """
+    assert isinstance(choices, collections.abc.Sequence), 'Choices must be a sequence'
 
-        if default is artiq.language.environment.NoDefault and len(choices) == 1:
-            # No default and only one choice, take the single choice as the default
-            default = choices[0]
+    if default is artiq.language.environment.NoDefault and len(choices) == 1:
+        # No default and only one choice, take the single choice as the default
+        default = choices[0]
 
-        # Call super
-        super(DefaultEnumerationValue, self).__init__(choices, default=default)
+    # Return an enumeration value object
+    return artiq.language.environment.EnumerationValue(choices, default=default)
 
 
 def _convert_argument(argument: typing.Any) -> typing.Any:

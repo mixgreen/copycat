@@ -17,7 +17,7 @@ from dax.experiment import *
 from dax.modules.hist_context import HistogramContext, HistogramAnalyzer
 from dax.interfaces.operation import OperationInterface
 from dax.interfaces.gate import GateInterface
-from dax.util.artiq import is_kernel, DefaultEnumerationValue
+from dax.util.artiq import is_kernel, default_enumeration_value
 from dax.util.output import get_base_path
 
 __all__ = ['RandomizedBenchmarkingSQ']
@@ -105,7 +105,7 @@ class RandomizedBenchmarkingSQ(DaxClient, Experiment):
         # Add general arguments
         self._operation_interface: str = self.get_argument(
             'Operation interface',
-            DefaultEnumerationValue(sorted(self._operation_interfaces), default=self.DEFAULT_OPERATION_KEY),
+            default_enumeration_value(sorted(self._operation_interfaces), default=self.DEFAULT_OPERATION_KEY),
             tooltip='The operation interface to use for benchmarking')
         self._max_depth: str = self.get_argument(
             'Max depth', EnumerationValue(natsort.natsorted(self._available_circuit_depths)),

@@ -85,12 +85,12 @@ class ProgramClient(DaxClient, Experiment):
         self._arguments = self.get_argument(
             'arguments', StringValue(''), tooltip='Command-line arguments (format: `[KEY=PYON_VALUE ...]`)')
         self._operation_key = self.get_argument(
-            'operation', dax.util.artiq.DefaultEnumerationValue(sorted(self._operation_interfaces),
-                                                                default=self.DEFAULT_OPERATION_KEY),
+            'operation', dax.util.artiq.default_enumeration_value(sorted(self._operation_interfaces),
+                                                                  default=self.DEFAULT_OPERATION_KEY),
             tooltip='The operation interface to use')
         self._data_context_key = self.get_argument(
-            'data_context', dax.util.artiq.DefaultEnumerationValue(sorted(self._data_context_interfaces),
-                                                                   default=self.DEFAULT_DATA_CONTEXT_KEY),
+            'data_context', dax.util.artiq.default_enumeration_value(sorted(self._data_context_interfaces),
+                                                                     default=self.DEFAULT_DATA_CONTEXT_KEY),
             tooltip='The data context interface to use')
 
         # Add custom arguments
