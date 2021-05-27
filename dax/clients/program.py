@@ -6,12 +6,15 @@ import os.path
 import shutil
 import shlex
 import argparse
+import h5py  # type: ignore
 
+from artiq import __version__ as _artiq_version
 import artiq.tools
 
 # No wildcard import to prevent aliasing with ``types``
 from dax.experiment import DaxClient, dax_client_factory, Experiment, StringValue, NoDefault
 
+from dax import __version__ as _dax_version
 import dax.base.program
 import dax.util.artiq
 import dax.util.output
@@ -51,6 +54,7 @@ class ProgramClient(DaxClient, Experiment):
     """Key of the default data context interface."""
 
     _managers: typing.Any
+    _scheduler: typing.Any
     _file: str
     _class: str
     _arguments: str
@@ -66,6 +70,8 @@ class ProgramClient(DaxClient, Experiment):
 
         # Store reference to ARTIQ managers
         self._managers = managers
+        # Obtain the scheduler
+        self._scheduler = self.get_device('scheduler')
 
         # Search for interfaces
         self._operation_interfaces = self.registry.search_interfaces(
@@ -135,8 +141,9 @@ class ProgramClient(DaxClient, Experiment):
 
         # Build the program
         self.logger.info(f'Building program "{self._class}"')
+        self._isolated_managers = dax.util.artiq.isolate_managers(self._managers, name='program', arguments=arguments)
         self._program = program_cls(
-            dax.util.artiq.isolate_managers(self._managers, name='program', arguments=arguments),
+            self._isolated_managers,
             core=self.core,
             operation=self._operation,
             data_context=self._data_context
@@ -168,6 +175,8 @@ class ProgramClient(DaxClient, Experiment):
         # Analyze the program
         self.logger.info(f'Analyzing program "{self._class}"')
         self._program.analyze()
+        # Write HDF5 file
+        self._write_hdf5_file()
 
     def _load_module(self) -> types.ModuleType:
         # Expand and check path
@@ -189,6 +198,23 @@ class ProgramClient(DaxClient, Experiment):
                 if not os.path.isfile(unpacked_file_name):
                     raise FileNotFoundError(f'Archive "{file_name}" does not contain a main.py file')
                 return _import_file(unpacked_file_name)
+
+    def _write_hdf5_file(self):
+        # Write a separate HDF5 file for the isolated datasets
+        self.logger.debug('Writing separate HDF5 file for isolated datasets')
+
+        with h5py.File(dax.util.output.get_file_name(self._scheduler, 'program', 'h5'), mode='w') as f:
+            # Write archive and datasets
+            self._isolated_managers.dataset_mgr.write_hdf5(f)
+            # Add metadata
+            f['artiq_version'] = _artiq_version
+            f['dax_version'] = _dax_version
+            f['rid'] = self._scheduler.rid
+            f['file'] = self._file
+            f['class'] = self._class
+            f['arguments'] = self._arguments
+            f['operation_key'] = self._operation_key
+            f['data_context_key'] = self._data_context_key
 
     """Customization functions"""
 

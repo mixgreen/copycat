@@ -304,7 +304,7 @@ class ClonedDatasetManager(artiq.master.worker_db.DatasetManager):
     from the existing ARTIQ dataset manager.
     """
 
-    _CLONE_DICT_KEY: typing.ClassVar[str] = '_dataset_mgr_clones_'
+    _CLONE_DICT_KEY: typing.ClassVar[str] = '_dax_dataset_mgr_clones_'
     """The attribute key of the clone dictionary attached to the existing ARTIQ dataset manager."""
     _CLONE_KEY_FORMAT: typing.ClassVar[str] = 'sub_experiment/{index}'
     """The key format for cloned datasets, which is used for the HDF5 group name."""
