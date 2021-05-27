@@ -1,4 +1,5 @@
 import typing
+import shlex
 import collections.abc
 
 from artiq.language.environment import HasEnvironment
@@ -29,10 +30,6 @@ def generate_command(base_command: str, *args: str, **kwargs: typing.Any) -> str
     :return: The command string
     """
 
-    def process_str(s: str) -> str:
-        s = s.replace("'", "")  # Remove single quotes from strings
-        return f"'{s}'"  # Escape string with single quotes
-
     def filter_value(v: typing.Any, *, nested: bool = False) -> bool:
         """Filter argument values."""
         if v is None or v is False:
@@ -48,14 +45,14 @@ def generate_command(base_command: str, *args: str, **kwargs: typing.Any) -> str
 
     def convert_arg(a: str) -> str:
         """Convert argument names."""
-        if "'" in a:
-            raise ValueError('Single quotes are not allowed in positional argument names')
+        if not a.isidentifier():
+            raise ValueError('Single quotes are not allowed in argument names')
         return a.replace('_', '-')  # Convert underscores to dashes
 
     def convert_value(v: typing.Any) -> typing.Any:
         """Convert argument values."""
         if isinstance(v, str):
-            return process_str(v)
+            return shlex.quote(v)
         elif isinstance(v, collections.abc.Collection):
             return [convert_value(e) for e in v if filter_value(e, nested=True)]  # Recursively process collections
         else:
@@ -71,12 +68,12 @@ def generate_command(base_command: str, *args: str, **kwargs: typing.Any) -> str
 
     # Filter and convert optional arguments
     kwargs = {convert_arg(a): convert_value(v) for a, v in kwargs.items() if filter_value(v)}
-    # Convert optional arguments to argparse strings
-    optional_arguments = (to_optional_argparse_str(a, v) for a, v in kwargs.items())
     # Convert positional arguments to argparse strings
-    positional_arguments = (process_str(a) for a in args)
+    arguments = [shlex.quote(a) for a in args]
+    # Convert optional arguments to argparse strings
+    arguments.extend(to_optional_argparse_str(a, v) for a, v in kwargs.items())
     # Return final command
-    return f"{base_command} {' '.join(positional_arguments)} {' '.join(optional_arguments)}"
+    return f"{base_command} {' '.join(arguments)}"
 
 
 class CcbTool:

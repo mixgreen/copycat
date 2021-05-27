@@ -25,13 +25,14 @@ class CcbTestCase(unittest.TestCase):
         from dax.util.ccb import generate_command
 
         data = {
-            'base1': (['y'], {'foo_bar': 'bar_', 'baz': None}, "'y' --foo-bar 'bar_'"),
-            'base2': (['y'], {'foo_bar': 1.5, 'baz': '"bar"'}, "'y' --foo-bar 1.5 --baz '\"bar\"'"),
-            'base3': (['y', 'fit'], {'foo_bar': None, 'bar': None, 'baz': 1}, "'y' 'fit' --baz 1"),
-            'base4': (['y', 'fit'], {'foo_bar': True, 'baz': False}, "'y' 'fit' --foo-bar"),
-            'base5': (['y', "'fit'"], {'foo_bar': 'bar', 'baz': "'baz'"}, "'y' 'fit' --foo-bar 'bar' --baz 'baz'"),
-            'base6': (['y', 'fit'], {'foo_bar': 0, 'baz': 0.0}, "'y' 'fit' --foo-bar 0 --baz 0.0"),
-            'base7': (['y'], {'foo_bar': ['a', 'b'], 'baz': [0, 1, 2, 3]}, "'y' --foo-bar 'a' 'b' --baz 0 1 2 3"),
+            'base1': (['y'], {'foo_bar': 'bar_', 'baz': None}, "y --foo-bar bar_"),
+            'base2': (['y'], {'foo_bar': 1.5, 'baz': '"bar"'}, "y --foo-bar 1.5 --baz '\"bar\"'"),
+            'base3': (['y', 'fit'], {'foo_bar': None, 'bar': None, 'baz': 1}, "y fit --baz 1"),
+            'base4': (['y', 'fit'], {'foo_bar': True, 'baz': False}, "y fit --foo-bar"),
+            'base5': (['y', "'fit'"], {'foo_bar': 'bar'}, "y ''\"'\"\'fit'\"'\"'' --foo-bar bar"),
+            'base6': (['y'], {'foo_bar': 'bar', 'baz': "'baz'"}, "y --foo-bar bar --baz ''\"'\"\'baz'\"'\"''"),
+            'base7': (['y', 'fit'], {'foo_bar': 0, 'baz': 0.0}, "y fit --foo-bar 0 --baz 0.0"),
+            'base8': (['y'], {'foo_bar': ['a', 'b'], 'baz': [0, 1, 2, 3]}, "y --foo-bar a b --baz 0 1 2 3"),
         }
 
         for base, (args, kwargs, ref) in data.items():
@@ -45,6 +46,8 @@ class CcbTestCase(unittest.TestCase):
 
         data = {
             'base1': (['y'], {"foo_'bar": 'bar_', 'baz': None}),  # Single quote in optional argument name
+            'base2': (['y'], {"foo_\"bar": 'bar_', 'baz': None}),  # Double quote in optional argument name
+            'base4': (['y'], {"0foo": 'bar_'}),  # Argument name is not an identifier
             'base7': (['y'], {'baz': [[0, 1, 2, 3]]}),  # Nested list
         }
 
