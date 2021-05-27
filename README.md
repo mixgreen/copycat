@@ -109,3 +109,13 @@ $ python3 -m unittest  # No additional libraries required
 
 - Leon Riesebos (Duke University)
 - Brad Bondurant (Duke University)
+
+## Acknowledgements
+
+The development of DAX was primarily funded by EPiQC, an NSF Expeditions in Computing (1832377) and the NSF STAQ project (1818914). The work was also partially funded by the IARPA LogiQ program (W911NF-16-1-0082) and the DOE ASCR Testbed QSCOUT. 
+
+More information about these projects can be found at:
+- EPiQC: https://www.epiqc.cs.uchicago.edu/
+- STAQ: https://staq.pratt.duke.edu/
+- LogiQ: https://www.iarpa.gov/index.php/research-programs/logiq
+- QSCOUT: https://www.sandia.gov/quantum/Projects/QSCOUT.html
