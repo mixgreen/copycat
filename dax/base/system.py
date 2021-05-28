@@ -53,21 +53,32 @@ def _is_valid_key(key: str) -> bool:
     return all(_NAME_RE.fullmatch(n) for n in key.split(_KEY_SEPARATOR))
 
 
-def _get_cwd_commit() -> typing.Optional[str]:
+def _get_cwd_commit() -> typing.Optional[typing.Tuple[str, bool]]:
     """Return the commit hash of the current working directory if available.
 
-    :return: Commit hash as a string or None if no repository could be found
+    The commit hash includes a dirty flag.
+
+    :return: Tuple of the commit hash as a string and a dirty flag, or None if no repository could be found
     """
     # Discover repository path of current working directory, also looks in parent directories
     try:
         # noinspection PyCallingNonCallable
         path = pygit2.discover_repository(os.getcwd())
-        return None if path is None else str(pygit2.Repository(path).head.target.hex)
+        if path is None:
+            return None
+        else:
+            # Obtain the repository object
+            repo = pygit2.Repository(path)
+            commit_hash = str(repo.head.target.hex)
+            # Check if the repository is dirty
+            dirty = any(s not in {pygit2.GIT_STATUS_CURRENT, pygit2.GIT_STATUS_IGNORED} for s in repo.status().values())
+            # Return results
+            return commit_hash, dirty
     except pygit2.GitError:
         return None
 
 
-_CWD_COMMIT: typing.Optional[str] = _get_cwd_commit()
+_CWD_COMMIT: typing.Optional[typing.Tuple[str, bool]] = _get_cwd_commit()
 """Commit hash of the current working directory if available."""
 
 del _get_cwd_commit  # Remove one-time function
@@ -900,7 +911,9 @@ class DaxSystem(DaxModuleBase):
         self.set_dataset('dax/dax_version', _dax_version, archive=True)
         self.set_dataset('dax/dax_sim_enabled', self.dax_sim_enabled, archive=True)
         if _CWD_COMMIT is not None:
-            self.set_dataset('dax/cwd_commit', _CWD_COMMIT, archive=True)
+            commit, dirty = _CWD_COMMIT
+            self.set_dataset('dax/cwd_commit', commit, archive=True)
+            self.set_dataset('dax/cwd_commit_dirty', dirty, archive=True)
 
         # Perform system initialization
         self.logger.debug('Starting DAX system initialization...')
@@ -1612,8 +1625,10 @@ class DaxDataStoreInfluxDb(DaxDataStore):
             self._base_fields['dax_sim_enabled'] = bool(environment.dax_sim_enabled)
 
         if _CWD_COMMIT is not None:
-            # Add commit hash to fields
-            self._base_fields['cwd_commit'] = _CWD_COMMIT
+            # Add commit hash and dirty flag to fields
+            commit, dirty = _CWD_COMMIT
+            self._base_fields['cwd_commit'] = commit
+            self._base_fields['cwd_commit_dirty'] = dirty
 
         # Add expid items to fields if keys do not exist yet and the types are appropriate
         self._base_fields.update((k, v) for k, v in scheduler.expid.items()

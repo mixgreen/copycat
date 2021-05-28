@@ -200,7 +200,11 @@ class DaxHelpersTestCase(unittest.TestCase):
             self.assertEqual(s.registry.get_unique_device_key(k), k, 'Virtual device key not returned correctly')
 
     def test_cwd_commit_hash(self):
-        self.assertIsInstance(dax.base.system._CWD_COMMIT, (str, type(None)), 'Unexpected type for CWD commit hash')
+        self.assertIsInstance(dax.base.system._CWD_COMMIT, (tuple, type(None)), 'Unexpected type for CWD commit hash')
+        if dax.base.system._CWD_COMMIT is not None:
+            commit, dirty = dax.base.system._CWD_COMMIT
+            self.assertIsInstance(commit, str)
+            self.assertIsInstance(dirty, bool)
 
         # Discover repo path
         # noinspection PyCallingNonCallable
@@ -212,8 +216,10 @@ class DaxHelpersTestCase(unittest.TestCase):
 
         # Test if CWD commit hash was loaded
         self.assertIsNotNone(dax.base.system._CWD_COMMIT, 'CWD commit hash was not loaded')
-        self.assertIsInstance(dax.base.system._CWD_COMMIT, str, 'Unexpected type for CWD commit hash')
-        self.assertEqual(dax.base.system._CWD_COMMIT, str(pygit2.Repository(path).head.target.hex),
+        commit, dirty = dax.base.system._CWD_COMMIT
+        self.assertIsInstance(commit, str, 'Unexpected type for CWD commit hash')
+        self.assertIsInstance(dirty, bool, 'Unexpected type for CWD commit dirty flag')
+        self.assertEqual(commit, str(pygit2.Repository(path).head.target.hex),
                          'CWD commit hash did not match reference')
 
     def test_ndarray_isinstance_sequence(self):
