@@ -8,6 +8,7 @@ dax.util.artiq module
     :members:
     :undoc-members:
     :show-inheritance:
+    :ignore-module-all:
 
 dax.util.ccb module
 -------------------

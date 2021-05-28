@@ -6,7 +6,9 @@ import typing
 import weakref
 import time
 import collections.abc
+import h5py  # type: ignore
 
+from artiq import __version__ as _artiq_version
 import artiq.language.core
 import artiq.language.environment
 import artiq.language.scan
@@ -15,9 +17,11 @@ import artiq.master.worker_impl  # type: ignore
 import artiq.master.databases
 import artiq.frontend.artiq_run  # type: ignore
 
+from dax import __version__ as _dax_version
+
 __all__ = ['is_kernel', 'is_portable', 'is_host_only', 'is_rpc', 'is_decorated',
            'default_enumeration_value',
-           'process_arguments', 'get_managers', 'ClonedDatasetManager', 'clone_managers', 'isolate_managers',
+           'process_arguments', 'get_managers', 'clone_managers', 'isolate_managers',
            'pause_strict_priority', 'terminate_running_instances']
 
 # Workaround required for Python<3.9
@@ -172,7 +176,7 @@ def process_arguments(arguments: typing.Dict[str, typing.Any]) -> typing.Dict[st
     return {key: _convert_argument(arg) for key, arg in arguments.items()}
 
 
-class _ManagersTuple(typing.NamedTuple):
+class ManagersTuple(typing.NamedTuple):
     """A named tuple of ARTIQ manager objects."""
 
     device_mgr: artiq.master.worker_db.DeviceManager
@@ -180,22 +184,57 @@ class _ManagersTuple(typing.NamedTuple):
     argument_mgr: artiq.language.environment.ProcessArgumentManager
     scheduler_defaults: typing.Dict[str, typing.Any]
 
-    def __enter__(self) -> _ManagersTuple:
+    def write_hdf5(self, file_name: str, *, metadata: typing.Optional[typing.Dict[str, typing.Any]] = None) -> None:
+        """Write the content of the dataset manager to an HDF5 file.
+
+        By default, the following metadata is added:
+
+        - ARTIQ version (``'artiq_version'``)
+        - DAX version (``'dax_version'``)
+
+        :param file_name: The file name to write to
+        :param metadata: Additional metadata added to the root of the HDF5 file
+        """
+        assert isinstance(file_name, str), 'File name must be of type str'
+        assert isinstance(metadata, dict) or metadata is None, 'Metadata must be a dict or None'
+
+        # Default values
+        if metadata is None:
+            metadata = {}
+
+        # Add default metadata
+        metadata.update({
+            'artiq_version': _artiq_version,
+            'dax_version': _dax_version,
+        })
+
+        with h5py.File(file_name, mode='w') as f:
+            # Write archive and datasets
+            self.dataset_mgr.write_hdf5(f)
+            # Write metadata
+            for k, v in metadata.items():
+                f[k] = v
+
+    def __enter__(self) -> ManagersTuple:
         return self
 
     def __exit__(self, exc_type: typing.Any, exc_val: typing.Any, exc_tb: typing.Any) -> None:
         pass
 
 
-class _CloseableManagersTuple(_ManagersTuple):
+class CloseableManagersTuple(ManagersTuple):
     """A named tuple of ARTIQ manager objects with functions to close resources."""
 
     def close(self) -> None:
+        """Close the resources of the managers.
+
+        Closes the devices of the device manager.
+        """
         # Close devices
         self.device_mgr.close_devices()
 
     def __exit__(self, exc_type: typing.Any, exc_val: typing.Any, exc_tb: typing.Any) -> None:
-        # Close at exit
+        """Closes the resources of the managers."""
         self.close()
 
 
@@ -203,7 +242,7 @@ def get_managers(device_db: typing.Union[typing.Dict[str, typing.Any], str, None
                  dataset_db: typing.Optional[str] = None,
                  expid: typing.Optional[typing.Dict[str, typing.Any]] = None,
                  arguments: typing.Optional[typing.Dict[str, typing.Any]] = None,
-                 **kwargs: typing.Any) -> _CloseableManagersTuple:
+                 **kwargs: typing.Any) -> CloseableManagersTuple:
     """Returns a tuple of ARTIQ manager objects that can be used to construct an ARTIQ :class:`HasEnvironment` object.
 
     This function is primarily used for testing purposes.
@@ -294,92 +333,12 @@ def get_managers(device_db: typing.Union[typing.Dict[str, typing.Any], str, None
 
     # Return an extended tuple object
     # noinspection PyArgumentList
-    return _CloseableManagersTuple(device_mgr, dataset_mgr, argument_mgr, {})
-
-
-class ClonedDatasetManager(artiq.master.worker_db.DatasetManager):
-    """Class for a cloned dataset manager.
-
-    A cloned dataset managers allows dataset separation for sub-experiments under one RID.
-    The cloned dataset manager has its own archive and datasets while using the same
-    backend as the original dataset manager.
-    When the original dataset manager is written to an HDF5 file, clones will appear as
-    independent groups in the same HDF5 file.
-
-    Dataset managers can not be cloned recursively and must always be created
-    from the existing ARTIQ dataset manager.
-    """
-
-    _CLONE_DICT_KEY: typing.ClassVar[str] = '_dax_dataset_mgr_clones_'
-    """The attribute key of the clone dictionary attached to the existing ARTIQ dataset manager."""
-    _CLONE_KEY_FORMAT: typing.ClassVar[str] = 'sub_experiment/{index}'
-    """The key format for cloned datasets, which is used for the HDF5 group name."""
-
-    def __init__(self, dataset_mgr: artiq.master.worker_db.DatasetManager, *,
-                 name: typing.Optional[str] = None,
-                 dataset_db: typing.Any = None):
-        """Create a clone of an existing ARTIQ dataset manager.
-
-        The name parameter must be unique and is formatted with an index parameter.
-        The index parameter starts at :const:`0` and is incremented for every new clone
-        created from the existing ARTIQ dataset manager.
-
-        The ``name`` is directly used as the HDF5 group name and ``'/'`` can therefore be
-        used to create sub-groups.
-
-        :param dataset_mgr: The existing ARTIQ dataset manager
-        :param name: Optional name for this clone, which will be used for the HDF5 group name
-        :param dataset_db: Optional backend dataset DB, defaults to dataset DB of the existing ARTIQ dataset manager
-        """
-        assert isinstance(dataset_mgr, artiq.master.worker_db.DatasetManager)
-        assert isinstance(name, str) or name is None, 'Name must be of type str or None'
-
-        if isinstance(dataset_mgr, ClonedDatasetManager):
-            raise TypeError('Dataset managers can not be cloned recursively')
-        if name in {'datasets', 'archive'}:
-            raise ValueError('Name can not be the same as the standard group names used by ARTIQ')
-
-        # Initialize this clone
-        super(ClonedDatasetManager, self).__init__(dataset_mgr.ddb if dataset_db is None else dataset_db)
-
-        if not hasattr(dataset_mgr, self._CLONE_DICT_KEY):
-            # The existing ARTIQ dataset manager is still "fresh", so we need to mutate it
-            self._mutate_dataset_manager(dataset_mgr)
-
-        # Extract the dict with clones from the dataset manager
-        clones: typing.Dict[str, ClonedDatasetManager] = getattr(dataset_mgr, self._CLONE_DICT_KEY)
-        # Generate the key for this clone and check if it is unique
-        key: str = (self._CLONE_KEY_FORMAT if name is None else name).format(index=len(clones))
-        if key in clones:
-            raise LookupError(f'Key "{key}" is already in use')
-        # Register this clone
-        clones[key] = self
-
-    def _mutate_dataset_manager(self, dataset_mgr: artiq.master.worker_db.DatasetManager) -> None:
-        """Mutate the existing ARTIQ dataset manager."""
-
-        # Attach an empty dict for clones
-        clones: typing.Dict[str, ClonedDatasetManager] = {}
-        setattr(dataset_mgr, self._CLONE_DICT_KEY, clones)
-
-        # Get a reference to the original write_hdf5() function
-        super_write_hdf5 = dataset_mgr.write_hdf5
-
-        def wrapped_write_hdf5(f: typing.Any) -> None:
-            # Call the "super" function of the dataset manager
-            super_write_hdf5(f)
-            # Write the data of the clones in separate HDF5 groups
-            for name, clone in clones.items():
-                clone.write_hdf5(f.create_group(name))
-
-        # Replace the write_hdf5() function of the dataset manager
-        setattr(dataset_mgr, 'write_hdf5', wrapped_write_hdf5)  # Dynamic assignment to pass type check
+    return CloseableManagersTuple(device_mgr, dataset_mgr, argument_mgr, {})
 
 
 def clone_managers(managers: typing.Any, *,
-                   name: typing.Optional[str] = None,
                    arguments: typing.Optional[typing.Dict[str, typing.Any]] = None,
-                   **kwargs: typing.Any) -> _ManagersTuple:
+                   **kwargs: typing.Any) -> ManagersTuple:
     """Clone a given tuple of ARTIQ manager objects to use for a sub-experiment.
 
     Sub-experiments (i.e. ``children`` in ARTIQ terminology) can share ARTIQ manager objects with their parent
@@ -390,6 +349,8 @@ def clone_managers(managers: typing.Any, *,
 
     This function is mainly used when creating and running multiple sub-experiments from a parent
     experiment class where the dataset manager archives and arguments are preferably decoupled.
+    Contents of the decoupled dataset manager are not automatically archived to an HDF5 file.
+    If desired, the user has to to so explicitly (see :func:`ManagersTuple.write_hdf5`).
 
     Note that the dataset DB is still shared, which means broadcast and persistent datasets are shared.
     To isolate a sub-experiment completely, see :func:`isolate_managers`.
@@ -398,10 +359,9 @@ def clone_managers(managers: typing.Any, *,
     have to be captured in the constructor of your experiment.
 
     :param managers: The tuple with ARTIQ manager objects
-    :param name: Optional name for cloned dataset manager, which will be used in the HDF5 group name
     :param arguments: Arguments for the ProcessArgumentManager object
     :param kwargs: Arguments for the ProcessArgumentManager object (updates ``arguments``)
-    :return: A cloned ARTIQ manager object: ``(DeviceManager, ClonedDatasetManager, ProcessArgumentManager, dict)``
+    :return: A cloned ARTIQ manager object: ``(DeviceManager, DatasetManager, ProcessArgumentManager, dict)``
     """
 
     if arguments is None:
@@ -435,8 +395,8 @@ def clone_managers(managers: typing.Any, *,
     # Create a new argument manager
     argument_mgr = artiq.language.environment.ProcessArgumentManager(arguments)
 
-    # Return the new managers consisting of existing, cloned, and new objects
-    return _ManagersTuple(device_mgr, ClonedDatasetManager(dataset_mgr, name=name), argument_mgr, {})
+    # Return the new managers consisting of existing and new objects
+    return ManagersTuple(device_mgr, artiq.master.worker_db.DatasetManager(dataset_mgr.ddb), argument_mgr, {})
 
 
 class _DummyDatasetDB(typing.Dict[typing.Any, typing.Any]):
@@ -448,24 +408,23 @@ class _DummyDatasetDB(typing.Dict[typing.Any, typing.Any]):
 
 
 def isolate_managers(managers: typing.Any, *,
-                     name: typing.Optional[str] = None,
                      arguments: typing.Optional[typing.Dict[str, typing.Any]] = None,
-                     **kwargs: typing.Any) -> _ManagersTuple:
+                     **kwargs: typing.Any) -> ManagersTuple:
     """Create a tuple of ARTIQ manager objects that is isolated from the given tuple of managers.
 
     Isolation of manager objects can be useful when running sub-experiments that should not
     share device/dataset/argument managers with the main experiment.
-    The isolated ARTIQ managers consists of an empty device manager, a cloned dataset manager with
-    an empty dummy dataset DB (see :class:`ClonedDatasetManager`), an empty argument manager,
-    and empty scheduling defaults.
+    The isolated ARTIQ managers consists of an empty device manager, an isolated dataset manager with
+    an empty dummy dataset DB, an empty argument manager, and empty scheduling defaults.
+    Contents of the isolated dataset manager are not automatically archived to an HDF5 file.
+    If desired, the user has to to so explicitly (see :func:`ManagersTuple.write_hdf5`).
 
     See also :func:`clone_managers`.
 
     :param managers: The tuple with ARTIQ manager objects
-    :param name: Optional name for cloned dataset manager, which will be used in the HDF5 group name
     :param arguments: Arguments for the ProcessArgumentManager object
     :param kwargs: Arguments for the ProcessArgumentManager object (updates ``arguments``)
-    :return: Isolated ARTIQ managers: ``(DeviceManager, ClonedDatasetManager, ProcessArgumentManager, dict)``
+    :return: Isolated ARTIQ managers: ``(DeviceManager, DatasetManager, ProcessArgumentManager, dict)``
     """
 
     if arguments is None:
@@ -520,8 +479,7 @@ def isolate_managers(managers: typing.Any, *,
     argument_mgr = artiq.language.environment.ProcessArgumentManager(arguments)
 
     # Return the isolated managers
-    return _ManagersTuple(
-        device_mgr, ClonedDatasetManager(dataset_mgr, name=name, dataset_db=_DummyDatasetDB()), argument_mgr, {})
+    return ManagersTuple(device_mgr, artiq.master.worker_db.DatasetManager(_DummyDatasetDB()), argument_mgr, {})
 
 
 @artiq.language.core.host_only
