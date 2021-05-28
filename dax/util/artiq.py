@@ -198,9 +198,13 @@ class ManagersTuple(typing.NamedTuple):
         assert isinstance(file_name, str), 'File name must be of type str'
         assert isinstance(metadata, dict) or metadata is None, 'Metadata must be a dict or None'
 
-        # Default values
         if metadata is None:
+            # Set default value
             metadata = {}
+        else:
+            assert isinstance(metadata, dict), 'Metadata must be of type dict'
+            assert all(isinstance(k, str) for k in metadata), 'Keys of the metadata dict must be of type str'
+            metadata = metadata.copy()  # Copy metadata to make sure the dict is not mutated
 
         # Add default metadata
         metadata.update({
@@ -369,6 +373,7 @@ def clone_managers(managers: typing.Any, *,
         arguments = {}
     else:
         assert isinstance(arguments, dict), 'Arguments must be of type dict'
+        assert all(isinstance(k, str) for k in arguments), 'Keys of the arguments dict must be of type str'
         arguments = arguments.copy()  # Copy arguments to make sure the dict is not mutated
 
     # Check the type of the passed managers
@@ -432,6 +437,7 @@ def isolate_managers(managers: typing.Any, *,
         arguments = {}
     else:
         assert isinstance(arguments, dict), 'Arguments must be of type dict'
+        assert all(isinstance(k, str) for k in arguments), 'Keys of the arguments dict must be of type str'
         arguments = arguments.copy()  # Copy arguments to make sure the dict is not mutated
 
     # Check the type of the passed managers

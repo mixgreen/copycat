@@ -167,6 +167,7 @@ class ArtiqTestCase(unittest.TestCase):
     def test_managers_tuple_write_hdf5(self):
         m = dax.util.artiq.get_managers()
         default_meta_keys = ['artiq_version', 'dax_version']
+        default_groups = ['archive', 'datasets']
 
         with m:
             for meta in [{}, {'foo': 1, 'bar': 2.0}]:
@@ -179,23 +180,18 @@ class ArtiqTestCase(unittest.TestCase):
                     result = h5py.File(file_name, mode='r')
                     for k, v in meta.items():
                         self.assertEqual(result[k][()], v)
-                    for k in default_meta_keys:
+                    for k in default_meta_keys + default_groups:
                         self.assertIn(k, result)
-                    self.assertEqual(len(result), len(meta) + len(default_meta_keys), 'Found more keys than expected')
-                    for k in ['archive', 'datasets']:
-                        self.assertIn(k, result)
+                    self.assertEqual(len(result), len(meta) + len(default_meta_keys) + len(default_groups),
+                                     'Found more keys than expected')
 
     def test_clone_managers(self):
         with dax.util.artiq.get_managers() as managers:
-            write_hdf5_fn = managers.dataset_mgr.write_hdf5
-
             with dax.util.artiq.clone_managers(managers) as cloned:
                 self.assertIsInstance(cloned, dax.util.artiq.ManagersTuple,
                                       'Cloned managers tuple is not of the correct type (should not be closable)')
                 self.assertIs(managers.device_mgr, cloned.device_mgr, 'Device manager was modified unintentionally')
                 self.assertIsNot(managers.dataset_mgr, cloned.dataset_mgr, 'Dataset manager was not replaced')
-                self.assertIsNot(managers.dataset_mgr.write_hdf5, write_hdf5_fn,
-                                 'write_hdf5() function was not replaced')
                 self.assertIsInstance(cloned.dataset_mgr, artiq.master.worker_db.DatasetManager)
                 self.assertIsNot(managers.argument_mgr, cloned.argument_mgr, 'Argument manager was not replaced')
                 self.assertFalse(cloned.argument_mgr.unprocessed_arguments, 'Arguments not decoupled')
