@@ -203,7 +203,7 @@ class DaxScan(dax.base.system.DaxBase, abc.ABC):
         """Build the scan object using the :func:`build_scan` function.
 
         Normally users would build their scan object by overriding the :func:`build_scan` function.
-        In specific cases where this function might be overridden, do not forget to call ``super.build()``.
+        In specific cases where this function might be overridden, do not forget to call ``super().build()``.
 
         :param args: Positional arguments forwarded to the superclass
         :param kwargs: Keyword arguments forwarded to the superclass (includes args and kwargs for :func:`build_scan`)

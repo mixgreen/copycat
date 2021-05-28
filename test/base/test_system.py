@@ -1015,7 +1015,7 @@ class DaxModuleBaseTestCase(unittest.TestCase):
                 pass  # No call to super(), which is bad
 
         # Test if an error occurs when super() is not called in build()
-        with self.assertRaises(AttributeError, msg='Not calling super.build() in user system did not raise'):
+        with self.assertRaises(AttributeError, msg='Not calling super().build() in user system did not raise'):
             BadTestSystem(self.managers)
 
     def test_system_kernel_invariants(self):
@@ -1521,7 +1521,7 @@ class DaxSystemTestCase(unittest.TestCase):
         class SomeBaseClass(HasEnvironment):
             # noinspection PyUnusedLocal
             def build(self, *args, **kwargs):
-                # super.build() here calls HasEnvironment, which is empty
+                # super().build() here calls HasEnvironment, which is empty
                 # Set flag
                 self.base_build_was_called = True
 

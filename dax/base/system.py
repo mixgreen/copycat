@@ -187,7 +187,7 @@ class DaxHasKey(DaxBase, abc.ABC):
         # Verify that all key attributes are available
         key_attributes: typing.List[str] = ['data_store']
         if not all(hasattr(self, n) for n in key_attributes):  # hasattr() checks properties too
-            msg: str = 'Missing key attributes (super.build() was probably not called)'
+            msg: str = 'Missing key attributes (super().build() was probably not called)'
             self.logger.error(msg)
             raise AttributeError(msg)
 
@@ -211,7 +211,7 @@ class DaxHasKey(DaxBase, abc.ABC):
             # Take attributes from parent
             self.__data_store = parent.data_store
         except AttributeError:
-            parent.logger.exception('Missing key attributes (super.build() was probably not called)')
+            parent.logger.exception('Missing key attributes (super().build() was probably not called)')
             raise
 
     @artiq.language.core.host_only
@@ -473,7 +473,7 @@ class DaxHasSystem(DaxHasKey, abc.ABC):
         core_devices: typing.List[str] = ['core', 'core_dma', 'core_cache']
         core_attributes: typing.List[str] = core_devices + ['registry']
         if not all(hasattr(self, n) for n in core_attributes):  # hasattr() checks properties too
-            msg: str = 'Missing core attributes (super.build() was probably not called)'
+            msg: str = 'Missing core attributes (super().build() was probably not called)'
             self.logger.error(msg)
             raise AttributeError(msg)
 
@@ -524,7 +524,7 @@ class DaxHasSystem(DaxHasKey, abc.ABC):
             self.__core_cache = parent.core_cache
             self.__registry = parent.registry
         except AttributeError:
-            parent.logger.exception('Missing core attributes (super.build() was probably not called)')
+            parent.logger.exception('Missing core attributes (super().build() was probably not called)')
             raise
 
     @artiq.language.core.host_only
@@ -827,7 +827,7 @@ class DaxSystem(DaxModuleBase):
         return self.__sim_enabled
 
     def build(self, *args: typing.Any, **kwargs: typing.Any) -> None:
-        """Override this method to build your DAX system. (Do not forget to call ``super.build()`` first!)
+        """Override this method to build your DAX system. (Do not forget to call ``super().build()`` first!)
 
         :param args: Positional arguments forwarded to the super class
         :param kwargs: Keyword arguments forwarded to the super class
@@ -990,7 +990,7 @@ class DaxClient(DaxHasSystem, abc.ABC):
     define an execution flow. Additionally, a :func:`build` function can be implemented to
     provide a user interface for configuring the client.
 
-    Note that the :func:`build` function does not need to call ``super()``.
+    Note that the :func:`build` function does not need to call ``super().build()``.
     The decorator will make sure all classes are build in the correct order.
     """
 
