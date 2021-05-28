@@ -173,21 +173,26 @@ def process_arguments(arguments: typing.Dict[str, typing.Any]) -> typing.Dict[st
 
 
 class _ManagersTuple(typing.NamedTuple):
-    """A named tuple of ARTIQ manager objects.
+    """A named tuple of ARTIQ manager objects."""
 
-    This named tuple extends the functionality of a bare tuple.
-    """
     device_mgr: artiq.master.worker_db.DeviceManager
     dataset_mgr: artiq.master.worker_db.DatasetManager
     argument_mgr: artiq.language.environment.ProcessArgumentManager
     scheduler_defaults: typing.Dict[str, typing.Any]
 
+    def __enter__(self) -> _ManagersTuple:
+        return self
+
+    def __exit__(self, exc_type: typing.Any, exc_val: typing.Any, exc_tb: typing.Any) -> None:
+        pass
+
+
+class _CloseableManagersTuple(_ManagersTuple):
+    """A named tuple of ARTIQ manager objects with functions to close resources."""
+
     def close(self) -> None:
         # Close devices
         self.device_mgr.close_devices()
-
-    def __enter__(self) -> _ManagersTuple:
-        return self
 
     def __exit__(self, exc_type: typing.Any, exc_val: typing.Any, exc_tb: typing.Any) -> None:
         # Close at exit
@@ -198,7 +203,7 @@ def get_managers(device_db: typing.Union[typing.Dict[str, typing.Any], str, None
                  dataset_db: typing.Optional[str] = None,
                  expid: typing.Optional[typing.Dict[str, typing.Any]] = None,
                  arguments: typing.Optional[typing.Dict[str, typing.Any]] = None,
-                 **kwargs: typing.Any) -> _ManagersTuple:
+                 **kwargs: typing.Any) -> _CloseableManagersTuple:
     """Returns a tuple of ARTIQ manager objects that can be used to construct an ARTIQ :class:`HasEnvironment` object.
 
     This function is primarily used for testing purposes.
@@ -288,7 +293,8 @@ def get_managers(device_db: typing.Union[typing.Dict[str, typing.Any], str, None
     argument_mgr = artiq.language.environment.ProcessArgumentManager(arguments)
 
     # Return an extended tuple object
-    return _ManagersTuple(device_mgr, dataset_mgr, argument_mgr, {})
+    # noinspection PyArgumentList
+    return _CloseableManagersTuple(device_mgr, dataset_mgr, argument_mgr, {})
 
 
 class ClonedDatasetManager(artiq.master.worker_db.DatasetManager):

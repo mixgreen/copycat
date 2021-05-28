@@ -199,7 +199,7 @@ class ProgramClient(DaxClient, Experiment):
                     raise FileNotFoundError(f'Archive "{file_name}" does not contain a main.py file')
                 return _import_file(unpacked_file_name)
 
-    def _write_hdf5_file(self):
+    def _write_hdf5_file(self) -> None:
         # Write a separate HDF5 file for the isolated datasets
         self.logger.debug('Writing separate HDF5 file for isolated datasets')
 
