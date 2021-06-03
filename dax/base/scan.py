@@ -6,7 +6,7 @@ import numpy as np
 import collections
 import collections.abc
 import os.path
-import h5py  # type: ignore
+import h5py
 
 from artiq.experiment import *
 import artiq.coredevice.core

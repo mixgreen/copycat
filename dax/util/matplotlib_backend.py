@@ -10,6 +10,6 @@ This workaround is sometimes needed when using Matplotlib in the ARTIQ Nix envir
 ``artiq_*`` commands, for example during testing or debugging.
 """
 
-import matplotlib  # type: ignore
+import matplotlib
 
 matplotlib.use('pdf')

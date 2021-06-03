@@ -6,7 +6,7 @@ import itertools
 import re
 import natsort
 import typing
-import pygit2  # type: ignore
+import pygit2
 import os
 import collections.abc
 import types

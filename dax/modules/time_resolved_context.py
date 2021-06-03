@@ -3,7 +3,7 @@ import collections
 import collections.abc
 import math
 import numpy as np
-import h5py  # type: ignore
+import h5py
 import os.path
 import natsort
 
@@ -728,7 +728,7 @@ class TimeResolvedAnalyzer:
         traces = self.traces[key]
 
         # Lazy import
-        import matplotlib.pyplot as plt  # type: ignore
+        import matplotlib.pyplot as plt
 
         # Create figure
         fig, ax = plt.subplots(figsize=fig_size)

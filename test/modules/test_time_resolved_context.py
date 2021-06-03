@@ -1,6 +1,6 @@
 import unittest
 import numpy as np
-import h5py  # type: ignore
+import h5py
 
 from dax.experiment import *
 import dax.util.matplotlib_backend  # noqa: F401

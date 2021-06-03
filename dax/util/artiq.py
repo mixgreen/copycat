@@ -6,7 +6,7 @@ import typing
 import weakref
 import time
 import collections.abc
-import h5py  # type: ignore
+import h5py
 
 from artiq import __version__ as _artiq_version
 import artiq.language.core

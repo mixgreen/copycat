@@ -19,7 +19,7 @@ import pathlib
 import artiq.experiment
 import artiq.master.worker_db
 import artiq.tools
-import sipyco.pc_rpc  # type: ignore
+import sipyco.pc_rpc
 from sipyco import pyon
 
 import dax.base.system

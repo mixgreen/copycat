@@ -4,7 +4,7 @@ import typing
 import random
 import argparse
 import os.path
-import h5py  # type: ignore
+import h5py
 
 from artiq.language.core import rpc, portable, kernel, host_only
 import artiq.experiment

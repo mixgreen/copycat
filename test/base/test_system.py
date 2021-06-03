@@ -2,7 +2,7 @@ import unittest
 import numpy as np
 import logging
 import os
-import pygit2  # type: ignore
+import pygit2
 import collections.abc
 import typing
 import itertools
