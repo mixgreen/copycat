@@ -2,7 +2,7 @@ import typing
 import collections
 import collections.abc
 import numpy as np
-import h5py  # type: ignore
+import h5py
 import natsort
 import os.path
 import math
@@ -995,8 +995,8 @@ class HistogramAnalyzer:
         assert isinstance(ext, str)
 
         # Lazy import
-        import matplotlib.pyplot as plt  # type: ignore
-        import matplotlib.ticker  # type: ignore
+        import matplotlib.pyplot as plt
+        import matplotlib.ticker
 
         if fig_size is None:
             # Make the default width of the figure wider

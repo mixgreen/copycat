@@ -5,7 +5,7 @@ import importlib
 import typing
 import dataclasses
 
-import sipyco.pyon  # type: ignore
+import sipyco.pyon
 
 import dax.util.configparser
 

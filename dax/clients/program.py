@@ -6,15 +6,12 @@ import os.path
 import shutil
 import shlex
 import argparse
-import h5py  # type: ignore
 
-from artiq import __version__ as _artiq_version
 import artiq.tools
 
 # No wildcard import to prevent aliasing with ``types``
 from dax.experiment import DaxClient, dax_client_factory, Experiment, StringValue, NoDefault
 
-from dax import __version__ as _dax_version
 import dax.base.program
 import dax.util.artiq
 import dax.util.output
@@ -174,9 +171,11 @@ class ProgramClient(DaxClient, Experiment):
     def analyze(self) -> None:
         # Analyze the program
         self.logger.info(f'Analyzing program "{self._class}"')
-        self._program.analyze()
-        # Write HDF5 file
-        self._write_hdf5_file()
+        try:
+            self._program.analyze()
+        finally:
+            # Write HDF5 file
+            self._write_hdf5_file()
 
     def _load_module(self) -> types.ModuleType:
         # Expand and check path
@@ -200,21 +199,20 @@ class ProgramClient(DaxClient, Experiment):
                 return _import_file(unpacked_file_name)
 
     def _write_hdf5_file(self) -> None:
-        # Write a separate HDF5 file for the isolated datasets
-        self.logger.debug('Writing separate HDF5 file for isolated datasets')
+        # Collect metadata
+        metadata = {
+            'rid': self._scheduler.rid,
+            'file': self._file,
+            'class': self._class,
+            'arguments': self._arguments,
+            'operation_key': self._operation_key,
+            'data_context_key': self._data_context_key,
+        }
 
-        with h5py.File(dax.util.output.get_file_name(self._scheduler, 'program', 'h5'), mode='w') as f:
-            # Write archive and datasets
-            self._isolated_managers.dataset_mgr.write_hdf5(f)
-            # Add metadata
-            f['artiq_version'] = _artiq_version
-            f['dax_version'] = _dax_version
-            f['rid'] = self._scheduler.rid
-            f['file'] = self._file
-            f['class'] = self._class
-            f['arguments'] = self._arguments
-            f['operation_key'] = self._operation_key
-            f['data_context_key'] = self._data_context_key
+        # Write a separate HDF5 file for the isolated datasets
+        self.logger.debug('Writing HDF5 file for isolated dataset manager')
+        self._isolated_managers.write_hdf5(dax.util.output.get_file_name(self._scheduler, 'program', 'h5'),
+                                           metadata=metadata)
 
     """Customization functions"""
 

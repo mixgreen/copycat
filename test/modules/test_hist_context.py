@@ -2,7 +2,7 @@ import typing
 import unittest
 import collections
 import numpy as np
-import h5py  # type: ignore
+import h5py
 import logging
 
 import artiq.coredevice

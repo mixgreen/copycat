@@ -19,7 +19,8 @@ import pathlib
 import artiq.experiment
 import artiq.master.worker_db
 import artiq.tools
-import sipyco.pc_rpc  # type: ignore
+import sipyco.pc_rpc
+from sipyco import pyon
 
 import dax.base.system
 import dax.base.exceptions
@@ -807,15 +808,15 @@ class CalibrationJob(BaseJob):
 
             def __init__(self, managers_or_parent: typing.Any, *args: typing.Any, **kwargs: typing.Any):
                 _, _, argument_mgr, _ = managers_or_parent
-                check_managers = dax.util.artiq.clone_managers(
+                self._check_args = argument_mgr.unprocessed_arguments.pop('check')
+                self._check_managers = dax.util.artiq.clone_managers(
                     managers_or_parent,
-                    name=f'{cls.CHECK_CLASS_NAME}_{{index}}',
-                    arguments=argument_mgr.unprocessed_arguments.pop('check')
+                    arguments=self._check_args
                 )
+                self._cal_args = argument_mgr.unprocessed_arguments.pop('calibration')
                 self._cal_managers = dax.util.artiq.clone_managers(
                     managers_or_parent,
-                    name=f'{cls.CALIBRATION_CLASS_NAME}_{{index}}',
-                    arguments=argument_mgr.unprocessed_arguments.pop('calibration')
+                    arguments=self._cal_args
                 )
                 self._controller_key = argument_mgr.unprocessed_arguments.pop('controller_key')
                 self._my_dataset_keys = argument_mgr.unprocessed_arguments.pop('my_dataset_keys')
@@ -832,7 +833,7 @@ class CalibrationJob(BaseJob):
                 assert issubclass(self._cal_cls, artiq.experiment.HasEnvironment)
                 # mypy/python doesn't support "intersection" style typing (yet), so just have to use typing.Any
                 try:
-                    self._check_exp = check_cls(check_managers)
+                    self._check_exp = check_cls(self._check_managers)
                 except Exception as e:
                     self._check_exception = e
                 else:
@@ -949,10 +950,28 @@ class CalibrationJob(BaseJob):
                                      broadcast=True, persist=True, archive=False)
 
             def analyze(self) -> None:
+                # make sure file names are unique in the case that the check class and cal class are the same
+                file_name_gen = dax.util.output.FileNameGenerator(self._scheduler)
+                check_name = file_name_gen(cls.CHECK_CLASS_NAME, 'h5')
+                cal_name = file_name_gen(cls.CALIBRATION_CLASS_NAME, 'h5')
                 if self._check_analyze:
-                    self._check_exp.analyze()
+                    try:
+                        self._check_exp.analyze()
+                    finally:
+                        check_meta = {
+                            'rid': self._scheduler.rid,
+                            'arguments': pyon.encode(self._check_args)
+                        }
+                        self._check_managers.write_hdf5(check_name, metadata=check_meta)
                 if self._cal_analyze:
-                    self._calibration_exp.analyze()
+                    try:
+                        self._calibration_exp.analyze()
+                    finally:
+                        cal_meta = {
+                            'rid': self._scheduler.rid,
+                            'arguments': pyon.encode(self._cal_args)
+                        }
+                        self._cal_managers.write_hdf5(cal_name, metadata=cal_meta)
 
             def _submit_barrier(self) -> None:
                 # Ensure the priority of the barrier is higher than the priority of the current experiment

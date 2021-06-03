@@ -20,7 +20,7 @@ from unittest.mock import Mock, call
 from artiq.language.scan import *
 from artiq.experiment import TerminationRequested, NumberValue
 import artiq.frontend.artiq_run  # type: ignore
-from sipyco.sync_struct import Subscriber  # type: ignore
+from sipyco.sync_struct import Subscriber
 
 from dax.base.scheduler import *
 import dax.base.scheduler

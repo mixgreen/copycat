@@ -1,7 +1,10 @@
 import unittest
+from unittest.mock import patch
 import typing
 import random
 import argparse
+import os.path
+import h5py
 
 from artiq.language.core import rpc, portable, kernel, host_only
 import artiq.experiment
@@ -19,6 +22,7 @@ class ArtiqTestCase(unittest.TestCase):
         with dax.util.artiq.get_managers() as managers:
             self.assertIsInstance(artiq.experiment.EnvExperiment(managers), artiq.experiment.HasEnvironment)
             self.assertIsInstance(managers, tuple)
+            self.assertIsInstance(managers, dax.util.artiq.CloseableManagersTuple)
 
             num_managers = 4
             self.assertEqual(len(managers), num_managers)
@@ -130,88 +134,77 @@ class ArtiqTestCase(unittest.TestCase):
 
         self.assertDictEqual(parsed_arguments, processed_arguments)
 
-    def test_cloned_dataset_manager(self):
-        with dax.util.artiq.get_managers() as managers:
-            clone = dax.util.artiq.ClonedDatasetManager(managers.dataset_mgr)
-            self.assertIs(clone.ddb, managers.dataset_mgr.ddb)
-            self.assertIsInstance(clone, artiq.master.worker_db.DatasetManager)
+    def test_managers_tuple(self):
+        managers = dax.util.artiq.get_managers()
+        with patch.object(managers.device_mgr, 'close_devices') as managers_fn:
+            with managers:
+                with dax.util.artiq.clone_managers(managers) as clone:
+                    self.assertIsInstance(clone, dax.util.artiq.ManagersTuple)
+                    with patch.object(clone.device_mgr, 'close_devices') as clone_fn:
+                        with clone:
+                            pass
+                        self.assertFalse(clone_fn.called)
+                self.assertFalse(managers_fn.called)
+            self.assertTrue(managers_fn.called)
 
-    def test_cloned_dataset_manager_non_recursive(self):
-        with dax.util.artiq.get_managers() as managers:
-            clone = dax.util.artiq.ClonedDatasetManager(managers.dataset_mgr)
-            with self.assertRaises(TypeError, msg='Recursive clone did not raise'):
-                dax.util.artiq.ClonedDatasetManager(clone)
+    def test_closable_managers_tuple(self):
+        m = dax.util.artiq.get_managers()
+        self.assertIsInstance(m, dax.util.artiq.CloseableManagersTuple)
 
-    def test_cloned_dataset_manager_name(self):
-        with dax.util.artiq.get_managers() as managers:
-            name = 'foobar'
+        with patch.object(m.device_mgr, 'close_devices') as fn:
+            m.close()
+            self.assertTrue(fn.called, 'Devices were not closed')
 
-            clone = dax.util.artiq.ClonedDatasetManager(managers.dataset_mgr, name=name)
-            clone_dict = getattr(managers.dataset_mgr, dax.util.artiq.ClonedDatasetManager._CLONE_DICT_KEY)
-            self.assertEqual(len(clone_dict), 1, 'Unexpected number of clones in dict')
-            registered_clone_key, registered_clone = clone_dict.popitem()
-            self.assertEqual(registered_clone_key, name, 'Dataset manager clone name was not passed correctly')
-            self.assertIs(registered_clone, clone)
+    def test_closable_managers_tuple_context(self):
+        m = dax.util.artiq.get_managers()
+        self.assertIsInstance(m, dax.util.artiq.CloseableManagersTuple)
 
-    def test_cloned_dataset_manager_name_index(self):
-        with dax.util.artiq.get_managers() as managers:
-            name = 'foobar_{index}'
+        with patch.object(m.device_mgr, 'close_devices') as fn:
+            with m:
+                pass
+            self.assertTrue(fn.called, 'Devices were not closed')
 
-            clone = dax.util.artiq.ClonedDatasetManager(managers.dataset_mgr, name=name)
-            clone_dict = getattr(managers.dataset_mgr, dax.util.artiq.ClonedDatasetManager._CLONE_DICT_KEY)
-            self.assertEqual(len(clone_dict), 1, 'Unexpected number of clones in dict')
-            registered_clone_key, registered_clone = clone_dict.popitem()
-            self.assertEqual(registered_clone_key, name.format(index=0),
-                             'Dataset manager clone name was not passed correctly')
-            self.assertIs(registered_clone, clone)
+    def test_managers_tuple_write_hdf5(self):
+        m = dax.util.artiq.get_managers()
+        default_meta_keys = ['artiq_version', 'dax_version']
+        default_groups = ['archive', 'datasets']
 
-    def test_cloned_dataset_manager_unique_name(self):
-        with dax.util.artiq.get_managers() as managers:
-            name = 'foobar'
+        with m:
+            for meta in [{}, {'foo': 1, 'bar': 2.0}]:
+                with dax.util.output.temp_dir() as tmp:
+                    file_name = os.path.join(tmp, 'out.h5')
+                    self.assertFalse(os.path.isfile(file_name))
+                    m.write_hdf5(file_name, metadata=meta)
+                    self.assertTrue(os.path.isfile(file_name))
 
-            dax.util.artiq.ClonedDatasetManager(managers.dataset_mgr, name=name)
-            with self.assertRaises(LookupError, msg='Non-unique name did not raise'):
-                dax.util.artiq.ClonedDatasetManager(managers.dataset_mgr, name=name)
-
-    def test_cloned_dataset_manager_artiq_name(self):
-        with dax.util.artiq.get_managers() as managers:
-            for name in ['datasets', 'archive']:
-                with self.assertRaises(ValueError):
-                    dax.util.artiq.ClonedDatasetManager(managers.dataset_mgr, name=name)
-
-    def test_cloned_dataset_manager_dataset_db(self):
-        with dax.util.artiq.get_managers() as managers:
-            d = {}
-            clone = dax.util.artiq.ClonedDatasetManager(managers.dataset_mgr, dataset_db=d)
-            self.assertIsNot(clone.ddb, managers.dataset_mgr.ddb)
-            self.assertIs(clone.ddb, d)
-            self.assertIsInstance(clone, artiq.master.worker_db.DatasetManager)
+                    result = h5py.File(file_name, mode='r')
+                    for k, v in meta.items():
+                        self.assertEqual(result[k][()], v)
+                    for k in default_meta_keys + default_groups:
+                        self.assertIn(k, result)
+                    self.assertEqual(len(result), len(meta) + len(default_meta_keys) + len(default_groups),
+                                     'Found more keys than expected')
 
     def test_clone_managers(self):
         with dax.util.artiq.get_managers() as managers:
-            write_hdf5_fn = managers.dataset_mgr.write_hdf5
-
             with dax.util.artiq.clone_managers(managers) as cloned:
+                self.assertIsInstance(cloned, dax.util.artiq.ManagersTuple,
+                                      'Cloned managers tuple is not of the correct type (should not be closable)')
                 self.assertIs(managers.device_mgr, cloned.device_mgr, 'Device manager was modified unintentionally')
                 self.assertIsNot(managers.dataset_mgr, cloned.dataset_mgr, 'Dataset manager was not replaced')
-                self.assertIsNot(managers.dataset_mgr.write_hdf5, write_hdf5_fn,
-                                 'write_hdf5() function was not replaced')
-                self.assertIsInstance(cloned.dataset_mgr, dax.util.artiq.ClonedDatasetManager)
+                self.assertIsInstance(cloned.dataset_mgr, artiq.master.worker_db.DatasetManager)
                 self.assertIsNot(managers.argument_mgr, cloned.argument_mgr, 'Argument manager was not replaced')
                 self.assertFalse(cloned.argument_mgr.unprocessed_arguments, 'Arguments not decoupled')
                 self.assertIsNot(managers.scheduler_defaults, cloned.scheduler_defaults,
                                  'Scheduler defaults were not replaced')
 
-    def test_clone_managers_name(self):
+    def test_clone_managers_recursive(self):
         with dax.util.artiq.get_managers() as managers:
-            name = 'foo'
-
-            with dax.util.artiq.clone_managers(managers, name=name) as cloned:
-                clone_dict = getattr(managers.dataset_mgr, dax.util.artiq.ClonedDatasetManager._CLONE_DICT_KEY)
-                self.assertEqual(len(clone_dict), 1, 'Unexpected number of clones in dict')
-                registered_clone_key, registered_clone = clone_dict.popitem()
-                self.assertEqual(registered_clone_key, name, 'Dataset manager clone name was not passed correctly')
-                self.assertIs(registered_clone, cloned.dataset_mgr)
+            dataset_db = managers.dataset_mgr.ddb
+            clone = managers
+            for _ in range(3):
+                clone = dax.util.artiq.clone_managers(clone)
+                self.assertIs(dataset_db, clone.dataset_mgr.ddb)
 
     def test_clone_managers_arguments(self):
         with dax.util.artiq.get_managers() as managers:
@@ -268,6 +261,8 @@ class ArtiqTestCase(unittest.TestCase):
     def test_isolate_managers(self):
         with dax.util.artiq.get_managers(arguments={'foo': 1, 'bar': 2}) as managers:
             with dax.util.artiq.isolate_managers(managers) as isolated:
+                self.assertIsInstance(isolated, dax.util.artiq.ManagersTuple,
+                                      'Isolated managers tuple is not of the correct type (should not be closable)')
                 self.assertEqual(len(managers), len(isolated))
                 for m, i in zip(managers, isolated):
                     if not isinstance(m, dict):
@@ -277,15 +272,15 @@ class ArtiqTestCase(unittest.TestCase):
                     self.assertIsNot(m, i)
                 self.assertFalse(isolated.argument_mgr.unprocessed_arguments, 'Arguments not decoupled')
 
-    def test_isolate_managers_name(self):
+    def test_isolate_managers_recursive(self):
         with dax.util.artiq.get_managers() as managers:
-            name = 'foo'
-            with dax.util.artiq.isolate_managers(managers, name=name) as isolated:
-                clone_dict = getattr(managers.dataset_mgr, dax.util.artiq.ClonedDatasetManager._CLONE_DICT_KEY)
-                self.assertEqual(len(clone_dict), 1, 'Unexpected number of clones in dict')
-                registered_clone_key, registered_clone = clone_dict.popitem()
-                self.assertEqual(registered_clone_key, name, 'Dataset manager clone name was not passed correctly')
-                self.assertIs(registered_clone, isolated[1])
+            dataset_dbs = [managers.dataset_mgr.ddb]
+            isolated = managers
+            for _ in range(3):
+                isolated = dax.util.artiq.isolate_managers(isolated)
+                for ddb in dataset_dbs:
+                    self.assertIsNot(ddb, isolated.dataset_mgr.ddb)
+                dataset_dbs.append(isolated.dataset_mgr.ddb)
 
     def test_isolate_managers_arguments(self):
         with dax.util.artiq.get_managers() as managers:
