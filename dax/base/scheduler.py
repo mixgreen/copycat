@@ -979,6 +979,8 @@ class CalibrationJob(BaseJob):
                 dax.util.experiments.Barrier.submit(self, pipeline=self._scheduler.pipeline_name, priority=priority)
                 dax.util.artiq.pause_strict_priority(self._scheduler)
 
+        # Workaround to fix repo scan issue #78
+        MetaExp.__name__ = cls._meta_exp_name()
         # Return the meta experiment class and its name
         return MetaExp, cls._meta_exp_name()
 
