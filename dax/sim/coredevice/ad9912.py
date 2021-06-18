@@ -5,11 +5,12 @@
 import numpy as np
 
 from artiq.language.core import *
-from artiq.language.types import *
+from artiq.language.types import TInt32, TInt64, TFloat, TTuple
 from artiq.language.units import *
 
-from dax.sim.device import DaxSimDevice
+from dax.sim.device import DaxSimDevice, ARTIQ_MAJOR_VERSION
 from dax.sim.signal import get_signal_manager
+from dax.sim.coredevice.urukul import CPLD
 
 
 class AD9912(DaxSimDevice):
@@ -25,7 +26,7 @@ class AD9912(DaxSimDevice):
         self._phase = self._signal_manager.register(self, 'phase', float)
 
         # CPLD device
-        self.cpld = dmgr.get(cpld_device)
+        self.cpld: CPLD = dmgr.get(cpld_device)
         # Chip select
         assert 4 <= chip_select <= 7
         self.chip_select = chip_select
@@ -61,11 +62,16 @@ class AD9912(DaxSimDevice):
     def set_att(self, att):
         self.cpld.set_att(self.chip_select - 4, att)
 
-    # noinspection PyShadowingBuiltins
-    @kernel
-    def set_mu(self, ftw, pow):
-        phase = pow / (1 << 14)  # Inverted turns_to_pow()
-        self.set(self.ftw_to_frequency(ftw), phase)
+    if ARTIQ_MAJOR_VERSION < 7:
+        # noinspection PyShadowingBuiltins
+        @kernel
+        def set_mu(self, ftw, pow):
+            phase = pow / (1 << 14)  # Inverted turns_to_pow()
+            self.set(self.ftw_to_frequency(ftw), phase)
+    else:
+        @kernel
+        def set_mu(self, ftw, pow_):
+            self.set(self.ftw_to_frequency(ftw), self.pow_to_turns(pow_))
 
     @portable(flags={"fast-math"})
     def frequency_to_ftw(self, frequency) -> TInt64:
@@ -89,3 +95,25 @@ class AD9912(DaxSimDevice):
     @kernel
     def cfg_sw(self, state):
         self.cpld.cfg_sw(self.chip_select - 4, state)
+
+    if ARTIQ_MAJOR_VERSION >= 7:
+        @kernel
+        def get_att_mu(self) -> TInt32:
+            return self.cpld.get_channel_att_mu(self.chip_select - 4)
+
+        @kernel
+        def get_att(self) -> TFloat:
+            return self.cpld.get_channel_att(self.chip_select - 4)
+
+        @kernel
+        def get_mu(self) -> TTuple([TInt64, TInt32]):  # type: ignore[valid-type]
+            freq, phase = self.get()
+            return self.frequency_to_ftw(freq), self.turns_to_pow(phase)
+
+        @portable(flags={"fast-math"})
+        def pow_to_turns(self, pow_: TInt32) -> TFloat:
+            return pow_ / (1 << 14)
+
+        @kernel
+        def get(self) -> TTuple([TFloat, TFloat]):  # type: ignore[valid-type]
+            raise NotImplementedError

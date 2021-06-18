@@ -2,7 +2,9 @@ import os
 import distutils.util
 import random
 
-__all__ = ['NIX_ENV', 'CONDA_ENV', 'CI_ENABLED', 'JOB_ID', 'TB_DISABLED']
+import artiq
+
+__all__ = ['NIX_ENV', 'CONDA_ENV', 'CI_ENABLED', 'JOB_ID', 'TB_DISABLED', 'ARTIQ_MAJOR_VERSION']
 
 NIX_ENV: bool = bool(os.getenv('NIX_STORE'))
 """True if we are in a Nix environment."""
@@ -18,3 +20,6 @@ JOB_ID: str = os.getenv('CI_JOB_ID', f'0{random.randrange(2 ** 32)}')  # Random 
 
 TB_DISABLED: bool = distutils.util.strtobool(os.getenv('TB_DISABLED', '0'))
 """True if hardware testbenches are disabled."""
+
+ARTIQ_MAJOR_VERSION: int = int(artiq.__version__[0])
+"""The ARTIQ major version number."""

@@ -70,7 +70,7 @@ class AD9912TestCase(dax.sim.test_case.PeekTestCase):
         for _ in range(_NUM_SAMPLES):
             f = self.rng.uniform(0 * MHz, 400 * MHz)
             p = self.rng.uniform(0.0, 0.99)
-            self.env.dut.set_mu(self.env.dut.frequency_to_ftw(f), pow=self.env.dut.turns_to_pow(p))
+            self.env.dut.set_mu(self.env.dut.frequency_to_ftw(f), self.env.dut.turns_to_pow(p))
             self.expect_close(self.env.dut, 'freq', f, places=1)
             self.expect_close(self.env.dut, 'phase', p, places=3)
 

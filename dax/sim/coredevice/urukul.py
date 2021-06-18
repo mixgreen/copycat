@@ -5,17 +5,20 @@
 import numpy as np
 
 from artiq.language.core import *
+from artiq.language.types import TInt32, TFloat
 from artiq.language.units import *
 
-from dax.sim.device import DaxSimDevice
+from dax.sim.device import DaxSimDevice, ARTIQ_MAJOR_VERSION
 from dax.sim.signal import get_signal_manager
 
+DEFAULT_PROFILE = 0
 
-def _mu_to_att(att_mu):
+
+def _mu_to_att(att_mu: int) -> float:
     return (255 - (att_mu & 0xFF)) / 8
 
 
-def _att_to_mu(att):
+def _att_to_mu(att: float) -> int:
     code = 255 - np.int32(round(att * 8))
     if code < 0 or code > 255:
         raise ValueError("Invalid urukul.CPLD attenuation!")
@@ -36,7 +39,7 @@ class CPLD(DaxSimDevice):
         self.refclk = refclk
         assert 0 <= clk_div <= 3
         self.clk_div = clk_div
-        self.att_reg = np.int32(np.int64(att))
+        self.att_reg: np.int32 = np.int32(np.int64(att))
 
         # Register signals
         self._signal_manager = get_signal_manager()
@@ -114,7 +117,7 @@ class CPLD(DaxSimDevice):
             self._signal_manager.event(s, a)
 
     @kernel
-    def get_att_mu(self):
+    def get_att_mu(self) -> TInt32:
         # Returns the value in the register instead of the device value
         delay(10 * us)  # Delay from ARTIQ code
         self._signal_manager.event(self._init_att, 1)
@@ -127,3 +130,20 @@ class CPLD(DaxSimDevice):
     @kernel
     def set_profile(self, profile):
         raise NotImplementedError
+
+    if ARTIQ_MAJOR_VERSION >= 7:
+        @portable(flags={"fast-math"})
+        def mu_to_att(self, att_mu: TInt32) -> TFloat:
+            return _mu_to_att(att_mu)
+
+        @portable(flags={"fast-math"})
+        def att_to_mu(self, att: TFloat) -> TInt32:
+            return _att_to_mu(att)
+
+        @kernel
+        def get_channel_att_mu(self, channel: TInt32) -> TInt32:
+            return np.int32((self.get_att_mu() >> (channel * 8)) & 0xff)
+
+        @kernel
+        def get_channel_att(self, channel: TInt32) -> TFloat:
+            return self.mu_to_att(self.get_channel_att_mu(channel))

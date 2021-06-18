@@ -5,17 +5,18 @@
 import numpy as np
 
 from artiq.language.core import *
-from artiq.language.types import *
+from artiq.language.types import TInt32, TFloat, TTuple
 from artiq.language.units import *
 from artiq.coredevice.ad9910 import PHASE_MODE_CONTINUOUS, PHASE_MODE_ABSOLUTE, PHASE_MODE_TRACKING  # type: ignore
 
-from dax.sim.device import DaxSimDevice
+from dax.sim.device import DaxSimDevice, ARTIQ_MAJOR_VERSION
 from dax.sim.signal import get_signal_manager
+from dax.sim.coredevice.urukul import CPLD, DEFAULT_PROFILE
 
+_NUM_PROFILES = 8
 _PHASE_MODE_DEFAULT = -1
-
-# Phase mode conversion dict
 _PHASE_MODE_DICT = {m: f'{m:02b}' for m in [PHASE_MODE_CONTINUOUS, PHASE_MODE_ABSOLUTE, PHASE_MODE_TRACKING]}
+"""Phase mode conversion dict."""
 
 
 class AD9910(DaxSimDevice):
@@ -26,7 +27,7 @@ class AD9910(DaxSimDevice):
         super(AD9910, self).__init__(dmgr, **kwargs)
 
         # CPLD device
-        self.cpld = dmgr.get(cpld_device)
+        self.cpld: CPLD = dmgr.get(cpld_device)
         # Chip select
         assert 4 <= chip_select <= 7
         self.chip_select = chip_select
@@ -130,12 +131,10 @@ class AD9910(DaxSimDevice):
 
     @kernel
     def set_mu(self, ftw, pow_=0, asf=0x3fff, phase_mode=_PHASE_MODE_DEFAULT,
-               ref_time_mu=np.int64(-1), profile=0):
+               ref_time_mu=np.int64(-1), profile=DEFAULT_PROFILE):
         self.set(self.ftw_to_frequency(ftw), self.pow_to_turns(pow_), self.asf_to_amplitude(asf),
                  phase_mode, ref_time_mu, profile)
         # Returns pow
-        if phase_mode == _PHASE_MODE_DEFAULT:
-            phase_mode = self.phase_mode
         return self._get_pow(ftw, pow_, phase_mode, ref_time_mu)
 
     def _get_pow(self, ftw, pow_, phase_mode, ref_time_mu):
@@ -149,7 +148,7 @@ class AD9910(DaxSimDevice):
         return pow_
 
     @kernel
-    def set_profile_ram(self, start, end, step=1, profile=0, nodwell_high=0,
+    def set_profile_ram(self, start, end, step=1, profile=DEFAULT_PROFILE, nodwell_high=0,
                         zero_crossing=0, mode=1):
         raise NotImplementedError
 
@@ -210,23 +209,25 @@ class AD9910(DaxSimDevice):
 
     @kernel
     def set_frequency(self, frequency):
-        assert 0 * MHz <= frequency <= 400 * MHz, 'Frequency out of range'
-        self._signal_manager.event(self._freq, float(frequency))
+        raise NotImplementedError
 
     @kernel
     def set_amplitude(self, amplitude):
-        assert 0.0 <= amplitude <= 1.0, 'Amplitude out of range'
-        self._signal_manager.event(self._amp, float(amplitude))
+        raise NotImplementedError
 
     @kernel
     def set_phase(self, turns):
-        assert 0.0 <= turns < 1.0, 'Phase out of range'
-        self._signal_manager.event(self._phase, float(turns))
+        raise NotImplementedError
 
     @kernel
     def set(self, frequency, phase=0.0, amplitude=1.0,
-            phase_mode=_PHASE_MODE_DEFAULT, ref_time_mu=np.int64(-1), profile=0):
-        if profile != 0:
+            phase_mode=_PHASE_MODE_DEFAULT, ref_time_mu=np.int64(-1), profile=DEFAULT_PROFILE):
+        assert 0 * MHz <= frequency <= 400 * MHz, 'Frequency out of range'
+        assert 0.0 <= phase < 1.0, 'Phase out of range'
+        assert 0.0 <= amplitude <= 1.0, 'Amplitude out of range'
+        assert 0 <= profile < _NUM_PROFILES, 'Profile out of range'
+
+        if profile != DEFAULT_PROFILE:
             raise NotImplementedError('AD9910 simulation does not support profiles at this moment')
 
         # From ARTIQ
@@ -234,10 +235,9 @@ class AD9910(DaxSimDevice):
             phase_mode = self.phase_mode
 
         # Manage signals
-        self.set_frequency(frequency)
-        self.set_phase(phase)
-        self.set_amplitude(amplitude)
-        # Update phase mode
+        self._signal_manager.event(self._freq, float(frequency))
+        self._signal_manager.event(self._phase, float(phase))
+        self._signal_manager.event(self._amp, float(amplitude))
         self._signal_manager.event(self._phase_mode, _PHASE_MODE_DICT[self.phase_mode])
 
         # Returns pow
@@ -275,3 +275,47 @@ class AD9910(DaxSimDevice):
     @kernel
     def tune_io_update_delay(self):
         raise NotImplementedError
+
+    if ARTIQ_MAJOR_VERSION >= 7:
+        @kernel
+        def get_ftw(self) -> TInt32:
+            return self.frequency_to_ftw(self.get_frequency())
+
+        @kernel
+        def get_asf(self) -> TInt32:
+            return self.amplitude_to_asf(self.get_amplitude())
+
+        @kernel
+        def get_pow(self) -> TInt32:
+            return self.turns_to_pow(self.get_phase())
+
+        @kernel
+        def get_frequency(self) -> TFloat:
+            raise NotImplementedError
+
+        @kernel
+        def get_amplitude(self) -> TFloat:
+            raise NotImplementedError
+
+        @kernel
+        def get_phase(self) -> TFloat:
+            raise NotImplementedError
+
+        @kernel
+        def get_mu(self, profile: TInt32 = DEFAULT_PROFILE) \
+                -> TTuple([TInt32, TInt32, TInt32]):  # type: ignore[valid-type]
+            freq, phase, amp = self.get(profile)
+            return self.frequency_to_ftw(freq), self.turns_to_pow(phase), self.amplitude_to_asf(amp)
+
+        @kernel
+        def get(self, profile: TInt32 = DEFAULT_PROFILE) \
+                -> TTuple([TFloat, TFloat, TFloat]):  # type: ignore[valid-type]
+            raise NotImplementedError
+
+        @kernel
+        def get_att_mu(self) -> TInt32:
+            return self.cpld.get_channel_att_mu(self.chip_select - 4)
+
+        @kernel
+        def get_att(self) -> TFloat:
+            return self.cpld.get_channel_att(self.chip_select - 4)
