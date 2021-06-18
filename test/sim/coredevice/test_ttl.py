@@ -5,7 +5,9 @@ import numpy as np
 from artiq.experiment import *
 
 import dax.sim.test_case
+import dax.sim.coredevice.ttl
 
+import test.sim.coredevice.compile_testcase as compile_testcase
 from test.environment import CI_ENABLED
 
 _NUM_SAMPLES = 1000 if CI_ENABLED else 100
@@ -213,6 +215,45 @@ class TTLInOutTestCase(TTLOutTestCase):
         def test_stop(self):
             self.env.dut.stop()
             self.expect(self.env.dut, 'freq', 0 * Hz)
+
+
+class TTLOutCompileTestCase(compile_testcase.CoredeviceCompileTestCase):
+    DEVICE_CLASS = dax.sim.coredevice.ttl.TTLOut
+    FN_KWARGS = {
+        'pulse_mu': {'duration': 100},
+        'pulse': {'duration': 1.0},
+        'set_o': {'o': True},
+    }
+
+
+class TTLInOutCompileTestCase(TTLOutCompileTestCase):
+    DEVICE_CLASS = dax.sim.coredevice.ttl.TTLInOut
+    FN_KWARGS = {
+        'set_oe': {'oe': True},
+        'gate_rising_mu': {'duration': 100},
+        'gate_falling_mu': {'duration': 100},
+        'gate_both_mu': {'duration': 100},
+        'gate_rising': {'duration': 1.0},
+        'gate_falling': {'duration': 1.0},
+        'gate_both': {'duration': 1.0},
+        'count': {'up_to_timestamp_mu': 0},
+        'timestamp_mu': {'up_to_timestamp_mu': 0},
+    }
+    FN_KWARGS.update(TTLOutCompileTestCase.FN_KWARGS)  # Add function kwargs of TTLOut
+    FN_EXCEPTIONS = {
+        'sample_get': IndexError,
+        'sample_get_nonrt': IndexError,
+    }
+
+
+class TTLClockGenCompileTestCase(compile_testcase.CoredeviceCompileTestCase):
+    DEVICE_CLASS = dax.sim.coredevice.ttl.TTLClockGen
+    FN_KWARGS = {
+        'frequency_to_ftw': {'frequency': 100000},
+        'ftw_to_frequency': {'ftw': 100},
+        'set_mu': {'frequency': 100},
+        'set': {'frequency': 100000},
+    }
 
 
 if __name__ == '__main__':

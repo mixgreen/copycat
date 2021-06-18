@@ -9,8 +9,8 @@ import enum
 import numpy as np
 import typing
 
-from artiq.language.core import *
-from artiq.language.units import *
+from artiq.language.core import kernel, portable, delay, delay_mu, now_mu
+from artiq.language.types import TInt32
 
 from dax.sim.device import DaxSimDevice
 from dax.sim.signal import get_signal_manager
@@ -107,12 +107,15 @@ class TTLInOut(TTLOut):
         self._edge_buffer.clear()
         self._sample_buffer.clear()
 
-    @kernel
-    def set_oe(self, oe):
+    def _set_oe(self, oe):
         # 0 = input, 1 = output
         self._signal_manager.event(self._direction, 1 if oe else 0)
         self._signal_manager.event(self._sensitivity, 'z' if oe else 0)
         self._signal_manager.event(self._state, 'x' if oe else 'z')
+
+    @kernel
+    def set_oe(self, oe):
+        self._set_oe(oe)
 
     @kernel
     def output(self):
@@ -122,7 +125,7 @@ class TTLInOut(TTLOut):
     def input(self):
         self.set_oe(False)
 
-    def _simulate_input_signal(self, duration: np.int64, edge_type: _EdgeType) -> None:
+    def _simulate_input_signal(self, duration, edge_type):
         """Simulate input signal for a given duration."""
 
         # Decide event frequency
@@ -193,9 +196,7 @@ class TTLInOut(TTLOut):
     def gate_both(self, duration):
         return self.gate_both_mu(self.core.seconds_to_mu(duration))
 
-    # noinspection PyUnusedLocal
-    @kernel
-    def count(self, up_to_timestamp_mu):
+    def _count(self) -> TInt32:
         # This function does not interact with the timeline
         count = len(self._edge_buffer)
         self._edge_buffer.clear()
@@ -205,12 +206,19 @@ class TTLInOut(TTLOut):
 
     # noinspection PyUnusedLocal
     @kernel
-    def timestamp_mu(self, up_to_timestamp_mu):
-        # This function does not interact with the timeline
+    def count(self, up_to_timestamp_mu):
+        return self._count()
+
+    def _timestamp_mu(self, up_to_timestamp_mu) -> TInt32:
         return self._edge_buffer.popleft() if len(self._edge_buffer) else -1
 
+    # noinspection PyUnusedLocal
     @kernel
-    def sample_input(self):
+    def timestamp_mu(self, up_to_timestamp_mu):
+        # This function does not interact with the timeline
+        return self._timestamp_mu(up_to_timestamp_mu)
+
+    def _sample_input(self):
         # Sample at the current time and store result in the sample buffer
         val = np.int32(self._rng.random() < self._input_prob)
         self._sample_buffer.append(val)
@@ -218,7 +226,10 @@ class TTLInOut(TTLOut):
         self._signal_manager.event(self._state, 'z', offset=1)  # Return to 'Z' 1 machine unit after sample
 
     @kernel
-    def sample_get(self):
+    def sample_input(self):
+        self._sample_input()
+
+    def _sample_get(self):
         if len(self._sample_buffer):
             # Return a sample from the buffer
             return self._sample_buffer.popleft()
@@ -227,18 +238,25 @@ class TTLInOut(TTLOut):
             raise IndexError(f'Device "{self.key}" has no sample to return')
 
     @kernel
+    def sample_get(self):
+        return self._sample_get()
+
+    @kernel
     def sample_get_nonrt(self):
         self.sample_input()
         r = self.sample_get()
         self.core.break_realtime()
         return r
 
+    @kernel
     def watch_stay_on(self):
         raise NotImplementedError
 
+    @kernel
     def watch_stay_off(self):
         raise NotImplementedError
 
+    @kernel
     def watch_done(self):
         raise NotImplementedError
 

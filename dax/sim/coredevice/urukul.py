@@ -17,11 +17,11 @@ DEFAULT_PROFILE = 0
 _NUM_CHANNELS = 4
 
 
-def _mu_to_att(att_mu: int) -> float:
+def _mu_to_att(att_mu: TInt32) -> TFloat:
     return (255 - (att_mu & 0xFF)) / 8
 
 
-def _att_to_mu(att: float) -> int:
+def _att_to_mu(att: TFloat) -> TInt32:
     code = 255 - np.int32(round(att * 8))
     if code < 0 or code > 255:
         raise ValueError("Invalid urukul.CPLD attenuation!")
@@ -81,12 +81,15 @@ class CPLD(DaxSimDevice):
         self._sw_reg[channel] = '1' if on else '0'
         self._update_switches()
 
-    @kernel
-    def cfg_switches(self, state: TInt32):
+    def _cfg_switches(self, state: TInt32):
         self._sw_reg = _state_to_sw_reg(state)
         self._update_switches()
 
-    def _update_switches(self) -> None:
+    @kernel
+    def cfg_switches(self, state: TInt32):
+        self._cfg_switches(state)
+
+    def _update_switches(self):  # type: () -> None
         self._signal_manager.event(self._sw, ''.join(reversed(self._sw_reg)))
 
     @kernel
@@ -97,11 +100,14 @@ class CPLD(DaxSimDevice):
         a |= att << (channel * 8)
         self.set_all_att_mu(a)
 
-    @kernel
-    def set_all_att_mu(self, att_reg: TInt32):
+    def _set_all_att_mu(self, att_reg: TInt32):
         self.att_reg = att_reg
         self._att_reg = [_mu_to_att(att_reg >> (i * 8)) for i in range(4)]
         self._update_att()
+
+    @kernel
+    def set_all_att_mu(self, att_reg: TInt32):
+        self._set_all_att_mu(att_reg)
 
     @kernel
     def set_att(self, channel: TInt32, att: TFloat):
@@ -114,7 +120,7 @@ class CPLD(DaxSimDevice):
         self._att_reg[channel] = float(att)
         self._update_att()
 
-    def _update_att(self) -> None:
+    def _update_att(self):  # type: () -> None
         for s, a in zip(self._att, self._att_reg):
             assert 0 * dB <= a <= (255 / 8) * dB, 'Attenuation out of range'
             self._signal_manager.event(s, a)

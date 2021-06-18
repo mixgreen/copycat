@@ -6,7 +6,8 @@ from artiq.experiment import *
 import dax.sim.test_case
 import dax.sim.coredevice.urukul
 
-from test.environment import CI_ENABLED
+import test.sim.coredevice.compile_testcase as compile_testcase
+from test.environment import CI_ENABLED, ARTIQ_MAJOR_VERSION
 
 _NUM_SAMPLES = 1000 if CI_ENABLED else 100
 
@@ -124,6 +125,27 @@ class UrukulPeekTestCase(dax.sim.test_case.PeekTestCase):
             with self.subTest(state=state, ref=ref):
                 self.env.dut.cfg_switches(state)
                 self.expect(self.env.dut, 'sw', ref)
+
+
+class CompileTestCase(compile_testcase.CoredeviceCompileTestCase):
+    DEVICE_CLASS = dax.sim.coredevice.urukul.CPLD
+    FN_KWARGS = {
+        'cfg_write': {'cfg': 0x0},
+        'cfg_sw': {'channel': 0, 'on': True},
+        'cfg_switches': {'state': 0x0},
+        'set_att_mu': {'channel': 0, 'att': 0},
+        'set_all_att_mu': {'att_reg': 0},
+        'set_att': {'channel': 0, 'att': 0.0},
+        'set_sync_div': {'div': 1},
+        'set_profile': {'profile': 0},
+    }
+    if ARTIQ_MAJOR_VERSION >= 7:
+        FN_KWARGS.update({
+            'mu_to_att': {'att_mu': 0},
+            'att_to_mu': {'att': 0.0},
+            'get_channel_att_mu': {'channel': 0},
+            'get_channel_att': {'channel': 0},
+        })
 
 
 if __name__ == '__main__':

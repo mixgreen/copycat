@@ -13,6 +13,8 @@ from dax.sim.signal import set_signal_manager, NullSignalManager
 from dax.sim.ddb import enable_dax_sim
 from dax.util.artiq import get_managers
 
+import test.sim.coredevice.compile_testcase as compile_testcase
+
 
 class BaseCoreTestCase(unittest.TestCase):
     _DEVICE_DB = {
@@ -134,6 +136,17 @@ class CoreCompileTestCase(CoreTestCase):
             'arguments': {'host': None, 'ref_period': 1e-9},
             'sim_args': {'compile': True},
         },
+    }
+
+
+class CoreCoredeviceCompileTestCase(compile_testcase.CoredeviceCompileTestCase):
+    DEVICE_CLASS = dax.sim.coredevice.core.Core
+    DEVICE_KWARGS = {'host': None, 'ref_period': 1e-9, 'compile': True}
+    FN_KWARGS = {
+        'wait_until_mu': {'cursor_mu': 1000},
+        'get_rtio_destination_status': {'destination': 0},
+        'mu_to_seconds': {'mu': 100},
+        'seconds_to_mu': {'seconds': 1.0},
     }
 
 
