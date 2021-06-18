@@ -2,11 +2,11 @@
 # mypy: disallow_incomplete_defs = False
 # mypy: check_untyped_defs = False
 
-import numpy as np
+from numpy import int32, int64
 
-from artiq.language.core import *
-from artiq.language.types import TInt32, TInt64, TFloat, TTuple
-from artiq.language.units import *
+from artiq.language.types import TInt32, TInt64, TFloat, TTuple, TBool
+from artiq.language.core import kernel, delay, portable
+from artiq.language.units import ms, us, MHz
 
 from dax.sim.device import DaxSimDevice, ARTIQ_MAJOR_VERSION
 from dax.sim.signal import get_signal_manager
@@ -37,14 +37,14 @@ class AD9912(DaxSimDevice):
         # Store attributes (from ARTIQ code)
         sysclk = self.cpld.refclk / [1, 1, 2, 4][self.cpld.clk_div] * pll_n
         assert sysclk <= 1e9
-        self.ftw_per_hz = 1 / sysclk * (np.int64(1) << 48)
+        self.ftw_per_hz: float = 1 / sysclk * (int64(1) << 48)
 
     @kernel
-    def write(self, addr, data, length):
+    def write(self, addr: TInt32, data: TInt32, length: TInt32):
         raise NotImplementedError
 
     @kernel
-    def read(self, addr, length):
+    def read(self, addr: TInt32, length: TInt32) -> TInt32:
         raise NotImplementedError
 
     @kernel
@@ -55,11 +55,11 @@ class AD9912(DaxSimDevice):
         self._signal_manager.event(self._init, 1)
 
     @kernel
-    def set_att_mu(self, att):
+    def set_att_mu(self, att: TInt32):
         self.cpld.set_att_mu(self.chip_select - 4, att)
 
     @kernel
-    def set_att(self, att):
+    def set_att(self, att: TFloat):
         self.cpld.set_att(self.chip_select - 4, att)
 
     if ARTIQ_MAJOR_VERSION < 7:
@@ -70,30 +70,30 @@ class AD9912(DaxSimDevice):
             self.set(self.ftw_to_frequency(ftw), phase)
     else:
         @kernel
-        def set_mu(self, ftw, pow_):
+        def set_mu(self, ftw: TInt64, pow_: TInt32):
             self.set(self.ftw_to_frequency(ftw), self.pow_to_turns(pow_))
 
     @portable(flags={"fast-math"})
-    def frequency_to_ftw(self, frequency) -> TInt64:
-        return np.int64(round(float(self.ftw_per_hz * frequency))) & ((np.int64(1) << 48) - 1)
+    def frequency_to_ftw(self, frequency: TFloat) -> TInt64:
+        return int64(round(float(self.ftw_per_hz * frequency))) & ((int64(1) << 48) - 1)
 
     @portable(flags={"fast-math"})
-    def ftw_to_frequency(self, ftw):
+    def ftw_to_frequency(self, ftw: TInt64) -> TFloat:
         return ftw / self.ftw_per_hz
 
     @portable(flags={"fast-math"})
-    def turns_to_pow(self, phase) -> TInt32:
-        return np.int32(round(float((1 << 14) * phase))) & np.int32(0xffff)
+    def turns_to_pow(self, phase: TFloat) -> TInt32:
+        return int32(round(float((1 << 14) * phase))) & int32(0xffff)
 
     @kernel
-    def set(self, frequency, phase=0.0):
+    def set(self, frequency: TFloat, phase: TFloat = 0.0):
         assert 0 * MHz <= frequency <= 400 * MHz, 'Frequency out of range'
         assert 0.0 <= phase < 1.0, 'Phase out of range'
         self._signal_manager.event(self._freq, float(frequency))
         self._signal_manager.event(self._phase, float(phase))
 
     @kernel
-    def cfg_sw(self, state):
+    def cfg_sw(self, state: TBool):
         self.cpld.cfg_sw(self.chip_select - 4, state)
 
     if ARTIQ_MAJOR_VERSION >= 7:
