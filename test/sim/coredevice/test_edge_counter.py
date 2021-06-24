@@ -4,7 +4,9 @@ import random
 from artiq.experiment import *
 
 import dax.sim.test_case
+import dax.sim.coredevice.edge_counter
 
+import test.sim.coredevice.compile_testcase as compile_testcase
 from test.environment import CI_ENABLED
 
 _NUM_SAMPLES = 1000 if CI_ENABLED else 100
@@ -110,6 +112,23 @@ class EdgeCounterTestCase(dax.sim.test_case.PeekTestCase):
 
             t, _ = self.env.ec.fetch_timestamped_count()
             self.assertEqual(t, -1)
+
+
+class CompileTestCase(compile_testcase.CoredeviceCompileTestCase):
+    DEVICE_CLASS = dax.sim.coredevice.edge_counter.EdgeCounter
+    FN_KWARGS = {
+        'gate_rising_mu': {'duration_mu': 100},
+        'gate_falling_mu': {'duration_mu': 100},
+        'gate_both_mu': {'duration_mu': 100},
+        'gate_rising': {'duration': 1.0},
+        'gate_falling': {'duration': 1.0},
+        'gate_both': {'duration': 1.0},
+        'set_config': {'count_rising': True, 'count_falling': False, 'send_count_event': False, 'reset_to_zero': True},
+        'fetch_timestamped_count': {'timeout_mu': 0},
+    }
+    FN_EXCEPTIONS = {
+        'fetch_count': IndexError,
+    }
 
 
 if __name__ == '__main__':
