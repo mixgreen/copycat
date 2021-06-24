@@ -39,8 +39,23 @@ test_nix:
     - coverage --version; coverage run -m pytest -v -rs
     - coverage report
     # Run build commands
-    - nix build -f ./default.nix
+    - nix-build ./default.nix --no-out-link
     - nix-shell ./shell.nix --run "python3 -c 'import dax; print(dax.__version__)'"
+
+test_nix_beta:
+  extends: .nix_env
+  stage: test
+  allow_failure: true
+  variables:
+    NIX_SHELL_FILE: "test/shell.nix"
+    ARTIQ_CHANNEL: "https://nixbld.m-labs.hk/channel/custom/artiq/full-beta/artiq-full"
+    NIXPKGS_CHANNEL: "https://nixos.org/channels/nixos-21.05"
+  script:
+    # Run test commands
+    - python3 --version
+    - mypy --version; mypy
+    - flake8 --version; flake8
+    - pytest -v -rs
 
 test_conda:
   extends: .conda_env
