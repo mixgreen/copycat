@@ -133,7 +133,3 @@ class _BadClass2:
     def foo(self, a, b, z):
         """Additional parameter."""
         pass
-
-
-if __name__ == '__main__':
-    unittest.main()

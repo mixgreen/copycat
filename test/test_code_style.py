@@ -38,7 +38,3 @@ class TestCodeStyle(unittest.TestCase):
             # Format message and assert
             msg = f'\n\nCode style report:\n{buf.getvalue()}'
             self.assertEqual(result.total_errors, 0, msg)
-
-
-if __name__ == '__main__':
-    unittest.main()
