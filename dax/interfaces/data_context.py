@@ -18,7 +18,7 @@ class DataContextInterface(DaxInterface, abc.ABC):
     """The data context interface is used to define batches during data collection."""
 
     @abc.abstractmethod
-    def open(self):  # type: () -> None
+    def open(self):  # type: () -> None  # pragma: no cover
         """Enter the data context manually.
 
         This function can be used to manually enter the data context.
@@ -29,7 +29,7 @@ class DataContextInterface(DaxInterface, abc.ABC):
         pass
 
     @abc.abstractmethod
-    def close(self):  # type: () -> None
+    def close(self):  # type: () -> None  # pragma: no cover
         """Exit the data context manually.
 
         This function can be used to manually exit the data context.
@@ -50,7 +50,7 @@ class DataContextInterface(DaxInterface, abc.ABC):
         self.close()
 
     @abc.abstractmethod
-    def get_raw(self) -> typing.Sequence[typing.Sequence[typing.Sequence[int]]]:
+    def get_raw(self) -> typing.Sequence[typing.Sequence[typing.Sequence[int]]]:  # pragma: no cover
         """Obtain the raw data captured by the data context.
 
         **This function can only be called from the host.**

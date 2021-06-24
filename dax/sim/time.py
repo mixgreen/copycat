@@ -29,7 +29,7 @@ class _TimeContext(abc.ABC):
         return self._block_duration
 
     @abc.abstractmethod
-    def take_time(self, amount: _MU_T) -> None:
+    def take_time(self, amount: _MU_T) -> None:  # pragma: no cover
         pass
 
 

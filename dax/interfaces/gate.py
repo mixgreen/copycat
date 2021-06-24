@@ -11,7 +11,7 @@ from dax.base.interface import DaxInterface
 __all__ = ['GateInterface']
 
 
-class GateInterface(DaxInterface, abc.ABC):
+class GateInterface(DaxInterface, abc.ABC):  # pragma: no cover
     """The gate interface exposes a set of quantum gates.
 
     When this interface is implemented, :attr:`pi` needs to be marked kernel invariant.

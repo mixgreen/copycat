@@ -347,7 +347,7 @@ class Node(dax.base.system.DaxHasKey, abc.ABC):
         self.schedule(wave=wave)
 
     @abc.abstractmethod
-    def _submit(self, *, wave: float, priority: int) -> None:
+    def _submit(self, *, wave: float, priority: int) -> None:  # pragma: no cover
         pass
 
     def schedule(self, *, wave: float) -> None:
@@ -371,7 +371,7 @@ class Node(dax.base.system.DaxHasKey, abc.ABC):
                 self.logger.warning('Next submit was rescheduled because the interval time expired')
 
     @abc.abstractmethod
-    def cancel(self) -> None:
+    def cancel(self) -> None:  # pragma: no cover
         """Cancel the submit action of this node."""
         pass
 
@@ -383,7 +383,7 @@ class Node(dax.base.system.DaxHasKey, abc.ABC):
         return self.INTERVAL is not None
 
     @abc.abstractmethod
-    def is_meta(self) -> bool:
+    def is_meta(self) -> bool:  # pragma: no cover
         """Check if this node is a meta-node (i.e. a node without submittable action).
 
         :return: True if this node is a meta-node
