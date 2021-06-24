@@ -3,7 +3,9 @@ import random
 from artiq.experiment import *
 
 import dax.sim.test_case
+import dax.sim.coredevice.ad9912
 
+import test.sim.coredevice._compile_testcase as compile_testcase
 from test.environment import CI_ENABLED
 
 _NUM_SAMPLES = 1000 if CI_ENABLED else 100
@@ -104,3 +106,30 @@ class AD9912TestCase(dax.sim.test_case.PeekTestCase):
             value = ref[index:4 + index] if state else '0000'
             assert value[-1 - index] == str(state)
             self.expect(self.env.dut.cpld, 'sw', value)
+
+
+class CompileTestCase(compile_testcase.CoredeviceCompileTestCase):
+    DEVICE_CLASS = dax.sim.coredevice.ad9912.AD9912
+    DEVICE_KWARGS = {
+        'chip_select': 4,
+        'cpld_device': 'cpld',
+        'pll_n': 4,
+    }
+    FN_ARGS = {
+        'set_mu': (0, 0),
+        'set': (0.0, 0.0),
+    }
+    FN_KWARGS = {
+        'frequency_to_ftw': {'frequency': 0.0},
+        'ftw_to_frequency': {'ftw': 0},
+        'turns_to_pow': {'phase': 0.0},
+        'pow_to_turns': {'pow_': 0},
+        'set_att_mu': {'att': 0},
+        'set_att': {'att': 0.0},
+        'cfg_sw': {'state': False},
+    }
+    FN_EXCLUDE = {'write', 'read'}
+
+    DEVICE_DB = {}
+    DEVICE_DB.update(_DEVICE_DB)
+    DEVICE_DB.update(compile_testcase.CoredeviceCompileTestCase.DEVICE_DB)

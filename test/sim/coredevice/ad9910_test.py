@@ -5,6 +5,7 @@ from artiq.experiment import *
 import dax.sim.test_case
 import dax.sim.coredevice.ad9910
 
+import test.sim.coredevice._compile_testcase as compile_testcase
 from test.environment import CI_ENABLED
 
 _NUM_SAMPLES = 1000 if CI_ENABLED else 100
@@ -23,10 +24,10 @@ _DEVICE_DB = {
         "arguments": {
             "pll_en": 0,
             "chip_select": 6,
-            "cpld_device": "cpld10",
+            "cpld_device": "cpld",
         }
     },
-    "cpld10": {
+    "cpld": {
         "type": "local",
         "module": "artiq.coredevice.urukul",
         "class": "CPLD",
@@ -119,3 +120,35 @@ class AD9910TestCase(dax.sim.test_case.PeekTestCase):
             value = ref[index:4 + index] if state else '0000'
             assert value[-1 - index] == str(state)
             self.expect(self.env.dut.cpld, 'sw', value)
+
+
+class CompileTestCase(compile_testcase.CoredeviceCompileTestCase):
+    DEVICE_CLASS = dax.sim.coredevice.ad9910.AD9910
+    DEVICE_KWARGS = {
+        'chip_select': 4,
+        'cpld_device': 'cpld',
+        'pll_en': 0,
+    }
+    FN_KWARGS = {
+        'set_phase_mode': {'phase_mode': 0},
+        'set_mu': {'ftw': 0},
+        'frequency_to_ftw': {'frequency': 0.0},
+        'ftw_to_frequency': {'ftw': 0},
+        'turns_to_pow': {'turns': 0.0},
+        'pow_to_turns': {'pow_': 0},
+        'amplitude_to_asf': {'amplitude': 0.0},
+        'asf_to_amplitude': {'asf': 0},
+        'set': {'frequency': 0.0},
+        'set_att_mu': {'att': 0},
+        'set_att': {'att': 0.0},
+        'cfg_sw': {'state': False},
+    }
+    FN_EXCLUDE = {'write16', 'write32', 'write64', 'read16', 'read32', 'read64',
+                  'write_ram', 'read_ram', 'set_profile_ram',
+                  'frequency_to_ram', 'turns_to_ram', 'amplitude_to_ram', 'turns_amplitude_to_ram',
+                  'set_ftw', 'set_pow', 'set_asf', 'set_frequency', 'set_phase', 'set_amplitude',
+                  'set_sync', 'measure_io_update_alignment'}
+
+    DEVICE_DB = {}
+    DEVICE_DB.update(_DEVICE_DB)
+    DEVICE_DB.update(compile_testcase.CoredeviceCompileTestCase.DEVICE_DB)

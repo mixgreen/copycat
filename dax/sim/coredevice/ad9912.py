@@ -47,12 +47,15 @@ class AD9912(DaxSimDevice):
     def read(self, addr: TInt32, length: TInt32) -> TInt32:
         raise NotImplementedError
 
+    def _init_(self):
+        self._signal_manager.event(self._init, 1)
+
     @kernel
     def init(self):
         # Delays from ARTIQ code
         delay(50 * us)
         delay(1 * ms)
-        self._signal_manager.event(self._init, 1)
+        self._init_()
 
     @kernel
     def set_att_mu(self, att: TInt32):

@@ -28,6 +28,8 @@ class CoredeviceCompileTestCase(unittest.TestCase):
     """The device class to test."""
     DEVICE_KWARGS: typing.Dict[str, typing.Any] = {}
     """Keyword arguments to instantiate the device class."""
+    FN_ARGS: typing.Dict[str, typing.Union[typing.Tuple[typing.Any, ...], typing.List[typing.Any]]] = {}
+    """Function positional arguments."""
     FN_KWARGS: typing.Dict[str, typing.Dict[str, typing.Any]] = {}
     """Function keyword arguments."""
     FN_EXCLUDE: typing.Set[str] = set()
@@ -56,8 +58,10 @@ class CoredeviceCompileTestCase(unittest.TestCase):
     def test_compile_functions(self):
         assert isinstance(self.DEVICE_CLASS, type), 'DEVICE_CLASS must be a type'
         assert isinstance(self.DEVICE_KWARGS, dict), 'DEVICE_KWARGS must be a dict'
+        assert isinstance(self.FN_ARGS, dict), 'FN_ARGS must be a dict'
         assert isinstance(self.FN_KWARGS, dict), 'FN_KWARGS must be a dict'
         assert isinstance(self.FN_EXCLUDE, set), 'FN_EXCLUDE must be a set'
+        assert isinstance(self.FN_EXCEPTIONS, dict), 'FN_EXCEPTIONS must be a dict'
 
         try:
             # Create device
@@ -73,11 +77,12 @@ class CoredeviceCompileTestCase(unittest.TestCase):
 
             for n, f in fn_list:
                 with self.subTest(function=n):
+                    args = self.FN_ARGS.get(n, ())
                     kwargs = self.FN_KWARGS.get(n, {})
                     expected_exception = self.FN_EXCEPTIONS.get(n, NotImplementedError)
 
                     try:
-                        f(**kwargs)  # This will cause compilation of the kernel function
+                        f(*args, **kwargs)  # This will cause compilation of the kernel function
                     except expected_exception:
                         # Ignore expected exception
                         pass
