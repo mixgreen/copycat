@@ -261,7 +261,7 @@ class DaxScan(dax.base.system.DaxBase, abc.ABC):
         self.update_kernel_invariants('_dax_scan_scheduler', '_dax_scan_infinite')
 
     @abc.abstractmethod
-    def build_scan(self) -> None:
+    def build_scan(self) -> None:  # pragma: no cover
         """Users should override this method to build their scan.
 
         To build the scan, use the :func:`add_scan` and :func:`add_static_scan` functions.
@@ -546,16 +546,16 @@ class DaxScan(dax.base.system.DaxBase, abc.ABC):
 
     """Functions to be implemented by the user"""
 
-    def host_enter(self) -> None:
+    def host_enter(self) -> None:  # pragma: no cover
         """0. Entry code on the host, called once."""
         pass
 
-    def host_setup(self) -> None:
+    def host_setup(self) -> None:  # pragma: no cover
         """1. Setup on the host, called once at entry and after a pause."""
         pass
 
     @portable
-    def device_setup(self):  # type: () -> None
+    def device_setup(self):  # type: () -> None  # pragma: no cover
         """2. Setup on the core device, called once at entry and after a pause.
 
         Can for example be used to reset the core.
@@ -563,7 +563,7 @@ class DaxScan(dax.base.system.DaxBase, abc.ABC):
         pass
 
     @abc.abstractmethod
-    def run_point(self, point, index):  # type: (typing.Any, typing.Any) -> None
+    def run_point(self, point, index):  # type: (typing.Any, typing.Any) -> None  # pragma: no cover
         """3. Code to run for a single point, called as many times as there are points.
 
         :param point: Point object containing the current scan parameter values
@@ -572,7 +572,7 @@ class DaxScan(dax.base.system.DaxBase, abc.ABC):
         pass
 
     @portable
-    def device_cleanup(self):  # type: () -> None
+    def device_cleanup(self):  # type: () -> None  # pragma: no cover
         """4. Cleanup on the core device, called once after scanning and before a pause.
 
         In case the device cleanup function is a kernel, it is good to add a ``self.core.break_realtime()``
@@ -581,11 +581,11 @@ class DaxScan(dax.base.system.DaxBase, abc.ABC):
         """
         pass
 
-    def host_cleanup(self) -> None:
+    def host_cleanup(self) -> None:  # pragma: no cover
         """5. Cleanup on the host, called once after scanning and before a pause."""
         pass
 
-    def host_exit(self) -> None:
+    def host_exit(self) -> None:  # pragma: no cover
         """6. Exit code on the host, called if the scan finished without exceptions."""
         pass
 

@@ -22,7 +22,7 @@ class DaxSignalManager(abc.ABC, typing.Generic[_S_T]):
     """Abstract class for classes that manage simulated signals."""
 
     @abc.abstractmethod
-    def register(self, scope: DaxSimDevice, name: str, type_: type, *,
+    def register(self, scope: DaxSimDevice, name: str, type_: type, *,  # pragma: no cover
                  size: typing.Optional[int] = None, init: typing.Any = None) -> _S_T:
         """Register a signal.
 
@@ -46,7 +46,7 @@ class DaxSignalManager(abc.ABC, typing.Generic[_S_T]):
         pass
 
     @abc.abstractmethod
-    def event(self, signal: _S_T, value: typing.Any, *,
+    def event(self, signal: _S_T, value: typing.Any, *,  # pragma: no cover
               time: typing.Optional[np.int64] = None, offset: typing.Optional[np.int64] = None) -> None:
         """Commit an event.
 
@@ -74,7 +74,7 @@ class DaxSignalManager(abc.ABC, typing.Generic[_S_T]):
         pass
 
     @abc.abstractmethod
-    def flush(self, ref_period: float) -> None:
+    def flush(self, ref_period: float) -> None:  # pragma: no cover
         """Flush the output of the signal manager.
 
         :param ref_period: The reference period (i.e. the time of one machine unit)
@@ -82,7 +82,7 @@ class DaxSignalManager(abc.ABC, typing.Generic[_S_T]):
         pass
 
     @abc.abstractmethod
-    def close(self) -> None:
+    def close(self) -> None:  # pragma: no cover
         """Close the signal manager."""
         pass
 

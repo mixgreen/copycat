@@ -4,13 +4,14 @@
 
 from artiq.language.core import *
 from artiq.language.units import *
+from artiq.language.types import TFloat, TInt32
 from artiq.coredevice.ad53xx import voltage_to_mu, AD53XX_READ_X1A  # type: ignore
 
 from dax.sim.device import DaxSimDevice
 from dax.sim.signal import get_signal_manager
 
 
-def _mu_to_voltage(voltage_mu, *, vref, offset_dacs=0x0):
+def _mu_to_voltage(voltage_mu: TInt32, *, vref: TFloat, offset_dacs: TInt32 = 0x0) -> TFloat:
     return ((voltage_mu - (offset_dacs * 0x4)) / 0x10000) * (4. * vref)
 
 
@@ -97,18 +98,21 @@ class AD53xx(DaxSimDevice):
             self._signal_manager.event(self._offset[i], self._offset_reg[i])
             self._signal_manager.event(self._gain[i], self._gain_reg[i])
 
+    # Note: 40 channels is too large, but this is taken from the ARTIQ driver
+    # noinspection PyDefaultArgument
     @kernel
-    def set_dac_mu(self, values, channels=None):
-        if channels is None:
-            channels = list(range(40))  # Note: 40 is too large, but this is taken from the ARTIQ driver
+    def set_dac_mu(self, values, channels=list(range(40))):
         for i in range(len(values)):
             self.write_dac_mu(channels[i], values[i])
         self.load()
 
+    # Note: 40 channels is too large, but this is taken from the ARTIQ driver
+    # noinspection PyDefaultArgument
     @kernel
-    def set_dac(self, voltages, channels=None):
+    def set_dac(self, voltages, channels=list(range(40))):
         voltages_mu = [self.voltage_to_mu(v) for v in voltages]
-        assert all(0 <= v_mu < 2 ** 16 for v_mu in voltages_mu), 'One or more voltages out of range'
+        for v_mu in voltages_mu:
+            assert 0 <= v_mu < 2 ** 16, 'One or more voltages out of range'
         self.set_dac_mu(voltages_mu, channels)
 
     @kernel

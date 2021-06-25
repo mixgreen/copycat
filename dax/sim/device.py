@@ -2,8 +2,12 @@ import typing
 import abc
 
 import artiq.coredevice.core
+from artiq import __version__ as _artiq_version
 
-__all__ = ['DaxSimDevice']
+__all__ = ['DaxSimDevice', 'ARTIQ_MAJOR_VERSION']
+
+ARTIQ_MAJOR_VERSION: int = int(_artiq_version[0])
+"""The ARTIQ major version number."""
 
 
 class DaxSimDevice(abc.ABC):

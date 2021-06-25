@@ -8,7 +8,7 @@ from dax.base.interface import DaxInterface
 __all__ = ['DetectionInterface']
 
 
-class DetectionInterface(DaxInterface, abc.ABC):
+class DetectionInterface(DaxInterface, abc.ABC):  # pragma: no cover
 
     @abc.abstractmethod
     def get_pmt_array(self) -> typing.List[artiq.coredevice.edge_counter.EdgeCounter]:

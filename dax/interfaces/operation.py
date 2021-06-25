@@ -15,7 +15,7 @@ import dax.util.artiq
 __all__ = ['OperationInterface', 'validate_interface']
 
 
-class OperationInterface(GateInterface, abc.ABC):
+class OperationInterface(GateInterface, abc.ABC):  # pragma: no cover
     """The operation interface exposes a set of quantum operations and functions to handle measurement results.
 
     When this interface is implemented, :attr:`pi` and :attr:`num_qubits` need to be marked kernel invariant.

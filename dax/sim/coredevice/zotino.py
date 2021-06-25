@@ -17,6 +17,9 @@ class Zotino(AD53xx):
         # Register additional signals
         self._led = self._signal_manager.register(self, 'led', bool, size=8)
 
+    def _set_leds(self, leds):
+        self._signal_manager.event(self._led, f'{leds & 0xFF:08b}')
+
     @kernel
     def set_leds(self, leds):
-        self._signal_manager.event(self._led, f'{leds & 0xFF:08b}')
+        self._set_leds(leds)

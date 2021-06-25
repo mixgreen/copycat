@@ -146,7 +146,7 @@ class _PmtMonitorBase(DaxClient, Experiment, abc.ABC):
         pass
 
     @abc.abstractmethod
-    def _create_applet(self, *args: typing.Any, **kwargs: typing.Any) -> None:
+    def _create_applet(self, *args: typing.Any, **kwargs: typing.Any) -> None:  # pragma: no cover
         """Create applet.
 
         :param args: Positional arguments for plotting **excluding the applet name**
@@ -301,12 +301,12 @@ class _PmtMonitorBase(DaxClient, Experiment, abc.ABC):
             self.append_to_dataset(self.dataset_key, data)
 
     @abc.abstractmethod
-    def _detect(self) -> None:
+    def _detect(self) -> None:  # pragma: no cover
         """Perform detection."""
         pass
 
     @abc.abstractmethod
-    def _count(self) -> None:
+    def _count(self) -> None:  # pragma: no cover
         """Get counts, and store result."""
         pass
 

@@ -150,7 +150,7 @@ class DaxBase(artiq.language.environment.HasEnvironment, abc.ABC):
         self.kernel_invariants = kernel_invariants | {*keys}
 
     @abc.abstractmethod
-    def get_identifier(self) -> str:
+    def get_identifier(self) -> str:  # pragma: no cover
         pass
 
     def __repr__(self) -> str:
@@ -583,7 +583,7 @@ class DaxHasSystem(DaxHasKey, abc.ABC):
             self.logger.debug('Post-initialization finished')
 
     @abc.abstractmethod
-    def init(self) -> None:
+    def init(self) -> None:  # pragma: no cover
         """Override this method to access the dataset (r/w), initialize devices, and record DMA traces.
 
         The :func:`init` function will be called when the user calls :func:`dax_init`
@@ -592,7 +592,7 @@ class DaxHasSystem(DaxHasKey, abc.ABC):
         pass
 
     @abc.abstractmethod
-    def post_init(self) -> None:
+    def post_init(self) -> None:  # pragma: no cover
         """Override this method for post-initialization procedures (e.g. obtaining DMA handles).
 
         The :func:`post_init` function will be called when the user calls :func:`dax_init`

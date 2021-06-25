@@ -2,20 +2,17 @@
 # mypy: disallow_incomplete_defs = False
 # mypy: check_untyped_defs = False
 
-from __future__ import annotations  # Postponed evaluation of annotations
-
 import typing
 import collections
 import enum
 import random
 import dataclasses
-import numpy as np
+from numpy import int64
 
 from artiq.coredevice.edge_counter import CounterOverflow
 
-from artiq.language.core import *
-from artiq.language.units import *
-from artiq.language.types import *
+from artiq.language.core import kernel, delay_mu, now_mu, at_mu
+from artiq.language.types import TBool, TInt32, TInt64, TTuple
 
 from dax.sim.device import DaxSimDevice
 from dax.sim.signal import get_signal_manager
@@ -28,8 +25,9 @@ class _EdgeType(enum.IntEnum):
     FALLING = 2
     BOTH = 3
 
+    # Not using postponed evaluation of annotations to prevent ARTIQ compiler errors
     @classmethod
-    def from_bool(cls, *, rising: bool, falling: bool) -> _EdgeType:
+    def from_bool(cls, *, rising: bool, falling: bool) -> '_EdgeType':
         assert isinstance(rising, bool), 'Rising flag must be of type bool'
         assert isinstance(falling, bool), 'Falling flag must be of type bool'
         return _EdgeType(cls.RISING * rising + cls.FALLING * falling)
@@ -39,14 +37,14 @@ class _EdgeType(enum.IntEnum):
 class _Config:
     """Data class to store EdgeCounter gate configuration."""
     edge_type: _EdgeType
-    timestamp: np.int64
+    timestamp: int64
 
 
 class EdgeCounter(DaxSimDevice):
     counter_max: int
     _input_freq: float
     _input_stdev: float
-    _count_buffer: typing.Deque[typing.Tuple[np.int64, int]]
+    _count_buffer: typing.Deque[typing.Tuple[int64, int]]
     _prev_config: typing.Optional[_Config]
 
     def __init__(self, dmgr: typing.Any, gateware_width: int = 31,
@@ -86,7 +84,7 @@ class EdgeCounter(DaxSimDevice):
         # Clear buffers
         self._count_buffer.clear()
 
-    def _simulate_input_signal(self, duration: np.int64, edge_type: _EdgeType) -> None:
+    def _simulate_input_signal(self, duration, edge_type):  # type: (int, _EdgeType) -> None
         """Simulate input signal for a given duration."""
 
         # Decide event frequency
@@ -137,8 +135,7 @@ class EdgeCounter(DaxSimDevice):
     def gate_both(self, duration):
         return self.gate_both_mu(self.core.seconds_to_mu(duration))
 
-    @kernel
-    def set_config(self, count_rising: TBool, count_falling: TBool, send_count_event: TBool, reset_to_zero: TBool):
+    def _set_config(self, count_rising: TBool, count_falling: TBool, send_count_event: TBool, reset_to_zero: TBool):
         if self._prev_config is None:
             if (send_count_event, reset_to_zero) == (False, True):
                 # Store this configuration to match it with the next call to this function
@@ -166,7 +163,10 @@ class EdgeCounter(DaxSimDevice):
                                      f'instead got the invalid combination ({send_count_event}, {reset_to_zero})')
 
     @kernel
-    def fetch_count(self) -> TInt32:
+    def set_config(self, count_rising: TBool, count_falling: TBool, send_count_event: TBool, reset_to_zero: TBool):
+        return self._set_config(count_rising, count_falling, send_count_event, reset_to_zero)
+
+    def _fetch_count(self) -> TInt32:
         if len(self._count_buffer):
             # Get count from the buffer (drop the timestamp)
             _, count = self._count_buffer.popleft()
@@ -181,9 +181,11 @@ class EdgeCounter(DaxSimDevice):
             # No count available to return
             raise IndexError(f'Device "{self.key}" has no count to return')
 
-    # noinspection PyUnusedLocal
     @kernel
-    def fetch_timestamped_count(self, timeout_mu=np.int64(-1)) -> TTuple([TInt64, TInt32]):  # type: ignore
+    def fetch_count(self) -> TInt32:
+        return self._fetch_count()
+
+    def _fetch_timestamped_count(self) -> TTuple([TInt64, TInt32]):  # type: ignore[valid-type]
         if len(self._count_buffer):
             # Get count and timestamp from the buffer
             timestamp, count = self._count_buffer.popleft()
@@ -197,3 +199,8 @@ class EdgeCounter(DaxSimDevice):
         else:
             # No count available to return
             return -1, 0
+
+    # noinspection PyUnusedLocal
+    @kernel
+    def fetch_timestamped_count(self, timeout_mu=int64(-1)) -> TTuple([TInt64, TInt32]):  # type: ignore[valid-type]
+        return self._fetch_timestamped_count()
