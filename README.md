@@ -52,9 +52,8 @@ and execution principles. The execution model of DAX.program follows the acceler
 
 ## Installation
 
-Currently, we only build packages on a private server. For internal users, installation instructions can be found on
-the [DAX wiki installation page](https://gitlab.com/duke-artiq/dax/-/wikis/DAX/Installation). External users can build
-the DAX Nix package locally using the provided Nix scripts.
+Installation instructions can be found on
+the [DAX wiki installation page](https://gitlab.com/duke-artiq/dax/-/wikis/DAX/Installation).
 
 ## Usage
 
@@ -98,11 +97,10 @@ The major version number of DAX matches the version of the targeted ARTIQ releas
 
 ## Testing
 
-To run the DAX unit tests, execute one of the following commands in the root directory of DAX:
+Use pytest or Python unittest to run the DAX unit tests. We recommend using pytest.
 
 ```shell
-$ pytest  # Requires pytest to be installed
-$ python3 -m unittest  # No additional libraries required
+$ pytest
 ```
 
 ## Main contributors
@@ -112,8 +110,8 @@ $ python3 -m unittest  # No additional libraries required
 
 ## Acknowledgements
 
-The development of DAX was primarily funded by EPiQC, an NSF Expeditions in Computing (1832377) and the NSF STAQ
-project (1818914). The work was also partially funded by the IARPA LogiQ program (W911NF-16-1-0082) and the DOE ASCR
+The development of DAX is primarily funded by EPiQC, an NSF Expeditions in Computing (1832377), and the NSF STAQ
+project (1818914). The work is also partially funded by the IARPA LogiQ program (W911NF-16-1-0082) and the DOE ASCR
 Testbed QSCOUT.
 
 More information about these projects can be found at:
