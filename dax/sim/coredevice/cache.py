@@ -30,19 +30,25 @@ class CoreCache(DaxSimDevice):
         # Cache
         self._cache = {} if cache is None else cache.copy()
 
-    @kernel
-    def get(self, key):  # type: (str) -> __V_T
-        assert isinstance(key, str), 'Key must be of type str'
+    def _get(self, key):  # type: (str) -> __V_T
+        if not isinstance(key, str):
+            raise TypeError('Key must be of type str')
 
         # Return value
         # NOTE: ``get()`` mimics the fact that an empty cache key is not mutable and first has to be set using ``put()``
         return self._cache.get(key, [])
 
     @kernel
-    def put(self, key, value):  # type: (str, __V_T) -> None
-        assert isinstance(key, str), 'Key must be of type str'
-        assert isinstance(value, list), 'Value must be of type list'
-        assert all(isinstance(e, (int, np.integer)) for e in value), 'List elements must be of type int'
+    def get(self, key):  # type: (str) -> __V_T
+        return self._get(key)
+
+    def _put(self, key, value):  # type: (str, __V_T) -> None
+        if not isinstance(key, str):
+            raise TypeError('Key must be of type str')
+        if not isinstance(value, list):
+            raise TypeError('Value must be of type list')
+        if not all(isinstance(e, (int, np.integer)) for e in value):
+            raise TypeError('List elements must be of type int')
 
         # NOTE: we can not check if the value was extracted earlier in the same kernel
         if value:
@@ -51,3 +57,7 @@ class CoreCache(DaxSimDevice):
         else:
             # Erase key
             self._cache.pop(key, None)
+
+    @kernel
+    def put(self, key, value):  # type: (str, __V_T) -> None
+        return self._put(key, value)

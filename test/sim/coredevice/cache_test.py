@@ -5,6 +5,8 @@ import dax.sim.coredevice.cache
 from dax.sim import enable_dax_sim
 from dax.util.artiq import get_managers
 
+import test.sim.coredevice._compile_testcase as compile_testcase
+
 
 class CoreCacheTestCase(unittest.TestCase):
     _CACHE = None
@@ -55,3 +57,12 @@ class CoreCacheTestCase(unittest.TestCase):
         # Erase
         self.cache.put(key, [])
         self.assertListEqual(self.cache.get(key), [], 'Extracting erased key did not return empty list')
+
+
+class CompileTestCase(compile_testcase.CoredeviceCompileTestCase):
+    DEVICE_CLASS = dax.sim.coredevice.cache.CoreCache
+    DEVICE_KWARGS = {'cache': {'k': [1]}}
+    FN_KWARGS = {
+        'get': {'key': 'k'},
+        'put': {'key': 'k', 'value': [2]},
+    }
