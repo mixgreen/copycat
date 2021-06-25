@@ -19,7 +19,7 @@ dependencies:
   - networkx
   # Packages required for testing
   - pytest
-  - mypy
+  - mypy<0.910  # See https://github.com/python/mypy/issues/10714
   - pycodestyle
   - flake8
   - flake8-artiq
