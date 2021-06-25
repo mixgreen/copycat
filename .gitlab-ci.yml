@@ -71,7 +71,7 @@ test_conda:
 
 pages:
   extends: .nix_env
-  stage: test
+  stage: deploy
   variables:
     NIX_SHELL_FILE: "doc/shell.nix"
   script:
