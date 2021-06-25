@@ -1,3 +1,7 @@
+import typing
+
+import dax.sim.coredevice.zotino
+
 import test.sim.coredevice.ad53xx_test
 
 _DEVICE_DB = {
@@ -29,3 +33,11 @@ class ZotinoPeekTestCase(test.sim.coredevice.ad53xx_test.AD53xxPeekTestCase):
             self.expect(self.env.dut, 'led', value)
             self.env.dut.set_leds(0x0)
             self.expect(self.env.dut, 'led', '00000000')
+
+
+class CompileTestCase(test.sim.coredevice.ad53xx_test.CompileTestCase):
+    DEVICE_CLASS: type = dax.sim.coredevice.zotino.Zotino
+    FN_KWARGS: typing.Dict[str, typing.Dict[str, typing.Any]] = {
+        'set_leds': {'leds': 0},
+    }
+    FN_KWARGS.update(test.sim.coredevice.ad53xx_test.CompileTestCase.FN_KWARGS)

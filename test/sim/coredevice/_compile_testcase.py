@@ -76,11 +76,11 @@ class CoredeviceCompileTestCase(unittest.TestCase):
             self.assertGreater(len(fn_list), 0, 'No kernel functions were found')
 
             for n, f in fn_list:
-                with self.subTest(function=n):
-                    args = self.FN_ARGS.get(n, ())
-                    kwargs = self.FN_KWARGS.get(n, {})
-                    expected_exception = self.FN_EXCEPTIONS.get(n, NotImplementedError)
+                args = self.FN_ARGS.get(n, ())
+                kwargs = self.FN_KWARGS.get(n, {})
+                expected_exception = self.FN_EXCEPTIONS.get(n, NotImplementedError)
 
+                with self.subTest(function=n, args=args, kwargs=kwargs, expected_exception=expected_exception):
                     try:
                         f(*args, **kwargs)  # This will cause compilation of the kernel function
                     except expected_exception:

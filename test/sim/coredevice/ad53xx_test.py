@@ -1,5 +1,6 @@
 import unittest
 import random
+import typing
 
 from artiq.experiment import *
 import artiq.coredevice.ad53xx  # type: ignore
@@ -7,6 +8,7 @@ import artiq.coredevice.ad53xx  # type: ignore
 import dax.sim.test_case
 import dax.sim.coredevice.ad53xx
 
+import test.sim.coredevice._compile_testcase as compile_testcase
 from test.environment import CI_ENABLED
 
 _NUM_SAMPLES = 1000 if CI_ENABLED else 100
@@ -137,3 +139,21 @@ class AD53xxPeekTestCase(dax.sim.test_case.PeekTestCase):
         self.env.dut.write_offset_dacs_mu(0)  # Should apply immediately
         for i in range(self._NUM_CHANNELS):
             self.expect_close(self.env.dut, f'v_out_{i}', 0.0, places=7)
+
+
+class CompileTestCase(compile_testcase.CoredeviceCompileTestCase):
+    DEVICE_CLASS: type = dax.sim.coredevice.ad53xx.AD53xx
+    FN_KWARGS: typing.Dict[str, typing.Dict[str, typing.Any]] = {
+        'write_offset_dacs_mu': {'value': 0},
+        'write_gain_mu': {'channel': 0},
+        'write_offset_mu': {'channel': 0},
+        'write_offset': {'channel': 0, 'voltage': 0.0},
+        'write_dac_mu': {'channel': 0, 'value': 0},
+        'write_dac': {'channel': 0, 'voltage': 0.0},
+        'set_dac_mu': {'values': [0]},
+        'set_dac': {'voltages': [0.0]},
+        'voltage_to_mu': {'voltage': 0.0},
+    }
+    FN_EXCLUDE = {
+        'calibrate',  # Skipped because conditions for inputs can not be easily satisfied
+    }
