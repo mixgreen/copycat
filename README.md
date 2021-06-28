@@ -52,8 +52,10 @@ and execution principles. The execution model of DAX.program follows the acceler
 
 ## Installation
 
-Installation instructions can be found on
-the [DAX wiki installation page](https://gitlab.com/duke-artiq/dax/-/wikis/DAX/Installation).
+Installation instructions for:
+
+- [External users](https://gitlab.com/duke-artiq/dax/-/wikis/DAX/Installation)
+- [Duke users](https://gitlab.com/duke-artiq/dax/-/wikis/DAX/Installation%20Duke%20users)
 
 ## Usage
 
