@@ -284,7 +284,7 @@ class AD9910(DaxSimDevice):
     def tune_io_update_delay(self) -> TInt32:
         raise NotImplementedError
 
-    if ARTIQ_MAJOR_VERSION >= 7:
+    if ARTIQ_MAJOR_VERSION >= 7:  # pragma: no cover
         @kernel
         def get_ftw(self) -> TInt32:
             return self.frequency_to_ftw(self.get_frequency())

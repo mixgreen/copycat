@@ -140,7 +140,7 @@ class CPLD(DaxSimDevice):
     def set_profile(self, profile: TInt32):
         raise NotImplementedError
 
-    if ARTIQ_MAJOR_VERSION >= 7:
+    if ARTIQ_MAJOR_VERSION >= 7:  # pragma: no cover
         @portable(flags={"fast-math"})
         def mu_to_att(self, att_mu: TInt32) -> TFloat:
             return _mu_to_att(att_mu)

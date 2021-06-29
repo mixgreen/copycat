@@ -71,7 +71,7 @@ class AD9912(DaxSimDevice):
         def set_mu(self, ftw, pow):
             phase = pow / (1 << 14)  # Inverted turns_to_pow()
             self.set(self.ftw_to_frequency(ftw), phase)
-    else:
+    else:  # pragma: no cover
         @kernel
         def set_mu(self, ftw: TInt64, pow_: TInt32):
             self.set(self.ftw_to_frequency(ftw), self.pow_to_turns(pow_))
@@ -99,7 +99,7 @@ class AD9912(DaxSimDevice):
     def cfg_sw(self, state: TBool):
         self.cpld.cfg_sw(self.chip_select - 4, state)
 
-    if ARTIQ_MAJOR_VERSION >= 7:
+    if ARTIQ_MAJOR_VERSION >= 7:  # pragma: no cover
         @kernel
         def get_att_mu(self) -> TInt32:
             return self.cpld.get_channel_att_mu(self.chip_select - 4)
