@@ -50,6 +50,7 @@ test_nix_beta:
     NIX_SHELL_FILE: "test/shell.nix"
     ARTIQ_CHANNEL: "https://nixbld.m-labs.hk/channel/custom/artiq/full-beta/artiq-full"
     NIXPKGS_CHANNEL: "https://nixos.org/channels/nixos-21.05"
+    TB_DISABLED: "true"
   script:
     # Run test commands
     - python3 --version

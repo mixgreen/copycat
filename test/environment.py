@@ -4,8 +4,8 @@ import random
 
 __all__ = ['NIX_ENV', 'CONDA_ENV', 'CI_ENABLED', 'JOB_ID', 'TB_DISABLED']
 
-NIX_ENV: bool = bool(os.getenv('NIX_STORE')) or os.getenv('CI_JOB_NAME') == 'test_nix'
-"""True if we are in a Nix shell or if we run inside the `test_nix` CI job."""
+NIX_ENV: bool = bool(os.getenv('NIX_STORE')) or 'nixos/nix' in os.getenv('CI_JOB_IMAGE', '')
+"""True if we are in a Nix shell or in a CI environment with a ``nixos/nix`` docker image."""
 
 CONDA_ENV: bool = bool(os.getenv('CONDA_DEFAULT_ENV'))
 """True if we are in a Conda environment."""

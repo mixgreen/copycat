@@ -149,5 +149,5 @@ class ArtiqKernelTestCase(test.hw_testbench.TestBenchCase):
         env = self.construct_env(_BuiltinsExperiment)
         arr = np.arange(5, dtype=np.int32)
         adder = 1
-        acc = env.array_test(arr)
+        acc = env.array_test(arr, adder)
         self.assertEqual(acc, sum(arr) + len(arr) * adder)
