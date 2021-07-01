@@ -81,8 +81,8 @@ class _BuiltinsExperiment(HasEnvironment):
         pass
 
     @kernel
-    def array_test(self, a):
-        a += 1
+    def array_test(self, a, adder):
+        a += adder
         acc = 0
         for e in a:
             acc += e
@@ -107,27 +107,27 @@ class ArtiqKernelTestCase(test.hw_testbench.TestBenchCase):
     def test_range(self):
         env = self.construct_env(_BuiltinsExperiment)
         acc = env.range_test(5)
-        self.asserEqual(acc, sum(range(5)))
+        self.assertEqual(acc, sum(range(5)))
 
     def test_len(self):
         env = self.construct_env(_BuiltinsExperiment)
         list_ = [1, 2, 3, 4]
         length = env.len_test(list_)
-        self.asserEqual(length, len(list_))
+        self.assertEqual(length, len(list_))
 
     def test_min_max(self):
         env = self.construct_env(_BuiltinsExperiment)
         a = 4
         b = 5
         min_, max_ = env.min_max_test(a, b)
-        self.asserEqual(min_, min(a, b))
-        self.asserEqual(max_, max(a, b))
+        self.assertEqual(min_, min(a, b))
+        self.assertEqual(max_, max(a, b))
 
     def test_abs(self):
         env = self.construct_env(_BuiltinsExperiment)
         for e in [-2, 4]:
             r = env.abs_test(e)
-            self.asserEqual(r, abs(e))
+            self.assertEqual(r, abs(e))
 
     def test_assert(self):
         env = self.construct_env(_BuiltinsExperiment)
@@ -148,5 +148,6 @@ class ArtiqKernelTestCase(test.hw_testbench.TestBenchCase):
     def test_array(self):
         env = self.construct_env(_BuiltinsExperiment)
         arr = np.arange(5, dtype=np.int32)
+        adder = 1
         acc = env.array_test(arr)
-        self.assertEqual(acc, sum(arr))
+        self.assertEqual(acc, sum(arr) + len(arr) * adder)
