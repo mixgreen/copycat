@@ -1,4 +1,5 @@
-{ pkgs ? import <nixpkgs> {}, artiqpkgs ? import <artiq-full> { inherit pkgs; }, daxVersion ? null }:
+{ pkgs ? import <nixpkgs> {}, artiqpkgs ? import <artiq-full> { inherit pkgs; },
+daxVersion ? null }:
 
 with pkgs;
 python3Packages.buildPythonPackage rec {
@@ -8,13 +9,18 @@ python3Packages.buildPythonPackage rec {
   src = nix-gitignore.gitignoreSource [ "*.nix" ] ./.;
 
   VERSIONEER_OVERRIDE = version;
+  inherit (python3Packages.pygit2) SSL_CERT_FILE;
 
   propagatedBuildInputs = (with artiqpkgs; [ artiq sipyco ])
     ++ (with python3Packages; [ numpy scipy pyvcd natsort pygit2 matplotlib graphviz h5py networkx ]);
 
   checkInputs = with python3Packages; [ pytestCheckHook ];
 
-  inherit (python3Packages.pygit2) SSL_CERT_FILE;
+  condaDependencies = [
+    "python>=3.7"
+    "artiq" "sipyco"
+    "numpy" "scipy" "pyvcd" "natsort" "pygit2" "matplotlib" "python-graphviz" "h5py" "networkx"
+  ];
 
   meta = with stdenv.lib; {
     description = "Duke ARTIQ Extensions (DAX)";
