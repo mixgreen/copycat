@@ -1286,6 +1286,12 @@ class DaxModuleBaseTestCase(unittest.TestCase):
         self.assertListEqual(s.get_dataset_sys(key2, default=value, data_store=False), value,
                              'get_dataset_sys() did not returned the provided default value')
 
+        key3 = 'key3'
+        self.assertListEqual(s.get_dataset_sys(key3, fallback=value), value,
+                             'get_dataset_sys() did not return the provided fallback value')
+        with self.assertRaises(KeyError, msg='get_dataset_sys() erroneously wrote fallback value to dataset'):
+            s.get_dataset_sys(key3)
+
         # Check data store calls
         self.assertListEqual(s.data_store.method_calls, [call.set(s.get_system_key(key), value)],
                              'Data store calls did not match expected pattern')
