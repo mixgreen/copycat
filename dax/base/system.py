@@ -333,11 +333,13 @@ class DaxHasKey(DaxBase, abc.ABC):
 
     @artiq.language.core.host_only
     def get_dataset_sys(self, key: str, default: typing.Any = artiq.language.environment.NoDefault,
-                        data_store: bool = True) -> typing.Any:
+                        data_store: bool = True,
+                        fallback: typing.Any = artiq.language.environment.NoDefault) -> typing.Any:
         """Returns the contents of a system dataset.
 
         If the key is present, its value will be returned.
-        If the key is not present and no default is provided, a :class:`KeyError` will be raised.
+        If the key is not present and no default is provided, a :class:`KeyError` will be raised unless a fallback
+        value is provided, in which case that fallback value will be returned and nothing will be written to a dataset.
         If the key is not present and a default is provided, the default value will
         be written to the dataset and the same value will be returned.
 
@@ -350,8 +352,9 @@ class DaxHasKey(DaxBase, abc.ABC):
         :param key: The key of the system dataset
         :param default: The default value to set the system dataset to if not present
         :param data_store: Flag to archive the value in the data store if the default value is used
+        :param fallback: The fallback value to return if not present and no default provided
         :return: The value of the system dataset or the default value
-        :raises KeyError: Raised if the key was not present and no default was provided
+        :raises KeyError: Raised if the key was not present and no default or fallback was provided
         :raises ValueError: Raised if the key has an invalid format
         """
 
@@ -368,8 +371,11 @@ class DaxHasKey(DaxBase, abc.ABC):
             value: typing.Any = self.get_dataset(system_key, archive=True)
         except KeyError:
             if default is artiq.language.environment.NoDefault:
-                # The value was not available in the system dataset and no default was provided
-                raise KeyError(f'System dataset key "{system_key}" not found') from None
+                if fallback is artiq.language.environment.NoDefault:
+                    # The value was not available in the system dataset and no default was provided
+                    raise KeyError(f'System dataset key "{system_key}" not found') from None
+                else:
+                    value = fallback
             else:
                 # If the value does not exist, write the default value to the system dataset, but do not archive yet
                 self.logger.debug(f'System dataset key "{key}" set to default value "{default}"')
