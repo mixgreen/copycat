@@ -252,8 +252,10 @@ class DaxHasKey(DaxBase, abc.ABC):
         # Return the assigned key
         return _KEY_SEPARATOR.join([self.__system_key, *keys])
 
+    # noinspection PyTypeHints
     @artiq.language.core.rpc(flags={'async'})
-    def set_dataset_sys(self, key, value, data_store=True):  # type: (str, typing.Any, bool) -> None
+    def set_dataset_sys(self, key, value, *,
+                        data_store=True):  # type: (str, typing.Any, bool) -> None
         """Sets the contents of a system dataset.
 
         :param key: The key of the system dataset
@@ -281,8 +283,9 @@ class DaxHasKey(DaxBase, abc.ABC):
             # Archive value using the data store
             self.data_store.set(system_key, value)
 
+    # noinspection PyTypeHints
     @artiq.language.core.rpc(flags={'async'})
-    def mutate_dataset_sys(self, key, index, value,
+    def mutate_dataset_sys(self, key, index, value, *,
                            data_store=True):  # type: (str, typing.Any, typing.Any, bool) -> None
         """Mutate an existing system dataset at the given index.
 
@@ -307,8 +310,10 @@ class DaxHasKey(DaxBase, abc.ABC):
             # Archive value using the data store
             self.data_store.mutate(system_key, index, value)
 
+    # noinspection PyTypeHints
     @artiq.language.core.rpc(flags={'async'})
-    def append_to_dataset_sys(self, key, value, data_store=True):  # type: (str, typing.Any, bool) -> None
+    def append_to_dataset_sys(self, key, value, *,
+                              data_store=True):  # type: (str, typing.Any, bool) -> None
         """Append a value to a system dataset.
 
         :param key: The key of the system dataset
@@ -332,12 +337,14 @@ class DaxHasKey(DaxBase, abc.ABC):
             self.data_store.append(system_key, value)
 
     @artiq.language.core.host_only
-    def get_dataset_sys(self, key: str, default: typing.Any = artiq.language.environment.NoDefault,
+    def get_dataset_sys(self, key: str, default: typing.Any = artiq.language.environment.NoDefault, *,
+                        fallback: typing.Any = artiq.language.environment.NoDefault,
                         data_store: bool = True) -> typing.Any:
         """Returns the contents of a system dataset.
 
         If the key is present, its value will be returned.
-        If the key is not present and no default is provided, a :class:`KeyError` will be raised.
+        If the key is not present and no default is provided, a :class:`KeyError` will be raised unless a fallback
+        value is provided, in which case that fallback value will be returned and nothing will be written to a dataset.
         If the key is not present and a default is provided, the default value will
         be written to the dataset and the same value will be returned.
 
@@ -349,9 +356,10 @@ class DaxHasKey(DaxBase, abc.ABC):
 
         :param key: The key of the system dataset
         :param default: The default value to set the system dataset to if not present
+        :param fallback: The fallback value to return if the system dataset is not present and no default provided
         :param data_store: Flag to archive the value in the data store if the default value is used
         :return: The value of the system dataset or the default value
-        :raises KeyError: Raised if the key was not present and no default was provided
+        :raises KeyError: Raised if the key was not present and no default or fallback was provided
         :raises ValueError: Raised if the key has an invalid format
         """
 
@@ -368,8 +376,11 @@ class DaxHasKey(DaxBase, abc.ABC):
             value: typing.Any = self.get_dataset(system_key, archive=True)
         except KeyError:
             if default is artiq.language.environment.NoDefault:
-                # The value was not available in the system dataset and no default was provided
-                raise KeyError(f'System dataset key "{system_key}" not found') from None
+                if fallback is artiq.language.environment.NoDefault:
+                    # The value was not available in the system dataset and no default was provided
+                    raise KeyError(f'System dataset key "{system_key}" not found') from None
+                else:
+                    value = fallback
             else:
                 # If the value does not exist, write the default value to the system dataset, but do not archive yet
                 self.logger.debug(f'System dataset key "{key}" set to default value "{default}"')
@@ -390,12 +401,14 @@ class DaxHasKey(DaxBase, abc.ABC):
         return value
 
     @artiq.language.core.host_only
-    def setattr_dataset_sys(self, key: str, default: typing.Any = artiq.language.environment.NoDefault,
+    def setattr_dataset_sys(self, key: str, default: typing.Any = artiq.language.environment.NoDefault, *,
+                            fallback: typing.Any = artiq.language.environment.NoDefault,
                             data_store: bool = True, kernel_invariant: bool = True) -> None:
         """Sets the contents of a system dataset as attribute.
 
         If the key is present, its value will be loaded to the attribute.
-        If the key is not present and no default is provided, the attribute is not set.
+        If the key is not present and no default is provided, the attribute is not set, unless a fallback
+        value is provided, in which case that fallback value will be set and nothing will be written to a dataset.
         If the key is not present and a default is provided, the default value will
         be written to the dataset and the attribute will be set to the same value.
 
@@ -412,9 +425,10 @@ class DaxHasKey(DaxBase, abc.ABC):
 
         :param key: The key of the system dataset
         :param default: The default value to set the system dataset to if not present
+        :param fallback: The fallback value to set if the system dataset is not present and no default provided
         :param data_store: Flag to archive the value in the data store if the default value is used
         :param kernel_invariant: Flag to set the attribute as kernel invariant
-        :raises KeyError: Raised if the key was not present
+        :raises KeyError: Raised if the key was not present and no default or fallback was provided
         :raises ValueError: Raised if the key has an invalid format
         """
 
@@ -422,7 +436,7 @@ class DaxHasKey(DaxBase, abc.ABC):
 
         try:
             # Get the value from system dataset
-            value: typing.Any = self.get_dataset_sys(key, default, data_store=data_store)
+            value: typing.Any = self.get_dataset_sys(key, default, fallback=fallback, data_store=data_store)
         except KeyError:
             # The value was not available in the system dataset and no default was provided, attribute will not be set
             self.logger.debug(f'System attribute "{key}" not set')
