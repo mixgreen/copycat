@@ -333,8 +333,8 @@ class DaxHasKey(DaxBase, abc.ABC):
 
     @artiq.language.core.host_only
     def get_dataset_sys(self, key: str, default: typing.Any = artiq.language.environment.NoDefault,
-                        data_store: bool = True,
-                        fallback: typing.Any = artiq.language.environment.NoDefault) -> typing.Any:
+                        fallback: typing.Any = artiq.language.environment.NoDefault,
+                        data_store: bool = True) -> typing.Any:
         """Returns the contents of a system dataset.
 
         If the key is present, its value will be returned.
@@ -351,8 +351,8 @@ class DaxHasKey(DaxBase, abc.ABC):
 
         :param key: The key of the system dataset
         :param default: The default value to set the system dataset to if not present
+        :param fallback: The fallback value to return if the system dataset is not present and no default provided
         :param data_store: Flag to archive the value in the data store if the default value is used
-        :param fallback: The fallback value to return if not present and no default provided
         :return: The value of the system dataset or the default value
         :raises KeyError: Raised if the key was not present and no default or fallback was provided
         :raises ValueError: Raised if the key has an invalid format
@@ -397,11 +397,13 @@ class DaxHasKey(DaxBase, abc.ABC):
 
     @artiq.language.core.host_only
     def setattr_dataset_sys(self, key: str, default: typing.Any = artiq.language.environment.NoDefault,
+                            fallback: typing.Any = artiq.language.environment.NoDefault,
                             data_store: bool = True, kernel_invariant: bool = True) -> None:
         """Sets the contents of a system dataset as attribute.
 
         If the key is present, its value will be loaded to the attribute.
-        If the key is not present and no default is provided, the attribute is not set.
+        If the key is not present and no default is provided, the attribute is not set, unless a fallback
+        value is provided, in which case that fallback value will be set and nothing will be written to a dataset.
         If the key is not present and a default is provided, the default value will
         be written to the dataset and the attribute will be set to the same value.
 
@@ -418,9 +420,10 @@ class DaxHasKey(DaxBase, abc.ABC):
 
         :param key: The key of the system dataset
         :param default: The default value to set the system dataset to if not present
+        :param fallback: The fallback value to set if the system dataset is not present and no default provided
         :param data_store: Flag to archive the value in the data store if the default value is used
         :param kernel_invariant: Flag to set the attribute as kernel invariant
-        :raises KeyError: Raised if the key was not present
+        :raises KeyError: Raised if the key was not present and no default or fallback was provided
         :raises ValueError: Raised if the key has an invalid format
         """
 
@@ -428,7 +431,7 @@ class DaxHasKey(DaxBase, abc.ABC):
 
         try:
             # Get the value from system dataset
-            value: typing.Any = self.get_dataset_sys(key, default, data_store=data_store)
+            value: typing.Any = self.get_dataset_sys(key, default, fallback=fallback, data_store=data_store)
         except KeyError:
             # The value was not available in the system dataset and no default was provided, attribute will not be set
             self.logger.debug(f'System attribute "{key}" not set')

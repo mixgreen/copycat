@@ -1367,6 +1367,17 @@ class DaxModuleBaseTestCase(unittest.TestCase):
         self.assertIn(key, s.kernel_invariants,
                       'setattr_dataset_sys() did not added the attribute to kernel_invariants')
 
+        key = 'key7'
+        self.assertIsNone(s.setattr_dataset_sys(key, fallback=99, data_store=True))  # Will NOT write to data store
+        self.assertTrue(hasattr(s, key), 'setattr_dataset_sys() did not set the attribute correctly')
+        with self.assertRaises(KeyError, msg='setattr_dataset_sys() erroneously wrote fallback value to dataset'):
+            s.get_dataset_sys(key)
+
+        key = 'key8'
+        self.assertIsNone(s.setattr_dataset_sys(key, default=80, fallback=81, data_store=False))
+        self.assertEqual(s.get_dataset_sys(key), 80,
+                         'setattr_dataset_sys() did not write the default value to the dataset')
+
         # Check data store calls
         self.assertListEqual(s.data_store.method_calls, [call.set(s.get_system_key('key3'), 10),
                                                          call.set(s.get_system_key('key1'), 100),
