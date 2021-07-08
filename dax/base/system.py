@@ -252,8 +252,10 @@ class DaxHasKey(DaxBase, abc.ABC):
         # Return the assigned key
         return _KEY_SEPARATOR.join([self.__system_key, *keys])
 
+    # noinspection PyTypeHints
     @artiq.language.core.rpc(flags={'async'})
-    def set_dataset_sys(self, key, value, data_store=True):  # type: (str, typing.Any, bool) -> None
+    def set_dataset_sys(self, key, value, *,
+                        data_store=True):  # type: (str, typing.Any, bool) -> None
         """Sets the contents of a system dataset.
 
         :param key: The key of the system dataset
@@ -281,8 +283,9 @@ class DaxHasKey(DaxBase, abc.ABC):
             # Archive value using the data store
             self.data_store.set(system_key, value)
 
+    # noinspection PyTypeHints
     @artiq.language.core.rpc(flags={'async'})
-    def mutate_dataset_sys(self, key, index, value,
+    def mutate_dataset_sys(self, key, index, value, *,
                            data_store=True):  # type: (str, typing.Any, typing.Any, bool) -> None
         """Mutate an existing system dataset at the given index.
 
@@ -307,8 +310,10 @@ class DaxHasKey(DaxBase, abc.ABC):
             # Archive value using the data store
             self.data_store.mutate(system_key, index, value)
 
+    # noinspection PyTypeHints
     @artiq.language.core.rpc(flags={'async'})
-    def append_to_dataset_sys(self, key, value, data_store=True):  # type: (str, typing.Any, bool) -> None
+    def append_to_dataset_sys(self, key, value, *,
+                              data_store=True):  # type: (str, typing.Any, bool) -> None
         """Append a value to a system dataset.
 
         :param key: The key of the system dataset
@@ -332,7 +337,7 @@ class DaxHasKey(DaxBase, abc.ABC):
             self.data_store.append(system_key, value)
 
     @artiq.language.core.host_only
-    def get_dataset_sys(self, key: str, default: typing.Any = artiq.language.environment.NoDefault,
+    def get_dataset_sys(self, key: str, default: typing.Any = artiq.language.environment.NoDefault, *,
                         fallback: typing.Any = artiq.language.environment.NoDefault,
                         data_store: bool = True) -> typing.Any:
         """Returns the contents of a system dataset.
@@ -396,7 +401,7 @@ class DaxHasKey(DaxBase, abc.ABC):
         return value
 
     @artiq.language.core.host_only
-    def setattr_dataset_sys(self, key: str, default: typing.Any = artiq.language.environment.NoDefault,
+    def setattr_dataset_sys(self, key: str, default: typing.Any = artiq.language.environment.NoDefault, *,
                             fallback: typing.Any = artiq.language.environment.NoDefault,
                             data_store: bool = True, kernel_invariant: bool = True) -> None:
         """Sets the contents of a system dataset as attribute.
