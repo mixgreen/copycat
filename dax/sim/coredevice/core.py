@@ -162,8 +162,8 @@ class Core(BaseCore):
     _reset_signal: typing.Any
     _level: int
     _context_switch_counter: int
-    _func_counter: typing.Counter[typing.Any]
-    _func_time: typing.Counter[typing.Any]
+    _fn_counter: typing.Counter[typing.Any]
+    _fn_time: typing.Counter[typing.Any]
     _compiler: typing.Optional[artiq.coredevice.core.Core]
 
     # noinspection PyShadowingBuiltins
@@ -203,8 +203,8 @@ class Core(BaseCore):
         # Counter for context switches
         self._context_switch_counter = 0
         # Counting dicts for function call profiling
-        self._func_counter = collections.Counter()
-        self._func_time = collections.Counter()
+        self._fn_counter = collections.Counter()
+        self._fn_time = collections.Counter()
 
         # Configure compiler
         if compile:
@@ -224,10 +224,10 @@ class Core(BaseCore):
             self._compiler.compile(function, args, kwargs)
 
         # Unpack function
-        kernel_func = function.artiq_embedded.function
+        kernel_fn = function.artiq_embedded.function
 
         # Register the function call
-        self._func_counter[kernel_func] += 1
+        self._fn_counter[kernel_fn] += 1
         # Track current time
         t_start: np.int64 = now_mu()
 
@@ -237,7 +237,7 @@ class Core(BaseCore):
         self._level -= 1
 
         # Accumulate the time spend in this function call
-        self._func_time[kernel_func] += now_mu() - t_start
+        self._fn_time[kernel_fn] += now_mu() - t_start
 
         if self._level == 0:
             # Flush signal manager if we are about to leave the kernel context
@@ -264,8 +264,8 @@ class Core(BaseCore):
                 # Submit context switch data
                 csv_writer.writerow([self._context_switch_counter, None, None, 'Core.compile'])
                 # Submit profiling data
-                csv_writer.writerows((self._func_counter[func], time, self.mu_to_seconds(time), func.__qualname__)
-                                     for func, time in self._func_time.items())
+                csv_writer.writerows((self._fn_counter[fn], time, self.mu_to_seconds(time), fn.__qualname__)
+                                     for fn, time in self._fn_time.items())
 
     def compile(self, function: typing.Any, args: typing.Tuple[typing.Any, ...], kwargs: typing.Dict[str, typing.Any],
                 set_result: typing.Any = None, attribute_writeback: bool = True,

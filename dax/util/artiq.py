@@ -68,48 +68,48 @@ _DEVICE_DB: typing.Dict[str, typing.Any] = {
 """Default device DB."""
 
 
-def is_kernel(func: typing.Any) -> bool:
+def is_kernel(fn: typing.Any) -> bool:
     """Helper function to detect if a function is an ARTIQ kernel (``@kernel``) or not.
 
-    :param func: The function of interest
+    :param fn: The function of interest
     :return: :const:`True` if the given function is a kernel
     """
-    meta = getattr(func, 'artiq_embedded', None)
+    meta = getattr(fn, 'artiq_embedded', None)
     return False if meta is None else (meta.core_name is not None and not meta.portable)
 
 
-def is_portable(func: typing.Any) -> bool:
+def is_portable(fn: typing.Any) -> bool:
     """Helper function to detect if a function is an ARTIQ portable function (``@portable``) or not.
 
-    :param func: The function of interest
+    :param fn: The function of interest
     :return: :const:`True` if the given function is a portable function
     """
-    meta = getattr(func, 'artiq_embedded', None)
+    meta = getattr(fn, 'artiq_embedded', None)
     return False if meta is None else bool(meta.portable)
 
 
-def is_host_only(func: typing.Any) -> bool:
+def is_host_only(fn: typing.Any) -> bool:
     """Helper function to detect if a function is decorated as host only (``@host_only``) or not.
 
-    :param func: The function of interest
+    :param fn: The function of interest
     :return: :const:`True` if the given function is host only
     """
-    meta = getattr(func, 'artiq_embedded', None)
+    meta = getattr(fn, 'artiq_embedded', None)
     return False if meta is None else bool(meta.forbidden)
 
 
-def is_rpc(func: typing.Any, *, flags: typing.Optional[typing.Set[str]] = None) -> bool:
+def is_rpc(fn: typing.Any, *, flags: typing.Optional[typing.Set[str]] = None) -> bool:
     """Helper function to detect if a function is an ARTIQ RPC function (``@rpc``) or not.
 
     Note that this function only detects RPC functions that are **explicitly decorated**.
 
-    :param func: The function of interest
+    :param fn: The function of interest
     :param flags: Expected flags
     :return: :const:`True` if the given function is an RPC function with the expected flags (subset of function flags)
     """
     assert flags is None or isinstance(flags, set), 'Flags must be a set or None'
 
-    meta = getattr(func, 'artiq_embedded', None)
+    meta = getattr(fn, 'artiq_embedded', None)
     if meta is None:
         return False
     else:
@@ -118,13 +118,13 @@ def is_rpc(func: typing.Any, *, flags: typing.Optional[typing.Set[str]] = None) 
         return meta.core_name is None and not meta.portable and not meta.forbidden and flags <= meta.flags
 
 
-def is_decorated(func: typing.Any) -> bool:
+def is_decorated(fn: typing.Any) -> bool:
     """Helper function to detect if a function is decorated with an ARTIQ decorator.
 
-    :param func: The function of interest
+    :param fn: The function of interest
     :return: :const:`True` if the given function is decorated with an ARTIQ decorator
     """
-    return getattr(func, 'artiq_embedded', None) is not None
+    return getattr(fn, 'artiq_embedded', None) is not None
 
 
 __NoDefault = artiq.language.environment.NoDefault  # Typing helper
