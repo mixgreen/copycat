@@ -2,6 +2,7 @@ import unittest
 import numpy as np
 
 from artiq.experiment import *
+from artiq.coredevice.core import CompileError
 
 import test.hw_testbench
 
@@ -41,7 +42,7 @@ class _ContextExperiment(HasEnvironment):
                 pass
 
 
-class _BuiltinsExperiment(HasEnvironment):
+class _CompilerSupportExperiment(HasEnvironment):
     def build(self):
         self.setattr_device('core')
 
@@ -88,6 +89,10 @@ class _BuiltinsExperiment(HasEnvironment):
             acc += e
         return acc
 
+    @kernel
+    def notimplementederror_test(self):
+        raise NotImplementedError
+
 
 class ArtiqKernelTestCase(test.hw_testbench.TestBenchCase):
 
@@ -105,18 +110,18 @@ class ArtiqKernelTestCase(test.hw_testbench.TestBenchCase):
                              'multiple item context (single `with` statement) has incorrect behavior')
 
     def test_range(self):
-        env = self.construct_env(_BuiltinsExperiment)
+        env = self.construct_env(_CompilerSupportExperiment)
         acc = env.range_test(5)
         self.assertEqual(acc, sum(range(5)))
 
     def test_len(self):
-        env = self.construct_env(_BuiltinsExperiment)
+        env = self.construct_env(_CompilerSupportExperiment)
         list_ = [1, 2, 3, 4]
         length = env.len_test(list_)
         self.assertEqual(length, len(list_))
 
     def test_min_max(self):
-        env = self.construct_env(_BuiltinsExperiment)
+        env = self.construct_env(_CompilerSupportExperiment)
         a = 4
         b = 5
         min_, max_ = env.min_max_test(a, b)
@@ -124,30 +129,35 @@ class ArtiqKernelTestCase(test.hw_testbench.TestBenchCase):
         self.assertEqual(max_, max(a, b))
 
     def test_abs(self):
-        env = self.construct_env(_BuiltinsExperiment)
+        env = self.construct_env(_CompilerSupportExperiment)
         for e in [-2, 4]:
             r = env.abs_test(e)
             self.assertEqual(r, abs(e))
 
     def test_assert(self):
-        env = self.construct_env(_BuiltinsExperiment)
+        env = self.construct_env(_CompilerSupportExperiment)
         with self.assertRaises(AssertionError):
             env.assert_test(3, 4)
         self.assertIsNone(env.assert_test(3, 3))
 
     def test_sin(self):
-        env = self.construct_env(_BuiltinsExperiment)
+        env = self.construct_env(_CompilerSupportExperiment)
         for e in [np.pi, np.pi * 1.5]:
             r = env.sin_test(e)
             self.assertAlmostEqual(r, np.sin(e))
 
     def test_rpc_args_kwargs(self):
-        env = self.construct_env(_BuiltinsExperiment)
+        env = self.construct_env(_CompilerSupportExperiment)
         self.assertIsNone(env.rpc_args_kwargs_test())
 
     def test_array(self):
-        env = self.construct_env(_BuiltinsExperiment)
+        env = self.construct_env(_CompilerSupportExperiment)
         arr = np.arange(5, dtype=np.int32)
         adder = 1
         acc = env.array_test(arr, adder)
         self.assertEqual(acc, sum(arr) + len(arr) * adder)
+
+    def test_notimplementederror(self):
+        env = self.construct_env(_CompilerSupportExperiment)
+        with self.assertRaises(CompileError, msg='NotImplementedError does not result in a compile error'):
+            env.notimplementederror_test()
