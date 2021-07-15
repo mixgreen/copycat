@@ -3,7 +3,7 @@ import random
 import typing
 
 from artiq.experiment import *
-import artiq.coredevice.ad53xx  # type: ignore
+import artiq.coredevice.ad53xx  # type: ignore[import]
 
 import dax.sim.test_case
 import dax.sim.coredevice.ad53xx

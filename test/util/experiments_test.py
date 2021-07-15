@@ -3,7 +3,7 @@ import unittest.mock
 import numpy as np
 
 from artiq.experiment import EnvExperiment, Experiment, HasEnvironment
-from artiq.master.worker_impl import Scheduler  # type: ignore
+from artiq.master.worker_impl import Scheduler  # type: ignore[import]
 
 import dax.util.artiq
 import dax.util.experiments

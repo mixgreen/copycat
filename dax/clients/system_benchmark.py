@@ -22,7 +22,7 @@ class SystemBenchmarkDaxInit(DaxClient, Experiment):
     DAX_INIT = False
     """Disable DAX init."""
 
-    def build(self) -> None:  # type: ignore
+    def build(self) -> None:  # type: ignore[override]
         # Arguments
         self.num_samples = self.get_argument('num_samples', NumberValue(5, min=1, step=1, ndecimals=0))
 
@@ -84,7 +84,7 @@ class SystemBenchmarkDaxInitProfile(DaxClient, Experiment):
     SORT_KEYS = [k.value for k in pstats.SortKey]  # type: ignore[attr-defined]
     """Profile stats sort keys."""
 
-    def build(self) -> None:  # type: ignore
+    def build(self) -> None:  # type: ignore[override]
         # Arguments
         self.sort_stats = self.get_argument('Sort stats',
                                             EnumerationValue(self.SORT_KEYS, default='cumulative'),
@@ -136,7 +136,7 @@ class _SystemBenchmarkBuildProfile(EnvExperiment):
     SYSTEM_KWARGS: typing.ClassVar[typing.Dict[str, typing.Any]]
     """Keyword arguments for building the system."""
 
-    def build(self) -> None:  # type: ignore
+    def build(self) -> None:  # type: ignore[override]
         # Arguments
         self.sort_stats = self.get_argument('Sort stats',
                                             EnumerationValue(self.SORT_KEYS, default='cumulative'),

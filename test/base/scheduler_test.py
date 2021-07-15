@@ -19,7 +19,7 @@ from unittest.mock import Mock, call
 
 from artiq.language.scan import *
 from artiq.experiment import TerminationRequested, NumberValue
-import artiq.frontend.artiq_run  # type: ignore
+import artiq.frontend.artiq_run  # type: ignore[import]
 from sipyco.sync_struct import Subscriber
 
 from dax.base.scheduler import *
@@ -1965,9 +1965,9 @@ class OptimusCalibrationTestCase(unittest.TestCase):
         adj = np.zeros((num_nodes, num_nodes))
         for i in range(num_nodes):
             for j in range(i + 1, num_nodes):
-                adj[i, j] = np.random.choice([1, 0], p=[p, 1 - p])  # type: ignore
+                adj[i, j] = np.random.choice([1, 0], p=[p, 1 - p])  # type: ignore[index,attr-defined]
         # redundant since scheduler also calls this, but need to make sure we're working with the exact same graph
-        g: nx.DiGraph = nx.convert_matrix.from_numpy_array(adj, create_using=nx.DiGraph)  # type: ignore
+        g: nx.DiGraph = nx.convert_matrix.from_numpy_array(adj, create_using=nx.DiGraph)  # type: ignore[attr-defined]
         g = nx.algorithms.transitive_reduction(g)
         if not nx.algorithms.is_directed_acyclic_graph(g):  # don't think this should happen, but can't hurt to check
             raise Exception('Non-DAG graph created')

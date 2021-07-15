@@ -4,12 +4,12 @@ import numpy as np
 
 from artiq.language.core import now_mu, delay, delay_mu, parallel, sequential
 from artiq.language.units import *
-import artiq.coredevice.ttl  # type: ignore
+import artiq.coredevice.ttl  # type: ignore[import]
 import artiq.coredevice.edge_counter
-import artiq.coredevice.ad9910  # type: ignore
-import artiq.coredevice.ad9912  # type: ignore
-import artiq.coredevice.ad53xx  # type: ignore
-import artiq.coredevice.zotino  # type: ignore
+import artiq.coredevice.ad9910  # type: ignore[import]
+import artiq.coredevice.ad9912  # type: ignore[import]
+import artiq.coredevice.ad53xx  # type: ignore[import]
+import artiq.coredevice.zotino  # type: ignore[import]
 
 from dax.experiment import DaxSystem
 from dax.sim import enable_dax_sim

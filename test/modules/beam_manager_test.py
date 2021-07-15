@@ -9,7 +9,7 @@ class _TestSystem(DaxSystem):
     SYS_ID = 'unittest_system'
     SYS_VER = 0
 
-    def build(self, num_beams) -> None:  # type: ignore
+    def build(self, num_beams) -> None:  # type: ignore[override]
         super(_TestSystem, self).build()
         self.m = BeamManager(self, 'beam_manager', num_beams=num_beams)
 

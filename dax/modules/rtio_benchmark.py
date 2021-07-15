@@ -1,7 +1,7 @@
 import typing
 import numpy as np
 
-import artiq.coredevice.ttl  # type: ignore
+import artiq.coredevice.ttl  # type: ignore[import]
 
 from dax.experiment import *
 import dax.util.units
@@ -25,7 +25,7 @@ class RtioBenchmarkModule(DaxModule):
     _max_burst: int
     _init_kernel: bool
 
-    def build(self, *,  # type: ignore
+    def build(self, *,  # type: ignore[override]
               ttl_out: str, dma: bool = False, max_burst: int = 10000, init_kernel: bool = True) -> None:
         """Build the RTIO benchmark module.
 
@@ -690,7 +690,7 @@ class RtioLoopBenchmarkModule(RtioBenchmarkModule):
     EDGE_DELAY: typing.ClassVar[float] = 1 * us
     """Fixed edge delay time."""
 
-    def build(self, *, ttl_in: str, **kwargs: typing.Any) -> None:  # type: ignore
+    def build(self, *, ttl_in: str, **kwargs: typing.Any) -> None:  # type: ignore[override]
         """Build the RTIO loop benchmark module.
 
         :param ttl_in: Key of the TTLInOut device to use as input

@@ -7,7 +7,8 @@ from numpy import int32, int64
 from artiq.language.core import kernel, delay, portable, now_mu
 from artiq.language.units import us, ms, MHz
 from artiq.language.types import TBool, TInt32, TInt64, TFloat, TList, TTuple
-from artiq.coredevice.ad9910 import PHASE_MODE_CONTINUOUS, PHASE_MODE_ABSOLUTE, PHASE_MODE_TRACKING  # type: ignore
+from artiq.coredevice.ad9910 import (PHASE_MODE_CONTINUOUS, PHASE_MODE_ABSOLUTE,  # type: ignore[import]
+                                     PHASE_MODE_TRACKING)
 
 from dax.sim.device import DaxSimDevice, ARTIQ_MAJOR_VERSION
 from dax.sim.signal import get_signal_manager

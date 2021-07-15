@@ -31,7 +31,7 @@ class Introspect(DaxClient, Experiment):
     }
     """Dict with available graph types."""
 
-    def build(self) -> None:  # type: ignore
+    def build(self) -> None:  # type: ignore[override]
         # Add arguments
         self._graph_types = self.get_argument('Graph', EnumerationValue(list(self.GRAPHS), default='Common graphs'))
         self._view = self.get_argument('View result', BooleanValue(True))

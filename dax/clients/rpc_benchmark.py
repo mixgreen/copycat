@@ -12,7 +12,7 @@ class RpcBenchmarkLatency(DaxClient, Experiment):
     DAX_INIT = False
     """Disable DAX init."""
 
-    def build(self) -> None:  # type: ignore
+    def build(self) -> None:  # type: ignore[override]
         # Arguments
         self.num_samples = self.get_argument('num_samples', NumberValue(100, min=1, step=1, ndecimals=0))
 
@@ -43,7 +43,7 @@ class RpcBenchmarkAsyncThroughput(DaxClient, Experiment):
     DAX_INIT = False
     """Disable DAX init."""
 
-    def build(self) -> None:  # type: ignore
+    def build(self) -> None:  # type: ignore[override]
         # Arguments
         self.num_events = self.get_argument('num_events', NumberValue(1000, min=1, step=1, ndecimals=0))
         self.num_samples = self.get_argument('num_samples', NumberValue(100, min=1, step=1, ndecimals=0))

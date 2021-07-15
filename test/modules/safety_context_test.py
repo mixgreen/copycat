@@ -14,7 +14,7 @@ class _ReentrantTestSystem(DaxSystem):
     SAFETY_CONTEXT_TYPE = ReentrantSafetyContext
     EXIT_ERROR = True
 
-    def build(self) -> None:  # type: ignore
+    def build(self) -> None:  # type: ignore[override]
         super(_ReentrantTestSystem, self).build()
         self.context = self.SAFETY_CONTEXT_TYPE(self, 'context',
                                                 enter_cb=self.enter, exit_cb=self.exit, exit_error=self.EXIT_ERROR)

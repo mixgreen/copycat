@@ -13,9 +13,9 @@ import artiq.language.core
 import artiq.language.environment
 import artiq.language.scan
 import artiq.master.worker_db
-import artiq.master.worker_impl  # type: ignore
+import artiq.master.worker_impl  # type: ignore[import]
 import artiq.master.databases
-import artiq.frontend.artiq_run  # type: ignore
+import artiq.frontend.artiq_run  # type: ignore[import]
 
 from dax import __version__ as _dax_version
 

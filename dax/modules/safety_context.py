@@ -40,7 +40,7 @@ class ReentrantSafetyContext(DaxModule):
     _exit_error_msg: str
     _in_context: np.int32
 
-    def build(self, *, enter_cb: __CB_T, exit_cb: __CB_T, exit_error: bool = False) -> None:  # type: ignore
+    def build(self, *, enter_cb: __CB_T, exit_cb: __CB_T, exit_error: bool = False) -> None:  # type: ignore[override]
         """Build the safety context module.
 
         :param enter_cb: The callback function for entering the context
@@ -131,7 +131,7 @@ class SafetyContext(ReentrantSafetyContext):
 
     _enter_err_msg: str
 
-    def build(self, **kwargs: typing.Any) -> None:  # type: ignore
+    def build(self, **kwargs: typing.Any) -> None:  # type: ignore[override]
         """Build the safety context module."""
 
         # Call super
