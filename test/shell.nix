@@ -24,8 +24,8 @@ in
         ps.mypy
         ps.pycodestyle
         ps.coverage
-        ps.flake8
         dax-full.flake8-artiq
+        dax-full.artiq-stubs
       ]))
       # Packages required for hardware testbenches
       artiq-full.binutils-or1k
