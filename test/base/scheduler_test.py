@@ -1957,7 +1957,7 @@ class OptimusCalibrationTestCase(unittest.TestCase):
         ''')
 
     @staticmethod
-    def _random_dag(num_nodes: int, p: float) -> nx.DiGraph:
+    def _random_dag(num_nodes: int, p: float, rng: np.random.Generator) -> nx.DiGraph:  # type: ignore[name-defined]
         # method 1 from https://doi.org/10.1016/0167-6377(86)90066-0
         # no point in finding transitive closure since we want transitive reduction anyway
         assert isinstance(num_nodes, int) and num_nodes > 0
@@ -1965,7 +1965,7 @@ class OptimusCalibrationTestCase(unittest.TestCase):
         adj = np.zeros((num_nodes, num_nodes))
         for i in range(num_nodes):
             for j in range(i + 1, num_nodes):
-                adj[i, j] = np.random.choice([1, 0], p=[p, 1 - p])  # type: ignore
+                adj[i, j] = rng.choice([1, 0], p=[p, 1 - p])  # type: ignore
         # redundant since scheduler also calls this, but need to make sure we're working with the exact same graph
         g: nx.DiGraph = nx.convert_matrix.from_numpy_array(adj, create_using=nx.DiGraph)  # type: ignore
         g = nx.algorithms.transitive_reduction(g)
@@ -2113,12 +2113,15 @@ class OptimusCalibrationTestCase(unittest.TestCase):
         num_reps = 5
         for num_nodes in range(5, 10):
             for _ in range(num_reps):
+                # initialize seed and rng for numpy.random calls
+                seed: int = time.time_ns()
+                rng: np.random.Generator = np.random.default_rng(seed)
                 # create graph
-                g: nx.DiGraph = self._random_dag(num_nodes, p)
+                g: nx.DiGraph = self._random_dag(num_nodes, p, rng)
                 root_nodes: typing.Set[int] = self._get_root_nodes(g)
                 # randomly choose results for each experiment - no calibration failure though
-                timeouts: typing.List[bool] = [np.random.choice([True, False]) for _ in range(num_nodes)]
-                results: typing.List[int] = [np.random.choice([0, 1, 2]) for _ in range(num_nodes)]
+                timeouts: typing.List[bool] = [rng.choice([True, False]) for _ in range(num_nodes)]
+                results: typing.List[int] = [rng.choice([0, 1, 2]) for _ in range(num_nodes)]
                 # create the scheduler/experiment files - use reversed topological sort so that jobs are written
                 # in correct dependency order in scheduler file
                 ts_rev = list(reversed(list(nx.topological_sort(g))))
@@ -2170,6 +2173,7 @@ class OptimusCalibrationTestCase(unittest.TestCase):
                 deps: {' '.join([f'{node} -> {{{list(g.successors(node))}}}' for node in initial_submit])}
                 timeouts: {timeouts}
                 exp results: {results}
+                rng seed: {seed}
                 ''')
                 with self.subTest(num_nodes=num_nodes, p=p, expected_actions=expected_actions,
                                   acutal_actions=actual_actions):
