@@ -164,6 +164,10 @@ class ProgramClient(DaxClient, Experiment):
             self._program.run()
             self.logger.debug('Program finished')
 
+        except:  # noqa: E722
+            # write to hdf5 file even if run fails
+            self._write_hdf5_file()
+
         finally:
             # Perform cleanup
             self.cleanup()
