@@ -18,6 +18,7 @@ import io
 from unittest.mock import Mock, call
 
 from artiq.language.scan import *
+from artiq.language.types import TBool
 from artiq.experiment import TerminationRequested, NumberValue
 import artiq.frontend.artiq_run  # type: ignore
 from sipyco.sync_struct import Subscriber
@@ -86,12 +87,12 @@ class _DummyScheduler(artiq.frontend.artiq_run.DummyScheduler):
 
     def __init__(self):
         super(_DummyScheduler, self).__init__()
-        self._terminate = False
+        self._terminate: bool = False
 
     def terminate_this_experiment(self):
         self._terminate = True
 
-    def check_pause(self):
+    def check_pause(self, rid=None) -> TBool:
         return self._terminate
 
     def pause(self):
@@ -2168,6 +2169,7 @@ class OptimusCalibrationTestCase(unittest.TestCase):
                 expected (flat): {expected_actions_flat}
                 actual: {actual_actions}
 
+                num nodes: {num_nodes}
                 initial submit order: {initial_submit}
                 root nodes: {root_nodes}
                 deps: {' '.join([f'{node} -> {{{list(g.successors(node))}}}' for node in initial_submit])}
