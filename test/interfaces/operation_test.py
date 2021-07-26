@@ -110,6 +110,18 @@ class OperationInstance(_MinimalOperationInstance):
     def rz(self, theta: TFloat, qubit: TInt32):
         pass
 
+    @kernel
+    def rphi(self, phi: TFloat, theta: TFloat, qubit: TInt32):
+        pass
+
+    @kernel
+    def cz(self, control: TInt32, target: TInt32):
+        pass
+
+    @kernel
+    def cnot(self, control: TInt32, target: TInt32):
+        pass
+
 
 class OperationInterfaceTestCase(unittest.TestCase):
     def test_optionals(self):
