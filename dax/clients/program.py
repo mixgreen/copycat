@@ -138,7 +138,7 @@ class ProgramClient(DaxClient, Experiment):
 
         # Build the program
         self.logger.info(f'Building program "{self._class}"')
-        self._isolated_managers = dax.util.artiq.isolate_managers(self._managers, name='program', arguments=arguments)
+        self._isolated_managers = self._get_managers(arguments=arguments)
         self._program = program_cls(
             self._isolated_managers,
             core=self.core,
@@ -201,6 +201,11 @@ class ProgramClient(DaxClient, Experiment):
                 if not os.path.isfile(unpacked_file_name):
                     raise FileNotFoundError(f'Archive "{file_name}" does not contain a main.py file')
                 return _import_file(unpacked_file_name)
+
+    def _get_managers(self, *, name: str = 'program',
+                      arguments: typing.Dict[str, typing.Any]) -> dax.util.artiq.ManagersTuple:
+        # Give a copy of managers, isolated
+        return dax.util.artiq.isolate_managers(self._managers, name=name, arguments=arguments)
 
     def _write_hdf5_file(self) -> None:
         # Collect metadata
