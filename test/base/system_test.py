@@ -10,7 +10,7 @@ from unittest.mock import Mock, call
 
 from artiq.experiment import HasEnvironment, Experiment
 import artiq.coredevice.edge_counter
-import artiq.coredevice.ttl  # type: ignore
+import artiq.coredevice.ttl  # type: ignore[import]
 import artiq.coredevice.core
 
 from dax.base.system import *

@@ -18,8 +18,8 @@ import artiq.language.environment
 import artiq.master.worker_db
 
 import artiq.coredevice.core
-import artiq.coredevice.dma  # type: ignore
-import artiq.coredevice.cache  # type: ignore
+import artiq.coredevice.dma  # type: ignore[import]
+import artiq.coredevice.cache  # type: ignore[import]
 
 from dax import __version__ as _dax_version
 import dax.base.exceptions

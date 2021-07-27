@@ -16,7 +16,7 @@ class RpcBenchmarkModule(DaxModule):
     LATENCY_CORE_HOST_CORE_ASYNC_KEY: typing.ClassVar[str] = 'latency_core_host_core_async'
     ASYNC_REQUEST_PERIOD_KEY: typing.ClassVar[str] = 'async_request_period'
 
-    def build(self) -> None:  # type: ignore
+    def build(self) -> None:  # type: ignore[override]
         """Build the RPC benchmark module."""
         pass
 

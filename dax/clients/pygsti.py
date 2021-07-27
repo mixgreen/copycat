@@ -6,7 +6,7 @@ import natsort
 
 try:
     # pyGSTi is an optional dependency
-    import pygsti  # type: ignore
+    import pygsti  # type: ignore[import]
 except ImportError:
     pass
 except AttributeError:
@@ -79,7 +79,7 @@ class RandomizedBenchmarkingSQ(DaxClient, Experiment):
     DEFAULT_OPERATION_KEY: typing.ClassVar[typing.Union[str, typing.Type[NoDefault]]] = NoDefault
     """Key of the default operation interface."""
 
-    def build(self) -> None:  # type: ignore
+    def build(self) -> None:  # type: ignore[override]
         assert isinstance(self.QUBIT_LABELS, collections.abc.Sequence), 'Qubit labels must be a sequence'
         assert all(isinstance(label, str) for label in self.QUBIT_LABELS), 'All qubit labels must be of type str'
         assert isinstance(self.MAX_CIRCUIT_DEPTH, int), 'Max circuit depth must be of type int'

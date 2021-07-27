@@ -262,7 +262,7 @@ class Node(dax.base.system.DaxHasKey, abc.ABC):
                                    name=self.get_name(), system_key=managers_or_parent.get_system_key(self.get_name()),
                                    **kwargs)
 
-    def build(self) -> None:  # type: ignore
+    def build(self) -> None:  # type: ignore[override]
         """Build the node object."""
 
         # Process dependencies
@@ -429,7 +429,7 @@ class BaseJob(Node, abc.ABC):
     _last_rid: int
     _rid_list_key: str
 
-    def build(self) -> None:  # type: ignore
+    def build(self) -> None:  # type: ignore[override]
         # Check log level, pipeline, priority, flush, and repository
         assert isinstance(self.LOG_LEVEL, int), 'Log level must be of type int'
         assert self.PIPELINE is None or isinstance(self.PIPELINE, str), 'Pipeline must be of type str or None'
@@ -533,7 +533,7 @@ class Job(BaseJob):
     _arguments: typing.Dict[str, typing.Any]
     _expid: typing.Dict[str, typing.Any]
 
-    def build(self) -> None:  # type: ignore
+    def build(self) -> None:  # type: ignore[override]
         """Build the job object.
 
         To add configurable arguments to this job, override the :func:`build_job` method instead.
@@ -643,7 +643,7 @@ class Trigger(Node):
     _nodes: typing.Set[str]
     _request_queue: _RQ_T
 
-    def build(self) -> None:  # type: ignore
+    def build(self) -> None:  # type: ignore[override]
         # Check nodes, action, policy, and reverse flag
         assert isinstance(self.NODES, collections.abc.Collection), 'The nodes must be a collection'
         assert all(issubclass(node, Node) for node in self.NODES), 'All nodes must be subclasses of Node'
@@ -984,7 +984,7 @@ class CalibrationJob(BaseJob):
         # Return the meta experiment class and its name
         return MetaExp, cls._meta_exp_name()
 
-    def build(self) -> None:  # type: ignore
+    def build(self) -> None:  # type: ignore[override]
         """Build the job object.
 
         To add configurable arguments to this job, override the :func:`build_job` method instead.
@@ -1866,7 +1866,7 @@ class _DaxSchedulerClient(dax.base.system.DaxBase, artiq.experiment.Experiment):
     _block: bool
     _dax_scheduler: SchedulerController
 
-    def build(self) -> None:  # type: ignore
+    def build(self) -> None:  # type: ignore[override]
         # Set default scheduling options for the client
         self.set_default_scheduling(pipeline_name=f'_{self.SCHEDULER_NAME}')
 

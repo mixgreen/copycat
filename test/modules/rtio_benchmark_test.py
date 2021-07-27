@@ -10,7 +10,7 @@ class _TestSystem(DaxSystem):
     SYS_ID = 'unittest_system'
     SYS_VER = 0
 
-    def build(self, **kwargs) -> None:  # type: ignore
+    def build(self, **kwargs) -> None:  # type: ignore[override]
         super(_TestSystem, self).build()
         self.rtio = RtioBenchmarkModule(self, 'rtio', ttl_out='ttl_out', **kwargs)
 
@@ -19,7 +19,7 @@ class _LoopTestSystem(DaxSystem):
     SYS_ID = 'unittest_system'
     SYS_VER = 0
 
-    def build(self, **kwargs) -> None:  # type: ignore
+    def build(self, **kwargs) -> None:  # type: ignore[override]
         super(_LoopTestSystem, self).build()
         self.rtio = RtioLoopBenchmarkModule(self, 'rtio', ttl_out='ttl_out', ttl_in='ttl_in', **kwargs)
 

@@ -24,7 +24,7 @@ class Barrier(artiq.experiment.EnvExperiment):
     CLOCK_PERIOD: typing.ClassVar[float] = 0.5
     """Internal clock period to check for pause conditions."""
 
-    def build(self) -> None:  # type: ignore
+    def build(self) -> None:  # type: ignore[override]
         assert isinstance(self.PRIORITY, int), 'Priority must be of type int'
         assert isinstance(self.CLOCK_PERIOD, float), 'Clock period must be of type float'
         assert self.CLOCK_PERIOD > 0.0, 'Clock period must be greater than 0.0'
@@ -85,7 +85,7 @@ class SetDataset(artiq.experiment.EnvExperiment):
                                                                      'uW', 'mW', 'W']}
     """Dict with all units."""
 
-    def build(self) -> None:  # type: ignore
+    def build(self) -> None:  # type: ignore[override]
         # Dataset key
         self.key: str = self.get_argument('Key', artiq.experiment.StringValue(),
                                           tooltip='The key of the dataset')

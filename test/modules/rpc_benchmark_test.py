@@ -9,7 +9,7 @@ class _TestSystem(DaxSystem):
     SYS_ID = 'unittest_system'
     SYS_VER = 0
 
-    def build(self, **kwargs) -> None:  # type: ignore
+    def build(self, **kwargs) -> None:  # type: ignore[override]
         super(_TestSystem, self).build()
         self.rpc = RpcBenchmarkModule(self, 'rpc_bench')
 

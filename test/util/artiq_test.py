@@ -51,15 +51,17 @@ class ArtiqTestCase(unittest.TestCase):
     def _test_decorator_classifier(self, fn, name, *, undecorated=False, kernel_=False, rpc_=False, rpc_async=False,
                                    portable_=False, host_only_=False, **kwargs):
         function_list = [
-            (self._undecorated_func, undecorated, 'Undecorated'),
-            (self._kernel_func, kernel_, 'Kernel'),
-            (self._rpc_func, rpc_, 'RPC'),
-            (self._rpc_async_func, rpc_async, 'Async RPC'),
-            (self._portable_func, portable_, 'Portable'),
-            (self._host_only_func, host_only_, 'Host only'),
+            (self._undecorated_fn, undecorated, 'Undecorated'),
+            (self._kernel_fn, kernel_, 'Kernel'),
+            (self._rpc_fn, rpc_, 'RPC'),
+            (self._rpc_async_fn, rpc_async, 'Async RPC'),
+            (self._portable_fn, portable_, 'Portable'),
+            (self._host_only_fn, host_only_, 'Host only'),
         ]
         for test_function, ref, test_name in function_list:
             self.assertEqual(fn(test_function, **kwargs), ref, f'{test_name} function wrongly classified by {name}')
+
+        self.assertFalse(fn(None))  # This is allowed
 
     def test_is_kernel(self):
         self._test_decorator_classifier(dax.util.artiq.is_kernel, 'is_kernel()', kernel_=True)
@@ -421,25 +423,25 @@ class ArtiqTestCase(unittest.TestCase):
 
     """Functions used for tests"""
 
-    def _undecorated_func(self):
+    def _undecorated_fn(self):
         pass
 
     @rpc
-    def _rpc_func(self):
+    def _rpc_fn(self):
         pass
 
     @rpc(flags={'async'})
-    def _rpc_async_func(self):
+    def _rpc_async_fn(self):
         pass
 
     @portable
-    def _portable_func(self):
+    def _portable_fn(self):
         pass
 
     @kernel
-    def _kernel_func(self):
+    def _kernel_fn(self):
         pass
 
     @host_only
-    def _host_only_func(self):
+    def _host_only_fn(self):
         pass

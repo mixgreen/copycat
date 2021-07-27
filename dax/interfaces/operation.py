@@ -7,8 +7,10 @@ import inspect
 
 import numpy as np
 
-from artiq.language import TInt32, TList, kernel
+from artiq.language.types import TInt32, TList
+from artiq.language.core import kernel, host_only
 
+from dax.base.interface import optional, is_optional, get_optionals
 from dax.interfaces.gate import GateInterface
 import dax.util.artiq
 
@@ -29,21 +31,42 @@ class OperationInterface(GateInterface, abc.ABC):  # pragma: no cover
 
     """Operations"""
 
-    @abc.abstractmethod
+    @optional
+    def prep_0(self, qubit: TInt32):
+        """Prepare the target qubit to the ``|0>`` state.
+
+        :param qubit: Target qubit
+        """
+        raise NotImplementedError
+
+    @optional
     def prep_0_all(self):
         """Prepare all qubits to the ``|0>`` state."""
-        pass
+        raise NotImplementedError
 
-    @abc.abstractmethod
+    @optional
+    def m_z(self, qubit: TInt32):
+        """Measure the target qubit in the ``Z`` basis.
+
+        This method only schedules a measurement operation and does not return the result.
+        The result, when it becomes available, will be kept in a buffer until the user retrieves it.
+        All measurement results must be retrieved by the user using :func:`get_measurement`,
+        :func:`store_measurement`, :func:`store_measurements` or :func:`store_measurements_all`.
+
+        :param qubit: Target qubit
+        """
+        raise NotImplementedError
+
+    @optional
     def m_z_all(self):
-        """Measure all qubits.
+        """Measure all qubits in the ``Z`` basis.
 
         This method only schedules measurement operations and does not return the result.
         The results, when it becomes available, will be kept in a buffer until the user retrieves it.
-        All measurement results must be retrieved by the user using :func:`get_measurement`
-        or :func:`store_measurements`.
+        All measurement results must be retrieved by the user using :func:`get_measurement`,
+        :func:`store_measurement`, :func:`store_measurements` or :func:`store_measurements_all`.
         """
-        pass
+        raise NotImplementedError
 
     """Measurement handling"""
 
@@ -63,12 +86,24 @@ class OperationInterface(GateInterface, abc.ABC):  # pragma: no cover
         """
         pass
 
+    @kernel
+    def store_measurement(self, qubit: TInt32):
+        """Store the binary measurement result of the target qubit in the archive.
+
+        This function must be used inside a :class:`dax.interfaces.data_context.DataContextInterface` context.
+        It can be used after one or more measurement operations are scheduled on the target qubit.
+        The execution of this function will block until the measurement result is available.
+
+        :param qubit: The target qubit
+        """
+        self.store_measurements([qubit])
+
     @abc.abstractmethod
     def store_measurements(self, qubits: TList(TInt32)):  # type: ignore[valid-type]
         """Store the binary measurement results of the given qubits in the archive.
 
         This function must be used inside a :class:`dax.interfaces.data_context.DataContextInterface` context.
-        It can be used after one or more measurement operations were scheduled on each target qubit.
+        It can be used after one or more measurement operations are scheduled on each listed qubit.
         The execution of this function will block until all measurement results are available.
 
         :param qubits: A list of target qubits
@@ -92,6 +127,15 @@ class OperationInterface(GateInterface, abc.ABC):  # pragma: no cover
     def num_qubits(self) -> np.int32:
         """The number of qubits in the system."""
         pass
+
+    @classmethod
+    @host_only
+    def get_operations(cls) -> typing.Set[str]:
+        """Get a set of available gates and operations.
+
+        :return: The implemented gate and operation functions as a set of strings
+        """
+        return get_optionals(OperationInterface) - get_optionals(cls)
 
     @abc.abstractmethod
     def set_realtime(self, realtime: bool) -> None:
@@ -128,7 +172,7 @@ def validate_interface(interface: OperationInterface, *, num_qubits: typing.Opti
     properties: typing.Dict[str, typing.Callable[[typing.Any], bool]] = {
         'num_qubits': lambda p: isinstance(p, np.int32) and (p == num_qubits or num_qubits is None),
     }
-    if not all(fn(getattr(interface, p, None)) for p, fn in properties.items()):
+    if not all(fn(getattr(interface, p)) for p, fn in properties.items()):
         raise TypeError('Not all properties return the correct types')
 
     # Validate kernel invariants
@@ -138,13 +182,19 @@ def validate_interface(interface: OperationInterface, *, num_qubits: typing.Opti
 
     # Validate host only functions
     host_only_fn: typing.Set[str] = {'set_realtime'}
-    if not all(dax.util.artiq.is_host_only(getattr(interface, fn, None)) for fn in host_only_fn):
+    if not all(dax.util.artiq.is_host_only(getattr(interface, fn)) for fn in host_only_fn):
         raise TypeError('Not all host only functions are decorated correctly')
 
-    # Validate kernel functions
+    # Validate optional functions
+    optional_fn: typing.Set[str] = get_optionals(OperationInterface)
+    if not all(dax.util.artiq.is_kernel(fn) or is_optional(fn)
+               for fn in (getattr(interface, fn) for fn in optional_fn)):
+        raise TypeError('Not all implemented optional functions are decorated as kernels')
+
+    # Validate remaining functions (kernel functions)
     kernel_fn: typing.Set[str] = {n for n, _ in inspect.getmembers(OperationInterface, inspect.isfunction)
-                                  if not n.startswith('_') and n not in host_only_fn}
-    if not all(dax.util.artiq.is_kernel(getattr(interface, fn, None)) for fn in kernel_fn):
+                                  if not n.startswith('_') and n not in host_only_fn | optional_fn}
+    if not all(dax.util.artiq.is_kernel(getattr(interface, fn)) for fn in kernel_fn):
         raise TypeError('Not all kernel functions are decorated correctly')
 
     # Return True

@@ -22,7 +22,7 @@ import test.helpers
 
 class _MockDetectionModule(DaxModule, DetectionInterface):
 
-    def build(self, state_detection_threshold: int):  # type: ignore
+    def build(self, state_detection_threshold: int):  # type: ignore[override]
         self.state_detection_threshold = state_detection_threshold
 
     def init(self) -> None:
@@ -45,7 +45,7 @@ class _TestSystem(DaxSystem):
     SYS_ID = 'unittest_system'
     SYS_VER = 0
 
-    def build(self, state_detection_threshold=2, default_dataset_key=None) -> None:  # type: ignore
+    def build(self, state_detection_threshold=2, default_dataset_key=None) -> None:  # type: ignore[override]
         super(_TestSystem, self).build()
         self.detection = _MockDetectionModule(self, 'detection', state_detection_threshold=state_detection_threshold)
         self.hist_context = HistogramContext(self, 'hist_context', default_dataset_key=default_dataset_key)

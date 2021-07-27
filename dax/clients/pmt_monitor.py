@@ -48,7 +48,7 @@ class _PmtMonitorBase(DaxClient, Experiment, abc.ABC):
     DAX_INIT = False
     """Disable DAX init."""
 
-    def build(self) -> None:  # type: ignore
+    def build(self) -> None:  # type: ignore[override]
         assert isinstance(self.APPLET_GROUP, str), 'Applet group must be of type str'
         assert isinstance(self.DEFAULT_DATASET, str), 'Default dataset must be of type str'
         assert isinstance(self.DEFAULT_BUFFER_SIZE, int), 'Default buffer size must be of type int'

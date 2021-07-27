@@ -5,7 +5,7 @@
 from artiq.language.core import *
 from artiq.language.units import *
 from artiq.language.types import TFloat, TInt32
-from artiq.coredevice.ad53xx import voltage_to_mu, AD53XX_READ_X1A  # type: ignore
+from artiq.coredevice.ad53xx import voltage_to_mu, AD53XX_READ_X1A  # type: ignore[import]
 
 from dax.sim.device import DaxSimDevice
 from dax.sim.signal import get_signal_manager

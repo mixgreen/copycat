@@ -14,7 +14,7 @@ class TestCodeStyle(unittest.TestCase):
         """Test that the code in the repository conforms to PEP-8."""
 
         try:
-            import pycodestyle  # type: ignore
+            import pycodestyle  # type: ignore[import]
         except ImportError:
             self.skipTest('pycodestyle library not available')
         else:

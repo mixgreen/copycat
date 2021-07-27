@@ -61,7 +61,7 @@ class ProgramClient(DaxClient, Experiment):
     _data_context: dax.interfaces.data_context.DataContextInterface
     _program: Experiment
 
-    def build(self, *, managers: typing.Any) -> None:  # type: ignore
+    def build(self, *, managers: typing.Any) -> None:  # type: ignore[override]
         assert isinstance(self.DEFAULT_OPERATION_KEY, str) or self.DEFAULT_OPERATION_KEY is NoDefault
         assert isinstance(self.DEFAULT_DATA_CONTEXT_KEY, str) or self.DEFAULT_DATA_CONTEXT_KEY is NoDefault
 

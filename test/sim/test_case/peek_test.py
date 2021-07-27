@@ -1,9 +1,9 @@
 import numpy as np
 
-import artiq.coredevice.ttl  # type: ignore
+import artiq.coredevice.ttl  # type: ignore[import]
 import artiq.coredevice.edge_counter
-import artiq.coredevice.ad9910  # type: ignore
-import artiq.coredevice.ad9912  # type: ignore
+import artiq.coredevice.ad9910  # type: ignore[import]
+import artiq.coredevice.ad9912  # type: ignore[import]
 
 from dax.experiment import *
 from dax.sim.signal import SignalNotSet

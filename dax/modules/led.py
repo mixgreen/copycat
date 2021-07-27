@@ -1,6 +1,6 @@
 import numpy as np
 
-import artiq.coredevice.ttl  # type: ignore
+import artiq.coredevice.ttl  # type: ignore[import]
 
 from dax.experiment import *
 
@@ -12,7 +12,7 @@ class LedModule(DaxModule):
 
     _init_kernel: bool
 
-    def build(self, *leds: str, init_kernel: bool = False) -> None:  # type: ignore
+    def build(self, *leds: str, init_kernel: bool = False) -> None:  # type: ignore[override]
         """Build the LED module.
 
         :param leds: Keys of the LED devices to use in order from least to most significant

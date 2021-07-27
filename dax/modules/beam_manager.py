@@ -36,7 +36,7 @@ class BeamManager(DaxModule):
     _num_beams: np.int32
     _beam_config: typing.List[_BeamConfig]
 
-    def build(self, *, num_beams: typing.Union[int, np.integer]):  # type: ignore
+    def build(self, *, num_beams: typing.Union[int, np.integer]):  # type: ignore[override]
         """Build the beam manager object.
 
         :param num_beams: The number of beams

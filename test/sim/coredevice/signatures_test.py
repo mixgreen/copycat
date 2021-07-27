@@ -1,17 +1,17 @@
 import unittest
 import inspect
 
-import artiq.coredevice.ad53xx  # type: ignore
-import artiq.coredevice.ad9910  # type: ignore
-import artiq.coredevice.ad9912  # type: ignore
-import artiq.coredevice.cache  # type: ignore
+import artiq.coredevice.ad53xx  # type: ignore[import]
+import artiq.coredevice.ad9910  # type: ignore[import]
+import artiq.coredevice.ad9912  # type: ignore[import]
+import artiq.coredevice.cache  # type: ignore[import]
 import artiq.coredevice.comm_kernel
 import artiq.coredevice.core
-import artiq.coredevice.dma  # type: ignore
+import artiq.coredevice.dma  # type: ignore[import]
 import artiq.coredevice.edge_counter
-import artiq.coredevice.ttl  # type: ignore
-import artiq.coredevice.urukul  # type: ignore
-import artiq.coredevice.zotino  # type: ignore
+import artiq.coredevice.ttl  # type: ignore[import]
+import artiq.coredevice.urukul  # type: ignore[import]
+import artiq.coredevice.zotino  # type: ignore[import]
 
 import dax.sim.coredevice.ad53xx
 import dax.sim.coredevice.ad9910

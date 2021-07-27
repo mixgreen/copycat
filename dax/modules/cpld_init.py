@@ -1,9 +1,9 @@
 import typing
 
-import artiq.coredevice.urukul  # type: ignore
-import artiq.coredevice.ad9910  # type: ignore
-import artiq.coredevice.ad9912  # type: ignore
-import artiq.coredevice.suservo  # type: ignore
+import artiq.coredevice.urukul  # type: ignore[import]
+import artiq.coredevice.ad9910  # type: ignore[import]
+import artiq.coredevice.ad9912  # type: ignore[import]
+import artiq.coredevice.suservo  # type: ignore[import]
 
 from dax.experiment import *
 import dax.util.units
@@ -28,7 +28,7 @@ class CpldInitModule(DaxModule):
     _interval: float
     _init_kernel: bool
 
-    def build(self, *,  # type: ignore
+    def build(self, *,  # type: ignore[override]
               interval: float = 5 * us, check_registered_devices: bool = True, init_kernel: bool = True) -> None:
         """Build the CPLD initialization module.
 

@@ -90,7 +90,7 @@ class HistogramContext(DaxModule, DataContextInterface):
     _state_probability_plot_key: str
     _plot_group: str
 
-    def build(self, *,  # type: ignore
+    def build(self, *,  # type: ignore[override]
               default_dataset_key: typing.Optional[str] = None, plot_base_key: str = 'dax') -> None:
         """Build the histogram context module.
 
