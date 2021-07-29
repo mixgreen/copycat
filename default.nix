@@ -22,7 +22,7 @@ python3Packages.buildPythonPackage rec {
     "numpy" "scipy" "pyvcd" "natsort" "pygit2" "matplotlib" "python-graphviz" "h5py" "networkx"
   ];
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Duke ARTIQ Extensions (DAX)";
     maintainers = [ "Duke University" ];
     homepage = "https://gitlab.com/duke-artiq/dax";
