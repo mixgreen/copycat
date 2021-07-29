@@ -13,7 +13,7 @@ __all__ = ['time_to_str', 'str_to_time',
            'watt_to_str', 'str_to_watt',
            'UnitsFormatter']
 
-_R_T = typing.Union[int, float, np.integer]  # Real number type
+_R_T = typing.Union[int, float, np.int32, np.int64]  # Real number type
 
 
 @artiq.language.core.host_only

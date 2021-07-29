@@ -21,6 +21,8 @@ if typing.TYPE_CHECKING:
 else:
     _TD_T = dict
 
+_TIME_MU_T = typing.Union[int, np.int32, np.int64]  # Types for time in machine units (permissive)
+
 
 class TimeResolvedContextError(RuntimeError):
     """Class for time resolved context errors."""
@@ -41,10 +43,12 @@ def _partition_bins(num_bins: int, max_partition_size: int,
     ...
 
 
-def _partition_bins(num_bins: int, max_partition_size: int, bin_width, bin_spacing, *, ceil: bool):
+def _partition_bins(num_bins: typing.Union[int, np.int32], max_partition_size: typing.Union[int, np.int32],
+                    bin_width: typing.Union[float, np.int64], bin_spacing: typing.Union[float, np.int64], *,
+                    ceil: bool) -> typing.List[typing.Tuple[np.int32, typing.Any]]:
     """Generic helper function function for partitioning bins."""
-    assert isinstance(num_bins, (int, np.integer)), 'Number of bins must be an integer'
-    assert isinstance(max_partition_size, (int, np.integer)), 'Max partition size must be an integer'
+    assert isinstance(num_bins, (int, np.int32)), 'Number of bins must be an integer'
+    assert isinstance(max_partition_size, (int, np.int32)), 'Max partition size must be an integer'
     assert isinstance(bin_width, (float, np.int64)), 'Bin width must be of type float or np.int64'
     assert isinstance(bin_spacing, (float, np.int64)), 'Bin spacing must be of type float or np.int64'
     assert isinstance(ceil, bool), 'Ceil flag must be of type bool'
@@ -183,7 +187,7 @@ class TimeResolvedContext(DaxModule):
 
     @classmethod
     @host_only
-    def partition_bins(cls, num_bins: int, max_partition_size: int,
+    def partition_bins(cls, num_bins: typing.Union[int, np.int32], max_partition_size: typing.Union[int, np.int32],
                        bin_width: float, bin_spacing: float,
                        *, ceil: bool = False) -> typing.List[typing.Tuple[np.int32, float]]:
         """Partition a number of bins.
@@ -208,9 +212,9 @@ class TimeResolvedContext(DaxModule):
 
     @classmethod
     @host_only
-    def partition_bins_mu(cls, num_bins: int, max_partition_size: int,
-                          bin_width: np.int64, bin_spacing: np.int64,
-                          *, ceil: bool = False) -> typing.List[typing.Tuple[np.int32, np.int64]]:
+    def partition_bins_mu(cls, num_bins: typing.Union[int, np.int32], max_partition_size: typing.Union[int, np.int32],
+                          bin_width: _TIME_MU_T, bin_spacing: _TIME_MU_T, *,
+                          ceil: bool = False) -> typing.List[typing.Tuple[np.int32, np.int64]]:
         """Partition a number of bins.
 
         This function returns a list of tuples that can be used at runtime for partitioning in a loop.
@@ -225,17 +229,17 @@ class TimeResolvedContext(DaxModule):
         :param ceil: Round last window size up to a full window
         :return: A list with tuples that can be used for automatic partitioning at runtime
         """
-        assert isinstance(bin_width, (int, np.integer)), 'Bin width must be an integer'
-        assert isinstance(bin_spacing, (int, np.integer)), 'Bin spacing must be an integer'
+        assert isinstance(bin_width, (int, np.int32, np.int64)), 'Bin width must be an integer'
+        assert isinstance(bin_spacing, (int, np.int32, np.int64)), 'Bin spacing must be an integer'
 
         # Return the partitions
         return _partition_bins(num_bins, max_partition_size, np.int64(bin_width), np.int64(bin_spacing), ceil=ceil)
 
     @classmethod
     @host_only
-    def partition_window(cls, window_size: float, max_partition_size: int,
-                         bin_width: float, bin_spacing: float,
-                         *, ceil: bool = False) -> typing.List[typing.Tuple[np.int32, float]]:
+    def partition_window(cls, window_size: float, max_partition_size: typing.Union[int, np.int32],
+                         bin_width: float, bin_spacing: float, *,
+                         ceil: bool = False) -> typing.List[typing.Tuple[np.int32, float]]:
         """Partition a time window.
 
         This function returns a list of tuples that can be used at runtime for partitioning in a loop.
@@ -260,7 +264,7 @@ class TimeResolvedContext(DaxModule):
 
     @classmethod
     @host_only
-    def partition_window_mu(cls, window_size: np.int64, max_partition_size: int,
+    def partition_window_mu(cls, window_size: np.int64, max_partition_size: typing.Union[int, np.int32],
                             bin_width: np.int64, bin_spacing: np.int64,
                             *, ceil: bool = False) -> typing.List[typing.Tuple[np.int32, np.int64]]:
         """Partition a time window.
@@ -277,8 +281,8 @@ class TimeResolvedContext(DaxModule):
         :param ceil: Round last window size up to a full window
         :return: A list with tuples that can be used for automatic partitioning at runtime
         """
-        assert isinstance(bin_width, (int, np.integer)), 'Bin width must be an integer'
-        assert isinstance(bin_spacing, (int, np.integer)), 'Bin spacing must be an integer'
+        assert isinstance(bin_width, (int, np.int32, np.int64)), 'Bin width must be an integer'
+        assert isinstance(bin_spacing, (int, np.int32, np.int64)), 'Bin spacing must be an integer'
 
         # Divide window into a number of bins
         num_bins: int = _window_to_bins(window_size, bin_width, bin_spacing)
@@ -312,7 +316,7 @@ class TimeResolvedContext(DaxModule):
         self._buffer_meta.append((bin_width, bin_spacing, offset))
 
     @rpc(flags={'async'})
-    def append_meta_mu(self, bin_width, bin_spacing, offset=0):  # type: (np.int64, np.int64, np.int64) -> None
+    def append_meta_mu(self, bin_width, bin_spacing, offset=0):  # type: (np.int64, np.int64, _TIME_MU_T) -> None
         """Store metadata that matches the next call to :func:`append_data`.
 
         This function is intended to be fast to allow high input data throughput.
@@ -349,7 +353,7 @@ class TimeResolvedContext(DaxModule):
         self._buffer_meta.pop()
 
     @rpc(flags={'async'})
-    def append_data(self, data, offset_mu=0):  # type: (typing.Sequence[typing.Sequence[int]], np.int64) -> None
+    def append_data(self, data, offset_mu=0):  # type: (typing.Sequence[typing.Sequence[int]], _TIME_MU_T) -> None
         """Append PMT data (async RPC).
 
         This function is intended to be fast to allow high input data throughput.
@@ -392,8 +396,8 @@ class TimeResolvedContext(DaxModule):
         self.append_data(data)
 
     @rpc(flags={'async'})
-    def append_mu(self, data, bin_width, bin_spacing,
-                  offset=0):  # type: (typing.Sequence[typing.Sequence[int]], np.int64, np.int64, np.int64) -> None
+    def append_mu(self, data, bin_width, bin_spacing, offset=0
+                  ):  # type: (typing.Sequence[typing.Sequence[int]], np.int64, np.int64, _TIME_MU_T) -> None
         """Append metadata and PMT data (async RPC).
 
         This function calls :func:`append_meta_mu` and :func:`append_data` in one call

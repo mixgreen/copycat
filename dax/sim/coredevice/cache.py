@@ -7,7 +7,7 @@ from dax.sim.device import DaxSimDevice
 
 
 class CoreCache(DaxSimDevice):
-    __V_T = typing.List[typing.Union[int, np.integer]]  # Cache value type
+    __V_T = typing.List[typing.Union[int, np.int32]]  # Cache value type
     _cache: typing.Dict[str, __V_T]
 
     def __init__(self, dmgr: typing.Any,
@@ -20,7 +20,7 @@ class CoreCache(DaxSimDevice):
 
         if isinstance(cache, dict):
             assert all(isinstance(k, str) and isinstance(v, list) for k, v in cache.items())
-            assert all(all(isinstance(e, (int, np.integer)) for e in list_) for list_ in cache.values())
+            assert all(all(isinstance(e, (int, np.int32)) for e in list_) for list_ in cache.values())
         else:
             assert cache is None, 'Cache must be of type dict or None'
 
@@ -47,7 +47,7 @@ class CoreCache(DaxSimDevice):
             raise TypeError('Key must be of type str')
         if not isinstance(value, list):
             raise TypeError('Value must be of type list')
-        if not all(isinstance(e, (int, np.integer)) for e in value):
+        if not all(isinstance(e, (int, np.int32)) for e in value):
             raise TypeError('List elements must be of type int')
 
         # NOTE: we can not check if the value was extracted earlier in the same kernel

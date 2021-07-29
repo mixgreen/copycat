@@ -7,7 +7,7 @@ import collections
 import enum
 import random
 import dataclasses
-from numpy import int64
+from numpy import int32, int64
 
 from artiq.coredevice.edge_counter import CounterOverflow
 
@@ -84,7 +84,8 @@ class EdgeCounter(DaxSimDevice):
         # Clear buffers
         self._count_buffer.clear()
 
-    def _simulate_input_signal(self, duration, edge_type):  # type: (int, _EdgeType) -> None
+    def _simulate_input_signal(self, duration, edge_type
+                               ):  # type: (typing.Union[int, int32, int64], _EdgeType) -> None
         """Simulate input signal for a given duration."""
 
         # Decide event frequency

@@ -343,7 +343,8 @@ class DaxScan(dax.base.system.DaxBase, abc.ABC):
         if not isinstance(points, collections.abc.Sequence):
             raise TypeError('Points must be a sequence')
         if isinstance(points, np.ndarray):
-            if not any(np.issubdtype(points.dtype, t) for t in [np.integer, np.floating, np.bool_, np.character]):
+            if not any(np.issubdtype(points.dtype, t)
+                       for t in [np.int32, np.int64, np.floating, np.bool_, np.character]):
                 raise TypeError('The NumPy point type is not supported')
             if points.ndim != 1:
                 raise TypeError('Only NumPy arrays with one dimension are supported')

@@ -18,7 +18,7 @@ _NUM_CHANNELS = 4
 
 
 def _mu_to_att(att_mu: TInt32) -> TFloat:
-    return (255 - (att_mu & 0xFF)) / 8
+    return float((255 - (att_mu & 0xFF)) / 8)
 
 
 def _att_to_mu(att: TFloat) -> TInt32:
@@ -28,7 +28,7 @@ def _att_to_mu(att: TFloat) -> TInt32:
     return code
 
 
-def _state_to_sw_reg(state: int) -> typing.List[str]:
+def _state_to_sw_reg(state: typing.Union[int, np.int32]) -> typing.List[str]:
     return ['1' if (state >> i) & 0x1 else '0' for i in range(4)]
 
 
@@ -101,7 +101,7 @@ class CPLD(DaxSimDevice):
         self.set_all_att_mu(a)
 
     def _set_all_att_mu(self, att_reg: TInt32):
-        self.att_reg = att_reg
+        self.att_reg = np.int32(att_reg)
         self._att_reg = [_mu_to_att(att_reg >> (i * 8)) for i in range(4)]
         self._update_att()
 
@@ -115,7 +115,7 @@ class CPLD(DaxSimDevice):
         # Update register
         a = self.att_reg & ~(0xff << (channel * 8))
         a |= _att_to_mu(att) << (channel * 8)
-        self.att_reg = a
+        self.att_reg = np.int32(a)
         # Handle signals
         self._att_reg[channel] = float(att)
         self._update_att()

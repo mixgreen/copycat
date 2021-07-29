@@ -175,7 +175,7 @@ class AD9910(DaxSimDevice):
 
     @portable(flags={"fast-math"})
     def ftw_to_frequency(self, ftw: TInt32) -> TFloat:
-        return ftw / self.ftw_per_hz
+        return float(ftw / self.ftw_per_hz)
 
     @portable(flags={"fast-math"})
     def turns_to_pow(self, turns: TFloat) -> TInt32:
@@ -183,7 +183,7 @@ class AD9910(DaxSimDevice):
 
     @portable(flags={"fast-math"})
     def pow_to_turns(self, pow_: TInt32) -> TFloat:
-        return pow_ / 0x10000
+        return float(pow_ / 0x10000)
 
     @portable(flags={"fast-math"})
     def amplitude_to_asf(self, amplitude: TFloat) -> TInt32:
@@ -194,7 +194,7 @@ class AD9910(DaxSimDevice):
 
     @portable(flags={"fast-math"})
     def asf_to_amplitude(self, asf: TInt32) -> TFloat:
-        return asf / float(0x3fff)
+        return float(asf / float(0x3fff))
 
     @portable(flags={"fast-math"})
     def frequency_to_ram(self, frequency: TList(TFloat), ram: TList(TInt32)):  # type: ignore[valid-type]
