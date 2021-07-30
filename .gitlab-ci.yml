@@ -7,7 +7,7 @@ stages:
   - deploy
 
 .conda_env:
-  image: ubuntu
+  image: ubuntu:rolling
   tags:
     - docker
   variables:
@@ -45,7 +45,7 @@ test_nix:
 test_conda:
   extends: .conda_env
   stage: test
-  allow_failure: true  # See https://github.com/m-labs/artiq/issues/1734
+  allow_failure: false
   variables:
     CONDA_ENV_FILE: "test/environment.yml"
   script:
