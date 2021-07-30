@@ -10,7 +10,7 @@ import numpy as np
 import typing
 
 from artiq.language.core import kernel, portable, delay, delay_mu, now_mu
-from artiq.language.types import TInt32
+from artiq.language.types import TInt32, TInt64
 
 from dax.sim.device import DaxSimDevice
 from dax.sim.signal import get_signal_manager
@@ -209,8 +209,8 @@ class TTLInOut(TTLOut):
     def count(self, up_to_timestamp_mu):
         return self._count()
 
-    def _timestamp_mu(self, up_to_timestamp_mu) -> TInt32:
-        return self._edge_buffer.popleft() if len(self._edge_buffer) else -1
+    def _timestamp_mu(self, up_to_timestamp_mu) -> TInt64:
+        return self._edge_buffer.popleft() if len(self._edge_buffer) else np.int64(-1)
 
     # noinspection PyUnusedLocal
     @kernel

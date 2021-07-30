@@ -37,7 +37,7 @@ class CoreCacheTestCase(unittest.TestCase):
         data = {
             'foo': [0],
             'bar': [np.int32(3), 0, 4],
-            'baz': [4, 6, 3, np.int64(99)],
+            'baz': [4, 6, 3, np.int32(99), 99],
         }
 
         for k, v in data.items():
@@ -46,6 +46,20 @@ class CoreCacheTestCase(unittest.TestCase):
                 self.cache.put(k, v)
                 # Get data
                 self.assertListEqual(self.cache.get(k), v, 'Data does not match earlier added data')
+
+    def test_cache_bad_types(self):
+        data = {
+            'foo': [0.0],
+            'bar': [np.int64(3), 0, 4],
+            'baz': [4, 6, 3, 'a'],
+            'foobar': [4, 6, [3]],
+        }
+
+        for k, v in data.items():
+            with self.subTest(key=k, value=v):
+                with self.assertRaises(TypeError):
+                    # Put data
+                    self.cache.put(k, v)
 
     def test_non_existing_key(self):
         self.assertListEqual(self.cache.get('non_existing_key'), [], 'Non-existing key did not return empty list')

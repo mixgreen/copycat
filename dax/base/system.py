@@ -1576,13 +1576,14 @@ class DaxDataStoreInfluxDb(DaxDataStore):
     push data to an Influx database.
     """
 
-    __F_T = typing.Union[bool, float, int, np.integer, str]  # Field type variable for Influx DB supported types
+    __F_T = typing.Union[bool, float, int, np.int32, np.int64, str]  # Field type variable for Influx DB supported types
     __FD_T = typing.Dict[str, __F_T]  # Field dict type variable
     __P_T = typing.Dict[str, typing.Union[str, __FD_T]]  # Point type variable
 
-    _FIELD_TYPES: typing.ClassVar[typing.Tuple[type, ...]] = (bool, float, int, np.integer, str)
-    """Legal field types (Python types) for Influx DB."""
-    _NP_FIELD_TYPES: typing.ClassVar[typing.List[type]] = [np.integer, np.floating, np.bool_, np.character]
+    _FIELD_TYPES: typing.ClassVar[typing.Tuple[type, ...]] = (bool, float, int, np.int32, np.int64, str)
+    """Legal field types for Influx DB."""
+    _NP_FIELD_TYPES: typing.ClassVar[typing.Tuple[type, ...]] = (np.int32, np.int64, np.floating, np.bool_,
+                                                                 np.character)
     """Legal field types (Numpy types) for Influx DB."""
 
     _sys_id: str
@@ -1697,7 +1698,7 @@ class DaxDataStoreInfluxDb(DaxDataStore):
         """
 
         if isinstance(value, self._FIELD_TYPES):
-            if isinstance(index, (int, np.integer)):
+            if isinstance(index, (int, np.int32, np.int64)):
                 # One-dimensional index
                 self._write_points([self._make_point(key, value, index)])
             else:
@@ -1736,7 +1737,7 @@ class DaxDataStoreInfluxDb(DaxDataStore):
             self._logger.warning(f'Could not append value for key "{key}", unsupported value type for value "{value}"')
 
     def _make_point(self, key: str, value: __F_T,
-                    index: typing.Union[None, int, np.integer, typing.Tuple[int, ...]] = None) -> __P_T:
+                    index: typing.Union[None, int, np.int32, np.int64, typing.Tuple[int, ...]] = None) -> __P_T:
         """Make a point object from a key-value pair, optionally with an index.
 
         This function does not check the type of the value and the index, which should be checked before.
@@ -1749,7 +1750,7 @@ class DaxDataStoreInfluxDb(DaxDataStore):
             # Invalid key
             raise ValueError(f'Influx DB data store received an invalid key "{key}"')
 
-        if isinstance(value, np.integer):
+        if isinstance(value, (np.int32, np.int64)):
             # Convert Numpy int to Python int
             value = int(value)
 

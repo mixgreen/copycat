@@ -47,7 +47,8 @@ class DaxSignalManager(abc.ABC, typing.Generic[_S_T]):
 
     @abc.abstractmethod
     def event(self, signal: _S_T, value: typing.Any, *,  # pragma: no cover
-              time: typing.Optional[np.int64] = None, offset: typing.Optional[np.int64] = None) -> None:
+              time: typing.Optional[np.int64] = None,
+              offset: typing.Union[int, np.int32, np.int64, None] = None) -> None:
         """Commit an event.
 
         Note that in a parallel context, :func:`delay` and :func:`delay_mu` do not directly
@@ -88,7 +89,7 @@ class DaxSignalManager(abc.ABC, typing.Generic[_S_T]):
 
     # noinspection PyMethodMayBeStatic
     def _get_timestamp(self, time: typing.Optional[np.int64] = None,
-                       offset: typing.Optional[np.int64] = None) -> np.int64:
+                       offset: typing.Union[int, np.int32, np.int64, None] = None) -> np.int64:
         """Return the timestamp of an event."""
         if time is None:
             time = artiq.language.core.now_mu()  # noqa: ATQ101
@@ -105,7 +106,8 @@ class NullSignalManager(DaxSignalManager[None]):
         pass
 
     def event(self, signal: None, value: typing.Any, *,
-              time: typing.Optional[np.int64] = None, offset: typing.Optional[np.int64] = None) -> None:
+              time: typing.Optional[np.int64] = None,
+              offset: typing.Union[int, np.int32, np.int64, None] = None) -> None:
         pass
 
     def flush(self, ref_period: float) -> None:
@@ -187,7 +189,8 @@ class VcdSignalManager(DaxSignalManager[_VS_T]):
         return self._vcd.register_var(scope.key, name, var_type=var_type, size=size, init=init)
 
     def event(self, signal: _VS_T, value: _VV_T, *,
-              time: typing.Optional[np.int64] = None, offset: typing.Optional[np.int64] = None) -> None:
+              time: typing.Optional[np.int64] = None,
+              offset: typing.Union[int, np.int32, np.int64, None] = None) -> None:
         # Add event to buffer
         self._event_buffer.append((self._get_timestamp(time, offset), signal, value))
 
@@ -267,7 +270,7 @@ class PeekSignalManager(DaxSignalManager[_PS_T]):
 
     _CHECK_TYPE: typing.ClassVar[typing.Dict[_PT_T, typing.Union[type, typing.Tuple[type, ...]]]] = {
         bool: bool,
-        int: (int, np.integer),
+        int: (int, np.int32, np.int64),
         float: float,
         str: str,
         object: bool,
@@ -319,16 +322,17 @@ class PeekSignalManager(DaxSignalManager[_PS_T]):
             init = self._check_value(type_, size, init)
 
         # Register and initialize signal
-        signals[name] = (type_, size, {} if init is None else {0: init})
+        signals[name] = (type_, size, {} if init is None else {np.int64(0): init})
 
         # Return the signal object
         return scope, name
 
     def event(self, signal: _PS_T, value: _PV_T, *,
-              time: typing.Optional[np.int64] = None, offset: typing.Optional[np.int64] = None) -> None:
+              time: typing.Optional[np.int64] = None,
+              offset: typing.Union[int, np.int32, np.int64, None] = None) -> None:
         assert isinstance(signal, tuple) and len(signal) == 2, 'Invalid signal object'
         assert time is None or isinstance(time, np.int64), 'Time must be of type np.int64 or None'
-        assert offset is None or isinstance(offset, (int, np.integer)), 'Invalid type for offset'
+        assert offset is None or isinstance(offset, (int, np.int32, np.int64)), 'Invalid type for offset'
 
         # Unpack device list
         device, name = signal

@@ -82,7 +82,7 @@ class AD9912(DaxSimDevice):
 
     @portable(flags={"fast-math"})
     def ftw_to_frequency(self, ftw: TInt64) -> TFloat:
-        return ftw / self.ftw_per_hz
+        return float(ftw / self.ftw_per_hz)
 
     @portable(flags={"fast-math"})
     def turns_to_pow(self, phase: TFloat) -> TInt32:
@@ -115,7 +115,7 @@ class AD9912(DaxSimDevice):
 
         @portable(flags={"fast-math"})
         def pow_to_turns(self, pow_: TInt32) -> TFloat:
-            return pow_ / (1 << 14)
+            return float(pow_ / (1 << 14))
 
         @kernel
         def get(self) -> TTuple([TFloat, TFloat]):  # type: ignore[valid-type]

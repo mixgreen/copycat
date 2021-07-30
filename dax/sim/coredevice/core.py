@@ -106,7 +106,7 @@ class BaseCore(DaxSimDevice):
     @portable
     def mu_to_seconds(self, mu):  # type: (np.int64) -> float
         # Convert machine units to seconds using the reference period
-        return mu * self.ref_period
+        return float(mu * self.ref_period)
 
     @kernel
     def wait_until_mu(self, cursor_mu):  # type: (np.int64) -> None
@@ -237,7 +237,7 @@ class Core(BaseCore):
         self._level -= 1
 
         # Accumulate the time spend in this function call
-        self._fn_time[kernel_fn] += now_mu() - t_start
+        self._fn_time[kernel_fn] += int(now_mu() - t_start)
 
         if self._level == 0:
             # Flush signal manager if we are about to leave the kernel context

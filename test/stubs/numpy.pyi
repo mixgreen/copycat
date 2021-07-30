@@ -1,3 +1,10 @@
+"""
+Stubs for NumPy.
+
+NumPy>=1.20 is typed (nixpkgs>=21.05), but the NumPy type annotations are difficult to get compatible with
+other libraries, especially when mixing `int` and `int32`. Hence, we will keep using our own limited NumPy stubs.
+"""
+
 import typing
 import collections.abc
 

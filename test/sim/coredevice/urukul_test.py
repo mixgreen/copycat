@@ -1,5 +1,6 @@
 import unittest
 import random
+import numpy as np
 
 from artiq.experiment import *
 
@@ -84,12 +85,12 @@ class UrukulPeekTestCase(dax.sim.test_case.PeekTestCase):
     def test_set_att_mu(self):
         att_reg = self.env.dut.get_att_mu()
         for _ in range(_NUM_SAMPLES):
-            a = self.rng.randrange(2 ** 8)
+            a = np.int32(self.rng.randrange(2 ** 8))
             c = self.rng.randrange(4)
             self.env.dut.set_att_mu(c, a)
             att_reg &= ~(0xFF << (c * 8))
             att_reg |= a << (c * 8)
-            self.assertEqual(att_reg, self.env.dut.att_reg)
+            self.assertEqual(np.int32(att_reg), self.env.dut.att_reg)
             self.assertEqual(self.env.dut.get_att_mu(), self.env.dut.att_reg)
             self.expect(self.env.dut, f'att_{c}', dax.sim.coredevice.urukul._mu_to_att(a))
 
@@ -102,7 +103,7 @@ class UrukulPeekTestCase(dax.sim.test_case.PeekTestCase):
             self.env.dut.set_att(c, a)
             att_reg &= ~(0xFF << (c * 8))
             att_reg |= a_mu << (c * 8)
-            self.assertEqual(att_reg, self.env.dut.att_reg)
+            self.assertEqual(np.int32(att_reg), self.env.dut.att_reg)
             self.assertEqual(self.env.dut.get_att_mu(), self.env.dut.att_reg)
             self.expect(self.env.dut, f'att_{c}', a)
 

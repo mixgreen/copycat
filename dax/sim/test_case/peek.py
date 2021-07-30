@@ -187,9 +187,9 @@ class PeekTestCase(unittest.TestCase):
         if type_ is not float:
             # Raise if the signal has an unsupported type
             raise TypeError(f'Signal "{scope.key}.{signal}" of type "{type_}" can not be tested for close equality')
-        if not isinstance(value, (float, int, np.integer)):
+        if not isinstance(value, (float, int, np.int32, np.int64)):
             # Raise if the value has an unsupported type
-            raise TypeError('Close equality can only be tested against values of type float or int')
+            raise TypeError('Close equality can only be tested against float or int values')
 
         if msg is None:
             # Set default error message

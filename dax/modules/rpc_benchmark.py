@@ -123,9 +123,10 @@ class RpcBenchmarkModule(DaxModule):
     """Benchmark async RPC throughput"""
 
     @host_only
-    def benchmark_async_throughput(self, num_events: int, num_samples: int) -> None:
-        assert isinstance(num_events, (int, np.integer)), 'Number of events must be of type int'
-        assert isinstance(num_samples, (int, np.integer)), 'Number of samples must be of type int'
+    def benchmark_async_throughput(self, num_events: typing.Union[int, np.int32],
+                                   num_samples: typing.Union[int, np.int32]) -> None:
+        assert isinstance(num_events, (int, np.int32)), 'Number of events must be of type int'
+        assert isinstance(num_samples, (int, np.int32)), 'Number of samples must be of type int'
 
         # Check arguments
         if not num_events > 0:

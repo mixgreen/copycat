@@ -12,7 +12,7 @@ from dax.sim.signal import get_signal_manager
 
 
 def _mu_to_voltage(voltage_mu: TInt32, *, vref: TFloat, offset_dacs: TInt32 = 0x0) -> TFloat:
-    return ((voltage_mu - (offset_dacs * 0x4)) / 0x10000) * (4. * vref)
+    return float((voltage_mu - (offset_dacs * 0x4)) / 0x10000) * (4. * vref)
 
 
 class AD53xx(DaxSimDevice):
