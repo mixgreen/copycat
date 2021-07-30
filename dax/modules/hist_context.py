@@ -844,8 +844,9 @@ class HistogramAnalyzer:
         counts = [[cls.histogram_to_stdev_count(h) for h in channel] for channel in histograms]
         return np.asarray(counts)
 
-    @staticmethod
-    def counter_to_ndarray(histogram: typing.Counter[_DATA_T], *, max_count: typing.Optional[int] = None) -> np.ndarray:
+    @classmethod
+    def counter_to_ndarray(cls, histogram: typing.Counter[_DATA_T], *,
+                           max_count: typing.Optional[int] = None) -> np.ndarray:
         """Convert a histogram stored as a ``Counter`` object to an ndarray.
 
         Note that histograms with binary measurement results will be converted to an array with length 2.
@@ -863,8 +864,8 @@ class HistogramAnalyzer:
 
         return np.asarray([histogram[i] for i in range(max_count + 1)])
 
-    @staticmethod
-    def ndarray_to_counter(histogram: typing.Sequence[int]) -> collections.Counter:
+    @classmethod
+    def ndarray_to_counter(cls, histogram: typing.Sequence[int]) -> collections.Counter:
         """Convert a histogram stored as an ndarray to a ``Counter`` object.
 
         Note that it is not possible to determine if arrays only contain binary measurement results,
