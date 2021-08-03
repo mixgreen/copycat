@@ -225,12 +225,12 @@ class CcbTool:
     def plot_xy_multi(self, name: str, y: str, *,
                       x: typing.Optional[str] = None,
                       error: typing.Optional[str] = None,
+                      fit: typing.Optional[str] = None,
                       v_lines: typing.Optional[str] = None,
                       h_lines: typing.Optional[str] = None,
                       index: typing.Union[None, int, typing.Collection[int]] = None,
                       sliding_window: typing.Optional[int] = None,
                       plot_names: typing.Optional[str] = None,
-                      markers_only: typing.Optional[bool] = None,
                       title: typing.Optional[str] = None,
                       x_label: typing.Optional[str] = None,
                       y_label: typing.Optional[str] = None,
@@ -243,12 +243,12 @@ class CcbTool:
         :param y: Y-values dataset (multiple graphs)
         :param x: X-value dataset
         :param error: Error dataset (multiple graphs)
+        :param fit: Fit dataset (multiple graphs)
         :param v_lines: Vertical lines dataset
         :param h_lines: Horizontal lines dataset
         :param index: A single or multiple indices of the results to plot (default plots all)
         :param sliding_window: Set size of the sliding window, or :const:`None` to disable
         :param plot_names: Base names of the plots (numbered automatically, formatting with ``'{index}'`` possible)
-        :param markers_only: Only plot markers and no lines between them
         :param title: Graph title
         :param x_label: X-axis label
         :param y_label: Y-axis label
@@ -258,9 +258,9 @@ class CcbTool:
         """
         # Assemble command
         command = generate_command(f'{self.DAX_APPLET}plot_xy_multi', y,
-                                   x=x, error=error, v_lines=v_lines, h_lines=h_lines, index=index,
-                                   sliding_window=sliding_window, plot_names=plot_names, markers_only=markers_only,
-                                   title=title, x_label=x_label, y_label=y_label, update_delay=update_delay, **kwargs)
+                                   x=x, error=error, fit=fit, v_lines=v_lines, h_lines=h_lines, index=index,
+                                   sliding_window=sliding_window, plot_names=plot_names, title=title,
+                                   x_label=x_label, y_label=y_label, update_delay=update_delay, **kwargs)
         # Create applet
         self.create_applet(name, command, group=group)
 

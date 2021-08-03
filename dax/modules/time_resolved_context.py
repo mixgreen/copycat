@@ -572,7 +572,6 @@ class TimeResolvedContext(DaxModule):
         kwargs.setdefault('x_label', 'Time')
         kwargs.setdefault('y_label', 'Number of counts')
         kwargs.setdefault('title', f'RID {self._scheduler.rid}')
-        kwargs.setdefault('markers_only', True)
         # Plot
         self._ccb.plot_xy_multi(self.PLOT_NAME, self._plot_result_key,
                                 x=self._plot_time_key, group=self._plot_group, **kwargs)

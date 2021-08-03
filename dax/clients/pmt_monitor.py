@@ -452,7 +452,6 @@ class MultiPmtMonitor(_PmtMonitorBase):
 
         # Modify keyword arguments
         kwargs.setdefault('plot_names', 'PMT')
-        kwargs.setdefault('markers_only', True)
 
         if self.separate_applets:
             # Assemble titles
