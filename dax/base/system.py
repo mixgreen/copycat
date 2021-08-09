@@ -380,6 +380,8 @@ class DaxHasKey(DaxBase, abc.ABC):
                     # The value was not available in the system dataset and no default was provided
                     raise KeyError(f'System dataset key "{system_key}" not found') from None
                 else:
+                    # Use fallback value
+                    self.logger.debug(f'System dataset key "{key}" not found, returning fallback value "{fallback}"')
                     value = fallback
             else:
                 # If the value does not exist, write the default value to the system dataset, but do not archive yet
@@ -417,8 +419,8 @@ class DaxHasKey(DaxBase, abc.ABC):
         Exceptions will be raised when an attribute is missing while being accessed in Python
         or when a kernel is compiled that needs the attribute.
 
-        The function :func:`hasattr` can be used for conditional initialization in case it is possible that a
-        certain attribute is not present (i.e. when this function is used without a default value).
+        The function :func:`hasattr` is a helper function used for conditional initialization based on
+        the presence of certain attributes (i.e. when this function is used without a default value).
 
         Attributes set using this function will by default be added to the kernel invariants.
         It is possible to disable this behavior by setting the appropriate function parameter.
@@ -456,7 +458,8 @@ class DaxHasKey(DaxBase, abc.ABC):
     def hasattr(self, *keys: str) -> bool:
         """Returns if this object has the given attributes.
 
-        This function is especially useful when :func:`setattr_dataset_sys` is used without a default value.
+        Helper function to check the presence of attributes when using :func:`setattr_dataset_sys`
+        without a default value.
 
         :param keys: The attribute names to check
         :return: True if all attributes are set
