@@ -1068,7 +1068,7 @@ class DaxNameRegistry:
     __S_T = typing.TypeVar('__S_T', bound=DaxService)  # Service type variable
     __I_T = typing.TypeVar('__I_T', bound=dax.base.interface.DaxInterface)  # Interface type variable
     _sys_services_key: str
-    _device_db: typing.Dict[str, typing.Any]
+    _device_db: typing.Mapping[str, typing.Any]
     _devices: typing.Dict[str, typing.Tuple[typing.Any, DaxHasSystem]]
     _modules: typing.Dict[str, DaxModuleBase]
     _services: typing.Dict[str, DaxService]
@@ -1087,8 +1087,8 @@ class DaxNameRegistry:
 
         # Store system services key
         self._sys_services_key = system.SYS_SERVICES  # Access attribute directly
-        # Store device DB
-        self._device_db = system.get_device_db()
+        # Store device DB (read-only)
+        self._device_db = types.MappingProxyType(system.get_device_db())
 
         # A dict containing registered devices
         self._devices = {}
@@ -1101,14 +1101,14 @@ class DaxNameRegistry:
     def device_db(self) -> typing.Mapping[str, typing.Any]:
         """Return the current device DB.
 
-        Requesting the device DB using ``HasEnvironment.get_device_db()`` is slow as it
-        connects to the ARTIQ master to obtain the database.
-        The registry caches the device DB and by using this property the number
+        Requesting the device DB using :func:``artiq.language.environment.HasEnvironment.get_device_db()``
+        is slow as it connects to the ARTIQ master to obtain the database.
+        The registry caches the device DB and by using this property, the number
         of calls to the ARTIQ master can be minimized.
 
         :return: A mapping proxy to the current device DB
         """
-        return types.MappingProxyType(self._device_db)
+        return self._device_db
 
     def add_module(self, module: __M_T) -> None:
         """Register a module.

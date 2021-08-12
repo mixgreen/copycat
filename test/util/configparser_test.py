@@ -4,6 +4,10 @@ import dax.util.configparser
 
 class ConfigParserTestCase(unittest.TestCase):
 
+    def setUp(self) -> None:
+        # Clear cache
+        dax.util.configparser._dax_config = None
+
     def test_cache(self):
         # By default, use cache if available
         a = dax.util.configparser.get_dax_config()

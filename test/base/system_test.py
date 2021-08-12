@@ -357,6 +357,12 @@ class DaxNameRegistryTestCase(unittest.TestCase):
         self.assertDictEqual(r.search_interfaces(_TestInterface), {itf.get_system_key(): itf},
                              'Search interfaces did not return expected result')
 
+    def test_device_db(self):
+        # Test system
+        s = _TestSystem(self.managers)
+        # Verify cached device DB
+        self.assertEqual(s.registry.device_db, s.get_device_db())
+
     def test_is_independent(self):
         # Test system
         s = _TestSystem(self.managers)
