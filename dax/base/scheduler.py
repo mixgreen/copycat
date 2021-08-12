@@ -1136,7 +1136,23 @@ def create_calibration(cls: typing.Type[__CJ_T]) -> typing.Type[__CJ_T]:
 
 
 class SchedulerController:
-    """Scheduler controller class, which exposes an external interface to a running DAX scheduler."""
+    """Scheduler controller class, which exposes an external interface to a running DAX scheduler.
+
+    The scheduler controller is started and stopped by the :class:`DaxScheduler` if configured using
+    the :attr:`DaxScheduler.CONTROLLER` attribute. If a scheduler controller is configured,
+    users need to add an appropriate entry in the device DB to assign a host and a port to the controller.
+    There is no need to add a startup command to this controller as the scheduler will start the controller.
+    Also note that the entry for the scheduler controller should not use key ``"scheduler"`` since this
+    key is already reserved for the ARTIQ scheduler virtual device.
+
+    An example of a device DB entry for a scheduler controller::
+
+        "dax_scheduler": {
+            "type": "controller",
+            "host": "::1",
+            "port": 3999,  # Choose your preferred port
+        }
+    """
 
     _scheduler: DaxScheduler
     _request_queue: _RQ_T
@@ -1222,7 +1238,7 @@ class DaxScheduler(dax.base.system.DaxHasKey, abc.ABC):
 
     - :attr:`ROOT_NODES`: A collection of node classes that are the root nodes, defaults to all entry nodes
     - :attr:`SYSTEM`: A DAX system type to enable additional logging of data
-    - :attr:`CONTROLLER`: The scheduler controller name as defined in the device DB
+    - :attr:`CONTROLLER`: The scheduler controller name as defined in the device DB (see :class:`SchedulerController`)
     - :attr:`TERMINATE_TIMEOUT`: The timeout for terminating other instances in seconds
     - :attr:`DEFAULT_SCHEDULING_POLICY`: The default scheduling policy
     - :attr:`DEFAULT_WAVE_INTERVAL`: The default wave interval in seconds
