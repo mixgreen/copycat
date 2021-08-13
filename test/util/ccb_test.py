@@ -2,6 +2,10 @@ import unittest
 
 from dax.experiment import DaxSystem
 from dax.util.artiq import get_managers
+from dax.util.output import temp_dir
+from dax.util.ccb import CcbTool, get_ccb_tool
+import dax.util.ccb
+import dax.util.configparser
 
 
 class _TestSystem(DaxSystem):
@@ -9,7 +13,28 @@ class _TestSystem(DaxSystem):
     SYS_VER = 0
 
 
+def _clear_cache():
+    dax.util.configparser._dax_config = None
+    dax.util.ccb._ccb_tool = None
+
+
+def _write_config(class_, *, no_module=False, no_class=False):
+    # Write a config file
+    lines = ['[dax.util.ccb]\n']
+    if not no_module:
+        lines.append(f'ccb_module = {class_.__module__}\n')
+    if not no_class:
+        lines.append(f'ccb_class = {class_.__name__}\n')
+    with open('.dax', mode='w') as file:
+        file.writelines(lines)
+    # Clear cache
+    _clear_cache()
+
+
 class CcbTestCase(unittest.TestCase):
+
+    def setUp(self) -> None:
+        _clear_cache()
 
     def test_convert_group(self):
         # noinspection PyProtectedMember
@@ -56,18 +81,53 @@ class CcbTestCase(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     generate_command(base, *args, **kwargs)
 
+    def _test_ccb_tool(self, ccb):
+        # Just call methods to see if no errors occur
+        self.assertIsNone(ccb.big_number('name', 'key'))
+        self.assertIsNone(ccb.image('name', 'key'))
+        self.assertIsNone(ccb.plot_xy('name', 'key'))
+        self.assertIsNone(ccb.plot_xy_multi('name', 'key'))
+        self.assertIsNone(ccb.plot_hist('name', 'key'))
+        self.assertIsNone(ccb.plot_hist_multi('name', 'key'))
+        self.assertIsNone(ccb.plot_xy_hist('name', 'key', 'key', 'key'))
+        self.assertIsNone(ccb.disable_applet('name'))
+        self.assertIsNone(ccb.disable_applet_group('group'))
+
     def test_ccb_tool(self):
         with get_managers() as managers:
-            from dax.util.ccb import get_ccb_tool
-            ccb = get_ccb_tool(_TestSystem(managers))
+            self._test_ccb_tool(CcbTool(_TestSystem(managers)))
 
-            # Just call methods to see if no errors occur
-            self.assertIsNone(ccb.big_number('name', 'key'))
-            self.assertIsNone(ccb.image('name', 'key'))
-            self.assertIsNone(ccb.plot_xy('name', 'key'))
-            self.assertIsNone(ccb.plot_xy_multi('name', 'key'))
-            self.assertIsNone(ccb.plot_hist('name', 'key'))
-            self.assertIsNone(ccb.plot_hist_multi('name', 'key'))
-            self.assertIsNone(ccb.plot_xy_hist('name', 'key', 'key', 'key'))
-            self.assertIsNone(ccb.disable_applet('name'))
-            self.assertIsNone(ccb.disable_applet_group('group'))
+    def test_get_ccb_tool(self):
+        with get_managers() as managers:
+            self._test_ccb_tool(get_ccb_tool(_TestSystem(managers)))
+
+    def test_get_ccb_tool_config(self):
+        with get_managers() as managers, temp_dir():
+            for class_ in [_CcbTool, CcbTool]:
+                # Write configuration
+                _write_config(class_)
+                # Get the CCB tool
+                ccb = get_ccb_tool(_TestSystem(managers))
+                self.assertIsInstance(ccb, class_)
+
+    def test_get_ccb_tool_bad_config(self):
+        with get_managers() as managers, temp_dir():
+            for no_module, no_class in [(False, True), (True, False)]:
+                # Write configuration
+                _write_config(CcbTool, no_module=no_module, no_class=no_class)
+                with self.assertRaises(LookupError):
+                    # Get the CCB tool
+                    get_ccb_tool(_TestSystem(managers))
+
+    def test_get_ccb_tool_config_bad_type(self):
+        with get_managers() as managers, temp_dir():
+            for class_ in [dax.util.ccb.CcbWrapper, _TestSystem]:
+                # Write configuration
+                _write_config(class_)
+                with self.assertRaises(TypeError):
+                    # Get the CCB tool
+                    get_ccb_tool(_TestSystem(managers))
+
+
+class _CcbTool(CcbTool):
+    pass
