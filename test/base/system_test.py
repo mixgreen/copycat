@@ -1,8 +1,6 @@
 import unittest
 import numpy as np
 import logging
-import os
-import pygit2
 import collections.abc
 import typing
 import itertools
@@ -12,12 +10,15 @@ from artiq.experiment import HasEnvironment, Experiment
 import artiq.coredevice.edge_counter
 import artiq.coredevice.ttl  # type: ignore[import]
 import artiq.coredevice.core
+from artiq import __version__ as _artiq_version
 
 from dax.base.system import *
 import dax.base.system
 import dax.base.exceptions
 import dax.base.interface
+import dax.util.git
 from dax.util.artiq import get_managers
+from dax import __version__ as _dax_version
 
 import test.util.logging_test
 import test.helpers
@@ -198,29 +199,6 @@ class DaxHelpersTestCase(unittest.TestCase):
                             'List of virtual devices in test does not match DAX base virtual device list')
         for k in virtual_devices:
             self.assertEqual(s.registry.get_unique_device_key(k), k, 'Virtual device key not returned correctly')
-
-    def test_cwd_commit_hash(self):
-        self.assertIsInstance(dax.base.system._CWD_COMMIT, (tuple, type(None)), 'Unexpected type for CWD commit hash')
-        if dax.base.system._CWD_COMMIT is not None:
-            commit, dirty = dax.base.system._CWD_COMMIT
-            self.assertIsInstance(commit, str)
-            self.assertIsInstance(dirty, bool)
-
-        # Discover repo path
-        # noinspection PyCallingNonCallable
-        path = pygit2.discover_repository(os.getcwd())
-
-        if path is None:
-            # CWD is not in a git repository at this moment, skipping test
-            self.skipTest('CWD currently not in a git repo')
-
-        # Test if CWD commit hash was loaded
-        self.assertIsNotNone(dax.base.system._CWD_COMMIT, 'CWD commit hash was not loaded')
-        commit, dirty = dax.base.system._CWD_COMMIT
-        self.assertIsInstance(commit, str, 'Unexpected type for CWD commit hash')
-        self.assertIsInstance(dirty, bool, 'Unexpected type for CWD commit dirty flag')
-        self.assertEqual(commit, str(pygit2.Repository(path).head.target.hex),
-                         'CWD commit hash did not match reference')
 
     def test_ndarray_isinstance_sequence(self):
         # See https://github.com/numpy/numpy/issues/2776 for more information
@@ -452,6 +430,20 @@ class DaxDataStoreInfluxDbTestCase(unittest.TestCase):
     def tearDown(self) -> None:
         # Close managers
         self.managers.close()
+
+    def test_base_fields(self):
+        # Test making point
+        d = self.ds._make_point('k', 4)
+
+        # Verify some base fields
+        fields = {
+            'artiq_version': _artiq_version,
+            'dax_version': _dax_version,
+        }
+        if dax.util.git.in_repository():
+            fields['git_commit'] = dax.util.git.get_repository_info().commit
+        for k, v in fields.items():
+            self.assertEqual(d['fields'][k], v)
 
     def test_make_point(self):
         # Data to test against
@@ -1551,6 +1543,27 @@ class DaxSystemTestCase(unittest.TestCase):
         self.assertEqual(self.init_count, self.num_modules + 1, 'Number of init calls does not match expected number')
         self.assertEqual(self.post_init_count, self.num_modules + 1,
                          'Number of post_init calls does not match expected number')
+
+    def test_system_info_archiving(self):
+        keys = {
+            'dax/system_id': self.system.SYS_ID,
+            'dax/system_version': self.system.SYS_VER,
+            'dax/dax_version': _dax_version,
+            'dax/dax_sim_enabled': self.system.dax_sim_enabled,
+        }
+        if dax.util.git.in_repository():
+            keys.update({f'dax/git_{k}': v for k, v in dax.util.git.get_repository_info().as_dict().items()})
+
+        for k in keys:
+            with self.assertRaises(KeyError):
+                self.system.get_dataset(k)
+
+        # Call DAX init
+        self.system.dax_init()
+
+        # Verify data exists in archive
+        for k, v in keys.items():
+            self.assertEqual(self.system.get_dataset(k), v)
 
     def test_build_super(self):
         class SomeBaseClass(HasEnvironment):

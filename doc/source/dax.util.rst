@@ -44,6 +44,14 @@ dax.util.experiments module
     :undoc-members:
     :show-inheritance:
 
+dax.util.git module
+-------------------
+
+.. automodule:: dax.util.git
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 dax.util.gtkwave module
 -----------------------
 

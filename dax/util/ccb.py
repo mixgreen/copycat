@@ -504,7 +504,7 @@ def get_ccb_tool(environment: artiq.language.environment.HasEnvironment) -> CcbT
                 m = importlib.import_module(module_name)
                 c = getattr(m, class_name)
             except (ImportError, AttributeError) as e:
-                raise ImportError(f'Cannot import name "{class_name}" from "{module_name}"') from e
+                raise ImportError(f'Cannot import configured CCB class "{class_name}" from "{module_name}"') from e
             if issubclass(c, CcbToolBase):
                 # Instantiate configured CCB class
                 _ccb_tool = c(environment)
