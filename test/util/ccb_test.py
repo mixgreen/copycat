@@ -3,7 +3,7 @@ import unittest
 from dax.experiment import DaxSystem
 from dax.util.artiq import get_managers
 from dax.util.output import temp_dir
-from dax.util.ccb import CcbTool, get_ccb_tool
+from dax.util.ccb import CcbWrapper, CcbToolBase, CcbTool, get_ccb_tool
 import dax.util.ccb
 import dax.util.configparser
 
@@ -82,6 +82,9 @@ class CcbTestCase(unittest.TestCase):
                     generate_command(base, *args, **kwargs)
 
     def _test_ccb_tool(self, ccb):
+        # Check type
+        self.assertIsInstance(ccb, CcbWrapper)
+        self.assertIsInstance(ccb, CcbToolBase)
         # Just call methods to see if no errors occur
         self.assertIsNone(ccb.big_number('name', 'key'))
         self.assertIsNone(ccb.image('name', 'key'))

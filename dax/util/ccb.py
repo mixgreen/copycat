@@ -8,7 +8,7 @@ import artiq.language.environment
 
 import dax.util.configparser
 
-__all__ = ['CcbTool', 'get_ccb_tool']
+__all__ = ['CcbWrapper', 'CcbToolBase', 'CcbTool', 'get_ccb_tool']
 
 _G_T = typing.Union[str, typing.List[str]]  # Type of a group
 
@@ -19,7 +19,7 @@ def _convert_group(group: typing.Optional[_G_T]) -> typing.Optional[_G_T]:
     Enables users to define group hierarchies using the dot "." character,
     similar as with datasets.
 
-    :param group: The group name as a single string or None
+    :param group: The group name as a single string, a list of strings, or :const:`None`
     """
     # Strings are split to enable applet group hierarchies in the dashboard
     return group.split('.') if isinstance(group, str) else group

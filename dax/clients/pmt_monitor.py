@@ -8,7 +8,7 @@ import artiq.coredevice.edge_counter
 
 from dax.experiment import *
 from dax.interfaces.detection import DetectionInterface
-from dax.util.ccb import get_ccb_tool
+from dax.util.ccb import get_ccb_tool, CcbTool, CcbToolBase
 from dax.util.artiq import is_kernel
 from dax.util.units import time_to_str
 
@@ -37,6 +37,9 @@ class _PmtMonitorBase(DaxClient, Experiment, abc.ABC):
     DATA_CLEANUP_PRESERVE_MULTIPLIER: typing.ClassVar[int] = 2
     """Data cleanup will preserve the number of samples in a window multiplied by this value."""
 
+    CCB_TOOL_CLASS: typing.Optional[typing.Type[CcbToolBase]] = CcbTool
+    """The CCB tool class to use, use :const:`None` to fallback on the default CCB tool."""
+
     _RAW_COUNT: typing.ClassVar[str] = '<Raw counts>'
     """Count scale key for raw count (i.e. no scaling)."""
     _COUNT_SCALES: typing.ClassVar[_C_T] = collections.OrderedDict(
@@ -62,6 +65,8 @@ class _PmtMonitorBase(DaxClient, Experiment, abc.ABC):
         assert isinstance(self.DATA_CLEANUP_PRESERVE_MULTIPLIER, int), \
             'Data cleanup preserve multiplier must be of type int'
         assert self.DATA_CLEANUP_PRESERVE_MULTIPLIER > 0, 'Data cleanup preserve multiplier must be greater than zero'
+        assert self.CCB_TOOL_CLASS is None or issubclass(self.CCB_TOOL_CLASS, CcbToolBase), \
+            'CCB tool class must be a subclass of CcbToolBase or None'
         assert is_kernel(self.device_setup), 'device_setup() must be a kernel function'
         assert is_kernel(self.device_cleanup), 'device_cleanup() must be a kernel function'
         assert not is_kernel(self.host_setup), 'host_setup() can not be a kernel function'
@@ -78,7 +83,7 @@ class _PmtMonitorBase(DaxClient, Experiment, abc.ABC):
 
         # Get the scheduler and CCB tool
         self.scheduler = self.get_device('scheduler')
-        self.ccb = get_ccb_tool(self)
+        self.ccb = get_ccb_tool(self) if self.CCB_TOOL_CLASS is None else self.CCB_TOOL_CLASS(self)
         self.update_kernel_invariants('scheduler')
 
         # Standard arguments
