@@ -1,10 +1,14 @@
 import typing
+import abc
 import shlex
+import importlib
 import collections.abc
 
-from artiq.language.environment import HasEnvironment
+import artiq.language.environment
 
-__all__ = ['get_ccb_tool']
+import dax.util.configparser
+
+__all__ = ['CcbWrapper', 'CcbToolBase', 'CcbTool', 'get_ccb_tool']
 
 _G_T = typing.Union[str, typing.List[str]]  # Type of a group
 
@@ -15,7 +19,7 @@ def _convert_group(group: typing.Optional[_G_T]) -> typing.Optional[_G_T]:
     Enables users to define group hierarchies using the dot "." character,
     similar as with datasets.
 
-    :param group: The group name as a single string or None
+    :param group: The group name as a single string, a list of strings, or :const:`None`
     """
     # Strings are split to enable applet group hierarchies in the dashboard
     return group.split('.') if isinstance(group, str) else group
@@ -46,7 +50,7 @@ def generate_command(base_command: str, *args: str, **kwargs: typing.Any) -> str
     def convert_arg(a: str) -> str:
         """Convert argument names."""
         if not a.isidentifier():
-            raise ValueError('Single quotes are not allowed in argument names')
+            raise ValueError('Argument names must be valid identifiers')
         return a.replace('_', '-')  # Convert underscores to dashes
 
     def convert_value(v: typing.Any) -> typing.Any:
@@ -76,24 +80,20 @@ def generate_command(base_command: str, *args: str, **kwargs: typing.Any) -> str
     return f"{base_command} {' '.join(arguments)}"
 
 
-class CcbTool:
-    """Wrapper around ARTIQ CCB object providing more convenient functions."""
-
-    ARTIQ_APPLET: typing.ClassVar[str] = '${artiq_applet}'
-    """The ARTIQ applet variable which can be used in CCB commands."""
-    DAX_APPLET: typing.ClassVar[str] = '${python} -m dax_applets.'
-    """The DAX applet starting command which can be used in CCB commands."""
+class CcbWrapper:
+    """Wrapper around the ARTIQ CCB object with helper functions for the available CCB commands."""
 
     __ccb: typing.Any
 
-    def __init__(self, ccb: typing.Any):
-        """Construct a new CCB tool.
+    def __init__(self, environment: artiq.language.environment.HasEnvironment):
+        """Construct a new CCB wrapper.
 
-        :param ccb: The CCB object
+        :param environment: An object which inherits ARTIQ :class:`artiq.language.environment.HasEnvironment`
         """
+        assert isinstance(environment, artiq.language.environment.HasEnvironment)
 
-        # Store the CCB object
-        self.__ccb = ccb
+        # Obtain and store the CCB object
+        self.__ccb = environment.get_device('ccb')
 
     @property
     def ccb(self) -> typing.Any:
@@ -138,7 +138,122 @@ class CcbTool:
         """
         self.issue('disable_applet_group', _convert_group(group))
 
-    """Functions that directly create ARTIQ applets"""
+
+class CcbToolBase(CcbWrapper, abc.ABC):  # pragma: no cover
+    """Abstract base class for a CCB tool with functions to directly create applets."""
+
+    @abc.abstractmethod
+    def big_number(self, name: str, dataset: str, *,
+                   group: typing.Optional[_G_T] = None,
+                   **kwargs: typing.Any) -> None:
+        """Create a big number applet.
+
+        :param name: Name of the applet
+        :param dataset: Dataset to show
+        :param group: Optional group of the applet
+        :param kwargs: Other optional arguments for the applet
+        """
+        pass
+
+    @abc.abstractmethod
+    def image(self, name: str, img: str, *,
+              group: typing.Optional[_G_T] = None,
+              **kwargs: typing.Any) -> None:
+        """Create an image applet.
+
+        :param name: Name of the applet
+        :param img: Image data (2D numpy array) dataset
+        :param group: Optional group of the applet
+        :param kwargs: Other optional arguments for the applet
+        """
+        pass
+
+    @abc.abstractmethod
+    def plot_xy(self, name: str, y: str, *,
+                x: typing.Optional[str] = None,
+                group: typing.Optional[_G_T] = None,
+                **kwargs: typing.Any) -> None:
+        """Create a plot XY applet.
+
+        :param name: Name of the applet
+        :param y: Y-value dataset
+        :param x: X-value dataset
+        :param group: Optional group of the applet
+        :param kwargs: Other optional arguments for the applet
+        """
+        pass
+
+    @abc.abstractmethod
+    def plot_xy_multi(self, name: str, y: str, *,
+                      x: typing.Optional[str] = None,
+                      group: typing.Optional[_G_T] = None,
+                      **kwargs: typing.Any) -> None:
+        """Create a plot XY applet with multiple plots.
+
+        :param name: Name of the applet
+        :param y: Y-values dataset (multiple graphs)
+        :param x: X-value dataset
+        :param group: Optional group of the applet
+        :param kwargs: Other optional arguments for the applet
+        """
+        pass
+
+    @abc.abstractmethod
+    def plot_hist(self, name: str, y: str, *,
+                  x: typing.Optional[str] = None,
+                  group: typing.Optional[_G_T] = None,
+                  **kwargs: typing.Any) -> None:
+        """Create a histogram applet.
+
+        :param name: Name of the applet
+        :param y: Y-value dataset
+        :param x: Bin boundaries dataset
+        :param group: Optional group of the applet
+        :param kwargs: Other optional arguments for the applet
+        """
+        pass
+
+    @abc.abstractmethod
+    def plot_hist_multi(self, name: str, y: str, *,
+                        x: typing.Optional[str] = None,
+                        group: typing.Optional[_G_T] = None,
+                        **kwargs: typing.Any) -> None:
+        """Create a histogram applet with multiple histograms.
+
+        :param name: Name of the applet
+        :param y: Histogram dataset (multiple histograms)
+        :param x: Bin boundaries dataset
+        :param group: Optional group of the applet
+        :param kwargs: Other optional arguments for the applet
+        """
+        pass
+
+    @abc.abstractmethod
+    def plot_xy_hist(self, name: str, xs: str, histogram_bins: str, histogram_counts: str, *,
+                     group: typing.Optional[_G_T] = None,
+                     **kwargs: typing.Any) -> None:
+        """Create a 2D histogram applet.
+
+        :param name: Name of the applet
+        :param xs: 1D array of point abscissas dataset
+        :param histogram_bins: 1D array of histogram bin boundaries dataset
+        :param histogram_counts: 2D array of histogram counts (for each point) dataset
+        :param group: Optional group of the applet
+        :param kwargs: Other optional arguments for the applet
+        """
+        pass
+
+
+class CcbTool(CcbToolBase):
+    """A CCB tool with functions to directly create ARTIQ applets and DAX applets."""
+
+    ARTIQ_APPLET: typing.ClassVar[str] = '${artiq_applet}'
+    """The ARTIQ applet variable which can be used in CCB commands."""
+    DAX_APPLET: typing.ClassVar[str] = '${python} -m dax_applets.'
+    """The DAX applet starting command which can be used in CCB commands."""
+
+    _DEFAULT_UPDATE_DELAY: typing.ClassVar[float] = 0.1
+    """The default update delay for ARTIQ applets that have zero update delay by default."""
 
     def big_number(self, name: str, dataset: str, *,
                    digit_count: typing.Optional[int] = None,
@@ -174,7 +289,7 @@ class CcbTool:
         """
         if update_delay is None:
             # Set update delay explicit for ARTIQ applets
-            update_delay = 0.1
+            update_delay = self._DEFAULT_UPDATE_DELAY
         # Assemble command
         command = generate_command(f'{self.ARTIQ_APPLET}image', img, update_delay=update_delay, **kwargs)
         # Create applet
@@ -282,7 +397,7 @@ class CcbTool:
         """
         if update_delay is None:
             # Set update delay explicit for ARTIQ applets
-            update_delay = 0.1
+            update_delay = self._DEFAULT_UPDATE_DELAY
         # Assemble command
         command = generate_command(f'{self.ARTIQ_APPLET}plot_hist', y,
                                    x=x, title=title, update_delay=update_delay, **kwargs)
@@ -336,7 +451,7 @@ class CcbTool:
         """
         if update_delay is None:
             # Set update delay explicit for ARTIQ applets
-            update_delay = 0.1
+            update_delay = self._DEFAULT_UPDATE_DELAY
         # Assemble command
         command = generate_command(f'{self.ARTIQ_APPLET}plot_xy_hist', xs, histogram_bins, histogram_counts,
                                    update_delay=update_delay, **kwargs)
@@ -344,14 +459,60 @@ class CcbTool:
         self.create_applet(name, command, group=group)
 
 
-def get_ccb_tool(environment: HasEnvironment) -> CcbTool:
-    """Obtain a CCB tool.
+_ccb_tool: typing.Optional[CcbToolBase] = None
+"""The cached CCB tool object."""
+
+
+def get_ccb_tool(environment: artiq.language.environment.HasEnvironment) -> CcbToolBase:
+    """Obtain the default CCB tool object.
 
     The CCB tool is a wrapper around the ARTIQ CCB object that allows users to conveniently
-    create standard applets using straight-forward functions.
+    create applets using straight-forward functions.
 
-    :param environment: An object which inherits ARTIQ :class:`HasEnvironment`, required to get the ARTIQ CCB object
-    :return: The CCB tool object
+    The default CCB tool class can be configured using the DAX configuration files.
+    The possible configuration files are listed in
+    the class variable :attr:`dax.util.configparser.DaxConfigParser.CONFIG_FILES`.
+    If no CCB tool class is configured, :class:`CcbTool` will be used.
+
+    The following options can currently be set through the configuration files
+    using the section ``[dax.util.ccb]``:
+
+     - ``ccb_module``, the module of the default CCB tool class
+     - ``ccb_class``, the class of the default CCB tool object
+
+    :param environment: An object which inherits ARTIQ :class:`artiq.language.environment.HasEnvironment`
+    :return: The default CCB tool object
     """
-    assert isinstance(environment, HasEnvironment), 'The given environment must be of type HasEnvironment'
-    return CcbTool(environment.get_device('ccb'))
+    if not isinstance(environment, artiq.language.environment.HasEnvironment):
+        raise TypeError('The given environment must be of ARTIQ type HasEnvironment')
+
+    global _ccb_tool
+
+    if _ccb_tool is None:
+        # Get configuration
+        config = dax.util.configparser.get_dax_config()
+        module_name = config.get(__name__, 'ccb_module', fallback=None)
+        class_name = config.get(__name__, 'ccb_class', fallback=None)
+
+        if module_name is None and class_name is None:
+            # No configuration available, CcbTool is the default CCB class
+            _ccb_tool = CcbTool(environment)
+
+        elif module_name is not None and class_name is not None:
+            # Configuration available, obtain and instantiate configured CCB class
+            try:
+                m = importlib.import_module(module_name)
+                c = getattr(m, class_name)
+            except (ImportError, AttributeError) as e:
+                raise ImportError(f'Cannot import configured CCB class "{class_name}" from "{module_name}"') from e
+            if issubclass(c, CcbToolBase):
+                # Instantiate configured CCB class
+                _ccb_tool = c(environment)
+            else:
+                raise TypeError(f'Configured CCB class is not a subclass of {__name__}.{CcbToolBase.__name__}')
+
+        else:
+            # Incomplete configuration
+            raise LookupError('Default CCB class configuration is incomplete')
+
+    return _ccb_tool

@@ -1,5 +1,8 @@
 import typing
 import configparser
+import os.path
+
+import dax.util.git
 
 __all__ = ['get_dax_config']
 
@@ -10,6 +13,8 @@ class DaxConfigParser(configparser.ConfigParser):
     CONFIG_FILES: typing.ClassVar[typing.List[str]] = ['.dax', 'setup.cfg']
     """The locations of the configuration files in order of precedence."""
 
+    __used_config_files: typing.FrozenSet[str]
+
     def __init__(self, *args: typing.Any, **kwargs: typing.Any):
         """Create a new DAX configuration parser object.
 
@@ -19,7 +24,15 @@ class DaxConfigParser(configparser.ConfigParser):
         # Call super
         super(DaxConfigParser, self).__init__(*args, **kwargs)
         # Read configuration files
-        self.__used_config_files: typing.FrozenSet[str] = frozenset(self.read(reversed(self.CONFIG_FILES)))
+        self._read_config_files()
+
+        if not self.__used_config_files and dax.util.git.in_repository():
+            # Fallback on root of the Git repository (see https://github.com/m-labs/artiq/issues/1747)
+            self._read_config_files(base=dax.util.git.get_repository_info().path)
+
+    def _read_config_files(self, *, base: str = '') -> None:
+        """Read configuration files, relative from the base path."""
+        self.__used_config_files = frozenset(self.read(os.path.join(base, f) for f in reversed(self.CONFIG_FILES)))
 
     @property
     def used_config_files(self) -> typing.FrozenSet[str]:
