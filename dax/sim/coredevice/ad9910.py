@@ -225,10 +225,9 @@ class AD9910(DaxSimDevice):
     def set_phase(self, turns: TFloat):
         raise NotImplementedError
 
-    @kernel
-    def set(self, frequency: TFloat, phase: TFloat = 0.0,
-            amplitude: TFloat = 1.0, phase_mode: TInt32 = _PHASE_MODE_DEFAULT,
-            ref_time_mu: TInt64 = int64(-1), profile: TInt32 = DEFAULT_PROFILE) -> TFloat:
+    def _set(self, frequency: TFloat, phase: TFloat = 0.0,
+             amplitude: TFloat = 1.0, phase_mode: TInt32 = _PHASE_MODE_DEFAULT,
+             ref_time_mu: TInt64 = int64(-1), profile: TInt32 = DEFAULT_PROFILE) -> TFloat:
         assert 0 * MHz <= frequency <= 400 * MHz, 'Frequency out of range'
         assert 0.0 <= phase < 1.0, 'Phase out of range'
         assert 0.0 <= amplitude <= 1.0, 'Amplitude out of range'
@@ -250,6 +249,13 @@ class AD9910(DaxSimDevice):
         # Returns pow
         return self.pow_to_turns(self._get_pow(
             self.frequency_to_ftw(frequency), self.turns_to_pow(phase), phase_mode, ref_time_mu))
+
+    @kernel
+    def set(self, frequency: TFloat, phase: TFloat = 0.0,
+            amplitude: TFloat = 1.0, phase_mode: TInt32 = _PHASE_MODE_DEFAULT,
+            ref_time_mu: TInt64 = int64(-1), profile: TInt32 = DEFAULT_PROFILE) -> TFloat:
+        return self._set(frequency=frequency, phase=phase, amplitude=amplitude, phase_mode=phase_mode,
+                         ref_time_mu=ref_time_mu, profile=profile)
 
     @kernel
     def set_att_mu(self, att: TInt32):

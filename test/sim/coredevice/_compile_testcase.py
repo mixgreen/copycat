@@ -29,9 +29,9 @@ class CoredeviceCompileTestCase(unittest.TestCase):
     DEVICE_KWARGS: typing.Dict[str, typing.Any] = {}
     """Keyword arguments to instantiate the device class."""
     FN_ARGS: typing.Dict[str, typing.Union[typing.Tuple[typing.Any, ...], typing.List[typing.Any]]] = {}
-    """Function positional arguments."""
+    """Function positional arguments (presence forces function testing)."""
     FN_KWARGS: typing.Dict[str, typing.Dict[str, typing.Any]] = {}
-    """Function keyword arguments."""
+    """Function keyword arguments (presence forces function testing)."""
     FN_EXCLUDE: typing.Set[str] = set()
     """Excluded functions."""
     FN_EXCEPTIONS: typing.Dict[str, type] = {}
@@ -87,9 +87,9 @@ class CoredeviceCompileTestCase(unittest.TestCase):
                         # Ignore expected exception
                         pass
                     except artiq.coredevice.core.CompileError as e:
-                        if "name 'NotImplementedError' is not bound to anything" in str(e):
-                            # Ignore compile errors due to NotImplementedError
-                            pass
+                        err_msg = "name 'NotImplementedError' is not bound to anything"
+                        if err_msg in str(e) and n not in self.FN_ARGS and n not in self.FN_KWARGS:
+                            pass  # Ignore compile errors due to NotImplementedError
                         else:
                             raise
                     except FileNotFoundError as e:

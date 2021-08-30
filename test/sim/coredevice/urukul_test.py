@@ -132,14 +132,11 @@ class UrukulPeekTestCase(dax.sim.test_case.PeekTestCase):
 class CompileTestCase(compile_testcase.CoredeviceCompileTestCase):
     DEVICE_CLASS = dax.sim.coredevice.urukul.CPLD
     FN_KWARGS = {
-        'cfg_write': {'cfg': 0x0},
         'cfg_sw': {'channel': 0, 'on': True},
         'cfg_switches': {'state': 0x0},
         'set_att_mu': {'channel': 0, 'att': 0},
         'set_all_att_mu': {'att_reg': 0},
         'set_att': {'channel': 0, 'att': 0.0},
-        'set_sync_div': {'div': 1},
-        'set_profile': {'profile': 0},
     }
     if ARTIQ_MAJOR_VERSION >= 7:
         FN_KWARGS.update({
