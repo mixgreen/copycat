@@ -6,25 +6,6 @@ stages:
   - test
   - deploy
 
-.conda_env:
-  image: ubuntu:rolling
-  tags:
-    - docker
-  variables:
-    CONDA_SCRIPT: "$HOME/miniconda.sh"
-    CONDA_DIR: "$HOME/miniconda"
-  before_script:
-    # Setup Conda
-    - apt-get -qq update; apt-get -qq -y install wget
-    - wget -nv -O $CONDA_SCRIPT https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
-    - bash $CONDA_SCRIPT -b -p $CONDA_DIR
-    - source $CONDA_DIR/bin/activate
-    - conda init
-    - source ~/.bashrc
-    # Create and activate environment
-    - conda env create -n env -f $CONDA_ENV_FILE
-    - conda activate env
-
 test_nix:
   extends: .nix_env
   stage: test
