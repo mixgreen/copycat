@@ -45,8 +45,6 @@ class _PmtMonitorBase(DaxClient, Experiment, abc.ABC):
     _COUNT_SCALES: typing.ClassVar[_C_T] = collections.OrderedDict(
         [(_RAW_COUNT, -1.0)], GHz=GHz, MHz=MHz, kHz=kHz, Hz=Hz, mHz=mHz)
     """Scales that can be used for the Y-axis."""
-    _DATASET_KWARGS: typing.Dict[str, typing.Any] = {'broadcast': True, 'archive': False}
-    """Keyword arguments for setting the dataset with monitoring values."""
 
     DAX_INIT = False
     """Disable DAX init."""
@@ -124,6 +122,10 @@ class _PmtMonitorBase(DaxClient, Experiment, abc.ABC):
                                                          group='Dataset',
                                                          tooltip='Clean data outside the window periodically (does not '
                                                                  'clean data if data window size is infinite)')
+        self.archive_data: bool = self.get_argument('Archive data',
+                                                    BooleanValue(default=False),
+                                                    group='Dataset',
+                                                    tooltip='Archive the obtained data in the HDF5 output file')
         self.dataset_key: str = self.get_argument('Dataset key',
                                                   StringValue(default=self.DEFAULT_DATASET),
                                                   group='Dataset',
@@ -163,6 +165,13 @@ class _PmtMonitorBase(DaxClient, Experiment, abc.ABC):
         if self.detection_window <= 0.0:
             raise ValueError('Detection window must be greater than zero')
 
+        # Prepare dataset kwargs
+        self.dataset_kwargs = {'archive': self.archive_data, 'broadcast': True, 'persist': False}
+
+        if self.archive_data and not self.auto_data_cleanup:
+            self.logger.warning('Auto data cleanup disabled and data archiving enabled, '
+                                'this can result in a large HDF5 output file')
+
         # Convert the detection delay to machine units
         # The lowest number of machine units required to separate two events is ``core.ref_multiplier``
         # Without event separation, the core device fuses consecutive detection windows to one
@@ -192,22 +201,30 @@ class _PmtMonitorBase(DaxClient, Experiment, abc.ABC):
             # No scaling
             self.y_scalar = 1.0
 
+    def analyze(self):
+        if self.archive_data:
+            # Archive relevant data
+            self.set_dataset('detection_window', self.detection_window)
+            self.set_dataset('detection_delay', self.detection_delay)
+            self.set_dataset('y_scalar', self.y_scalar)
+            self.logger.info(f'Number of data points prepared for archiving: {len(self._data)}')
+
     def run(self) -> None:
         # Initial value is reset to an empty list or try to obtain the previous value defaulting to an empty list
         if self.reset_data:
-            self.logger.debug('Starting with empty dataset')
+            self.logger.info('Starting with empty dataset')
             self._data: typing.List[typing.Any] = []
         else:
             previous_data = self.get_dataset(self.dataset_key, default=[], archive=False)
             if isinstance(previous_data, list):
-                self.logger.debug('Appending to previous dataset')
+                self.logger.info('Appending to previous dataset')
                 self._data = previous_data
             else:
-                self.logger.debug('Previous dataset invalid, starting with empty dataset')
+                self.logger.info('Previous dataset invalid, starting with empty dataset')
                 self._data = []
 
         # Set the result datasets
-        self.set_dataset(self.dataset_key, self._data, **self._DATASET_KWARGS)
+        self.set_dataset(self.dataset_key, self._data.copy(), **self.dataset_kwargs)
 
         # Log messages from the prepare phase
         if self.window_size_samples > 0:
@@ -237,24 +254,24 @@ class _PmtMonitorBase(DaxClient, Experiment, abc.ABC):
                 # Host setup
                 self.host_setup()
                 # Monitor
-                self.logger.debug('Start monitoring')
+                self.logger.info('Start monitoring')
                 self.monitor()
                 # Host cleanup
                 self.host_cleanup()
 
                 # To pause, close communications and call the pause function
-                self.logger.debug('Pausing')
+                self.logger.info('Pausing')
                 self.core.comm.close()
                 self.scheduler.pause()  # Can raise a TerminationRequested exception
 
                 if self.reset_data_resume:
                     # Reset dataset when resuming
                     self._data = []
-                    self.set_dataset(self.dataset_key, self._data, **self._DATASET_KWARGS)
+                    self.set_dataset(self.dataset_key, self._data.copy(), **self.dataset_kwargs)
 
         except TerminationRequested:
             # Experiment was terminated, gracefully end the experiment
-            self.logger.debug('Terminated gracefully')
+            self.logger.info('Terminated gracefully')
 
         except RTIOUnderflow:
             # Underflow exception
@@ -300,7 +317,7 @@ class _PmtMonitorBase(DaxClient, Experiment, abc.ABC):
         if self.auto_data_cleanup and len(self._data) > self.data_cleanup_threshold:
             # Cleanup data
             self._data = self._data[-self.window_size_samples * self.DATA_CLEANUP_PRESERVE_MULTIPLIER:]
-            self.set_dataset(self.dataset_key, self._data, **self._DATASET_KWARGS)
+            self.set_dataset(self.dataset_key, self._data.copy(), **self.dataset_kwargs)
         else:
             # Append to dataset
             self.append_to_dataset(self.dataset_key, data)
