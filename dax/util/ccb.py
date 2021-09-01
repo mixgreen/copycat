@@ -90,7 +90,8 @@ class CcbWrapper:
 
         :param environment: An object which inherits ARTIQ :class:`artiq.language.environment.HasEnvironment`
         """
-        assert isinstance(environment, artiq.language.environment.HasEnvironment)
+        if not isinstance(environment, artiq.language.environment.HasEnvironment):
+            raise TypeError('The given environment object must be of type HasEnvironment')
 
         # Obtain and store the CCB object
         self.__ccb = environment.get_device('ccb')
