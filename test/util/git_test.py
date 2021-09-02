@@ -29,6 +29,8 @@ class GitTestCase(unittest.TestCase):
             self._test_not_in_repo()
             self.skipTest('CWD currently not in a Git repo')
 
+        # Reference repo
+        repo = pygit2.Repository(path)
         # Get repo info, should not raise an exception
         repo_info = dax.util.git.get_repository_info()
 
@@ -40,7 +42,7 @@ class GitTestCase(unittest.TestCase):
         # Check values
         self.assertTrue(path.endswith('.git/'))
         self.assertEqual(repo_info.path, str(path)[:-5], 'Git path did not match reference')
-        self.assertEqual(repo_info.commit, str(pygit2.Repository(path).head.target.hex),
+        self.assertEqual(repo_info.commit, '' if repo.is_empty else str(pygit2.Repository(path).head.target.hex),
                          'Git commit hash did not match reference')
 
     def test_not_in_repo(self):

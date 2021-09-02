@@ -28,7 +28,7 @@ def _load() -> typing.Optional[RepositoryInfo]:
         if path is not None:
             # Obtain the repository object
             repo = pygit2.Repository(path)
-            commit = str(repo.head.target.hex)
+            commit = '' if repo.is_empty else str(repo.head.target.hex)
             # Check if the repository is dirty
             dirty = any(s not in {pygit2.GIT_STATUS_CURRENT, pygit2.GIT_STATUS_IGNORED} for s in repo.status().values())
             # Return results
