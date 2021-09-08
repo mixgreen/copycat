@@ -62,8 +62,10 @@ class ProgramClient(DaxClient, Experiment):
     _program: Experiment
 
     def build(self, *, managers: typing.Any) -> None:  # type: ignore[override]
-        assert isinstance(self.DEFAULT_OPERATION_KEY, str) or self.DEFAULT_OPERATION_KEY is NoDefault
-        assert isinstance(self.DEFAULT_DATA_CONTEXT_KEY, str) or self.DEFAULT_DATA_CONTEXT_KEY is NoDefault
+        assert isinstance(self.DEFAULT_OPERATION_KEY, str) or self.DEFAULT_OPERATION_KEY is NoDefault, \
+            'Default operation interface key must be a string or NoDefault'
+        assert isinstance(self.DEFAULT_DATA_CONTEXT_KEY, str) or self.DEFAULT_DATA_CONTEXT_KEY is NoDefault, \
+            'Default data context interface key must be a string or NoDefault'
 
         # Store reference to ARTIQ managers
         self._managers = managers
@@ -152,8 +154,9 @@ class ProgramClient(DaxClient, Experiment):
 
     def run(self) -> None:
         # Validate interfaces
-        assert dax.interfaces.operation.validate_interface(self._operation)
-        assert dax.interfaces.data_context.validate_interface(self._data_context)
+        assert dax.interfaces.operation.validate_interface(self._operation), 'Operation interface validation failed'
+        assert dax.interfaces.data_context.validate_interface(self._data_context), \
+            'Data context interface validation failed'
 
         try:
             # Perform setup
@@ -165,8 +168,9 @@ class ProgramClient(DaxClient, Experiment):
             self.logger.debug('Program finished')
 
         except:  # noqa: E722
-            # write to hdf5 file even if run fails
+            # Write to HDF5 file if run fails and re-raise exception
             self._write_hdf5_file()
+            raise
 
         finally:
             # Perform cleanup
