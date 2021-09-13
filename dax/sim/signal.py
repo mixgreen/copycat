@@ -1,9 +1,10 @@
 import abc
 import typing
-import vcd.writer
+import types
 import operator
-import numpy as np
 import datetime
+import numpy as np
+import vcd.writer
 
 import artiq.language.core
 from artiq.language.units import ns
@@ -125,8 +126,12 @@ _VV_T = typing.Union[bool, int, np.int32, np.int64, float, str, None]  # The VCD
 class VcdSignalManager(DaxSignalManager[_VS_T]):
     """VCD signal manager."""
 
+    # Signal-type type
+    __S_T = typing.Tuple[str, type, typing.Optional[int]]
     # Dict of registered signals type
-    __RS_T = typing.Dict[DaxSimDevice, typing.List[typing.Tuple[str, type, typing.Optional[int]]]]
+    __RS_T = typing.Dict[DaxSimDevice, typing.List[__S_T]]
+    # Map of registered signals type
+    __RSM_T = typing.Mapping[DaxSimDevice, typing.List[__S_T]]
 
     _CONVERT_TYPE: typing.ClassVar[typing.Dict[type, str]] = {
         bool: 'reg',
@@ -227,12 +232,12 @@ class VcdSignalManager(DaxSignalManager[_VS_T]):
         # Close the VCD file
         self._vcd_file.close()
 
-    def get_registered_signals(self) -> __RS_T:
+    def get_registered_signals(self) -> __RSM_T:
         """Return the registered signals.
 
         :return: A dictionary with devices and a list of signals
         """
-        return self._registered_signals
+        return types.MappingProxyType(self._registered_signals)
 
 
 _PS_T = typing.Tuple[DaxSimDevice, str]  # The peek signal manager signal type

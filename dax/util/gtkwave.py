@@ -1,10 +1,10 @@
 import typing
-import vcd.gtkw
-import numpy as np
 import datetime
 import itertools
 import operator
 import logging
+import numpy as np
+import vcd.gtkw
 
 import dax.base.system
 from dax import __version__ as _dax_version
