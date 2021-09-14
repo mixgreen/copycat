@@ -5,8 +5,8 @@ let
   daxInputs = import ../inputs.nix { inherit pkgs; artiqpkgs = artiq-full; };
 in
   pkgs.mkShell {
-    buildInputs = daxInputs ++ [
-      (pkgs.python3.withPackages(ps: [
+    buildInputs = [
+      (pkgs.python3.withPackages(ps: (daxInputs ps) ++ [
         # Packages required for documentation
         ps.sphinx
         ps.sphinx_rtd_theme

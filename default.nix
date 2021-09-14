@@ -11,7 +11,7 @@ python3Packages.buildPythonPackage rec {
   VERSIONEER_OVERRIDE = version;
   inherit (python3Packages.pygit2) SSL_CERT_FILE;
 
-  propagatedBuildInputs = import ./inputs.nix { inherit pkgs artiqpkgs; };
+  propagatedBuildInputs = import ./inputs.nix { inherit pkgs artiqpkgs; } python3Packages;
 
   checkInputs = with python3Packages; [ pytestCheckHook ];
 
