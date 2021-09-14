@@ -7,7 +7,7 @@ in
   pkgs.mkShell {
     buildInputs = [
       (pkgs.python3.withPackages(ps: [
-        # DAX dependencies
+        # DAX dependencies (not using inputs.nix for compatibility with nix-env)
         artiq-full.artiq
         artiq-full.sipyco
         ps.numpy
@@ -19,6 +19,7 @@ in
         ps.graphviz
         ps.h5py
         ps.networkx
+        ps.sortedcontainers
         # Packages required for testing
         ps.pytest
         ps.mypy

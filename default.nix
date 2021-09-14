@@ -11,15 +11,14 @@ python3Packages.buildPythonPackage rec {
   VERSIONEER_OVERRIDE = version;
   inherit (python3Packages.pygit2) SSL_CERT_FILE;
 
-  propagatedBuildInputs = (with artiqpkgs; [ artiq sipyco ])
-    ++ (with python3Packages; [ numpy scipy pyvcd natsort pygit2 matplotlib graphviz h5py networkx ]);
+  propagatedBuildInputs = import ./inputs.nix { inherit pkgs artiqpkgs; };
 
   checkInputs = with python3Packages; [ pytestCheckHook ];
 
   condaDependencies = [
     "python>=3.7"
     "artiq" "sipyco"
-    "numpy" "scipy" "pyvcd" "natsort" "pygit2" "matplotlib" "python-graphviz" "h5py" "networkx"
+    "numpy" "scipy" "pyvcd" "natsort" "pygit2" "matplotlib" "python-graphviz" "h5py" "networkx" "sortedcontainers"
   ];
 
   meta = with lib; {

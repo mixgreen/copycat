@@ -17,6 +17,7 @@ dependencies:
   - python-graphviz
   - h5py
   - networkx
+  - sortedcontainers
   # Packages required for testing
   - pytest
   - mypy
