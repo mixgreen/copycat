@@ -68,7 +68,7 @@ class TTLInOut(TTLOut):
     _edge_buffer: typing.Deque[np.int64]
     _sample_buffer: typing.Deque[np.int32]
 
-    def __init__(self, dmgr: typing.Any,
+    def __init__(self, dmgr: typing.Any, *,
                  input_freq: float = 0.0, input_stdev: float = 0.0, input_prob: float = 0.5,
                  seed: typing.Optional[int] = None, **kwargs: typing.Any):
         """Simulation driver for :class:`artiq.coredevice.ttl.TTLInOut`.
@@ -129,11 +129,11 @@ class TTLInOut(TTLOut):
         """Simulate input signal for a given duration."""
 
         # Decide event frequency
-        # Multiply by 2 to simulate a full duty cycle (rising and falling edge)
-        event_freq = self._rng.normalvariate(self._input_freq, self._input_stdev) * 2
+        event_freq = max(self._rng.normalvariate(self._input_freq, self._input_stdev), 0.0)
 
         # Calculate the number of events we expect to observe based on duration and frequency
-        num_events = int(self.core.mu_to_seconds(duration) * event_freq)
+        # Multiply by 2 to simulate a full duty cycle (rising and falling edge)
+        num_events = int(self.core.mu_to_seconds(duration) * event_freq * 2)
 
         # Generate relative timestamps for these events in machine units
         timestamps = np.asarray(self._rng.sample(range(duration), num_events), dtype=np.int64)

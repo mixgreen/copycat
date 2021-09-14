@@ -47,7 +47,7 @@ class EdgeCounter(DaxSimDevice):
     _count_buffer: typing.Deque[typing.Tuple[int64, int]]
     _prev_config: typing.Optional[_Config]
 
-    def __init__(self, dmgr: typing.Any, gateware_width: int = 31,
+    def __init__(self, dmgr: typing.Any, gateware_width: int = 31, *,
                  input_freq: float = 0.0, input_stdev: float = 0.0, seed: typing.Optional[int] = None,
                  **kwargs: typing.Any):
         """Simulation driver for :class:`artiq.coredevice.edge_counter.EdgeCounter`.
@@ -89,7 +89,7 @@ class EdgeCounter(DaxSimDevice):
         """Simulate input signal for a given duration."""
 
         # Decide event frequency
-        event_freq = self._rng.normalvariate(self._input_freq, self._input_stdev)
+        event_freq = max(self._rng.normalvariate(self._input_freq, self._input_stdev), 0.0)
         if edge_type is _EdgeType.BOTH:
             # Multiply by 2 in case we detect both edges
             event_freq *= 2

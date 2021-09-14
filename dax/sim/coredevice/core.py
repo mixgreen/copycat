@@ -167,7 +167,7 @@ class Core(BaseCore):
     _compiler: typing.Optional[artiq.coredevice.core.Core]
 
     # noinspection PyShadowingBuiltins
-    def __init__(self, dmgr: typing.Any, ref_period: float, ref_multiplier: int = 8,
+    def __init__(self, dmgr: typing.Any, ref_period: float, ref_multiplier: int = 8, *,
                  compile: bool = False, **kwargs: typing.Any):
         """Simulation driver for :class:`artiq.coredevice.core.Core`.
 
