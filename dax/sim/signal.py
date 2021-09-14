@@ -5,6 +5,7 @@ import operator
 import datetime
 import numpy as np
 import vcd.writer
+import sortedcontainers
 
 import artiq.language.core
 from artiq.language.units import ns
@@ -16,6 +17,7 @@ import dax.util.units
 __all__ = ['DaxSignalManager', 'NullSignalManager', 'VcdSignalManager', 'PeekSignalManager', 'SignalNotSet',
            'get_signal_manager', 'set_signal_manager']
 
+_T_T = np.int64
 _S_T = typing.TypeVar('_S_T')  # The abstract signal type
 
 
@@ -48,7 +50,7 @@ class DaxSignalManager(abc.ABC, typing.Generic[_S_T]):
 
     @abc.abstractmethod
     def event(self, signal: _S_T, value: typing.Any, *,  # pragma: no cover
-              time: typing.Optional[np.int64] = None,
+              time: typing.Optional[_T_T] = None,
               offset: typing.Union[int, np.int32, np.int64, None] = None) -> None:
         """Commit an event.
 
@@ -89,8 +91,8 @@ class DaxSignalManager(abc.ABC, typing.Generic[_S_T]):
         pass
 
     # noinspection PyMethodMayBeStatic
-    def _get_timestamp(self, time: typing.Optional[np.int64] = None,
-                       offset: typing.Union[int, np.int32, np.int64, None] = None) -> np.int64:
+    def _get_timestamp(self, time: typing.Optional[_T_T] = None,
+                       offset: typing.Union[int, np.int32, np.int64, None] = None) -> _T_T:
         """Return the timestamp of an event."""
         if time is None:
             time = artiq.language.core.now_mu()  # noqa: ATQ101
@@ -107,7 +109,7 @@ class NullSignalManager(DaxSignalManager[None]):
         pass
 
     def event(self, signal: None, value: typing.Any, *,
-              time: typing.Optional[np.int64] = None,
+              time: typing.Optional[_T_T] = None,
               offset: typing.Union[int, np.int32, np.int64, None] = None) -> None:
         pass
 
@@ -194,7 +196,7 @@ class VcdSignalManager(DaxSignalManager[_VS_T]):
         return self._vcd.register_var(scope.key, name, var_type=var_type, size=size, init=init)
 
     def event(self, signal: _VS_T, value: _VV_T, *,
-              time: typing.Optional[np.int64] = None,
+              time: typing.Optional[_T_T] = None,
               offset: typing.Union[int, np.int32, np.int64, None] = None) -> None:
         # Add event to buffer
         self._event_buffer.append((self._get_timestamp(time, offset), signal, value))
@@ -203,7 +205,7 @@ class VcdSignalManager(DaxSignalManager[_VS_T]):
         # Sort the list of events (VCD writer can only handle a linear timeline)
         self._event_buffer.sort(key=operator.itemgetter(0))
         # Get a timestamp for now
-        now: typing.Union[int, np.int64] = self._get_timestamp()
+        now: typing.Union[int, _T_T] = self._get_timestamp()
 
         if ref_period != self._timescale:
             # Scale the timestamps if the reference period does not match the timescale
@@ -243,8 +245,16 @@ class VcdSignalManager(DaxSignalManager[_VS_T]):
 _PS_T = typing.Tuple[DaxSimDevice, str]  # The peek signal manager signal type
 _PT_T = _VT_T  # The peek signal manager signal-type type
 _PV_T = _VV_T  # The peek signal manager signal type
-_PD_T = typing.Dict[DaxSimDevice,  # The peek signal manager device list type
-                    typing.Dict[str, typing.Tuple[_PT_T, typing.Optional[int], typing.Dict[np.int64, _PV_T]]]]
+
+# Workaround required for Python<3.9 and the usage of stubs for the sorted containers library
+if typing.TYPE_CHECKING:
+    _PE_T = sortedcontainers.SortedDict[_T_T, _PV_T]  # The peek signal manager event sequence type
+else:
+    _PE_T = sortedcontainers.SortedDict
+
+_PET_T = typing.Sequence[_T_T]  # The peek signal manager event sequence timestamp view type
+_PD_T = typing.Dict[DaxSimDevice,  # The peek signal manager device list and event buffer type
+                    typing.Dict[str, typing.Tuple[_PT_T, typing.Optional[int], _PE_T, _PET_T]]]
 
 
 class _Meta(type):
@@ -322,18 +332,18 @@ class PeekSignalManager(DaxSignalManager[_PS_T]):
             if size is not None:
                 raise TypeError(f'Size not supported for signal type "{type_}"')
 
+        # Register and initialize signal
+        events: _PE_T = sortedcontainers.SortedDict()
         if init is not None:
             # Check init value
-            init = self._check_value(type_, size, init)
-
-        # Register and initialize signal
-        signals[name] = (type_, size, {} if init is None else {np.int64(0): init})
+            events[np.int64(0)] = self._check_value(type_, size, init)
+        signals[name] = (type_, size, events, events.keys())
 
         # Return the signal object
         return scope, name
 
     def event(self, signal: _PS_T, value: _PV_T, *,
-              time: typing.Optional[np.int64] = None,
+              time: typing.Optional[_T_T] = None,
               offset: typing.Union[int, np.int32, np.int64, None] = None) -> None:
         assert isinstance(signal, tuple) and len(signal) == 2, 'Invalid signal object'
         assert time is None or isinstance(time, np.int64), 'Time must be of type np.int64 or None'
@@ -341,9 +351,10 @@ class PeekSignalManager(DaxSignalManager[_PS_T]):
 
         # Unpack device list
         device, name = signal
-        type_, size, events = self._event_buffer[device][name]
+        type_, size, events, _ = self._event_buffer[device][name]
 
-        # Check value and add value to event buffer (overwrites old values)
+        # Check value and add value to event buffer
+        # An existing value at the same timestamp will be overwritten, just as the ARTIQ RTIO system does
         events[self._get_timestamp(time, offset)] = self._check_value(type_, size, value)
 
     def flush(self, ref_period: float) -> None:
@@ -370,7 +381,7 @@ class PeekSignalManager(DaxSignalManager[_PS_T]):
 
     """Peek functions"""
 
-    def peek_and_type(self, scope: DaxSimDevice, signal: str, time: typing.Optional[np.int64] = None) -> \
+    def peek_and_type(self, scope: DaxSimDevice, signal: str, time: typing.Optional[_T_T] = None) -> \
             typing.Tuple[typing.Union[_PV_T, typing.Type[SignalNotSet]], type]:
         """Peek a value of a signal at a given time.
 
@@ -388,7 +399,7 @@ class PeekSignalManager(DaxSignalManager[_PS_T]):
             # Get the device
             device = self._event_buffer[scope]
             # Get the signal
-            type_, _, events = device[signal]
+            type_, _, events, timestamps = device[signal]
         except KeyError:
             raise KeyError(f'Signal "{scope.key}.{signal}" could not be found') from None
 
@@ -396,14 +407,14 @@ class PeekSignalManager(DaxSignalManager[_PS_T]):
             # Use the default time if none was provided
             time = artiq.language.core.now_mu()  # noqa: ATQ101
 
-        # Return the last value before or at the given time stamp traversing the event list backwards
-        value = next((v for t, v in sorted(events.items(), reverse=True) if t <= time), SignalNotSet)
+        # Binary search for the insertion point (right) of the given timestamp
+        index = events.bisect_right(time)
 
         # Return the value and the type
-        return value, type_
+        return events[timestamps[index - 1]] if index else SignalNotSet, type_
 
     def peek(self, scope: DaxSimDevice, signal: str,
-             time: typing.Optional[np.int64] = None) -> typing.Union[_PV_T, typing.Type[SignalNotSet]]:
+             time: typing.Optional[_T_T] = None) -> typing.Union[_PV_T, typing.Type[SignalNotSet]]:
         """Peek a value of a signal at a given time.
 
         :param scope: The scope of the signal

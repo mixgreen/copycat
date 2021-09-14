@@ -12,7 +12,6 @@ from artiq.master.databases import device_db_from_file
 from dax.util.artiq import get_managers
 from dax.sim import enable_dax_sim
 from dax.sim.signal import get_signal_manager, PeekSignalManager, SignalNotSet
-from dax.sim.device import DaxSimDevice
 
 __all__ = ['PeekTestCase']
 
@@ -138,7 +137,7 @@ class PeekTestCase(unittest.TestCase):
         :raises TypeError: Raised if the signal type can not be tested
         """
         # Get the value and the type
-        peek, type_ = self.__signal_manager.peek_and_type(typing.cast(DaxSimDevice, scope), signal)
+        peek, type_ = self.__signal_manager.peek_and_type(scope, signal)
         _logger.info(f'EXPECT {scope}.{signal} -> {value} == {peek}')
 
         if type_ not in {bool, int, float}:
@@ -181,7 +180,7 @@ class PeekTestCase(unittest.TestCase):
         :raises TypeError: Raised if the signal type can not be tested or if invalid parameters are used
         """
         # Get the value and the type
-        peek, type_ = self.__signal_manager.peek_and_type(typing.cast(DaxSimDevice, scope), signal)
+        peek, type_ = self.__signal_manager.peek_and_type(scope, signal)
         _logger.info(f'EXPECT {scope}.{signal} -> {value} == {peek} (places={places}, delta={delta})')
 
         if type_ is not float:
