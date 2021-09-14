@@ -209,10 +209,10 @@ class TTLInOut(TTLOut):
     def count(self, up_to_timestamp_mu):
         return self._count()
 
+    # noinspection PyUnusedLocal
     def _timestamp_mu(self, up_to_timestamp_mu) -> TInt64:
         return self._edge_buffer.popleft() if len(self._edge_buffer) else np.int64(-1)
 
-    # noinspection PyUnusedLocal
     @kernel
     def timestamp_mu(self, up_to_timestamp_mu):
         # This function does not interact with the timeline

@@ -3,22 +3,11 @@
 let
   artiq-full = import <artiq-full> { inherit pkgs; };
   dax-full = import <dax-full> { inherit pkgs; };
+  daxInputs = import ../inputs.nix { inherit pkgs; artiqpkgs = artiq-full; };
 in
   pkgs.mkShell {
     buildInputs = [
-      (pkgs.python3.withPackages(ps: [
-        # DAX dependencies
-        artiq-full.artiq
-        artiq-full.sipyco
-        ps.numpy
-        ps.scipy
-        ps.pyvcd
-        ps.natsort
-        ps.pygit2
-        ps.matplotlib
-        ps.graphviz
-        ps.h5py
-        ps.networkx
+      (pkgs.python3.withPackages(ps: (daxInputs ps) ++ [
         # Packages required for testing
         ps.pytest
         ps.mypy
