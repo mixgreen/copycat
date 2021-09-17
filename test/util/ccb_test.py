@@ -11,6 +11,8 @@ import dax.util.configparser
 class _TestSystem(DaxSystem):
     SYS_ID = 'unittest_system'
     SYS_VER = 0
+    CORE_LOG_KEY = None
+    DAX_INFLUX_DB_KEY = None
 
 
 def _clear_cache():

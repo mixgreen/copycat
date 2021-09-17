@@ -32,7 +32,7 @@ class TTLOut(DaxSimDevice):
 
     @kernel
     def set_o(self, o):
-        self._signal_manager.event(self._state, 1 if o else 0)
+        self._signal_manager.push(self._state, 1 if o else 0)
 
     @kernel
     def on(self):
@@ -62,14 +62,11 @@ class TTLInOut(TTLOut):
         FALLING = 2
         BOTH = 3
 
-    _input_freq: float
-    _input_stdev: float
-    _input_prob: float
     _edge_buffer: typing.Deque[np.int64]
     _sample_buffer: typing.Deque[np.int32]
 
     def __init__(self, dmgr: typing.Any, *,
-                 input_freq: float = 0.0, input_stdev: float = 0.0, input_prob: float = 0.5,
+                 input_freq: float = 0.0, input_stdev: float = 0.0, input_prob: float = 0.0,
                  seed: typing.Optional[int] = None, **kwargs: typing.Any):
         """Simulation driver for :class:`artiq.coredevice.ttl.TTLInOut`.
 
@@ -86,11 +83,6 @@ class TTLInOut(TTLOut):
         # Call super
         super(TTLInOut, self).__init__(dmgr, **kwargs)
 
-        # Store simulation settings
-        self._input_freq = input_freq
-        self._input_stdev = input_stdev
-        self._input_prob = input_prob
-
         # Random number generator for generating values
         self._rng = random.Random(seed)
 
@@ -101,6 +93,9 @@ class TTLInOut(TTLOut):
         # Register signals
         self._direction = self._signal_manager.register(self, 'direction', bool, size=1)
         self._sensitivity = self._signal_manager.register(self, 'sensitivity', bool, size=1)
+        self._input_freq = self._signal_manager.register(self, 'input_freq', float, init=input_freq)
+        self._input_stdev = self._signal_manager.register(self, 'input_stdev', float, init=input_stdev)
+        self._input_prob = self._signal_manager.register(self, 'input_prob', float, init=input_prob)
 
     def core_reset(self) -> None:
         # Clear buffers
@@ -109,9 +104,9 @@ class TTLInOut(TTLOut):
 
     def _set_oe(self, oe):
         # 0 = input, 1 = output
-        self._signal_manager.event(self._direction, 1 if oe else 0)
-        self._signal_manager.event(self._sensitivity, 'z' if oe else 0)
-        self._signal_manager.event(self._state, 'x' if oe else 'z')
+        self._signal_manager.push(self._direction, 1 if oe else 0)
+        self._signal_manager.push(self._sensitivity, 'z' if oe else 0)
+        self._signal_manager.push(self._state, 'x' if oe else 'z')
 
     @kernel
     def set_oe(self, oe):
@@ -128,8 +123,14 @@ class TTLInOut(TTLOut):
     def _simulate_input_signal(self, duration, edge_type):
         """Simulate input signal for a given duration."""
 
+        # Obtain current input configuration
+        input_freq = self._signal_manager.pull(self._input_freq)
+        input_stdev = self._signal_manager.pull(self._input_stdev)
+        assert isinstance(input_freq, float)
+        assert isinstance(input_stdev, float)
+
         # Decide event frequency
-        event_freq = max(self._rng.normalvariate(self._input_freq, self._input_stdev), 0.0)
+        event_freq = max(self._rng.normalvariate(input_freq, input_stdev), 0.0)
 
         # Calculate the number of events we expect to observe based on duration and frequency
         # Multiply by 2 to simulate a full duty cycle (rising and falling edge)
@@ -141,11 +142,11 @@ class TTLInOut(TTLOut):
         timestamps.sort()
 
         # Initialize the signal to 0 at the start of the window (for graphical purposes)
-        self._signal_manager.event(self._state, 0)
+        self._signal_manager.push(self._state, 0)
 
         # Write the stream of input events to the signal manager
         for t, v in zip(timestamps, itertools.cycle((1, 0))):
-            self._signal_manager.event(self._state, v, offset=t)
+            self._signal_manager.push(self._state, v, offset=t)
 
         if edge_type is self._EdgeType.RISING:
             # Store odd half of the event times in the event buffer
@@ -161,27 +162,27 @@ class TTLInOut(TTLOut):
         delay_mu(duration)
 
         # Return to Z after all signals were inserted
-        self._signal_manager.event(self._state, 'z')
+        self._signal_manager.push(self._state, 'z')
 
     @kernel
     def gate_rising_mu(self, duration):
-        self._signal_manager.event(self._sensitivity, 1)
+        self._signal_manager.push(self._sensitivity, 1)
         self._simulate_input_signal(duration, self._EdgeType.RISING)
-        self._signal_manager.event(self._sensitivity, 0)
+        self._signal_manager.push(self._sensitivity, 0)
         return now_mu()
 
     @kernel
     def gate_falling_mu(self, duration):
-        self._signal_manager.event(self._sensitivity, 1)
+        self._signal_manager.push(self._sensitivity, 1)
         self._simulate_input_signal(duration, self._EdgeType.FALLING)
-        self._signal_manager.event(self._sensitivity, 0)
+        self._signal_manager.push(self._sensitivity, 0)
         return now_mu()
 
     @kernel
     def gate_both_mu(self, duration):
-        self._signal_manager.event(self._sensitivity, 1)
+        self._signal_manager.push(self._sensitivity, 1)
         self._simulate_input_signal(duration, self._EdgeType.BOTH)
-        self._signal_manager.event(self._sensitivity, 0)
+        self._signal_manager.push(self._sensitivity, 0)
         return now_mu()
 
     @kernel
@@ -219,11 +220,15 @@ class TTLInOut(TTLOut):
         return self._timestamp_mu(up_to_timestamp_mu)
 
     def _sample_input(self):
+        # Obtain current input configuration
+        input_prob = self._signal_manager.pull(self._input_prob)
+        assert isinstance(input_prob, float)
+
         # Sample at the current time and store result in the sample buffer
-        val = np.int32(self._rng.random() < self._input_prob)
+        val = np.int32(self._rng.random() < input_prob)
         self._sample_buffer.append(val)
-        self._signal_manager.event(self._state, val)  # Sample value at current time
-        self._signal_manager.event(self._state, 'z', offset=1)  # Return to 'Z' 1 machine unit after sample
+        self._signal_manager.push(self._state, val)  # Sample value at current time
+        self._signal_manager.push(self._state, 'z', offset=1)  # Return to 'Z' 1 machine unit after sample
 
     @kernel
     def sample_input(self):
@@ -288,7 +293,7 @@ class TTLClockGen(DaxSimDevice):
 
     @kernel
     def set(self, frequency):
-        self._signal_manager.event(self._freq, float(frequency))
+        self._signal_manager.push(self._freq, float(frequency))
 
     @kernel
     def stop(self):

@@ -50,7 +50,7 @@ class AD53xx(DaxSimDevice):
         if not blind:
             delay(25 * us)
             delay(15 * us)
-        self._signal_manager.event(self._init, 1)
+        self._signal_manager.push(self._init, 1)
 
     @kernel
     def read_reg(self, channel=0, op=AD53XX_READ_X1A):
@@ -94,9 +94,9 @@ class AD53xx(DaxSimDevice):
     def _update_signals(self):
         for i in range(self._NUM_CHANNELS):
             v_out = _mu_to_voltage(self._dac_reg_mu[i], vref=self.vref, offset_dacs=self.offset_dacs)
-            self._signal_manager.event(self._dac[i], v_out)
-            self._signal_manager.event(self._offset[i], self._offset_reg[i])
-            self._signal_manager.event(self._gain[i], self._gain_reg[i])
+            self._signal_manager.push(self._dac[i], v_out)
+            self._signal_manager.push(self._offset[i], self._offset_reg[i])
+            self._signal_manager.push(self._gain[i], self._gain_reg[i])
 
     # Note: 40 channels is too large, but this is taken from the ARTIQ driver
     # noinspection PyDefaultArgument

@@ -110,39 +110,39 @@ class PeekTestCase(unittest.TestCase):
         # Return the environment
         return env
 
-    def peek(self, scope: typing.Any, signal: str) -> typing.Any:
+    def peek(self, scope: typing.Any, name: str) -> typing.Any:
         """Peek a signal of a device at the current time.
 
         :param scope: The scope (device) of the signal
-        :param signal: The name of the signal
+        :param name: The name of the signal
         :return: The value of the signal at the current time
         """
         # Peek the value using the signal manager
-        value = self.__signal_manager.peek(scope, signal)
-        _logger.info(f'PEEK {scope}.{signal} -> {value}')
+        value = self.__signal_manager.peek(scope, name)
+        _logger.info(f'PEEK {scope}.{name} -> {value}')
 
         # Return the value
         return value
 
-    def expect(self, scope: typing.Any, signal: str, value: typing.Any, msg: typing.Optional[str] = None) -> None:
+    def expect(self, scope: typing.Any, name: str, value: typing.Any, msg: typing.Optional[str] = None) -> None:
         """Test if a signal holds a given value at the current time.
 
         If the signal does not match the value, the test will fail.
         See also :func:`expect_close`.
 
         :param scope: The scope (device) of the signal
-        :param signal: The name of the signal
+        :param name: The name of the signal
         :param value: The expected value
         :param msg: Message to show when this assertion fails
         :raises TypeError: Raised if the signal type can not be tested
         """
         # Get the value and the type
-        peek, type_ = self.__signal_manager.peek_and_type(scope, signal)
-        _logger.info(f'EXPECT {scope}.{signal} -> {value} == {peek}')
+        peek, type_ = self.__signal_manager.peek_and_type(scope, name)
+        _logger.info(f'EXPECT {scope}.{name} -> {value} == {peek}')
 
         if type_ not in {bool, int, float}:
             # Raise if the signal has an unsupported type
-            raise TypeError(f'Signal "{scope.key}.{signal}" of type "{type_}" can not be tested for equality')
+            raise TypeError(f'Signal "{scope}.{name}" of type "{type_}" can not be tested for equality')
 
         # Match with special values
         if any(value in s and peek in s for s in [{'x', 'X', SignalNotSet}, {'z', 'Z'}]):  # type: ignore[operator]
@@ -158,7 +158,7 @@ class PeekTestCase(unittest.TestCase):
         # Assert if values are equal
         self.assertEqual(value, peek, msg=msg)
 
-    def expect_close(self, scope: typing.Any, signal: str, value: typing.Any, msg: typing.Optional[str] = None, *,
+    def expect_close(self, scope: typing.Any, name: str, value: typing.Any, msg: typing.Optional[str] = None, *,
                      places: typing.Optional[int] = None, delta: typing.Optional[float] = None) -> None:
         """Test if a signal holds a given value at the current time within a tolerance.
 
@@ -172,7 +172,7 @@ class PeekTestCase(unittest.TestCase):
         See also :func:`expect`.
 
         :param scope: The scope (device) of the signal
-        :param signal: The name of the signal
+        :param name: The name of the signal
         :param value: The expected value
         :param msg: Message to show when this assertion fails
         :param places: Allow errors up to the given number of decimal places (default 7)
@@ -180,12 +180,12 @@ class PeekTestCase(unittest.TestCase):
         :raises TypeError: Raised if the signal type can not be tested or if invalid parameters are used
         """
         # Get the value and the type
-        peek, type_ = self.__signal_manager.peek_and_type(scope, signal)
-        _logger.info(f'EXPECT {scope}.{signal} -> {value} == {peek} (places={places}, delta={delta})')
+        peek, type_ = self.__signal_manager.peek_and_type(scope, name)
+        _logger.info(f'EXPECT {scope}.{name} -> {value} == {peek} (places={places}, delta={delta})')
 
         if type_ is not float:
             # Raise if the signal has an unsupported type
-            raise TypeError(f'Signal "{scope.key}.{signal}" of type "{type_}" can not be tested for close equality')
+            raise TypeError(f'Signal "{scope}.{name}" of type "{type_}" can not be tested for close equality')
         if not isinstance(value, (float, int, np.int32, np.int64)):
             # Raise if the value has an unsupported type
             raise TypeError('Close equality can only be tested against float or int values')
@@ -200,3 +200,14 @@ class PeekTestCase(unittest.TestCase):
         else:
             # Assert if values are almost equal
             self.assertAlmostEqual(value, peek, msg=msg, places=places, delta=delta)  # type: ignore[arg-type]
+
+    def push(self, scope: typing.Any, name: str, value: typing.Any) -> None:
+        """Push a signal of a device at the current time.
+
+        :param scope: The scope (device) of the signal
+        :param name: The name of the signal
+        :param value: The new value of the signal
+        """
+        # Push the value using the signal manager
+        _logger.info(f'PUSH {scope}.{name} -> {value}')
+        self.__signal_manager.push(self.__signal_manager.signal(scope, name), value)

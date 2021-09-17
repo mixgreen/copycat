@@ -79,17 +79,22 @@ _DEVICE_DB = {
 """Classes used for testing"""
 
 
-class _TestSystem(DaxSystem):
+class _TestSystemWithControllers(DaxSystem):
     SYS_ID = 'unittest_system'
     SYS_VER = 0
 
     def __init__(self, *args, **kwargs):
         self._data_store = Mock(spec=dax.base.system.DaxDataStore)
-        super(_TestSystem, self).__init__(*args, **kwargs)
+        super(_TestSystemWithControllers, self).__init__(*args, **kwargs)
 
     @property
     def data_store(self):
         return self._data_store
+
+
+class _TestSystem(_TestSystemWithControllers):
+    CORE_LOG_KEY = None
+    DAX_INFLUX_DB_KEY = None
 
 
 class _TestModule(DaxModule):
@@ -423,7 +428,7 @@ class DaxDataStoreInfluxDbTestCase(unittest.TestCase):
 
         # Test system
         self.managers = get_managers(_DEVICE_DB)
-        self.s = _TestSystem(self.managers)
+        self.s = _TestSystemWithControllers(self.managers)
         # Special data store that skips actual writing
         self.ds = self.MockDataStore(callback, self.s, type(self.s))
 
@@ -1095,7 +1100,7 @@ class DaxModuleBaseTestCase(unittest.TestCase):
         TestSystemVerZero(self.managers)
 
     def test_build_controller_warnings(self):
-        class TestSystem(_TestSystem):
+        class TestSystem(_TestSystemWithControllers):
             # noinspection PyMethodParameters
             def build(self_, *args: typing.Any, **kwargs: typing.Any) -> None:
                 self.assertIsNotNone(self_.CORE_LOG_KEY, 'Core log controller key was not configured')
@@ -1105,7 +1110,7 @@ class DaxModuleBaseTestCase(unittest.TestCase):
                 with self.assertLogs(self_.logger, logging.WARNING):
                     super(TestSystem, self_).build(*args, **kwargs)
 
-        class NoCoreLogTestSystem(_TestSystem):
+        class NoCoreLogTestSystem(_TestSystemWithControllers):
             CORE_LOG_KEY = None
 
             # noinspection PyMethodParameters
@@ -1117,7 +1122,7 @@ class DaxModuleBaseTestCase(unittest.TestCase):
                 with self.assertLogs(self_.logger, logging.WARNING):
                     super(NoCoreLogTestSystem, self_).build(*args, **kwargs)
 
-        class NoDataStoreTestSystem(_TestSystem):
+        class NoDataStoreTestSystem(_TestSystemWithControllers):
             DAX_INFLUX_DB_KEY = None
 
             # noinspection PyMethodParameters
@@ -1129,7 +1134,7 @@ class DaxModuleBaseTestCase(unittest.TestCase):
                 with self.assertLogs(self_.logger, logging.WARNING):
                     super(NoDataStoreTestSystem, self_).build(*args, **kwargs)
 
-        class NoControllerTestSystem(_TestSystem):
+        class NoControllerTestSystem(_TestSystemWithControllers):
             CORE_LOG_KEY = None
             DAX_INFLUX_DB_KEY = None
 

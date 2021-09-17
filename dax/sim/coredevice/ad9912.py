@@ -48,7 +48,7 @@ class AD9912(DaxSimDevice):
         raise NotImplementedError
 
     def _init_(self):
-        self._signal_manager.event(self._init, 1)
+        self._signal_manager.push(self._init, 1)
 
     @kernel
     def init(self):
@@ -92,8 +92,8 @@ class AD9912(DaxSimDevice):
     def set(self, frequency: TFloat, phase: TFloat = 0.0):
         assert 0 * MHz <= frequency <= 400 * MHz, 'Frequency out of range'
         assert 0.0 <= phase < 1.0, 'Phase out of range'
-        self._signal_manager.event(self._freq, float(frequency))
-        self._signal_manager.event(self._phase, float(phase))
+        self._signal_manager.push(self._freq, float(frequency))
+        self._signal_manager.push(self._phase, float(phase))
 
     @kernel
     def cfg_sw(self, state: TBool):

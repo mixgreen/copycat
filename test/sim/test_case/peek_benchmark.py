@@ -70,6 +70,8 @@ class PeekBenchmarkTestCase(dax.sim.test_case.PeekTestCase):
 class _TestSystem(DaxSystem):
     SYS_ID = 'unittest_system'
     SYS_VER = 0
+    CORE_LOG_KEY = None
+    DAX_INFLUX_DB_KEY = None
 
     def build(self, *args, **kwargs) -> None:
         super(_TestSystem, self).build(*args, **kwargs)

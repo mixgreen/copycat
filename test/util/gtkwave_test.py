@@ -31,6 +31,8 @@ _DEVICE_DB: typing.Dict[str, typing.Any] = {
 class _TestSystem(DaxSystem):
     SYS_ID = 'unittest_system'
     SYS_VER = 0
+    CORE_LOG_KEY = None
+    DAX_INFLUX_DB_KEY = None
 
 
 class GTKWaveTestCase(unittest.TestCase):

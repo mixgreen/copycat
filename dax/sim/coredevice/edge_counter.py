@@ -42,8 +42,6 @@ class _Config:
 
 class EdgeCounter(DaxSimDevice):
     counter_max: int
-    _input_freq: float
-    _input_stdev: float
     _count_buffer: typing.Deque[typing.Tuple[int64, int]]
     _prev_config: typing.Optional[_Config]
 
@@ -52,8 +50,8 @@ class EdgeCounter(DaxSimDevice):
                  **kwargs: typing.Any):
         """Simulation driver for :class:`artiq.coredevice.edge_counter.EdgeCounter`.
 
-        :param input_freq: Simulated input frequency for gate operations
-        :param input_stdev: Simulated input frequency standard deviation for gate operations
+        :param input_freq: Simulated input frequency for gate operations (signal)
+        :param input_stdev: Simulated input frequency standard deviation for gate operations (signal)
         :param seed: Seed for the random number generator used for simulating input
         """
         assert isinstance(gateware_width, int), 'Gateware width must be of type int'
@@ -66,11 +64,8 @@ class EdgeCounter(DaxSimDevice):
         # From ARTIQ code
         self.counter_max = (1 << (gateware_width - 1)) - 1
 
-        # Store simulation settings
-        self._input_freq = input_freq
-        self._input_stdev = input_stdev
+        # Initialize rng
         self._rng = random.Random(seed)
-
         # Buffers to store counts
         self._count_buffer = collections.deque()
         # Single buffer to match set_config() calls
@@ -79,6 +74,8 @@ class EdgeCounter(DaxSimDevice):
         # Register signals
         self._signal_manager = get_signal_manager()
         self._count = self._signal_manager.register(self, 'count', int, init='z')
+        self._input_freq = self._signal_manager.register(self, 'input_freq', float, init=input_freq)
+        self._input_stdev = self._signal_manager.register(self, 'input_stdev', float, init=input_stdev)
 
     def core_reset(self) -> None:
         # Clear buffers
@@ -88,8 +85,14 @@ class EdgeCounter(DaxSimDevice):
                                ):  # type: (typing.Union[int, int32, int64], _EdgeType) -> None
         """Simulate input signal for a given duration."""
 
+        # Obtain current input configuration
+        input_freq = self._signal_manager.pull(self._input_freq)
+        input_stdev = self._signal_manager.pull(self._input_stdev)
+        assert isinstance(input_freq, float)
+        assert isinstance(input_stdev, float)
+
         # Decide event frequency
-        event_freq = max(self._rng.normalvariate(self._input_freq, self._input_stdev), 0.0)
+        event_freq = max(self._rng.normalvariate(input_freq, input_stdev), 0.0)
         if edge_type is _EdgeType.BOTH:
             # Multiply by 2 in case we detect both edges
             event_freq *= 2
@@ -98,13 +101,13 @@ class EdgeCounter(DaxSimDevice):
         num_events = int(self.core.mu_to_seconds(duration) * event_freq)
 
         # Set the number of counts for the duration window (for graphical purposes)
-        self._signal_manager.event(self._count, num_events)
+        self._signal_manager.push(self._count, num_events)
 
         # Move the cursor
         delay_mu(duration)
 
         # Return to Z at the end of the window
-        self._signal_manager.event(self._count, 'z')
+        self._signal_manager.push(self._count, 'z')
 
         # Store number of events and the ending timestamp in count buffer
         self._count_buffer.append((now_mu(), num_events))

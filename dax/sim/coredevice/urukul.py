@@ -69,7 +69,7 @@ class CPLD(DaxSimDevice):
         # Delays from ARTIQ code
         delay(100 * us)  # reset, slack
         delay(1 * ms)  # DDS wake up
-        self._signal_manager.event(self._init, 1)
+        self._signal_manager.push(self._init, 1)
 
     @kernel
     def io_rst(self):
@@ -90,7 +90,7 @@ class CPLD(DaxSimDevice):
         self._cfg_switches(state)
 
     def _update_switches(self):  # type: () -> None
-        self._signal_manager.event(self._sw, ''.join(reversed(self._sw_reg)))
+        self._signal_manager.push(self._sw, ''.join(reversed(self._sw_reg)))
 
     @kernel
     def set_att_mu(self, channel: TInt32, att: TInt32):
@@ -123,13 +123,13 @@ class CPLD(DaxSimDevice):
     def _update_att(self):  # type: () -> None
         for s, a in zip(self._att, self._att_reg):
             assert 0 * dB <= a <= (255 / 8) * dB, 'Attenuation out of range'
-            self._signal_manager.event(s, a)
+            self._signal_manager.push(s, a)
 
     @kernel
     def get_att_mu(self) -> TInt32:
         # Returns the value in the register instead of the device value
         delay(10 * us)  # Delay from ARTIQ code
-        self._signal_manager.event(self._init_att, 1)
+        self._signal_manager.push(self._init_att, 1)
         return self.att_reg
 
     @kernel

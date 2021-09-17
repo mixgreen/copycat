@@ -49,14 +49,14 @@ class _DMARecordContext:
         # Save current time
         self._duration = now_mu()
         # Set record signal
-        self._signal_manager.event(self._record_signal, self.name)
+        self._signal_manager.push(self._record_signal, self.name)
 
     @kernel
     def __exit__(self, type_, value, traceback):  # type: (typing.Any, typing.Any, typing.Any) -> None
         # Store duration
         self._duration = now_mu() - self.duration
         # Reset record signal
-        self._signal_manager.event(self._record_signal, None)  # Shows up as Z in the graphical interface
+        self._signal_manager.push(self._record_signal, None)  # Shows up as Z in the graphical interface
 
 
 class _DMAHandle:
@@ -166,11 +166,11 @@ class CoreDMA(DaxSimDevice):
         assert isinstance(recording, _DMARecordContext), 'DMA recording has an incorrect type'
 
         # Place events for DMA playback
-        self._signal_manager.event(self._dma_play, True)  # Represents the event of playing a trace
-        self._signal_manager.event(self._dma_play_name, recording.name)  # Represents the duration of the event
+        self._signal_manager.push(self._dma_play, True)  # Represents the event of playing a trace
+        self._signal_manager.push(self._dma_play_name, recording.name)  # Represents the duration of the event
 
         # Forward time by the duration of the DMA trace
         delay_mu(recording.duration)
 
         # Record ending of DMA trace (shows up as Z in the graphical interface)
-        self._signal_manager.event(self._dma_play_name, None)
+        self._signal_manager.push(self._dma_play_name, None)

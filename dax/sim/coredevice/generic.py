@@ -35,8 +35,8 @@ class _GenericBase:
                      f'{",".join(f"{k}={v}" for k, v in kwargs.items())}'
 
         # Register the event
-        self._signal_manager.event(self._signal_call, True)  # Register the timestamp of the call
-        self._signal_manager.event(self._signal_function, f'{self._attr_name}({parameters})')
+        self._signal_manager.push(self._signal_call, True)  # Register the timestamp of the call
+        self._signal_manager.push(self._signal_function, f'{self._attr_name}({parameters})')
 
 
 class Generic(_GenericBase, DaxSimDevice):
