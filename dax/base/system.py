@@ -1120,12 +1120,12 @@ class DaxNameRegistry:
 
         assert isinstance(key, str), 'Key must be a string'
 
-        try:
-            # Get the module
-            module: DaxModuleBase = self._modules[key]
-        except KeyError:
+        if key not in self._modules:
             # Module was not found
-            raise KeyError(f'Module "{key}" could not be found') from None
+            raise KeyError(f'Module "{key}" could not be found')
+
+        # Get the module
+        module: DaxModuleBase = self._modules[key]
 
         if not isinstance(module, type_):
             # Module does not have the correct type
@@ -1381,12 +1381,12 @@ class DaxNameRegistry:
         # Obtain the key
         service_key: str = key if isinstance(key, str) else key.SERVICE_NAME
 
-        # Try to return the requested service
-        try:
+        if service_key in self._services:
+            # Return the requested service
             return self._services[service_key]
-        except KeyError:
+        else:
             # Service was not found
-            raise KeyError(f'Service "{service_key}" is not available') from None
+            raise KeyError(f'Service "{service_key}" is not available')
 
     def get_service_key_list(self) -> typing.List[str]:
         """Return a sorted list of registered service keys.
