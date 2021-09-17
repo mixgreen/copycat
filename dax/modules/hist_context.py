@@ -1108,6 +1108,7 @@ class HistogramAnalyzer:
 
         # Plotting defaults
         kwargs.setdefault('marker', 'o')
+        kwargs.setdefault('linestyle', '')
 
         # Lazy import
         import matplotlib.pyplot as plt
@@ -1200,6 +1201,7 @@ class HistogramAnalyzer:
 
         # Plotting defaults
         kwargs.setdefault('marker', 'o')
+        kwargs.setdefault('linestyle', '')
 
         # Lazy import
         import matplotlib.pyplot as plt
@@ -1299,6 +1301,7 @@ class HistogramAnalyzer:
 
         # Plotting defaults
         kwargs.setdefault('marker', 'o')
+        kwargs.setdefault('linestyle', '')
 
         # Lazy import
         import matplotlib.pyplot as plt
