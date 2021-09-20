@@ -14,18 +14,15 @@ import artiq.coredevice.zotino  # type: ignore[import]
 from dax.experiment import DaxSystem
 from dax.sim import enable_dax_sim
 from dax.sim.device import DaxSimDevice
-from dax.sim.signal import get_signal_manager, SignalNotSet, SignalNotSetError, SignalNotFoundError, \
+from dax.sim.signal import get_signal_manager, Signal, SignalNotSetError, SignalNotFoundError, \
     DaxSignalManager, NullSignalManager, VcdSignalManager, PeekSignalManager
 from dax.util.artiq import get_managers
 from dax.util.output import temp_dir
 
-_SIGNAL_TYPES = {bool, int, np.int32, np.int64, float, str, object}
-"""Signal types that need to be supported by every signal manager."""
-
 
 class NullSignalManagerTestCase(unittest.TestCase):
     SIGNAL_MANAGER: str = 'null'
-    SIGNAL_MANAGER_CLASS: typing.Type[DaxSignalManager] = NullSignalManager
+    SIGNAL_MANAGER_CLASS: typing.ClassVar[typing.Type[DaxSignalManager]] = NullSignalManager
 
     def setUp(self) -> None:
         ddb = enable_dax_sim(_DEVICE_DB.copy(), enable=True, output=self.SIGNAL_MANAGER, moninj_service=False)
@@ -36,6 +33,9 @@ class NullSignalManagerTestCase(unittest.TestCase):
     def tearDown(self) -> None:
         self.sm.close()
         self.managers.close()
+
+    def test_signal_types(self):
+        self.assertSetEqual(set(Signal._EXPECTED_TYPES), set(Signal._SPECIAL_VALUES))
 
     def test_signal_manager_type(self):
         # Verify the signal manager type
@@ -61,6 +61,16 @@ class NullSignalManagerTestCase(unittest.TestCase):
             self.sys.zotino: ad53xx_signals | {'led'},
         }
 
+    def test_signal_repr_str(self):
+        key = '_device_key'
+        scope = DaxSimDevice(self.managers.device_mgr, _key=key)
+        name = 'foo'
+        signal = self.sm.register(scope, name, type_=object)
+
+        ref = f'{key}.{name}'
+        for val in [str(signal), repr(signal), f'{signal}']:
+            self.assertEqual(val, ref)
+
     def test_register(self):
         scope = DaxSimDevice(self.managers.device_mgr, _key='_device_key')
         name = 'foo'
@@ -80,6 +90,16 @@ class NullSignalManagerTestCase(unittest.TestCase):
                 s = self.sm.signal(scope, n)
                 self.assertIs(s, self.sm.signal(scope, n), 'Function returned a different signal object')
 
+    def test_iter(self):
+        self.assertGreater(len(self.sm), 200)  # Test that the iterator is not empty (exact number is not important)
+        self.assertEqual(len(list(self.sm)), len(self.sm))
+
+    def test_pull_not_set(self):
+        for ttl in self.sys.ttl_list:
+            for s in ['state', 'direction', 'sensitivity']:
+                with self.assertRaises(SignalNotSetError):
+                    self.sm.signal(ttl, s).pull()
+
     def test_pull_init(self):
         ttl_initialized = {'input_freq': 0.0, 'input_stdev': 0.0, 'input_prob': 0.0}
         initialized = {
@@ -93,10 +113,10 @@ class NullSignalManagerTestCase(unittest.TestCase):
             for n in names:
                 signal = self.sm.signal(scope, n)
                 if n in init:
-                    self.assertEqual(self.sm.pull(signal), init[n])
+                    self.assertEqual(signal.pull(), init[n])
                 else:
                     with self.assertRaises(SignalNotSetError, msg=f'Signal: {signal}'):
-                        self.sm.pull(signal)
+                        signal.pull()
 
     def test_push(self, *, pull=False):
         test_data = {
@@ -105,20 +125,20 @@ class NullSignalManagerTestCase(unittest.TestCase):
             self.sys.ttl1._state: [0.0, 1.0],  # bool, side effect of Python hash()
             self.sys.ec._count: [0, 1, 'x', 'X', 'z', 'Z', True, False, 99, -34, np.int32(655), np.int64(7)],  # int
             self.sys.ad9912._freq: [1.7, -8.2, 7.7, np.float_(300), np.float_(200)],  # float
-            self.sys.core_dma._dma_record: ['foo', 'bar', None, ''],  # str
+            self.sys.core_dma._dma_record: ['foo', 'bar', ''],  # str
             self.sys.core_dma._dma_play: [True],  # object
         }
 
         for signal, values in test_data.items():
             with self.subTest(signal=signal):
                 for v in values:
-                    self.assertIsNone(self.sm.push(signal, v))
+                    self.assertIsNone(signal.push(v)),
 
                     if pull:
-                        self.assertEqual(self.sm.pull(signal), v)
-                        self.assertEqual(self.sm.pull(signal, offset=1), v)
+                        self.assertEqual(signal.pull(), v)
+                        self.assertEqual(signal.pull(offset=1), v)
                         with self.assertRaises(SignalNotSetError):
-                            self.sm.pull(signal, offset=-1)
+                            signal.pull(offset=-1)
 
     def test_push_bool_vector(self, *, pull=False):
         test_data = {
@@ -128,14 +148,41 @@ class NullSignalManagerTestCase(unittest.TestCase):
         for signal, values in test_data.items():
             for v in values:
                 with self.subTest(signal=signal, value=v):
-                    self.sm.push(signal, v)
+                    signal.push(v)
 
                     if pull:
                         ref = v.lower()  # string is lowered when stored
-                        self.assertEqual(self.sm.pull(signal), ref)
-                        self.assertEqual(self.sm.pull(signal, offset=1), ref)
+                        self.assertEqual(signal.pull(), ref)
+                        self.assertEqual(signal.pull(offset=1), ref)
                         with self.assertRaises(SignalNotSetError):
-                            self.sm.pull(signal, offset=-1)
+                            signal.pull(offset=-1)
+
+    def test_push_bad(self):
+        test_data = {
+            self.sys.ttl0._state: ['foo', '00', np.int32(9), np.int64(-1), 0.4, None, '0', '1'],  # bool
+            self.sys.ec._count: ['foo', 0.3, object, complex(6, 7), None, '0', '1'],  # int
+            self.sys.ad9912._freq: [True, 1, object, complex(6, 7), None, '1'],  # float
+            self.sys.core_dma._dma_record: [True, 1, object, complex(6, 7), 1.1, None],  # str
+            self.sys.core_dma._dma_play: [3, 4.4, 'a', object, None],  # object
+        }
+
+        for signal, values in test_data.items():
+            for v in values:
+                with self.subTest(signal=signal, value=v):
+                    with self.assertRaises(ValueError, msg='Bad push value for signal did not raise'):
+                        signal.push(v),
+
+    def test_push_bool_vector_bad(self):
+        test_data = {
+            self.sys.ad9910._phase_mode: ['foo', 0.3, object, complex(6, 7), None, 4, 9, -1, 1.0, 1, 2, 3, 0, True,
+                                          False, np.int64(2), 'x', 'z', '000', '10z', '0', 'a0', '1g'],  # bool vector
+        }
+
+        for signal, values in test_data.items():
+            for v in values:
+                with self.subTest(signal=signal, value=v):
+                    with self.assertRaises(ValueError, msg='Bad push value for signal did not raise'):
+                        signal.push(v)
 
 
 class VcdSignalManagerTestCase(NullSignalManagerTestCase):
@@ -156,27 +203,13 @@ class VcdSignalManagerTestCase(NullSignalManagerTestCase):
         self._temp_dir.__exit__(None, None, None)
 
     def test_signal_types(self):
-        self.assertSetEqual(set(VcdSignalManager._CONVERT_TYPE), _SIGNAL_TYPES, 'Signal types did not match reference.')
-
-    def test_registered_signals_vcd(self):
-        signals = self._get_signal_registrations()
-
-        # Verify signals are registered
-        registered_signals = self.sm.get_registered_signals()
-        self.assertSetEqual(set(signals), set(registered_signals), 'Registered devices did not match')
-        for d, s in signals.items():
-            with self.subTest(device_type=type(d)):
-                if s:
-                    self.assertSetEqual({n for n, _, _ in registered_signals[d]}, s,
-                                        'Registered signals did not match')
+        import dax.sim.signal
+        self.assertSetEqual(set(dax.sim.signal.VcdSignal._VCD_TYPE), set(Signal._EXPECTED_TYPES))
 
 
 class PeekSignalManagerTestCase(NullSignalManagerTestCase):
     SIGNAL_MANAGER = 'peek'
     SIGNAL_MANAGER_CLASS = PeekSignalManager
-
-    def test_signal_types(self):
-        self.assertSetEqual(set(self.sm._CONVERT_TYPE), _SIGNAL_TYPES, 'Signal types did not match reference.')
 
     def test_push_pull(self):
         self.test_push(pull=True)
@@ -184,44 +217,35 @@ class PeekSignalManagerTestCase(NullSignalManagerTestCase):
     def test_push_pull_bool_vector(self):
         self.test_push_bool_vector(pull=True)
 
-    def _test_all_not_set(self):
-        for ttl in self.sys.ttl_list:
-            for s in ['state', 'direction', 'sensitivity']:
-                self.assertEqual(self.sm.peek(ttl, s), SignalNotSet)
-
-    def test_peek_not_set(self):
-        # At zero time, all signals should be unset
-        self._test_all_not_set()
-
-    def test_peek_1(self):
+    def test_pull_1(self):
         delay(1 * us)
-        self._test_all_not_set()
+        self.test_pull_not_set()
 
         # Set direction
         for ttl in self.sys.ttl_list:
             ttl.input()
 
         for ttl in self.sys.ttl_list:
-            self.assertEqual(self.sm.peek(ttl, 'direction'), 0)
-            self.assertEqual(self.sm.peek(ttl, 'sensitivity'), 0)
-            self.assertEqual(self.sm.peek(ttl, 'state'), 'z')
+            self.assertEqual(self.sm.signal(ttl, 'direction').pull(), 0)
+            self.assertEqual(self.sm.signal(ttl, 'sensitivity').pull(), 0)
+            self.assertEqual(self.sm.signal(ttl, 'state').pull(), 'z')
 
-    def test_peek_2(self):
+    def test_pull_2(self):
         delay(1 * us)
-        self._test_all_not_set()
+        self.test_pull_not_set()
 
         # Set direction
         for ttl in self.sys.ttl_list:
             ttl.output()
 
         for ttl in self.sys.ttl_list:
-            self.assertEqual(self.sm.peek(ttl, 'direction'), 1)
-            self.assertEqual(self.sm.peek(ttl, 'sensitivity'), 'z')
-            self.assertEqual(self.sm.peek(ttl, 'state'), 'x')
+            self.assertEqual(self.sm.signal(ttl, 'direction').pull(), 1)
+            self.assertEqual(self.sm.signal(ttl, 'sensitivity').pull(), 'z')
+            self.assertEqual(self.sm.signal(ttl, 'state').pull(), 'x')
 
-    def test_peek_after_delay(self):
+    def test_pull_after_delay(self):
         delay(1 * us)
-        self._test_all_not_set()
+        self.test_pull_not_set()
 
         # Set direction
         for ttl in self.sys.ttl_list:
@@ -230,30 +254,30 @@ class PeekSignalManagerTestCase(NullSignalManagerTestCase):
         delay(10 * us)
 
         for ttl in self.sys.ttl_list:
-            self.assertEqual(self.sm.peek(ttl, 'direction'), 1)
-            self.assertEqual(self.sm.peek(ttl, 'sensitivity'), 'z')
-            self.assertEqual(self.sm.peek(ttl, 'state'), 'x')
+            self.assertEqual(self.sm.signal(ttl, 'direction').pull(), 1)
+            self.assertEqual(self.sm.signal(ttl, 'sensitivity').pull(), 'z')
+            self.assertEqual(self.sm.signal(ttl, 'state').pull(), 'x')
 
-    def test_peek_negative_delay(self):
+    def test_pull_negative_delay(self):
         delay(10 * us)
-        self._test_all_not_set()
+        self.test_pull_not_set()
 
         # Set direction
         for ttl in self.sys.ttl_list:
             ttl.output()
 
         delay_mu(-1)
-        self._test_all_not_set()
+        self.test_pull_not_set()
 
         delay_mu(1)
         for ttl in self.sys.ttl_list:
-            self.assertEqual(self.sm.peek(ttl, 'direction'), 1)
-            self.assertEqual(self.sm.peek(ttl, 'sensitivity'), 'z')
-            self.assertEqual(self.sm.peek(ttl, 'state'), 'x')
+            self.assertEqual(self.sm.signal(ttl, 'direction').pull(), 1)
+            self.assertEqual(self.sm.signal(ttl, 'sensitivity').pull(), 'z')
+            self.assertEqual(self.sm.signal(ttl, 'state').pull(), 'x')
 
-    def test_peek_negative_delay_arg(self):
+    def test_pull_negative_delay_arg(self):
         delay(10 * us)
-        self._test_all_not_set()
+        self.test_pull_not_set()
 
         # Set direction
         for ttl in self.sys.ttl_list:
@@ -261,16 +285,17 @@ class PeekSignalManagerTestCase(NullSignalManagerTestCase):
 
         for ttl in self.sys.ttl_list:
             for s in ['state', 'direction', 'sensitivity']:
-                self.assertEqual(self.sm.peek(ttl, s, time=now_mu() - 1), SignalNotSet)
+                with self.assertRaises(SignalNotSetError):
+                    self.sm.signal(ttl, s).pull(time=now_mu() - 1)
 
         for ttl in self.sys.ttl_list:
-            self.assertEqual(self.sm.peek(ttl, 'direction'), 1)
-            self.assertEqual(self.sm.peek(ttl, 'sensitivity'), 'z')
-            self.assertEqual(self.sm.peek(ttl, 'state'), 'x')
+            self.assertEqual(self.sm.signal(ttl, 'direction').pull(), 1)
+            self.assertEqual(self.sm.signal(ttl, 'sensitivity').pull(), 'z')
+            self.assertEqual(self.sm.signal(ttl, 'state').pull(), 'x')
 
-    def test_peek_overwrite(self):
+    def test_pull_overwrite(self):
         delay(10 * us)
-        self._test_all_not_set()
+        self.test_pull_not_set()
 
         # Set direction
         for ttl in self.sys.ttl_list:
@@ -279,13 +304,13 @@ class PeekSignalManagerTestCase(NullSignalManagerTestCase):
             ttl.input()
 
         for ttl in self.sys.ttl_list:
-            self.assertEqual(self.sm.peek(ttl, 'direction'), 0)
-            self.assertEqual(self.sm.peek(ttl, 'sensitivity'), 0)
-            self.assertEqual(self.sm.peek(ttl, 'state'), 'z')
+            self.assertEqual(self.sm.signal(ttl, 'direction').pull(), 0)
+            self.assertEqual(self.sm.signal(ttl, 'sensitivity').pull(), 0)
+            self.assertEqual(self.sm.signal(ttl, 'state').pull(), 'z')
 
-    def test_peek_many_changes(self):
+    def test_pull_many_changes(self):
         delay(10 * us)
-        self._test_all_not_set()
+        self.test_pull_not_set()
 
         # Set direction
         for ttl in self.sys.ttl_list:
@@ -300,13 +325,13 @@ class PeekSignalManagerTestCase(NullSignalManagerTestCase):
             for i in range(10):
                 delay(2 * us)
                 ttl.set_o(i % 2)
-                self.assertEqual(self.sm.peek(ttl, 'direction'), 1)
-                self.assertEqual(self.sm.peek(ttl, 'sensitivity'), 'z')
-                self.assertEqual(self.sm.peek(ttl, 'state'), i % 2)
+                self.assertEqual(self.sm.signal(ttl, 'direction').pull(), 1)
+                self.assertEqual(self.sm.signal(ttl, 'sensitivity').pull(), 'z')
+                self.assertEqual(self.sm.signal(ttl, 'state').pull(), i % 2)
 
-    def test_peek_parallel(self):
+    def test_pull_parallel(self):
         delay(10 * us)
-        self._test_all_not_set()
+        self.test_pull_not_set()
 
         # Set direction
         for ttl in self.sys.ttl_list:
@@ -321,37 +346,9 @@ class PeekSignalManagerTestCase(NullSignalManagerTestCase):
                 with sequential:
                     for i in range(10):
                         delay(2 * us)
-                        self.assertEqual(self.sm.peek(ttl, 'direction'), 1)
-                        self.assertEqual(self.sm.peek(ttl, 'sensitivity'), 'z')
-                        self.assertEqual(self.sm.peek(ttl, 'state'), i % 2)
-
-    def test_push_bad(self):
-        test_data = {
-            self.sys.ttl0._state: ['foo', '00', np.int32(9), np.int64(-1), 0.4, None, '0', '1'],  # bool
-            self.sys.ec._count: ['foo', 0.3, object, complex(6, 7), None, '0', '1'],  # int
-            self.sys.ad9912._freq: [True, 1, object, complex(6, 7), None, '1'],  # float
-            self.sys.core_dma._dma_record: [True, 1, object, complex(6, 7), 1.1],  # str
-            self.sys.core_dma._dma_play: [3, 4.4, 'a', object],  # object
-        }
-
-        for signal, values in test_data.items():
-            for v in values:
-                with self.subTest(signal=signal, value=v):
-                    with self.assertRaises(ValueError, msg='Bad push value for signal did not raise'):
-                        self.sm.push(signal, v)
-
-    def test_push_bool_vector_bad(self):
-        test_data = {
-            self.sys.ad9910._phase_mode: ['foo', 0.3, object, complex(6, 7), None, 4, 9, -1, 1.0,
-                                          1, 2, 3, 0, True, False, np.int64(2), 'x', 'z', '000', '10z',
-                                          'a0', '1g'],  # bool vector
-        }
-
-        for signal, values in test_data.items():
-            for v in values:
-                with self.subTest(signal=signal, value=v):
-                    with self.assertRaises(ValueError, msg='Bad push value for signal did not raise'):
-                        self.sm.push(signal, v)
+                        self.assertEqual(self.sm.signal(ttl, 'direction').pull(), 1)
+                        self.assertEqual(self.sm.signal(ttl, 'sensitivity').pull(), 'z')
+                        self.assertEqual(self.sm.signal(ttl, 'state').pull(), i % 2)
 
 
 class _TestSystem(DaxSystem):

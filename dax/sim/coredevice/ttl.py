@@ -23,8 +23,8 @@ class TTLOut(DaxSimDevice):
         super(TTLOut, self).__init__(dmgr, **kwargs)
 
         # Register signals
-        self._signal_manager = get_signal_manager()
-        self._state = self._signal_manager.register(self, 'state', bool, size=1)
+        signal_manager = get_signal_manager()
+        self._state = signal_manager.register(self, 'state', bool, size=1)
 
     @kernel
     def output(self):
@@ -32,7 +32,7 @@ class TTLOut(DaxSimDevice):
 
     @kernel
     def set_o(self, o):
-        self._signal_manager.push(self._state, 1 if o else 0)
+        self._state.push(1 if o else 0)
 
     @kernel
     def on(self):
@@ -91,11 +91,12 @@ class TTLInOut(TTLOut):
         self._sample_buffer = collections.deque()
 
         # Register signals
-        self._direction = self._signal_manager.register(self, 'direction', bool, size=1)
-        self._sensitivity = self._signal_manager.register(self, 'sensitivity', bool, size=1)
-        self._input_freq = self._signal_manager.register(self, 'input_freq', float, init=input_freq)
-        self._input_stdev = self._signal_manager.register(self, 'input_stdev', float, init=input_stdev)
-        self._input_prob = self._signal_manager.register(self, 'input_prob', float, init=input_prob)
+        signal_manager = get_signal_manager()
+        self._direction = signal_manager.register(self, 'direction', bool, size=1)
+        self._sensitivity = signal_manager.register(self, 'sensitivity', bool, size=1)
+        self._input_freq = signal_manager.register(self, 'input_freq', float, init=input_freq)
+        self._input_stdev = signal_manager.register(self, 'input_stdev', float, init=input_stdev)
+        self._input_prob = signal_manager.register(self, 'input_prob', float, init=input_prob)
 
     def core_reset(self) -> None:
         # Clear buffers
@@ -104,9 +105,9 @@ class TTLInOut(TTLOut):
 
     def _set_oe(self, oe):
         # 0 = input, 1 = output
-        self._signal_manager.push(self._direction, 1 if oe else 0)
-        self._signal_manager.push(self._sensitivity, 'z' if oe else 0)
-        self._signal_manager.push(self._state, 'x' if oe else 'z')
+        self._direction.push(1 if oe else 0)
+        self._sensitivity.push('z' if oe else 0)
+        self._state.push('x' if oe else 'z')
 
     @kernel
     def set_oe(self, oe):
@@ -124,8 +125,8 @@ class TTLInOut(TTLOut):
         """Simulate input signal for a given duration."""
 
         # Obtain current input configuration
-        input_freq = self._signal_manager.pull(self._input_freq)
-        input_stdev = self._signal_manager.pull(self._input_stdev)
+        input_freq = self._input_freq.pull()
+        input_stdev = self._input_stdev.pull()
         assert isinstance(input_freq, float)
         assert isinstance(input_stdev, float)
 
@@ -142,11 +143,11 @@ class TTLInOut(TTLOut):
         timestamps.sort()
 
         # Initialize the signal to 0 at the start of the window (for graphical purposes)
-        self._signal_manager.push(self._state, 0)
+        self._state.push(0)
 
         # Write the stream of input events to the signal manager
         for t, v in zip(timestamps, itertools.cycle((1, 0))):
-            self._signal_manager.push(self._state, v, offset=t)
+            self._state.push(v, offset=t)
 
         if edge_type is self._EdgeType.RISING:
             # Store odd half of the event times in the event buffer
@@ -162,27 +163,27 @@ class TTLInOut(TTLOut):
         delay_mu(duration)
 
         # Return to Z after all signals were inserted
-        self._signal_manager.push(self._state, 'z')
+        self._state.push('z')
 
     @kernel
     def gate_rising_mu(self, duration):
-        self._signal_manager.push(self._sensitivity, 1)
+        self._sensitivity.push(1)
         self._simulate_input_signal(duration, self._EdgeType.RISING)
-        self._signal_manager.push(self._sensitivity, 0)
+        self._sensitivity.push(0)
         return now_mu()
 
     @kernel
     def gate_falling_mu(self, duration):
-        self._signal_manager.push(self._sensitivity, 1)
+        self._sensitivity.push(1)
         self._simulate_input_signal(duration, self._EdgeType.FALLING)
-        self._signal_manager.push(self._sensitivity, 0)
+        self._sensitivity.push(0)
         return now_mu()
 
     @kernel
     def gate_both_mu(self, duration):
-        self._signal_manager.push(self._sensitivity, 1)
+        self._sensitivity.push(1)
         self._simulate_input_signal(duration, self._EdgeType.BOTH)
-        self._signal_manager.push(self._sensitivity, 0)
+        self._sensitivity.push(0)
         return now_mu()
 
     @kernel
@@ -221,14 +222,14 @@ class TTLInOut(TTLOut):
 
     def _sample_input(self):
         # Obtain current input configuration
-        input_prob = self._signal_manager.pull(self._input_prob)
+        input_prob = self._input_prob.pull()
         assert isinstance(input_prob, float)
 
         # Sample at the current time and store result in the sample buffer
         val = np.int32(self._rng.random() < input_prob)
         self._sample_buffer.append(val)
-        self._signal_manager.push(self._state, val)  # Sample value at current time
-        self._signal_manager.push(self._state, 'z', offset=1)  # Return to 'Z' 1 machine unit after sample
+        self._state.push(val)  # Sample value at current time
+        self._state.push('z', offset=1)  # Return to 'Z' 1 machine unit after sample
 
     @kernel
     def sample_input(self):
@@ -276,8 +277,8 @@ class TTLClockGen(DaxSimDevice):
         self._acc_width = np.int64(acc_width)
 
         # Register signals
-        self._signal_manager = get_signal_manager()
-        self._freq = self._signal_manager.register(self, 'freq', float)
+        signal_manager = get_signal_manager()
+        self._freq = signal_manager.register(self, 'freq', float)
 
     @portable
     def frequency_to_ftw(self, frequency):
@@ -293,7 +294,7 @@ class TTLClockGen(DaxSimDevice):
 
     @kernel
     def set(self, frequency):
-        self._signal_manager.push(self._freq, float(frequency))
+        self._freq.push(float(frequency))
 
     @kernel
     def stop(self):

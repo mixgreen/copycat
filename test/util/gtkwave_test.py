@@ -1,11 +1,12 @@
 import unittest
+import unittest.mock
 import typing
 
 from dax.base.system import DaxSystem
 from dax.util.artiq import get_managers
 from dax.util.output import temp_dir
 from dax.sim import enable_dax_sim
-from dax.sim.signal import get_signal_manager, VcdSignalManager
+from dax.sim.signal import get_signal_manager, set_signal_manager, Signal, DaxSignalManager
 from dax.util.gtkwave import GTKWSaveGenerator
 
 _DEVICE_DB: typing.Dict[str, typing.Any] = {
@@ -38,12 +39,11 @@ class _TestSystem(DaxSystem):
 class GTKWaveTestCase(unittest.TestCase):
 
     def test_signal_types(self):
-        self.assertSetEqual(set(VcdSignalManager._CONVERT_TYPE), set(GTKWSaveGenerator._CONVERT_TYPE),
-                            'Signal types did not match VCD signal types.')
+        self.assertSetEqual(set(Signal._EXPECTED_TYPES), set(GTKWSaveGenerator._GTKW_TYPE))
 
-    def test_gtk_wave_save_generator(self):
+    def _test_gtk_wave_save_generator(self, *, signal_manager):
         with temp_dir():
-            ddb = enable_dax_sim(ddb=_DEVICE_DB.copy(), enable=True, output='vcd', moninj_service=False)
+            ddb = enable_dax_sim(ddb=_DEVICE_DB.copy(), enable=True, output=signal_manager, moninj_service=False)
 
             with get_managers(ddb) as managers:
                 system = _TestSystem(managers)
@@ -51,20 +51,26 @@ class GTKWaveTestCase(unittest.TestCase):
 
                 # Create GTKWave save generator object, which immediately writes the waves file
                 GTKWSaveGenerator(system)
-
                 # Manually close signal manager before leaving temp dir
                 get_signal_manager().close()
 
+    def test_gtk_wave_save_generator_null(self):
+        self._test_gtk_wave_save_generator(signal_manager='null')
+
+    def test_gtk_wave_save_generator_vcd(self):
+        self._test_gtk_wave_save_generator(signal_manager='vcd')
+
+    def test_gtk_wave_save_generator_peek(self):
+        self._test_gtk_wave_save_generator(signal_manager='peek')
+
     def test_gtk_wave_save_generator_invalid_signal_manager(self):
         with temp_dir():
-            ddb = enable_dax_sim(ddb=_DEVICE_DB.copy(), enable=True, output='null', moninj_service=False)
+            set_signal_manager(unittest.mock.Mock(spec=DaxSignalManager))
 
-            with get_managers(ddb) as managers:
+            with get_managers(_DEVICE_DB.copy()) as managers:
                 system = _TestSystem(managers)
-                self.assertTrue(system.dax_sim_enabled)
 
-                with self.assertRaises(RuntimeError, msg='Not using VCD signal manager did not raise'):
-                    # Create GTKWave save generator object, which immediately writes the waves file
+                with self.assertRaises(RuntimeError, msg='Not using DAX.sim did not raise'):
                     GTKWSaveGenerator(system)
 
                 # Manually close signal manager before leaving temp dir

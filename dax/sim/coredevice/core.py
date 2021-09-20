@@ -275,14 +275,14 @@ class Core(BaseCore):
     @kernel
     def reset(self):  # type: () -> None
         # Reset signal to 1
-        self._signal_manager.push(self._reset_signal, 1)
+        self._reset_signal.push(True)
         # Reset devices
         self._reset_devices()
 
         # Move cursor
         delay_mu(self.RESET_TIME_MU)
         # Reset signal back to 0
-        self._signal_manager.push(self._reset_signal, 0)
+        self._reset_signal.push(False)
 
     def _reset_devices(self):  # type: () -> None
         # Reset devices to clear buffers

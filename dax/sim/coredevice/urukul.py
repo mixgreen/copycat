@@ -45,11 +45,11 @@ class CPLD(DaxSimDevice):
         self.att_reg: np.int32 = np.int32(np.int64(att))
 
         # Register signals
-        self._signal_manager = get_signal_manager()
-        self._init = self._signal_manager.register(self, 'init', bool, size=1)
-        self._init_att = self._signal_manager.register(self, 'init_att', bool, size=1)
-        self._att = [self._signal_manager.register(self, f'att_{i}', float) for i in range(4)]
-        self._sw = self._signal_manager.register(self, 'sw', bool, size=4)
+        signal_manager = get_signal_manager()
+        self._init = signal_manager.register(self, 'init', bool, size=1)
+        self._init_att = signal_manager.register(self, 'init_att', bool, size=1)
+        self._att = [signal_manager.register(self, f'att_{i}', float) for i in range(4)]
+        self._sw = signal_manager.register(self, 'sw', bool, size=4)
 
         # Internal registers
         self._att_reg = [_mu_to_att(att >> (i * 8)) for i in range(4)]
@@ -69,7 +69,7 @@ class CPLD(DaxSimDevice):
         # Delays from ARTIQ code
         delay(100 * us)  # reset, slack
         delay(1 * ms)  # DDS wake up
-        self._signal_manager.push(self._init, 1)
+        self._init.push(True)
 
     @kernel
     def io_rst(self):
@@ -90,7 +90,7 @@ class CPLD(DaxSimDevice):
         self._cfg_switches(state)
 
     def _update_switches(self):  # type: () -> None
-        self._signal_manager.push(self._sw, ''.join(reversed(self._sw_reg)))
+        self._sw.push(''.join(reversed(self._sw_reg)))
 
     @kernel
     def set_att_mu(self, channel: TInt32, att: TInt32):
@@ -123,13 +123,13 @@ class CPLD(DaxSimDevice):
     def _update_att(self):  # type: () -> None
         for s, a in zip(self._att, self._att_reg):
             assert 0 * dB <= a <= (255 / 8) * dB, 'Attenuation out of range'
-            self._signal_manager.push(s, a)
+            s.push(a)
 
     @kernel
     def get_att_mu(self) -> TInt32:
         # Returns the value in the register instead of the device value
         delay(10 * us)  # Delay from ARTIQ code
-        self._signal_manager.push(self._init_att, 1)
+        self._init_att.push(True)
         return self.att_reg
 
     @kernel

@@ -7,7 +7,7 @@ from artiq.language.core import *
 from artiq.language.units import *
 
 from dax.sim.device import DaxSimDevice
-from dax.sim.signal import get_signal_manager
+from dax.sim.signal import get_signal_manager, Signal
 
 
 class _DMARecordContext:
@@ -15,10 +15,10 @@ class _DMARecordContext:
 
     _core: typing.Any
     _name: str
-    _record_signal: typing.Any
+    _record_signal: Signal
     _duration: np.int64
 
-    def __init__(self, core: typing.Any, name: str, record_signal: typing.Any):
+    def __init__(self, core: typing.Any, name: str, record_signal: Signal):
         assert isinstance(name, str)
 
         # Store attributes
@@ -26,7 +26,6 @@ class _DMARecordContext:
         self._name = name
 
         # Signals
-        self._signal_manager = get_signal_manager()
         self._record_signal = record_signal
 
         # Duration will be recorded using enter and exit
@@ -49,14 +48,14 @@ class _DMARecordContext:
         # Save current time
         self._duration = now_mu()
         # Set record signal
-        self._signal_manager.push(self._record_signal, self.name)
+        self._record_signal.push(self.name)
 
     @kernel
     def __exit__(self, type_, value, traceback):  # type: (typing.Any, typing.Any, typing.Any) -> None
         # Store duration
         self._duration = now_mu() - self.duration
         # Reset record signal
-        self._signal_manager.push(self._record_signal, None)  # Shows up as Z in the graphical interface
+        self._record_signal.push('')
 
 
 class _DMAHandle:
@@ -85,9 +84,9 @@ class _DMAHandle:
 class CoreDMA(DaxSimDevice):
     _epoch: int
     _dma_traces: typing.Dict[str, _DMARecordContext]
-    _dma_record: typing.Any
-    _dma_play: typing.Any
-    _dma_play_name: typing.Any
+    _dma_record: Signal
+    _dma_play: Signal
+    _dma_play_name: Signal
 
     def __init__(self, dmgr: typing.Any, **kwargs: typing.Any):
         # Call super
@@ -99,10 +98,10 @@ class CoreDMA(DaxSimDevice):
         self._dma_traces = {}
 
         # Register signal
-        self._signal_manager = get_signal_manager()
-        self._dma_record = self._signal_manager.register(self, 'record', str)
-        self._dma_play = self._signal_manager.register(self, 'play', object)
-        self._dma_play_name = self._signal_manager.register(self, 'play_name', str)
+        signal_manager = get_signal_manager()
+        self._dma_record = signal_manager.register(self, 'record', str)
+        self._dma_play = signal_manager.register(self, 'play', object)
+        self._dma_play_name = signal_manager.register(self, 'play_name', str)
 
     @kernel
     def record(self, name):  # type: (str) -> _DMARecordContext
@@ -166,11 +165,11 @@ class CoreDMA(DaxSimDevice):
         assert isinstance(recording, _DMARecordContext), 'DMA recording has an incorrect type'
 
         # Place events for DMA playback
-        self._signal_manager.push(self._dma_play, True)  # Represents the event of playing a trace
-        self._signal_manager.push(self._dma_play_name, recording.name)  # Represents the duration of the event
+        self._dma_play.push(True)  # Represents the event of playing a trace
+        self._dma_play_name.push(recording.name)  # Represents the duration of the event
 
         # Forward time by the duration of the DMA trace
         delay_mu(recording.duration)
 
-        # Record ending of DMA trace (shows up as Z in the graphical interface)
-        self._signal_manager.push(self._dma_play_name, None)
+        # Record ending of DMA trace
+        self._dma_play_name.push('')

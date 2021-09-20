@@ -6,8 +6,9 @@ import artiq.coredevice.ad9910  # type: ignore[import]
 import artiq.coredevice.ad9912  # type: ignore[import]
 
 from dax.experiment import *
-from dax.sim.signal import SignalNotSet
 import dax.sim.test_case
+from dax.sim.test_case import SignalNotSet
+from dax.sim.signal import get_signal_manager
 
 
 class PeekTestCaseTestCase(dax.sim.test_case.PeekTestCase):
@@ -36,8 +37,8 @@ class PeekTestCaseTestCase(dax.sim.test_case.PeekTestCase):
                     delay_mu(1)
 
     def test_expect_bool(self):
-        zero_values = [0, False, np.int32(0), np.int64(0)]
-        one_values = [1, True, np.int32(1), np.int64(1)]
+        zero_values = [0, False, np.int32(0), np.int64(0), 0.0]
+        one_values = [1, True, np.int32(1), np.int64(1), 1.0]
         x_values = ['x', 'X', SignalNotSet]
         z_values = ['z', 'Z']
         test_data = [(v, values) for values in [zero_values, one_values] for v in values]
@@ -64,14 +65,20 @@ class PeekTestCaseTestCase(dax.sim.test_case.PeekTestCase):
                 # Set new value
                 delay(1 * us)
                 scope.set_o(val)
-                # Test against reference values
-                for r in ref:
-                    self.expect(scope, name, r)
-                    self.assertEqual(self.peek(scope, name), r)
-                delay(1 * us)
-                for r in ref:
-                    self.expect(scope, name, r)
-                    self.assertEqual(self.peek(scope, name), r)
+                for _ in range(2):
+                    # Test against reference values
+                    for r in ref:
+                        self.expect(scope, name, r)
+                        self.assertEqual(self.peek(scope, name), r)
+                    delay(1 * us)
+
+    def test_expect_bool_bad_value(self):
+        scope = self.sys.ttl0
+        name = 'state'
+
+        for val in ['a', None, 1.1, 0.5]:
+            with self.subTest(value=val), self.assertRaises(ValueError):
+                self.expect(scope, name, val)
 
     def test_expect_bool_vector(self):
         test_data = [
@@ -104,14 +111,60 @@ class PeekTestCaseTestCase(dax.sim.test_case.PeekTestCase):
                 delay(1 * us)
                 self.expect(scope, name, ref)
 
+    def test_expect_bool_vector_bad_value(self):
+        scope = self.sys.ad9910
+        name = 'phase_mode'
+
+        for val in [None, 1, 1.1, True, False, 'foo', '000']:
+            with self.subTest(value=val), self.assertRaises(ValueError):
+                self.expect(scope, name, val)
+
+    def test_expect_int(self):
+        test_data = [
+            (1, 1),
+            (np.int32(4), 4),
+            (1, np.int32(1)),
+            (np.int64(1), 1),
+            (1, np.int64(1)),
+            (np.int32(1), np.int64(1)),
+            ('x', 'X'),
+            ('x', SignalNotSet),
+            ('Z', 'z'),
+        ]
+
+        scope = self.sys.ec
+        name = 'count'
+        signal = get_signal_manager().signal(scope, name)  # Get signal to easily change signal
+
+        for v in ['z', 'Z']:
+            self.expect(scope, name, v)
+
+        for val, ref in test_data:
+            with self.subTest(value=val, reference=ref):
+                # Set new value
+                delay(1 * us)
+                signal.push(val)
+                for _ in range(2):
+                    # Test against reference values
+                    self.expect(scope, name, ref)
+                    self.assertEqual(self.peek(scope, name), val)
+                    delay(1 * us)
+
+    def test_expect_int_bad_value(self):
+        scope = self.sys.ec
+        name = 'count'
+
+        for val in ['a', None, 1.1, 0.5]:
+            with self.subTest(value=val), self.assertRaises(ValueError):
+                self.expect(scope, name, val)
+
     def test_expect_float(self):
         test_data = [
-            (1.0, True),
-            (0.0, False),
-            (1.0, 1),
+            (1.0, 1.00),
             (99.2, 99.2),
             (-99.2, -99.2),
-            (np.float_(3), 3),
+            (-99.2, np.float_(-99.2)),
+            (np.float_(3), 3.0),
         ]
 
         scope = self.sys.ttl_clk  # This driver has no checks on its set() function
@@ -131,6 +184,14 @@ class PeekTestCaseTestCase(dax.sim.test_case.PeekTestCase):
                 delay(1 * us)
                 self.expect(scope, name, ref)
                 self.expect_close(scope, name, ref, places=7)
+
+    def test_expect_float_bad_value(self):
+        scope = self.sys.ttl_clk
+        name = 'freq'
+
+        for val in [True, False, None, '0.1']:
+            with self.subTest(val=val), self.assertRaises(ValueError):
+                self.expect(scope, name, val)
 
     def test_expect_is_close(self):
         test_data = [
@@ -178,7 +239,7 @@ class PeekTestCaseTestCase(dax.sim.test_case.PeekTestCase):
             # Fail on signal not set
             self.expect_close(scope, name, 0.1)
 
-    def test_expect_is_close_value_type_error(self):
+    def test_expect_is_close_bad_value(self):
         scope = self.sys.ttl_clk
         name = 'freq'
 
@@ -207,7 +268,7 @@ class PeekTestCaseTestCase(dax.sim.test_case.PeekTestCase):
 
         for scope, (name, values) in test_data.items():
             for v in values:
-                with self.subTest(scope=scope, signal=name, value=v):
+                with self.subTest(scope=scope, name=name, value=v):
                     with self.assertRaises(self.failureException, msg='Expect wrong value did not assert'):
                         self.expect(scope, name, v)
 
@@ -250,14 +311,7 @@ class PeekTestCaseTestCase(dax.sim.test_case.PeekTestCase):
                     self.expect(scope, name, v)
 
     def test_sequential(self):
-        test_data = [
-            1.0,
-            0.0,
-            1.0,
-            99.2,
-            -99.2,
-            np.float_(4),
-        ]
+        test_data = [1.0, 0.0, 1.0, 99.2, -99.2, np.float_(4)]
 
         scope = self.sys.ttl_clk  # This driver has no checks on its set() function
         name = 'freq'

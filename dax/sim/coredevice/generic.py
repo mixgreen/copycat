@@ -1,30 +1,26 @@
 import typing
 
 from dax.sim.device import DaxSimDevice
-from dax.sim.signal import get_signal_manager, DaxSignalManager
+from dax.sim.signal import get_signal_manager, Signal
 
 
 class _GenericBase:
     _attr_name: typing.Optional[str]
-    _signal_manager: DaxSignalManager[typing.Any]
-    _signal_call: typing.Any
-    _signal_function: typing.Any
+    _signal_call: Signal
+    _signal_function: Signal
 
-    def __init__(self, attr_name: typing.Optional[str],
-                 signal_manager: DaxSignalManager[typing.Any],
-                 signal_call: typing.Any, signal_function: typing.Any):
+    def __init__(self, attr_name: typing.Optional[str], signal_call: Signal, signal_function: Signal):
         assert isinstance(attr_name, str) or attr_name is None, 'Attribute name must be of type str or None'
 
         # Store attributes
         self._attr_name = attr_name
-        self._signal_manager = signal_manager
         self._signal_call = signal_call
         self._signal_function = signal_function
 
     def __getattr__(self, item: str) -> typing.Any:
         # Non-existing attributes are added
         attr_name = item if self._attr_name is None else f'{self._attr_name}.{item}'
-        obj = _GenericBase(attr_name, self._signal_manager, self._signal_call, self._signal_function)
+        obj = _GenericBase(attr_name, self._signal_call, self._signal_function)
         setattr(self, item, obj)
         return obj
 
@@ -35,8 +31,8 @@ class _GenericBase:
                      f'{",".join(f"{k}={v}" for k, v in kwargs.items())}'
 
         # Register the event
-        self._signal_manager.push(self._signal_call, True)  # Register the timestamp of the call
-        self._signal_manager.push(self._signal_function, f'{self._attr_name}({parameters})')
+        self._signal_call.push(True)  # Register the timestamp of the call
+        self._signal_function.push(f'{self._attr_name}({parameters})')
 
 
 class Generic(_GenericBase, DaxSimDevice):
@@ -47,11 +43,11 @@ class Generic(_GenericBase, DaxSimDevice):
 
         # Register signal
         signal_manager = get_signal_manager()
-        signal_call: typing.Any = signal_manager.register(self, 'call', object)
-        signal_function: typing.Any = signal_manager.register(self, 'function', str)
+        signal_call: Signal = signal_manager.register(self, 'call', object)
+        signal_function: Signal = signal_manager.register(self, 'function', str)
 
         # Call super for _GenericBase
-        _GenericBase.__init__(self, None, signal_manager, signal_call, signal_function)
+        _GenericBase.__init__(self, None, signal_call, signal_function)
 
     def __call__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
         # The device can not be directly called, only its attributes

@@ -97,7 +97,7 @@ The major version number of DAX matches the version of the targeted ARTIQ releas
 
 ## Testing
 
-Use pytest or Python unittest to run the DAX unit tests. We recommend using pytest.
+Use pytest (installed separately) to run the DAX unit tests.
 
 ```shell
 $ pytest
