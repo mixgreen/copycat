@@ -2,7 +2,7 @@ import unittest
 import typing
 import numpy as np
 
-from artiq.language.core import now_mu, delay, delay_mu, parallel, sequential
+from artiq.language.core import now_mu, at_mu, delay, delay_mu, parallel, sequential
 from artiq.language.units import *
 import artiq.coredevice.ttl  # type: ignore[import]
 import artiq.coredevice.edge_counter
@@ -357,6 +357,31 @@ class PeekSignalManagerTestCase(NullSignalManagerTestCase):
                         self.assertEqual(self.sm.signal(ttl, 'direction').pull(), 1)
                         self.assertEqual(self.sm.signal(ttl, 'sensitivity').pull(), 'z')
                         self.assertEqual(self.sm.signal(ttl, 'state').pull(), i % 2)
+
+    def test_push_buffer(self):
+        test_data = {
+            self.sys.ttl0._state: [0, 1, 'x', 'X', 'z', 'Z', True, False, np.int32(0), np.int64(1)],  # bool
+            self.sys.ec._count: [0, 1, 'x', 'X', 'z', 'Z', True, False, 99, -34, np.int32(655), np.int64(7)],  # int
+            self.sys.ad9912._freq: [1.7, -8.2, 7.7, np.float_(300), np.float_(200)],  # float
+            self.sys.core_dma._dma_record: ['foo', 'bar', ''],  # str
+            self.sys.core_dma._dma_play: [True],  # object
+        }
+        delay_t = 100
+
+        for signal, buffer in test_data.items():
+            with self.subTest(signal=signal):
+                signal.push_buffer(buffer)
+                for v in buffer:
+                    self.assertEqual(signal.pull(), v)
+                    delay_mu(delay_t)
+                end_t = now_mu()
+
+                for v in reversed(buffer):
+                    delay_mu(-delay_t)
+                    self.assertEqual(signal.pull(), v)
+
+                # Restore time
+                at_mu(end_t)
 
 
 class _TestSystem(DaxSystem):

@@ -123,7 +123,7 @@ class PeekTestCase(unittest.TestCase):
         return env
 
     def peek(self, scope: typing.Any, name: str) -> typing.Any:
-        """Peek a signal of a device at the current time.
+        """Peek a signal at the current time.
 
         :param scope: The scope (device) of the signal
         :param name: The name of the signal
@@ -227,7 +227,7 @@ class PeekTestCase(unittest.TestCase):
             self.assertAlmostEqual(value, peek, msg=msg, places=places, delta=delta)
 
     def push(self, scope: typing.Any, name: str, value: typing.Any) -> None:
-        """Push a signal of a device at the current time.
+        """Push a signal at the current time.
 
         :param scope: The scope (device) of the signal
         :param name: The name of the signal
@@ -237,6 +237,24 @@ class PeekTestCase(unittest.TestCase):
         # Obtain the signal
         signal = self.__signal_manager.signal(scope, name)
 
-        # Push the value using the signal manager
+        # Push the value
         _logger.info(f'PUSH {signal} -> {value}')
         signal.push(value)
+
+    def push_buffer(self, scope: typing.Any, name: str, buffer: typing.Sequence[typing.Any]) -> None:
+        """Push a buffer of values to a signal.
+
+        The buffer of values will be queued and the next time the signal is addressed, the first value
+        in the queue will be pushed at that timestamp.
+
+        :param scope: The scope (device) of the signal
+        :param name: The name of the signal
+        :param buffer: A buffer of values for the target signal
+        """
+
+        # Obtain the signal
+        signal = self.__signal_manager.signal(scope, name)
+
+        # Push the buffer
+        _logger.info(f'PUSH BUF {signal} -> {buffer}')
+        signal.push_buffer(buffer)

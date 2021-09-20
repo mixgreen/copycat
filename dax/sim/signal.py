@@ -2,6 +2,7 @@ import abc
 import typing
 import operator
 import datetime
+import collections
 import numpy as np
 import vcd.writer
 import sortedcontainers
@@ -110,9 +111,11 @@ class Signal(abc.ABC):
         raise ValueError(f'Invalid value "{value}" for signal type "{self.type}"')
 
     @abc.abstractmethod
-    def push(self, value: _SV_T, *,  # pragma: no cover
+    def push(self, value: typing.Any, *,  # pragma: no cover
              time: typing.Optional[_T_T] = None, offset: _O_T = 0) -> None:
         """Push an event to this signal (i.e. change the value of this signal at the given time).
+
+        Values are automatically normalized before inserted into the signal manager (see :func:`normalize`).
 
         Note that in a parallel context, :func:`delay` and :func:`delay_mu` do not directly
         influence the time returned by :func:`now_mu`.
@@ -136,6 +139,7 @@ class Signal(abc.ABC):
         :param value: The new value of this signal
         :param time: Optional time in machine units when the event happened (:func:`now_mu` if no time was provided)
         :param offset: Optional offset from the given time in machine units (default is :const:`0`)
+        :raises ValueError: Raised if the value is invalid
         """
         pass
 
@@ -303,7 +307,7 @@ class ConstantSignal(Signal):
         super(ConstantSignal, self).__init__(scope, name, type_, size)
         self._init = None if init is None else self.normalize(init)
 
-    def push(self, value: _SV_T, *,
+    def push(self, value: typing.Any, *,
              time: typing.Optional[_T_T] = None, offset: _O_T = 0) -> None:
         self.normalize(value)  # Do normalization (for exceptions) before dropping the event
 
@@ -362,7 +366,7 @@ class VcdSignal(ConstantSignal):
         # Register this variable with the VCD writer
         self._vcd = vcd_.register_var(scope.key, name, var_type=self._VCD_TYPE[type_], size=size, init=init)
 
-    def push(self, value: _SV_T, *,
+    def push(self, value: typing.Any, *,
              time: typing.Optional[_T_T] = None, offset: _O_T = 0) -> None:
         # Add event to buffer
         self._event_buffer.append((_get_timestamp(time, offset), self, self.normalize(value)))
@@ -448,6 +452,8 @@ class VcdSignalManager(DaxSignalManager[VcdSignal]):
         self._event_buffer.clear()
 
     def close(self) -> None:
+        # Clear the event buffer
+        self._event_buffer.clear()
         # Close the VCD writer (reentrant)
         self._vcd.close()
         # Close the VCD file (reentrant)
@@ -465,6 +471,7 @@ class PeekSignal(Signal):
         _EB_T = sortedcontainers.SortedDict
         _TV_T = typing.KeysView[_T_T]  # Using generic KeysView, helps the PyCharm type checker
 
+    _push_buffer: typing.Deque[_SV_T]
     _event_buffer: _EB_T
     _timestamps: _TV_T
 
@@ -472,6 +479,8 @@ class PeekSignal(Signal):
         # Call super
         super(PeekSignal, self).__init__(scope, name, type_, size)
 
+        # Create push buffer
+        self._push_buffer = collections.deque()
         # Create event buffer
         self._event_buffer = sortedcontainers.SortedDict()
         if init is not None:
@@ -479,7 +488,7 @@ class PeekSignal(Signal):
         # Create timestamp view
         self._timestamps = self._event_buffer.keys()
 
-    def push(self, value: _SV_T, *,
+    def push(self, value: typing.Any, *,
              time: typing.Optional[_T_T] = None, offset: _O_T = 0) -> None:
         # Normalize value and add value to event buffer
         # An existing value at the same timestamp will be overwritten, just as the ARTIQ RTIO system does
@@ -487,18 +496,37 @@ class PeekSignal(Signal):
 
     def pull(self, *,
              time: typing.Optional[_T_T] = None, offset: _O_T = 0) -> _SV_T:
-        # Binary search for the insertion point (right) of the given timestamp
-        index = self._event_buffer.bisect_right(_get_timestamp(time, offset))
+        if self._push_buffer:
+            # Take an item from the buffer, push it, and return the value
+            value = self._push_buffer.popleft()
+            self.push(value, time=time, offset=offset)
+            return value
 
-        if index:
-            # Return the value
-            return self._event_buffer[self._timestamps[index - 1]]
         else:
-            # Signal was not set, raise an exception
-            raise SignalNotSetError(self, _get_timestamp(time, offset))
+            # Binary search for the insertion point (right) of the given timestamp
+            index = self._event_buffer.bisect_right(_get_timestamp(time, offset))
+
+            if index:
+                # Return the value
+                return self._event_buffer[self._timestamps[index - 1]]
+            else:
+                # Signal was not set, raise an exception
+                raise SignalNotSetError(self, _get_timestamp(time, offset))
+
+    def push_buffer(self, buffer: typing.Sequence[typing.Any]) -> None:
+        """Push a buffer of values this signal.
+
+        Values in the buffer will be pushed automatically at the next call to :func:`pull`. See also :func:`push`.
+
+        :param buffer: The buffer of values to queue
+        :raises ValueError: Raised if the value is invalid
+        """
+        # Add values to the push buffer
+        self._push_buffer.extend(self.normalize(v) for v in buffer)
 
     def clear(self) -> None:
-        """Clear the event buffer."""
+        """Clear buffers."""
+        self._push_buffer.clear()
         self._event_buffer.clear()
 
 
@@ -513,7 +541,7 @@ class PeekSignalManager(DaxSignalManager[PeekSignal]):
         pass
 
     def close(self) -> None:
-        # Clear all event buffers
+        # Clear all signals
         for signal in self:
             signal.clear()
 

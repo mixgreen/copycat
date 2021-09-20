@@ -344,6 +344,23 @@ class PeekTestCaseTestCase(dax.sim.test_case.PeekTestCase):
                         self.expect(scope, name, val)
                         self.assertEqual(self.peek(scope, name), val)
 
+    def test_push_buffer(self):
+        test_data = [1 * kHz, 0 * kHz, 99.2 * kHz, 100 * kHz]
+
+        scope = self.sys.ec
+        name = 'input_freq'
+
+        # Push the whole buffer
+        self.push_buffer(scope, name, test_data)
+
+        for _ in range(len(test_data)):
+            delay_mu(1000)
+            self.sys.ec.gate_rising_mu(self.sys.core.seconds_to_mu(1 * s))
+
+        for freq in test_data:
+            self.assertAlmostEqual(self.sys.ec.fetch_count(), freq, delta=1)
+        self.assertEqual(self.peek(scope, name), test_data[-1])
+
 
 class _TestSystem(DaxSystem):
     SYS_ID = 'unittest_system'
