@@ -22,7 +22,7 @@ _KEY_RE: typing.Pattern[str] = re.compile(r'[a-zA-Z_]\w*')
 _S_T = typing.Union[ScanObject, typing.Sequence[typing.Any]]  # Scan object type
 
 # Workaround required for Python<3.9
-if typing.TYPE_CHECKING:
+if typing.TYPE_CHECKING:  # pragma: no cover
     _SD_T = collections.OrderedDict[str, _S_T]  # Scan dict type
 else:
     _SD_T = collections.OrderedDict

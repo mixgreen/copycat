@@ -15,7 +15,7 @@ from dax.util.units import UnitsFormatter
 __all__ = ['TimeResolvedContext', 'TimeResolvedAnalyzer', 'TimeResolvedContextError']
 
 # Workaround required for Python<3.9
-if typing.TYPE_CHECKING:
+if typing.TYPE_CHECKING:  # pragma: no cover
     _TD_T = typing.Dict[str, typing.Union[typing.Sequence[float],
                                           typing.Sequence[typing.Sequence[float]]]]  # Type for a trace dict
 else:

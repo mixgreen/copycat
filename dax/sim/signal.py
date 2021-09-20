@@ -358,6 +358,7 @@ class VcdSignal(ConstantSignal):
 
         # Workaround for str init values (shows up as `z` instead of string value 'x')
         init = '' if type_ is str and init is None else init
+
         # Register this variable with the VCD writer
         self._vcd = vcd_.register_var(scope.key, name, var_type=self._VCD_TYPE[type_], size=size, init=init)
 
@@ -365,6 +366,17 @@ class VcdSignal(ConstantSignal):
              time: typing.Optional[_T_T] = None, offset: _O_T = 0) -> None:
         # Add event to buffer
         self._event_buffer.append((_get_timestamp(time, offset), self, self.normalize(value)))
+
+    def normalize(self, value: typing.Any) -> _SV_T:
+        # Call super
+        v = super(VcdSignal, self).normalize(value)
+
+        # Workaround for int values (NumPy int objects are not accepted)
+        if self.type is int and isinstance(v, (np.int32, np.int64)):
+            v = int(v)
+
+        # Return value
+        return v
 
     @property
     def vcd(self) -> __VCD_T:
@@ -446,7 +458,7 @@ class PeekSignal(Signal):
     """Class to represent a peek signal."""
 
     # Workaround required for the local stubs of the sorted containers library
-    if typing.TYPE_CHECKING:
+    if typing.TYPE_CHECKING:  # pragma: no cover
         _EB_T = sortedcontainers.SortedDict[_T_T, _SV_T]  # The peek signal event buffer type
         _TV_T = sortedcontainers.SortedKeysView[_T_T]  # The peek signal event buffer timestamp view type
     else:

@@ -25,7 +25,7 @@ __all__ = ['is_kernel', 'is_portable', 'is_host_only', 'is_rpc', 'is_decorated',
            'pause_strict_priority', 'terminate_running_instances']
 
 # Workaround required for Python<3.9
-if typing.TYPE_CHECKING:
+if typing.TYPE_CHECKING:  # pragma: no cover
     _TD_T = tempfile.TemporaryDirectory[str]  # Type for a temporary directory
 else:
     _TD_T = tempfile.TemporaryDirectory

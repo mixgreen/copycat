@@ -157,6 +157,14 @@ class NullSignalManagerTestCase(unittest.TestCase):
                         with self.assertRaises(SignalNotSetError):
                             signal.pull(offset=-1)
 
+    def test_flush_close(self):
+        # Push signals
+        self.test_push()
+        self.test_push_bool_vector()
+        # Flush and close
+        self.sm.flush(self.sys.core.ref_period)
+        self.sm.close()
+
     def test_push_bad(self):
         test_data = {
             self.sys.ttl0._state: ['foo', '00', np.int32(9), np.int64(-1), 0.4, None, '0', '1'],  # bool

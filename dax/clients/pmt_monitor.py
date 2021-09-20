@@ -15,7 +15,7 @@ from dax.util.units import time_to_str
 __all__ = ['PmtMonitor', 'MultiPmtMonitor']
 
 # Workaround required for Python<3.9
-if typing.TYPE_CHECKING:
+if typing.TYPE_CHECKING:  # pragma: no cover
     _C_T = collections.OrderedDict[str, float]  # Count scales type
 else:
     _C_T = collections.OrderedDict
