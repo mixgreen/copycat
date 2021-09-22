@@ -341,7 +341,7 @@ class VcdSignal(ConstantSignal):
     __VCD_T = vcd.writer.Variable[vcd.writer.VarValue]  # VCD variable type
     E_T = typing.Tuple[typing.Union[int, np.int64], 'VcdSignal', _SV_T]  # Event type (string literal forward reference)
 
-    _event_buffer: typing.List[E_T]
+    _events: typing.List[E_T]
     _vcd: __VCD_T
 
     _VCD_TYPE: typing.ClassVar[typing.Dict[_ST_T, str]] = {
@@ -354,11 +354,11 @@ class VcdSignal(ConstantSignal):
     """Dict to convert Python types to VCD types."""
 
     def __init__(self, scope: DaxSimDevice, name: str, type_: _ST_T, size: _SS_T, *, init: typing.Optional[_SV_T],
-                 vcd_: vcd.writer.VCDWriter, event_buffer: typing.List[E_T]):
+                 vcd_: vcd.writer.VCDWriter, events: typing.List[E_T]):
         # Call super
         super(VcdSignal, self).__init__(scope, name, type_, size, init=init)
         # Store reference to shared and mutable event buffer
-        self._event_buffer = event_buffer
+        self._events = events
 
         # Workaround for str init values (shows up as `z` instead of string value 'x')
         init = '' if type_ is str and init is None else init
@@ -368,8 +368,8 @@ class VcdSignal(ConstantSignal):
 
     def push(self, value: typing.Any, *,
              time: typing.Optional[_T_T] = None, offset: _O_T = 0) -> None:
-        # Add event to buffer
-        self._event_buffer.append((_get_timestamp(time, offset), self, self.normalize(value)))
+        # Add event
+        self._events.append((_get_timestamp(time, offset), self, self.normalize(value)))
 
     def normalize(self, value: typing.Any) -> _SV_T:
         # Call super
@@ -393,7 +393,7 @@ class VcdSignalManager(DaxSignalManager[VcdSignal]):
     _timescale: float
     _file: typing.IO[str]
     _vcd: vcd.writer.VCDWriter
-    _event_buffer: typing.List[VcdSignal.E_T]
+    _events: typing.List[VcdSignal.E_T]
 
     def __init__(self, file_name: str, timescale: float = 1 * ns):
         assert isinstance(file_name, str), 'Output file name must be of type str'
@@ -414,32 +414,32 @@ class VcdSignalManager(DaxSignalManager[VcdSignal]):
                                          comment=file_name,
                                          version=_dax_version)
 
-        # Create the shared event buffer
-        self._event_buffer = []
+        # Create the shared buffer for events
+        self._events = []
 
     def _create_signal(self, scope: DaxSimDevice, name: str, type_: _ST_T, *,
                        size: _SS_T = None, init: typing.Optional[_SV_T] = None) -> VcdSignal:
-        return VcdSignal(scope, name, type_, size, init=init, vcd_=self._vcd, event_buffer=self._event_buffer)
+        return VcdSignal(scope, name, type_, size, init=init, vcd_=self._vcd, events=self._events)
 
     def flush(self, ref_period: float) -> None:
         # Sort the list of events (VCD writer can only handle a linear timeline)
-        self._event_buffer.sort(key=operator.itemgetter(0))
+        self._events.sort(key=operator.itemgetter(0))
         # Get a timestamp for now
         now: int = int(_get_timestamp())
 
         if ref_period == self._timescale:
-            # Just iterate over the event buffer
-            event_buffer_iter: typing.Iterator[VcdSignal.E_T] = iter(self._event_buffer)
+            # Just iterate over the events
+            events_iter: typing.Iterator[VcdSignal.E_T] = iter(self._events)
         else:
             # Scale the timestamps if the reference period does not match the timescale
             scalar = ref_period / self._timescale
-            event_buffer_iter = ((int(time * scalar), signal, value) for time, signal, value in self._event_buffer)
+            events_iter = ((int(time * scalar), signal, value) for time, signal, value in self._events)
             # Scale the timestamp for now
             now = int(now * scalar)
 
         try:
             # Submit sorted events to the VCD writer
-            for time, signal, value in event_buffer_iter:
+            for time, signal, value in events_iter:
                 self._vcd.change(signal.vcd, time, value)
         except vcd.writer.VCDPhaseError as e:
             # Occurs when we try to submit a timestamp which is earlier than the last submitted timestamp
@@ -449,11 +449,11 @@ class VcdSignalManager(DaxSignalManager[VcdSignal]):
             self._vcd.flush(now)
 
         # Clear the event buffer
-        self._event_buffer.clear()
+        self._events.clear()
 
     def close(self) -> None:
         # Clear the event buffer
-        self._event_buffer.clear()
+        self._events.clear()
         # Close the VCD writer (reentrant)
         self._vcd.close()
         # Close the VCD file (reentrant)
@@ -471,44 +471,44 @@ class PeekSignal(Signal):
         _EB_T = sortedcontainers.SortedDict
         _TV_T = typing.KeysView[_T_T]  # Using generic KeysView, helps the PyCharm type checker
 
-    _push_buffer: typing.Deque[_SV_T]
-    _event_buffer: _EB_T
+    _buffer: typing.Deque[_SV_T]
+    _events: _EB_T
     _timestamps: _TV_T
 
     def __init__(self, scope: DaxSimDevice, name: str, type_: _ST_T, size: _SS_T, *, init: typing.Optional[_SV_T]):
         # Call super
         super(PeekSignal, self).__init__(scope, name, type_, size)
 
-        # Create push buffer
-        self._push_buffer = collections.deque()
-        # Create event buffer
-        self._event_buffer = sortedcontainers.SortedDict()
+        # Create buffer for push values
+        self._buffer = collections.deque()
+        # Create buffer for events
+        self._events = sortedcontainers.SortedDict()
         if init is not None:
-            self._event_buffer[np.int64(0)] = self.normalize(init)
+            self._events[np.int64(0)] = self.normalize(init)
         # Create timestamp view
-        self._timestamps = self._event_buffer.keys()
+        self._timestamps = self._events.keys()
 
     def push(self, value: typing.Any, *,
              time: typing.Optional[_T_T] = None, offset: _O_T = 0) -> None:
         # Normalize value and add value to event buffer
         # An existing value at the same timestamp will be overwritten, just as the ARTIQ RTIO system does
-        self._event_buffer[_get_timestamp(time, offset)] = self.normalize(value)
+        self._events[_get_timestamp(time, offset)] = self.normalize(value)
 
     def pull(self, *,
              time: typing.Optional[_T_T] = None, offset: _O_T = 0) -> _SV_T:
-        if self._push_buffer:
+        if self._buffer:
             # Take an item from the buffer, push it, and return the value
-            value = self._push_buffer.popleft()
+            value = self._buffer.popleft()
             self.push(value, time=time, offset=offset)
             return value
 
         else:
             # Binary search for the insertion point (right) of the given timestamp
-            index = self._event_buffer.bisect_right(_get_timestamp(time, offset))
+            index = self._events.bisect_right(_get_timestamp(time, offset))
 
             if index:
                 # Return the value
-                return self._event_buffer[self._timestamps[index - 1]]
+                return self._events[self._timestamps[index - 1]]
             else:
                 # Signal was not set, raise an exception
                 raise SignalNotSetError(self, _get_timestamp(time, offset))
@@ -522,12 +522,12 @@ class PeekSignal(Signal):
         :raises ValueError: Raised if the value is invalid
         """
         # Add values to the push buffer
-        self._push_buffer.extend(self.normalize(v) for v in buffer)
+        self._buffer.extend(self.normalize(v) for v in buffer)
 
     def clear(self) -> None:
         """Clear buffers."""
-        self._push_buffer.clear()
-        self._event_buffer.clear()
+        self._buffer.clear()
+        self._events.clear()
 
 
 class PeekSignalManager(DaxSignalManager[PeekSignal]):

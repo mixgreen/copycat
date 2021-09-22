@@ -8,7 +8,7 @@ from artiq.language.core import *
 import artiq.coredevice.core
 
 from dax.sim.device import DaxSimDevice
-from dax.sim.signal import get_signal_manager, DaxSignalManager
+from dax.sim.signal import get_signal_manager, DaxSignalManager, Signal
 from dax.sim.ddb import DAX_SIM_CONFIG_KEY
 from dax.sim.time import DaxTimeManager
 from dax.sim.coredevice.comm_kernel import CommKernelDummy
@@ -159,7 +159,7 @@ class Core(BaseCore):
     _sim_config: DaxSimConfig
     _file_name_generator: BaseFileNameGenerator
     _signal_manager: DaxSignalManager[typing.Any]
-    _reset_signal: typing.Any
+    _reset_signal: Signal
     _level: int
     _context_switch_counter: int
     _fn_counter: typing.Counter[typing.Any]
