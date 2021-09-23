@@ -5,7 +5,7 @@ Duke ARTIQ Extensions (DAX).
 DAX is a library that extends the capabilities of [ARTIQ](https://github.com/m-labs/artiq)
 while maintaining a vanilla ARTIQ experience. The goal of the project is to provide a framework that enables the
 development of modular and transparently layered software for current state-of-the-art and future-generation quantum
-control systems. Users can implement software for their system using the DAX framework and combine it with shared
+control systems. Users can implement software for their system using the DAX framework and combine it with other
 components and utilities provided by DAX.
 
 Projects related to DAX:
@@ -95,6 +95,18 @@ from dax.program import *
 
 The major version number of DAX matches the version of the targeted ARTIQ release.
 
+## Development
+
+Below you will find the development stage of each component in the DAX library.
+
+| Component                 | Development stage |
+|---------------------------|-------------------|
+| `DAX.experiment` (system) | Stable            |
+| `DAX.sim`                 | Beta              |
+| `DAX.scan`                | Stable            |
+| `DAX.scheduler`           | Alpha             |
+| `DAX.program`             | Alpha             |
+
 ## Testing
 
 Use pytest or Python unittest to run the DAX unit tests. We recommend using pytest.
@@ -107,6 +119,10 @@ $ pytest
 
 - Leon Riesebos (Duke University)
 - Brad Bondurant (Duke University)
+
+## Publications
+
+- DAX.scheduler: [Universal Graph-Based Scheduling for Quantum Systems (2021)](https://doi.org/10.1109/MM.2021.3094968)
 
 ## Acknowledgements
 
