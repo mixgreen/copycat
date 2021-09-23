@@ -39,7 +39,7 @@ class _NonReentrantExitErrorTestSystem(_NonReentrantTestSystem):
     EXIT_ERROR = False
 
 
-class _GenericSafetyContextTestCase(unittest.TestCase):
+class ReentrantSafetyContextTestCase(unittest.TestCase):
     SYSTEM_TYPE = _ReentrantTestSystem
 
     def setUp(self) -> None:
@@ -161,10 +161,6 @@ class _GenericSafetyContextTestCase(unittest.TestCase):
         # Test kernel invariants
         test.helpers.test_system_kernel_invariants(self, self.s)
 
-
-class ReentrantSafetyContextTestCase(_GenericSafetyContextTestCase):
-    SYSTEM_TYPE = _ReentrantTestSystem
-
     def test_nested_context(self):
         self.assertDictEqual(self.counter, {'enter': 0, 'exit': 0}, 'Counters did not match expected values')
 
@@ -198,7 +194,7 @@ class ReentrantExitErrorSafetyContextTestCase(ReentrantSafetyContextTestCase):
     SYSTEM_TYPE = _ReentrantExitErrorTestSystem
 
 
-class NonReentrantSafetyContextTestCase(_GenericSafetyContextTestCase):
+class NonReentrantSafetyContextTestCase(ReentrantSafetyContextTestCase):
     SYSTEM_TYPE = _NonReentrantTestSystem
 
     def test_nested_context(self):

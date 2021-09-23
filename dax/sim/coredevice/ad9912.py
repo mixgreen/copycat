@@ -20,10 +20,10 @@ class AD9912(DaxSimDevice):
         super(AD9912, self).__init__(dmgr, **kwargs)
 
         # Register signals
-        self._signal_manager = get_signal_manager()
-        self._init = self._signal_manager.register(self, 'init', bool, size=1)
-        self._freq = self._signal_manager.register(self, 'freq', float)
-        self._phase = self._signal_manager.register(self, 'phase', float)
+        signal_manager = get_signal_manager()
+        self._init = signal_manager.register(self, 'init', bool, size=1)
+        self._freq = signal_manager.register(self, 'freq', float)
+        self._phase = signal_manager.register(self, 'phase', float)
 
         # CPLD device
         self.cpld: CPLD = dmgr.get(cpld_device)
@@ -48,7 +48,7 @@ class AD9912(DaxSimDevice):
         raise NotImplementedError
 
     def _init_(self):
-        self._signal_manager.event(self._init, 1)
+        self._init.push(True)
 
     @kernel
     def init(self):
@@ -92,8 +92,8 @@ class AD9912(DaxSimDevice):
     def set(self, frequency: TFloat, phase: TFloat = 0.0):
         assert 0 * MHz <= frequency <= 400 * MHz, 'Frequency out of range'
         assert 0.0 <= phase < 1.0, 'Phase out of range'
-        self._signal_manager.event(self._freq, float(frequency))
-        self._signal_manager.event(self._phase, float(phase))
+        self._freq.push(float(frequency))
+        self._phase.push(float(phase))
 
     @kernel
     def cfg_sw(self, state: TBool):

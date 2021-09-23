@@ -61,12 +61,12 @@ class AD9910(DaxSimDevice):
         self.phase_mode = PHASE_MODE_CONTINUOUS
 
         # Register signals
-        self._signal_manager = get_signal_manager()
-        self._init = self._signal_manager.register(self, 'init', bool, size=1)
-        self._freq = self._signal_manager.register(self, 'freq', float)
-        self._phase = self._signal_manager.register(self, 'phase', float)
-        self._phase_mode = self._signal_manager.register(self, 'phase_mode', bool, size=2)
-        self._amp = self._signal_manager.register(self, 'amp', float)
+        signal_manager = get_signal_manager()
+        self._init = signal_manager.register(self, 'init', bool, size=1)
+        self._freq = signal_manager.register(self, 'freq', float)
+        self._phase = signal_manager.register(self, 'phase', float)
+        self._phase_mode = signal_manager.register(self, 'phase_mode', bool, size=2)
+        self._amp = signal_manager.register(self, 'amp', float)
 
     @kernel
     def set_phase_mode(self, phase_mode: TInt32):
@@ -126,7 +126,7 @@ class AD9910(DaxSimDevice):
         delay(1 * ms)
 
         # Update signal
-        self._signal_manager.event(self._init, True)
+        self._init.push(True)
 
     @kernel
     def power_down(self, bits: TInt32 = 0b1111):
@@ -241,10 +241,10 @@ class AD9910(DaxSimDevice):
             phase_mode = self.phase_mode
 
         # Manage signals
-        self._signal_manager.event(self._freq, float(frequency))
-        self._signal_manager.event(self._phase, float(phase))
-        self._signal_manager.event(self._amp, float(amplitude))
-        self._signal_manager.event(self._phase_mode, _PHASE_MODE_DICT[self.phase_mode])
+        self._freq.push(float(frequency))
+        self._phase.push(float(phase))
+        self._amp.push(float(amplitude))
+        self._phase_mode.push(_PHASE_MODE_DICT[self.phase_mode])
 
         # Returns pow
         return self.pow_to_turns(self._get_pow(

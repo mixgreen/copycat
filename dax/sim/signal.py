@@ -1,8 +1,8 @@
 import abc
 import typing
-import types
 import operator
 import datetime
+import collections
 import numpy as np
 import vcd.writer
 import sortedcontainers
@@ -14,52 +14,118 @@ from dax.sim.device import DaxSimDevice
 from dax import __version__ as _dax_version
 import dax.util.units
 
-__all__ = ['DaxSignalManager', 'NullSignalManager', 'VcdSignalManager', 'PeekSignalManager', 'SignalNotSet',
+__all__ = ['Signal', 'SignalNotSetError', 'SignalNotFoundError', 'DaxSignalManager',
+           'NullSignalManager', 'VcdSignalManager', 'PeekSignalManager',
            'get_signal_manager', 'set_signal_manager']
 
-_T_T = np.int64
-_S_T = typing.TypeVar('_S_T')  # The abstract signal type
+_T_T = np.int64  # Timestamp type
+_O_T = typing.Union[int, np.int32, np.int64]  # Time offset type
+
+_ST_T = typing.Union[typing.Type[bool], typing.Type[int], typing.Type[float],  # The signal type type
+                     typing.Type[str], typing.Type[object]]
+_SS_T = typing.Optional[int]  # The signal size type
+_SV_T = typing.Union[bool, int, np.int32, np.int64, float, str]  # The signal value type
 
 
-class DaxSignalManager(abc.ABC, typing.Generic[_S_T]):
-    """Abstract class for classes that manage simulated signals."""
+class Signal(abc.ABC):
+    """Abstract class to represent a signal."""
 
-    @abc.abstractmethod
-    def register(self, scope: DaxSimDevice, name: str, type_: type, *,  # pragma: no cover
-                 size: typing.Optional[int] = None, init: typing.Any = None) -> _S_T:
-        """Register a signal.
+    __scope: DaxSimDevice
+    __name: str
+    __type: _ST_T
+    __size: _SS_T
 
-        Signals have to be registered before any events are committed.
+    _EXPECTED_TYPES: typing.ClassVar[typing.Dict[_ST_T, typing.Union[type, typing.Tuple[type, ...]]]] = {
+        bool: bool,
+        int: (int, np.int32, np.int64),
+        float: float,
+        str: str,
+        object: bool,
+    }
+    """Valid value types for each signal type."""
 
-        Possible types and expected arguments:
+    _SPECIAL_VALUES: typing.ClassVar[typing.Dict[_ST_T, typing.Set[typing.Any]]] = {
+        bool: {'x', 'X', 'z', 'Z', 0, 1},  # Also matches float and NumPy int
+        int: {'x', 'X', 'z', 'Z'},
+        float: set(),
+        str: set(),
+        object: set(),
+    }
+    """Valid special values for each signal type."""
 
-        - ``bool`` (a register with bit values ``0``, ``1``, ``'X'``, ``'Z'``), provide a size of the register
-        - ``int``, ``np.int32``, ``np.int64``
-        - ``float``
-        - ``str``
-        - ``object`` (an event type with no value)
+    def __init__(self, scope: DaxSimDevice, name: str, type_: _ST_T, size: _SS_T = None):
+        """Initialize a new signal object."""
+        assert isinstance(scope, DaxSimDevice), 'Signal scope must be of type DaxSimDevice'
+        assert isinstance(name, str), 'Signal name must be of type str'
+        assert name.isidentifier(), 'Invalid signal name (must be a valid identifier)'
+        assert type_ in self._EXPECTED_TYPES, 'Invalid signal type'
+        if type_ is bool:
+            assert isinstance(size, int) and size > 0, 'Signal size must be an integer > 0 for signal type bool'
+        else:
+            assert size is None, f'Size not supported for signal type "{type_}"'
 
-        :param scope: The scope of the signal, which is the device object
-        :param name: The name of the signal
-        :param type_: The type of the signal
-        :param size: The size of the data (only for type bool)
-        :param init: Initial value (defaults to ``'X'``)
-        :return: The signal object to use when committing events
+        # Store attributes
+        self.__scope = scope
+        self.__name = name
+        self.__type = type_
+        self.__size = size
+
+    @property
+    def scope(self) -> DaxSimDevice:
+        """Scope of the signal, which is the device object."""
+        return self.__scope
+
+    @property
+    def name(self) -> str:
+        """Name of the signal."""
+        return self.__name
+
+    @property
+    def type(self) -> _ST_T:
+        """Type of the signal."""
+        return self.__type
+
+    @property
+    def size(self) -> _SS_T:
+        """Size of the signal."""
+        return self.__size
+
+    def normalize(self, value: typing.Any) -> _SV_T:
+        """Normalize a value for this signal.
+
+        :param value: The value to normalize
+        :return: The normalized value
+        :raises ValueError: Raised if the value is invalid
         """
-        pass
+        if self.size in {None, 1}:
+            # noinspection PyTypeHints
+            if isinstance(value, self._EXPECTED_TYPES[self.type]):
+                return typing.cast(_SV_T, value)  # Value is legal (expected type), cast required for mypy
+            if value in self._SPECIAL_VALUES[self.type]:
+                return typing.cast(_SV_T, value)  # Value is legal (special value), cast required for mypy
+        elif self.type is bool and isinstance(value, str) and len(value) == self.size and all(
+                v in {'x', 'X', 'z', 'Z', '0', '1'} for v in value):
+            return value.lower()  # Value is legal (bool vector) (store lower case)
+
+        # Value did not pass check
+        raise ValueError(f'Invalid value "{value}" for signal type "{self.type}"')
 
     @abc.abstractmethod
-    def event(self, signal: _S_T, value: typing.Any, *,  # pragma: no cover
-              time: typing.Optional[_T_T] = None,
-              offset: typing.Union[int, np.int32, np.int64, None] = None) -> None:
-        """Commit an event.
+    def push(self, value: typing.Any, *,  # pragma: no cover
+             time: typing.Optional[_T_T] = None, offset: _O_T = 0) -> None:
+        """Push an event to this signal (i.e. change the value of this signal at the given time).
+
+        Values are automatically normalized before inserted into the signal manager (see :func:`normalize`).
 
         Note that in a parallel context, :func:`delay` and :func:`delay_mu` do not directly
         influence the time returned by :func:`now_mu`.
-        It is better to use the time or offset parameters to set events at different times.
+        It is recommended to use the time or offset parameters to set events at a different
+        time without modifying the timeline.
 
         Bool type signals can have values ``0``, ``1``, ``'X'``, ``'Z'``.
         A vector of a bool type signal has a value of type ``str`` (e.g. ``'1001XZ'``).
+        An integer can be converted to a bool vector with the following example code:
+        ``f'{value & 0xFF:08b}'`` (size 8 bool vector).
 
         Integer type variables can have any int value or any value legal for a bool type signal.
 
@@ -70,10 +136,139 @@ class DaxSignalManager(abc.ABC, typing.Generic[_S_T]):
 
         String type signals can use value :const:`None` which is equivalent to ``'Z'``.
 
-        :param signal: The signal that changed
-        :param value: The new value of the signal
+        :param value: The new value of this signal
         :param time: Optional time in machine units when the event happened (:func:`now_mu` if no time was provided)
         :param offset: Optional offset from the given time in machine units (default is :const:`0`)
+        :raises ValueError: Raised if the value is invalid
+        """
+        pass
+
+    @abc.abstractmethod
+    def pull(self, *,  # pragma: no cover
+             time: typing.Optional[_T_T] = None, offset: _O_T = 0) -> _SV_T:
+        """Pull the value of this signal at the given time.
+
+        Note that in a parallel context, :func:`delay` and :func:`delay_mu` do not directly
+        influence the time returned by :func:`now_mu`.
+        It is recommended to use the time or offset parameters to get values at a different
+        time without modifying the timeline.
+
+        :param time: Optional time in machine units to obtain the signal value (:func:`now_mu` if no time was provided)
+        :param offset: Optional offset from the given time in machine units (default is :const:`0`)
+        :return: The value of the given signal at the given time and offset
+        :raises SignalNotSetError: Raised if the signal was not set at the given time
+        """
+        pass
+
+    def __str__(self) -> str:
+        """The key of the corresponding device followed by the name of this signal."""
+        return f'{self.scope}.{self.name}'
+
+    def __repr__(self) -> str:
+        """See :func:`__str__`."""
+        return str(self)
+
+
+class SignalNotSetError(RuntimeError):
+    """This exception is raised when a signal value is requested but the signal is not set."""
+
+    def __init__(self, signal: Signal, time: _T_T, msg: str = ''):
+        msg_ = f'Signal "{signal}" not set at time {time}{f": {msg}" if msg else ""}'
+        super(SignalNotSetError, self).__init__(msg_)
+
+
+class SignalNotFoundError(KeyError):
+    """This exception is raised when a requested signal does not exist."""
+
+    def __init__(self, scope: DaxSimDevice, name: str):
+        super(SignalNotFoundError, self).__init__(f'Signal "{scope}.{name}" could not be found')
+
+
+_S_T = typing.TypeVar('_S_T', bound=Signal)  # The abstract signal type variable
+
+
+class DaxSignalManager(abc.ABC, typing.Generic[_S_T]):
+    """Base class for classes that manage simulated signals."""
+
+    __signals: typing.Dict[typing.Tuple[DaxSimDevice, str], _S_T]
+    """Registered signals"""
+
+    def __init__(self) -> None:
+        self.__signals = {}
+
+    def register(self, scope: DaxSimDevice, name: str, type_: _ST_T, *,
+                 size: _SS_T = None, init: typing.Optional[_SV_T] = None) -> _S_T:
+        """Register a signal.
+
+        Signals have to be registered before any events are committed.
+        Used by the device driver to register signals.
+
+        Possible types and expected arguments:
+
+        - ``bool`` (a register with bit values ``0``, ``1``, ``'X'``, ``'Z'``), provide a size of the register
+        - ``int``
+        - ``float``
+        - ``str``
+        - ``object`` (an event type with no value)
+
+        :param scope: The scope of the signal, which is the device object
+        :param name: The name of the signal
+        :param type_: The type of the signal
+        :param size: The size of the data (only for type bool)
+        :param init: Initial value (defaults to :const:`None` (``'X'``))
+        :return: The signal object used to call other functions of this class
+        :raises LookupError: Raised if the signal was already registered
+        """
+        # Create the key
+        key = (scope, name)
+
+        if key in self.__signals:
+            # A signal can not be registered more than once
+            raise LookupError(f'Signal "{self.__signals[key]}" was already registered')
+
+        # Create, register, and return signal
+        signal = self._create_signal(scope, name, type_, size=size, init=init)
+        self.__signals[key] = signal
+        return signal
+
+    def signal(self, scope: DaxSimDevice, name: str) -> _S_T:
+        """Obtain an existing signal object.
+
+        :param scope: The scope of the signal, which is the device object
+        :param name: The name of the signal
+        :return: The signal object used to call other functions of this class
+        :raises SignalNotFoundError: Raised if the signal could not be found
+        """
+        # Create the key
+        key = (scope, name)
+
+        if key not in self.__signals:
+            # Signal not found
+            raise SignalNotFoundError(scope, name)
+
+        # Return key
+        return self.__signals[key]
+
+    def __iter__(self) -> typing.Iterator[_S_T]:
+        """Obtain an iterator over the registered signals."""
+        return iter(self.__signals.values())
+
+    def __len__(self) -> int:
+        """Get the number of registered signals."""
+        return len(self.__signals)
+
+    @abc.abstractmethod
+    def _create_signal(self, scope: DaxSimDevice, name: str, type_: _ST_T, *,  # pragma: no cover
+                       size: _SS_T = None, init: typing.Optional[_SV_T] = None) -> _S_T:
+        """Create a new signal object.
+
+        :param scope: The scope of the signal, which is the device object
+        :param name: The name of the signal
+        :param type_: The type of the signal
+        :param size: The size of the data (only for type bool)
+        :param init: Initial value (defaults to :const:`None` (``'X'``))
+        :return: The signal object used to call other functions of this class
+        :raises LookupError: Raised if the signal was already registered
         """
         pass
 
@@ -87,31 +282,51 @@ class DaxSignalManager(abc.ABC, typing.Generic[_S_T]):
 
     @abc.abstractmethod
     def close(self) -> None:  # pragma: no cover
-        """Close the signal manager."""
+        """Close the signal manager.
+
+        Note that this function must be reentrant!
+        """
         pass
 
-    # noinspection PyMethodMayBeStatic
-    def _get_timestamp(self, time: typing.Optional[_T_T] = None,
-                       offset: typing.Union[int, np.int32, np.int64, None] = None) -> _T_T:
-        """Return the timestamp of an event."""
-        if time is None:
-            time = artiq.language.core.now_mu()  # noqa: ATQ101
-        if offset is not None:
-            time += offset
-        return time
+
+def _get_timestamp(time: typing.Optional[_T_T] = None, offset: _O_T = 0) -> _T_T:
+    """Calculate the timestamp of an event."""
+    if time is None:
+        time = artiq.language.core.now_mu()  # noqa: ATQ101
+    else:
+        assert isinstance(time, np.int64), 'Time must be of type np.int64'
+    return time + offset if offset else time
 
 
-class NullSignalManager(DaxSignalManager[None]):
-    """A signal manager that does nothing."""
+class ConstantSignal(Signal):
+    """Class to represent a constant signal."""
 
-    def register(self, scope: DaxSimDevice, name: str, type_: type, *,
-                 size: typing.Optional[int] = None, init: typing.Any = None) -> None:
-        pass
+    _init: typing.Optional[_SV_T]
 
-    def event(self, signal: None, value: typing.Any, *,
-              time: typing.Optional[_T_T] = None,
-              offset: typing.Union[int, np.int32, np.int64, None] = None) -> None:
-        pass
+    def __init__(self, scope: DaxSimDevice, name: str, type_: _ST_T, size: _SS_T, *, init: typing.Optional[_SV_T]):
+        super(ConstantSignal, self).__init__(scope, name, type_, size)
+        self._init = None if init is None else self.normalize(init)
+
+    def push(self, value: typing.Any, *,
+             time: typing.Optional[_T_T] = None, offset: _O_T = 0) -> None:
+        self.normalize(value)  # Do normalization (for exceptions) before dropping the event
+
+    def pull(self, *,
+             time: typing.Optional[_T_T] = None, offset: _O_T = 0) -> _SV_T:
+        if self._init is None:
+            # Signal was not set
+            raise SignalNotSetError(self, _get_timestamp(time, offset), msg='Signal not initialized')
+        else:
+            # Return the init value
+            return self._init
+
+
+class NullSignalManager(DaxSignalManager[ConstantSignal]):
+    """A signal manager with constant signals (i.e. all push events to signals are dropped)."""
+
+    def _create_signal(self, scope: DaxSimDevice, name: str, type_: _ST_T, *,
+                       size: _SS_T = None, init: typing.Optional[_SV_T] = None) -> ConstantSignal:
+        return ConstantSignal(scope, name, type_, size, init=init)
 
     def flush(self, ref_period: float) -> None:
         pass
@@ -120,104 +335,112 @@ class NullSignalManager(DaxSignalManager[None]):
         pass
 
 
-_VS_T = vcd.writer.Variable[vcd.writer.VarValue]  # The VCD signal type
-_VT_T = typing.Type[typing.Union[bool, int, np.int32, np.int64, float, str, object]]  # The VCD signal-type type
-_VV_T = typing.Union[bool, int, np.int32, np.int64, float, str, None]  # The VCD value types
+class VcdSignal(ConstantSignal):
+    """Class to represent a VCD signal."""
 
+    __VCD_T = vcd.writer.Variable[vcd.writer.VarValue]  # VCD variable type
+    E_T = typing.Tuple[typing.Union[int, np.int64], 'VcdSignal', _SV_T]  # Event type (string literal forward reference)
 
-class VcdSignalManager(DaxSignalManager[_VS_T]):
-    """VCD signal manager."""
+    _events: typing.List[E_T]
+    _vcd: __VCD_T
 
-    # Signal-type type
-    __S_T = typing.Tuple[str, type, typing.Optional[int]]
-    # Dict of registered signals type
-    __RS_T = typing.Dict[DaxSimDevice, typing.List[__S_T]]
-    # Map of registered signals type
-    __RSM_T = typing.Mapping[DaxSimDevice, typing.List[__S_T]]
-
-    _CONVERT_TYPE: typing.ClassVar[typing.Dict[type, str]] = {
+    _VCD_TYPE: typing.ClassVar[typing.Dict[_ST_T, str]] = {
         bool: 'reg',
         int: 'integer',
-        np.int32: 'integer',
-        np.int64: 'integer',
         float: 'real',
         str: 'string',
         object: 'event',
     }
     """Dict to convert Python types to VCD types."""
 
+    def __init__(self, scope: DaxSimDevice, name: str, type_: _ST_T, size: _SS_T, *, init: typing.Optional[_SV_T],
+                 vcd_: vcd.writer.VCDWriter, events: typing.List[E_T]):
+        # Call super
+        super(VcdSignal, self).__init__(scope, name, type_, size, init=init)
+        # Store reference to shared and mutable event buffer
+        self._events = events
+
+        # Workaround for str init values (shows up as `z` instead of string value 'x')
+        init = '' if type_ is str and init is None else init
+
+        # Register this variable with the VCD writer
+        self._vcd = vcd_.register_var(scope.key, name, var_type=self._VCD_TYPE[type_], size=size, init=init)
+
+    def push(self, value: typing.Any, *,
+             time: typing.Optional[_T_T] = None, offset: _O_T = 0) -> None:
+        # Add event
+        self._events.append((_get_timestamp(time, offset), self, self.normalize(value)))
+
+    def normalize(self, value: typing.Any) -> _SV_T:
+        # Call super
+        v = super(VcdSignal, self).normalize(value)
+
+        # Workaround for int values (NumPy int objects are not accepted)
+        if self.type is int and isinstance(v, (np.int32, np.int64)):
+            v = int(v)
+
+        # Return value
+        return v
+
+    @property
+    def vcd(self) -> __VCD_T:
+        return self._vcd
+
+
+class VcdSignalManager(DaxSignalManager[VcdSignal]):
+    """VCD signal manager."""
+
     _timescale: float
-    _event_buffer: typing.List[typing.Tuple[typing.Union[int, np.int64], _VS_T, _VV_T]]
-    _registered_signals: __RS_T
+    _file: typing.IO[str]
+    _vcd: vcd.writer.VCDWriter
+    _events: typing.List[VcdSignal.E_T]
 
     def __init__(self, file_name: str, timescale: float = 1 * ns):
         assert isinstance(file_name, str), 'Output file name must be of type str'
         assert isinstance(timescale, float), 'Timescale must be of type float'
         assert timescale > 0.0, 'Timescale must be > 0.0'
 
+        # Call super
+        super(VcdSignalManager, self).__init__()
         # Store timescale
         self._timescale = timescale
 
         # Open file
-        self._vcd_file = open(file_name, mode='w')
-
+        self._file = open(file_name, mode='w')
         # Create VCD writer
-        timescale_str = dax.util.units.time_to_str(timescale, precision=0)
-        self._vcd = vcd.writer.VCDWriter(self._vcd_file,
-                                         timescale=timescale_str,
+        self._vcd = vcd.writer.VCDWriter(self._file,
+                                         timescale=dax.util.units.time_to_str(timescale, precision=0),
                                          date=datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
                                          comment=file_name,
                                          version=_dax_version)
 
-        # Create event buffer to support reverting time
-        self._event_buffer = []
-        # Create a registered signals data structure
-        self._registered_signals = {}
+        # Create the shared buffer for events
+        self._events = []
 
-    def register(self, scope: DaxSimDevice, name: str, type_: _VT_T, *,
-                 size: typing.Optional[int] = None, init: _VV_T = None) -> _VS_T:
-        assert isinstance(scope, DaxSimDevice), 'The scope of the signal must be of type DaxSimDevice'
-        assert isinstance(name, str), 'The name of the signal must be of type str'
-        assert isinstance(size, int) or size is None, 'The size must be an int or None'
-
-        if type_ not in self._CONVERT_TYPE:
-            raise TypeError(f'VCD signal manager does not support signal type {type_}')
-
-        # Get the var type
-        var_type = self._CONVERT_TYPE[type_]
-
-        # Workaround for str init values
-        if type_ is str and init is None:
-            init = ''  # Shows up as `Z` instead of string value 'x'
-
-        # Register signal locally
-        self._registered_signals.setdefault(scope, []).append((name, type_, size))
-        # Register the signal with the VCD writer and return the signal object
-        return self._vcd.register_var(scope.key, name, var_type=var_type, size=size, init=init)
-
-    def event(self, signal: _VS_T, value: _VV_T, *,
-              time: typing.Optional[_T_T] = None,
-              offset: typing.Union[int, np.int32, np.int64, None] = None) -> None:
-        # Add event to buffer
-        self._event_buffer.append((self._get_timestamp(time, offset), signal, value))
+    def _create_signal(self, scope: DaxSimDevice, name: str, type_: _ST_T, *,
+                       size: _SS_T = None, init: typing.Optional[_SV_T] = None) -> VcdSignal:
+        return VcdSignal(scope, name, type_, size, init=init, vcd_=self._vcd, events=self._events)
 
     def flush(self, ref_period: float) -> None:
         # Sort the list of events (VCD writer can only handle a linear timeline)
-        self._event_buffer.sort(key=operator.itemgetter(0))
+        self._events.sort(key=operator.itemgetter(0))
         # Get a timestamp for now
-        now: typing.Union[int, _T_T] = self._get_timestamp()
+        now: int = int(_get_timestamp())
 
-        if ref_period != self._timescale:
+        if ref_period == self._timescale:
+            # Just iterate over the events
+            events_iter: typing.Iterator[VcdSignal.E_T] = iter(self._events)
+        else:
             # Scale the timestamps if the reference period does not match the timescale
             scalar = ref_period / self._timescale
-            self._event_buffer = [(int(time * scalar), signal, value) for time, signal, value in self._event_buffer]
+            events_iter = ((int(time * scalar), signal, value) for time, signal, value in self._events)
             # Scale the timestamp for now
             now = int(now * scalar)
 
         try:
             # Submit sorted events to the VCD writer
-            for time, signal, value in self._event_buffer:
-                self._vcd.change(signal, time, value)
+            for time, signal, value in events_iter:
+                self._vcd.change(signal.vcd, time, value)
         except vcd.writer.VCDPhaseError as e:
             # Occurs when we try to submit a timestamp which is earlier than the last submitted timestamp
             raise RuntimeError('Attempt to go back in time too much') from e
@@ -226,207 +449,101 @@ class VcdSignalManager(DaxSignalManager[_VS_T]):
             self._vcd.flush(now)
 
         # Clear the event buffer
-        self._event_buffer.clear()
+        self._events.clear()
 
     def close(self) -> None:
-        # Close the VCD writer
+        # Clear the event buffer
+        self._events.clear()
+        # Close the VCD writer (reentrant)
         self._vcd.close()
-        # Close the VCD file
-        self._vcd_file.close()
+        # Close the VCD file (reentrant)
+        self._file.close()
 
-    def get_registered_signals(self) -> __RSM_T:
-        """Return the registered signals.
 
-        :return: A dictionary with devices and a list of signals
+class PeekSignal(Signal):
+    """Class to represent a peek signal."""
+
+    # Workaround required for the local stubs of the sorted containers library
+    if typing.TYPE_CHECKING:  # pragma: no cover
+        _EB_T = sortedcontainers.SortedDict[_T_T, _SV_T]  # The peek signal event buffer type
+        _TV_T = sortedcontainers.SortedKeysView[_T_T]  # The peek signal event buffer timestamp view type
+    else:
+        _EB_T = sortedcontainers.SortedDict
+        _TV_T = typing.KeysView[_T_T]  # Using generic KeysView, helps the PyCharm type checker
+
+    _buffer: typing.Deque[_SV_T]
+    _events: _EB_T
+    _timestamps: _TV_T
+
+    def __init__(self, scope: DaxSimDevice, name: str, type_: _ST_T, size: _SS_T, *, init: typing.Optional[_SV_T]):
+        # Call super
+        super(PeekSignal, self).__init__(scope, name, type_, size)
+
+        # Create buffer for push values
+        self._buffer = collections.deque()
+        # Create buffer for events
+        self._events = sortedcontainers.SortedDict()
+        if init is not None:
+            self._events[np.int64(0)] = self.normalize(init)
+        # Create timestamp view
+        self._timestamps = self._events.keys()
+
+    def push(self, value: typing.Any, *,
+             time: typing.Optional[_T_T] = None, offset: _O_T = 0) -> None:
+        # Normalize value and add value to event buffer
+        # An existing value at the same timestamp will be overwritten, just as the ARTIQ RTIO system does
+        self._events[_get_timestamp(time, offset)] = self.normalize(value)
+
+    def pull(self, *,
+             time: typing.Optional[_T_T] = None, offset: _O_T = 0) -> _SV_T:
+        if self._buffer:
+            # Take an item from the buffer, push it, and return the value
+            value = self._buffer.popleft()
+            self.push(value, time=time, offset=offset)
+            return value
+
+        else:
+            # Binary search for the insertion point (right) of the given timestamp
+            index = self._events.bisect_right(_get_timestamp(time, offset))
+
+            if index:
+                # Return the value
+                return self._events[self._timestamps[index - 1]]
+            else:
+                # Signal was not set, raise an exception
+                raise SignalNotSetError(self, _get_timestamp(time, offset))
+
+    def push_buffer(self, buffer: typing.Sequence[typing.Any]) -> None:
+        """Push a buffer of values this signal.
+
+        Values in the buffer will be pushed automatically at the next call to :func:`pull`. See also :func:`push`.
+
+        :param buffer: The buffer of values to queue
+        :raises ValueError: Raised if the value is invalid
         """
-        return types.MappingProxyType(self._registered_signals)
+        # Add values to the push buffer
+        self._buffer.extend(self.normalize(v) for v in buffer)
+
+    def clear(self) -> None:
+        """Clear buffers."""
+        self._buffer.clear()
+        self._events.clear()
 
 
-_PS_T = typing.Tuple[DaxSimDevice, str]  # The peek signal manager signal type
-_PT_T = _VT_T  # The peek signal manager signal-type type
-_PV_T = _VV_T  # The peek signal manager signal type
-
-# Workaround required for Python<3.9 and the usage of stubs for the sorted containers library
-if typing.TYPE_CHECKING:
-    _PE_T = sortedcontainers.SortedDict[_T_T, _PV_T]  # The peek signal manager event sequence type
-else:
-    _PE_T = sortedcontainers.SortedDict
-
-_PET_T = typing.Sequence[_T_T]  # The peek signal manager event sequence timestamp view type
-_PD_T = typing.Dict[DaxSimDevice,  # The peek signal manager device list and event buffer type
-                    typing.Dict[str, typing.Tuple[_PT_T, typing.Optional[int], _PE_T, _PET_T]]]
-
-
-class _Meta(type):
-    """Metaclass to have a pretty representation of a class."""
-
-    def __repr__(cls) -> str:
-        return cls.__name__
-
-
-class SignalNotSet(metaclass=_Meta):
-    """Class used to indicate that a signal was not set and no value could be returned."""
-    pass
-
-
-class PeekSignalManager(DaxSignalManager[_PS_T]):
+class PeekSignalManager(DaxSignalManager[PeekSignal]):
     """Peek signal manager."""
 
-    _CONVERT_TYPE: typing.ClassVar[typing.Dict[type, _PT_T]] = {
-        bool: bool,
-        int: int,
-        np.int32: int,
-        np.int64: int,
-        float: float,
-        str: str,
-        object: object,
-    }
-    """Dict to convert Python types to peek signal manager internal types."""
-
-    _CHECK_TYPE: typing.ClassVar[typing.Dict[_PT_T, typing.Union[type, typing.Tuple[type, ...]]]] = {
-        bool: bool,
-        int: (int, np.int32, np.int64),
-        float: float,
-        str: str,
-        object: bool,
-    }
-    """Dict to convert internal types to peek signal manager type-checking types."""
-
-    _SPECIAL_VALUES: typing.ClassVar[typing.Dict[_PT_T, typing.Set[typing.Any]]] = {
-        bool: {'x', 'X', 'z', 'Z', 0, 1},  # Also matches NumPy int and float
-        int: {'x', 'X', 'z', 'Z'},
-        float: set(),
-        str: {None},
-        object: set(),
-    }
-    """Dict with special allowed values for internal types."""
-
-    _event_buffer: _PD_T
-
-    def __init__(self) -> None:
-        # Registered devices and buffer for signals/events
-        self._event_buffer = {}
-
-    def register(self, scope: DaxSimDevice, name: str, type_: _PT_T, *,
-                 size: typing.Optional[int] = None, init: _PV_T = None) -> _PS_T:
-        assert isinstance(scope, DaxSimDevice), 'The scope of the signal must be of type DaxSimDevice'
-        assert isinstance(name, str), 'The name of the signal must be of type str'
-        assert isinstance(size, int) or size is None, 'The size must be an int or None'
-
-        # Check if type is supported and convert type if it is
-        if type_ not in self._CONVERT_TYPE:
-            raise ValueError(f'Peek signal manager does not support signal type {type_}')
-        type_ = self._CONVERT_TYPE[type_]
-
-        # Get signals of the given device
-        signals = self._event_buffer.setdefault(scope, {})
-        # Check if signal was already registered
-        if name in signals:
-            raise LookupError(f'Signal "{scope.key}.{name}" was already registered')
-
-        # Check size
-        if type_ is bool:
-            if size is None or size < 1:
-                raise TypeError('Provide a legal size for signal type bool')
-        else:
-            if size is not None:
-                raise TypeError(f'Size not supported for signal type "{type_}"')
-
-        # Register and initialize signal
-        events: _PE_T = sortedcontainers.SortedDict()
-        if init is not None:
-            # Check init value
-            events[np.int64(0)] = self._check_value(type_, size, init)
-        signals[name] = (type_, size, events, events.keys())
-
-        # Return the signal object
-        return scope, name
-
-    def event(self, signal: _PS_T, value: _PV_T, *,
-              time: typing.Optional[_T_T] = None,
-              offset: typing.Union[int, np.int32, np.int64, None] = None) -> None:
-        assert isinstance(signal, tuple) and len(signal) == 2, 'Invalid signal object'
-        assert time is None or isinstance(time, np.int64), 'Time must be of type np.int64 or None'
-        assert offset is None or isinstance(offset, (int, np.int32, np.int64)), 'Invalid type for offset'
-
-        # Unpack device list
-        device, name = signal
-        type_, size, events, _ = self._event_buffer[device][name]
-
-        # Check value and add value to event buffer
-        # An existing value at the same timestamp will be overwritten, just as the ARTIQ RTIO system does
-        events[self._get_timestamp(time, offset)] = self._check_value(type_, size, value)
+    def _create_signal(self, scope: DaxSimDevice, name: str, type_: _ST_T, *,
+                       size: _SS_T = None, init: typing.Optional[_SV_T] = None) -> PeekSignal:
+        return PeekSignal(scope, name, type_, size, init=init)
 
     def flush(self, ref_period: float) -> None:
         pass
 
     def close(self) -> None:
-        pass
-
-    def _check_value(self, type_: _PT_T, size: typing.Optional[int], value: _PV_T) -> _PV_T:
-        """Check if value is valid, raise exception otherwise."""
-
-        if size in {None, 1}:
-            # noinspection PyTypeHints
-            if isinstance(value, self._CHECK_TYPE[type_]):
-                return value  # Value is legal (expected type)
-            elif value in self._SPECIAL_VALUES[type_]:
-                return value  # Value is legal (special value)
-        elif type_ is bool and isinstance(value, str) and len(value) == size and all(
-                v in {'x', 'X', 'z', 'Z', '0', '1'} for v in value):
-            return value.lower()  # Value is legal (bool vector) (store lower case)
-
-        # Value did not pass check
-        raise ValueError(f'Invalid value {value} for signal type {type_}')
-
-    """Peek functions"""
-
-    def peek_and_type(self, scope: DaxSimDevice, signal: str, time: typing.Optional[_T_T] = None) -> \
-            typing.Tuple[typing.Union[_PV_T, typing.Type[SignalNotSet]], type]:
-        """Peek a value of a signal at a given time.
-
-        :param scope: The scope of the signal
-        :param signal: The signal name
-        :param time: The time of interest (now if no time is given)
-        :return: The type and value of the signal at the time of interest or :class:`SignalNotSet` if no value was found
-        """
-
-        assert isinstance(scope, DaxSimDevice), 'The given scope must be of type DaxSimDevice'
-        assert isinstance(signal, str), 'The signal name must be of type str'
-        assert isinstance(time, np.int64) or time is None
-
-        try:
-            # Get the device
-            device = self._event_buffer[scope]
-            # Get the signal
-            type_, _, events, timestamps = device[signal]
-        except KeyError:
-            raise KeyError(f'Signal "{scope.key}.{signal}" could not be found') from None
-
-        if time is None:
-            # Use the default time if none was provided
-            time = artiq.language.core.now_mu()  # noqa: ATQ101
-
-        # Binary search for the insertion point (right) of the given timestamp
-        index = events.bisect_right(time)
-
-        # Return the value and the type
-        return events[timestamps[index - 1]] if index else SignalNotSet, type_
-
-    def peek(self, scope: DaxSimDevice, signal: str,
-             time: typing.Optional[_T_T] = None) -> typing.Union[_PV_T, typing.Type[SignalNotSet]]:
-        """Peek a value of a signal at a given time.
-
-        :param scope: The scope of the signal
-        :param signal: The signal name
-        :param time: The time of interest (now if no time is given)
-        :return: The value of the signal at the time of interest or :class:`SignalNotSet` if no value was found
-        """
-
-        # Call the peek and type function
-        value, _ = self.peek_and_type(scope, signal, time)
-        # Return the value
-        return value
+        # Clear all signals
+        for signal in self:
+            signal.clear()
 
 
 _signal_manager: DaxSignalManager[typing.Any] = NullSignalManager()

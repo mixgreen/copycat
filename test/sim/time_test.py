@@ -23,6 +23,12 @@ class TimeManagerTestCase(unittest.TestCase):
         set_time_manager(DaxTimeManager(self.REF_PERIOD))
         self.rnd = random.Random(self.SEED)
 
+    def test_bad_ref_period(self):
+        with self.assertRaises(ValueError):
+            DaxTimeManager(0.0)
+        with self.assertRaises(ValueError):
+            DaxTimeManager(-self.REF_PERIOD)
+
     def test_delay_mu(self):
         # Reference time
         ref_time = now_mu()

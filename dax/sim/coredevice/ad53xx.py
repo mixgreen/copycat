@@ -24,11 +24,11 @@ class AD53xx(DaxSimDevice):
         super(AD53xx, self).__init__(dmgr, **kwargs)
 
         # Register signals
-        self._signal_manager = get_signal_manager()
-        self._init = self._signal_manager.register(self, 'init', bool, size=1)
-        self._dac = [self._signal_manager.register(self, f'v_out_{i}', float) for i in range(self._NUM_CHANNELS)]
-        self._offset = [self._signal_manager.register(self, f'v_offset_{i}', float) for i in range(self._NUM_CHANNELS)]
-        self._gain = [self._signal_manager.register(self, f'gain_{i}', float) for i in range(self._NUM_CHANNELS)]
+        signal_manager = get_signal_manager()
+        self._init = signal_manager.register(self, 'init', bool, size=1)
+        self._dac = [signal_manager.register(self, f'v_out_{i}', float) for i in range(self._NUM_CHANNELS)]
+        self._offset = [signal_manager.register(self, f'v_offset_{i}', float) for i in range(self._NUM_CHANNELS)]
+        self._gain = [signal_manager.register(self, f'gain_{i}', float) for i in range(self._NUM_CHANNELS)]
 
         # Store attributes (from ARTIQ code)
         assert 2 * V <= vref <= 5 * V, 'Reference voltage out of range'
@@ -50,7 +50,7 @@ class AD53xx(DaxSimDevice):
         if not blind:
             delay(25 * us)
             delay(15 * us)
-        self._signal_manager.event(self._init, 1)
+        self._init.push(True)
 
     @kernel
     def read_reg(self, channel=0, op=AD53XX_READ_X1A):
@@ -94,9 +94,9 @@ class AD53xx(DaxSimDevice):
     def _update_signals(self):
         for i in range(self._NUM_CHANNELS):
             v_out = _mu_to_voltage(self._dac_reg_mu[i], vref=self.vref, offset_dacs=self.offset_dacs)
-            self._signal_manager.event(self._dac[i], v_out)
-            self._signal_manager.event(self._offset[i], self._offset_reg[i])
-            self._signal_manager.event(self._gain[i], self._gain_reg[i])
+            self._dac[i].push(v_out)
+            self._offset[i].push(self._offset_reg[i])
+            self._gain[i].push(self._gain_reg[i])
 
     # Note: 40 channels is too large, but this is taken from the ARTIQ driver
     # noinspection PyDefaultArgument

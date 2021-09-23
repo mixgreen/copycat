@@ -142,7 +142,7 @@ class Policy(enum.Enum):
     The policy enumeration includes definitions for the policies using a mapping table.
     """
 
-    if typing.TYPE_CHECKING:
+    if typing.TYPE_CHECKING:  # pragma: no cover
         # Only add type when type checking is enabled to not conflict with iterations over the Policy enum
         __P_T = typing.Dict[typing.Tuple[NodeAction, NodeAction], NodeAction]  # Policy enum type
 
@@ -215,7 +215,7 @@ class _Request:
 
 
 # Workaround required for Python<3.9
-if typing.TYPE_CHECKING:
+if typing.TYPE_CHECKING:  # pragma: no cover
     _RQ_T = asyncio.Queue[_Request]  # Type for the request queue
 else:
     _RQ_T = asyncio.Queue

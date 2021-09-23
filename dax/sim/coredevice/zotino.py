@@ -4,6 +4,7 @@
 
 from artiq.language.core import kernel
 
+from dax.sim.signal import get_signal_manager
 from dax.sim.coredevice.ad53xx import AD53xx
 
 
@@ -15,10 +16,11 @@ class Zotino(AD53xx):
         super(Zotino, self).__init__(dmgr, **kwargs)
 
         # Register additional signals
-        self._led = self._signal_manager.register(self, 'led', bool, size=8)
+        signal_manager = get_signal_manager()
+        self._led = signal_manager.register(self, 'led', bool, size=8)
 
     def _set_leds(self, leds):
-        self._signal_manager.event(self._led, f'{leds & 0xFF:08b}')
+        self._led.push(f'{leds & 0xFF:08b}')
 
     @kernel
     def set_leds(self, leds):

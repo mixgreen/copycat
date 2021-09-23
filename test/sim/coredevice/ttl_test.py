@@ -12,6 +12,7 @@ from test.environment import CI_ENABLED
 _NUM_SAMPLES = 1000 if CI_ENABLED else 100
 
 _INPUT_FREQ = 1 * kHz
+_INPUT_PROB = 0.0
 
 _DEVICE_DB = {
     'core': {
@@ -31,7 +32,7 @@ _DEVICE_DB = {
         "module": "artiq.coredevice.ttl",
         "class": "TTLInOut",
         "arguments": {},
-        "sim_args": {'input_freq': _INPUT_FREQ}
+        "sim_args": {'input_freq': _INPUT_FREQ, 'input_prob': _INPUT_PROB}
     },
     "TTLClockGen": {
         "type": "local",
@@ -125,7 +126,7 @@ class TTLInOutTestCase(TTLOutTestCase):
         self.env.dut.output()
         self.expect(self.env.dut, 'state', 'x')
 
-    def test_count(self):
+    def test_count(self, *, input_freq=_INPUT_FREQ):
         cases = [
             (self.env.dut.gate_rising, 1),
             (self.env.dut.gate_falling, 1),
@@ -151,7 +152,13 @@ class TTLInOutTestCase(TTLOutTestCase):
                         self.expect(self.env.dut, 'sensitivity', 1)
 
                 c = self.env.dut.count(t)
-                self.assertAlmostEqual(c, _INPUT_FREQ * multiplier * duration, delta=1)
+                self.assertAlmostEqual(c, input_freq * multiplier * duration, delta=1)
+
+    def test_push_input_freq(self):
+        for freq in [0.5 * kHz, 2 * kHz]:
+            delay_mu(100)
+            self.push(self.env.dut, 'input_freq', freq)
+            self.test_count(input_freq=freq)
 
     def test_timestamp_mu(self):
         self.env.dut.input()
@@ -171,7 +178,9 @@ class TTLInOutTestCase(TTLOutTestCase):
                 self.assertLessEqual(r, end_t)
             self.assertEqual(self.env.dut.timestamp_mu(t), -1)
 
-    def test_sample_get(self):
+    def test_sample_get(self, *, input_prob=_INPUT_PROB):
+        assert input_prob in {0.0, 1.0}, 'Test only works for fixed input probability values'
+
         self.env.dut.input()
         self.env.core.break_realtime()
         for _ in range(_NUM_SAMPLES):
@@ -179,9 +188,15 @@ class TTLInOutTestCase(TTLOutTestCase):
             for _ in range(n):
                 self.env.dut.sample_input()
             for _ in range(n):
-                self.assertIn(self.env.dut.sample_get(), {0, 1})
+                self.assertEqual(self.env.dut.sample_get(), int(input_prob))
             with self.assertRaises(IndexError, msg='Obtaining more samples than number of samples did not raise'):
                 self.env.dut.sample_get()
+
+    def test_push_input_prob(self):
+        for prob in [0.0, 1.0]:
+            delay_mu(100)
+            self.push(self.env.dut, 'input_prob', prob)
+            self.test_sample_get(input_prob=prob)
 
     def test_sample_get_nonrt(self):
         self.env.dut.input()

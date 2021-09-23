@@ -109,7 +109,7 @@ Below you will find the development stage of each component in the DAX library.
 
 ## Testing
 
-Use pytest or Python unittest to run the DAX unit tests. We recommend using pytest.
+Use pytest (installed separately) to run the DAX unit tests.
 
 ```shell
 $ pytest

@@ -8,7 +8,7 @@ from artiq.language.core import *
 import artiq.coredevice.core
 
 from dax.sim.device import DaxSimDevice
-from dax.sim.signal import get_signal_manager, DaxSignalManager
+from dax.sim.signal import get_signal_manager, DaxSignalManager, Signal
 from dax.sim.ddb import DAX_SIM_CONFIG_KEY
 from dax.sim.time import DaxTimeManager
 from dax.sim.coredevice.comm_kernel import CommKernelDummy
@@ -159,7 +159,7 @@ class Core(BaseCore):
     _sim_config: DaxSimConfig
     _file_name_generator: BaseFileNameGenerator
     _signal_manager: DaxSignalManager[typing.Any]
-    _reset_signal: typing.Any
+    _reset_signal: Signal
     _level: int
     _context_switch_counter: int
     _fn_counter: typing.Counter[typing.Any]
@@ -167,7 +167,7 @@ class Core(BaseCore):
     _compiler: typing.Optional[artiq.coredevice.core.Core]
 
     # noinspection PyShadowingBuiltins
-    def __init__(self, dmgr: typing.Any, ref_period: float, ref_multiplier: int = 8,
+    def __init__(self, dmgr: typing.Any, ref_period: float, ref_multiplier: int = 8, *,
                  compile: bool = False, **kwargs: typing.Any):
         """Simulation driver for :class:`artiq.coredevice.core.Core`.
 
@@ -275,14 +275,14 @@ class Core(BaseCore):
     @kernel
     def reset(self):  # type: () -> None
         # Reset signal to 1
-        self._signal_manager.event(self._reset_signal, 1)
+        self._reset_signal.push(True)
         # Reset devices
         self._reset_devices()
 
         # Move cursor
         delay_mu(self.RESET_TIME_MU)
         # Reset signal back to 0
-        self._signal_manager.event(self._reset_signal, 0)
+        self._reset_signal.push(False)
 
     def _reset_devices(self):  # type: () -> None
         # Reset devices to clear buffers

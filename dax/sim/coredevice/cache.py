@@ -10,9 +10,8 @@ class CoreCache(DaxSimDevice):
     __V_T = typing.List[typing.Union[int, np.int32]]  # Cache value type
     _cache: typing.Dict[str, __V_T]
 
-    def __init__(self, dmgr: typing.Any,
-                 cache: typing.Optional[typing.Dict[str, __V_T]] = None,
-                 **kwargs: typing.Any):
+    def __init__(self, dmgr: typing.Any, *,
+                 cache: typing.Optional[typing.Dict[str, __V_T]] = None, **kwargs: typing.Any):
         """Simulation driver for :class:`artiq.coredevice.cache.CoreCache`.
 
         :param cache: Initial state of the cache

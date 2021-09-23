@@ -8,6 +8,8 @@ from dax.util.artiq import get_managers
 class _TestSystem(DaxSystem):
     SYS_ID = 'unittest_system'
     SYS_VER = 0
+    CORE_LOG_KEY = None
+    DAX_INFLUX_DB_KEY = None
 
     def build(self, num_beams) -> None:  # type: ignore[override]
         super(_TestSystem, self).build()

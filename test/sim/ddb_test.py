@@ -2,11 +2,19 @@ import unittest
 import logging
 import copy
 import textwrap
+import pathlib
 
 import dax.sim.ddb
 from dax.sim.ddb import enable_dax_sim, DAX_SIM_CONFIG_KEY
 from dax.util.output import temp_dir
 from dax.util.configparser import get_dax_config
+import dax.util.git
+
+
+def _clear_cache():
+    # Clear DAX config parser cache
+    dax.util.git._REPO_INFO = None
+    get_dax_config(clear_cache=True)
 
 
 class DdbTestCase(unittest.TestCase):
@@ -134,8 +142,20 @@ class DdbTestCase(unittest.TestCase):
     def setUp(self) -> None:
         # Always make a deep copy at the start to make sure we do not mutate the dict
         self.DEVICE_DB = copy.deepcopy(self.DEVICE_DB)
-        # Clear DAX config parser cache
-        get_dax_config(clear_cache=True)
+        _clear_cache()
+
+    def test_no_config(self):
+        with temp_dir():
+            _clear_cache()
+            with self.assertRaises(FileNotFoundError):
+                enable_dax_sim(copy.deepcopy(self.DEVICE_DB), logging_level=logging.WARNING, moninj_service=False)
+
+    def test_missing_config(self):
+        with temp_dir():
+            _clear_cache()
+            pathlib.Path('.dax').touch()  # Create empty config file
+            with self.assertRaises(Exception):
+                enable_dax_sim(copy.deepcopy(self.DEVICE_DB), logging_level=logging.WARNING, moninj_service=False)
 
     def test_disable(self):
         self.assertDictEqual(enable_dax_sim(copy.deepcopy(self.DEVICE_DB), enable=False, logging_level=logging.WARNING,
