@@ -19,6 +19,16 @@ dax.sim.ddb module
     :undoc-members:
     :show-inheritance:
 
+.. _dax.sim.test_case:
+
+dax.sim.test\_case module
+-------------------------
+
+.. automodule:: dax.sim.test_case
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 dax.sim.signal module
 ---------------------
 
@@ -47,17 +57,6 @@ dax.sim.device module
 ---------------------
 
 .. automodule:: dax.sim.device
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
-
-.. _dax.sim.test_case:
-
-dax.sim.test\_case
-==================
-
-.. automodule:: dax.sim.test_case
     :members:
     :undoc-members:
     :show-inheritance:
