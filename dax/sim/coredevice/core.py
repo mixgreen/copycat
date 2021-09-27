@@ -82,7 +82,7 @@ class BaseCore(DaxSimDevice):
 
     def run(self, function: typing.Any,
             args: typing.Tuple[typing.Any, ...], kwargs: typing.Dict[str, typing.Any]) -> typing.Any:
-        # Every function is called in a sequential context for correct parallel behavior
+        # Every function is called in a sequential context for deep parallel behavior with sequential function entry
         with sequential:
             # Call the kernel function
             result = function.artiq_embedded.function(*args, **kwargs)
@@ -93,10 +93,8 @@ class BaseCore(DaxSimDevice):
     def close(self) -> None:
         pass
 
-    def compile(self, function: typing.Any, args: typing.Tuple[typing.Any, ...], kwargs: typing.Dict[str, typing.Any],
-                set_result: typing.Any = None, attribute_writeback: bool = True,
-                print_as_rpc: bool = True) -> typing.Any:
-        raise NotImplementedError('Base core does not implement the compile function')
+    def compile(self, *args: typing.Any, **kwargs: typing.Any) -> typing.Any:
+        raise NotImplementedError('Simulated core does not implement the compile function')
 
     @portable
     def seconds_to_mu(self, seconds):  # type: (float) -> np.int64
@@ -231,19 +229,23 @@ class Core(BaseCore):
         # Track current time
         t_start: np.int64 = now_mu()
 
-        # Call the kernel function while increasing the level
+        # Increase level
         self._level += 1
-        result = super(Core, self).run(function, args, kwargs)
-        self._level -= 1
+        try:
+            # Call the kernel function
+            result = super(Core, self).run(function, args, kwargs)
+        finally:
+            # Decrease level
+            self._level -= 1
+
+            if self._level == 0:
+                # Flush signal manager if we are about to leave the kernel context
+                self._signal_manager.flush(self.ref_period)
+                # Increment the context switch counter
+                self._context_switch_counter += 1
 
         # Accumulate the time spend in this function call
         self._fn_time[kernel_fn] += int(now_mu() - t_start)
-
-        if self._level == 0:
-            # Flush signal manager if we are about to leave the kernel context
-            self._signal_manager.flush(self.ref_period)
-            # Increment the context switch counter
-            self._context_switch_counter += 1
 
         # Return the result
         return result
@@ -267,10 +269,8 @@ class Core(BaseCore):
                 csv_writer.writerows((self._fn_counter[fn], time, self.mu_to_seconds(time), fn.__qualname__)
                                      for fn, time in self._fn_time.items())
 
-    def compile(self, function: typing.Any, args: typing.Tuple[typing.Any, ...], kwargs: typing.Dict[str, typing.Any],
-                set_result: typing.Any = None, attribute_writeback: bool = True,
-                print_as_rpc: bool = True) -> typing.Any:
-        raise NotImplementedError('Simulated core does not implement the compile function')
+    def compile(self, *args: typing.Any, **kwargs: typing.Any) -> typing.Any:
+        super(Core, self).compile(*args, **kwargs)
 
     @kernel
     def reset(self):  # type: () -> None

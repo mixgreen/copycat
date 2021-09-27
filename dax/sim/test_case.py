@@ -258,3 +258,20 @@ class PeekTestCase(unittest.TestCase):
         # Push the buffer
         _logger.info(f'PUSH BUF {signal} -> {buffer}')
         signal.push_buffer(buffer)
+
+    def write_vcd(self, file_name: str, core: typing.Any, **kwargs: typing.Any) -> None:
+        """Write a VCD file containing all current signal events.
+
+        Because this function generates an output file, this function is normally not used during automated testing.
+        This function can be useful when a test fails and manual/visual inspection of the signals is desired.
+
+        :param file_name: The file name of the VCD output file
+        :param core: The core device
+        :param kwargs: Keyword arguments passed to the VCD signal manager
+        """
+        assert isinstance(file_name, str), 'File name must be of type str'
+        assert hasattr(core, 'ref_period'), 'Core does not has the attribute `ref_period`'
+
+        # Write the VCD file
+        _logger.debug(f'Writing VCD file: {file_name}')
+        self.__signal_manager.write_vcd(file_name, core.ref_period, **kwargs)

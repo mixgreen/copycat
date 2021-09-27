@@ -53,6 +53,25 @@ class CoreTestCase(BaseCoreTestCase):
         # Test with correct arguments
         dax.sim.coredevice.core.Core(dmgr=self.managers.device_mgr, _key='core', **self.core_arguments)
 
+    def test_level(self):
+        core = dax.sim.coredevice.core.Core(dmgr=self.managers.device_mgr, _key='core', **self.core_arguments)
+
+        with unittest.mock.patch.object(self, 'core', core, create=True):
+            try:
+                self.assertEqual(core._level, 0)
+                self._kernel_fn()
+                self.assertEqual(core._level, 0)
+                with self.assertRaises(RuntimeError):
+                    self._raise_exception_kernel()
+                self.assertEqual(core._level, 0)
+            except FileNotFoundError as e:
+                # NOTE: compilation only works from the Nix shell/Conda env, otherwise the linker can not be found
+                self.skipTest(f'Skipping compiler test: {e}')
+
+    @kernel
+    def _raise_exception_kernel(self):
+        raise RuntimeError
+
     def test_compile(self):
         core = dax.sim.coredevice.core.Core(dmgr=self.managers.device_mgr, _key='core', **self.core_arguments)
         compile_flag = self.core_arguments.get('compile', False)

@@ -1,3 +1,4 @@
+import os.path
 import numpy as np
 
 import artiq.coredevice.ttl  # type: ignore[import]
@@ -9,6 +10,7 @@ from dax.experiment import *
 import dax.sim.test_case
 from dax.sim.test_case import SignalNotSet
 from dax.sim.signal import get_signal_manager
+from dax.util.output import temp_dir
 
 
 class PeekTestCaseTestCase(dax.sim.test_case.PeekTestCase):
@@ -360,6 +362,12 @@ class PeekTestCaseTestCase(dax.sim.test_case.PeekTestCase):
         for freq in test_data:
             self.assertAlmostEqual(self.sys.ec.fetch_count(), freq, delta=1)
         self.assertEqual(self.peek(scope, name), test_data[-1])
+
+    def test_write_vcd(self):
+        file_name = 'foo.vcd'
+        with temp_dir():
+            self.write_vcd(file_name, self.sys.core)
+            self.assertTrue(os.path.isfile(file_name))
 
 
 class _TestSystem(DaxSystem):

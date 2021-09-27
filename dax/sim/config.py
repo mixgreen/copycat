@@ -47,7 +47,7 @@ class DaxSimConfig:
 
             # Set the VCD signal manager
             _logger.debug('Initializing VCD signal manager...')
-            set_signal_manager(VcdSignalManager(file_name=file_name, **signal_mgr_kwargs))
+            set_signal_manager(VcdSignalManager(file_name, **signal_mgr_kwargs))
             _logger.debug('VCD signal manager initialized')
 
         elif output == 'peek':

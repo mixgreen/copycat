@@ -1,5 +1,6 @@
 import unittest
 import typing
+import os.path
 import numpy as np
 
 from artiq.language.core import now_mu, at_mu, delay, delay_mu, parallel, sequential
@@ -382,6 +383,12 @@ class PeekSignalManagerTestCase(NullSignalManagerTestCase):
 
                 # Restore time
                 at_mu(end_t)
+
+    def test_write_vcd(self):
+        file_name = 'foo.vcd'
+        with temp_dir():
+            self.sm.write_vcd(file_name, self.sys.core.ref_period)
+            self.assertTrue(os.path.isfile(file_name))
 
 
 class _TestSystem(DaxSystem):
