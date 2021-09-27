@@ -9,7 +9,6 @@ import os.path
 import h5py
 
 from artiq.experiment import *
-import artiq.coredevice.core
 
 import dax.base.system
 import dax.util.artiq
@@ -191,7 +190,9 @@ class DaxScan(dax.base.system.DaxBase, abc.ABC):
     SCAN_KWARGS_KEY: typing.ClassVar[str] = 'scan_kwargs'
     """:func:`build` keyword argument for keyword arguments passed to :func:`build_scan`."""
 
-    core: artiq.coredevice.core.Core
+    SCAN_CORE_ATTR: typing.ClassVar[str] = 'core'
+    """Attribute name of the core device."""
+
     __in_build: bool
     _dax_scan_scannables: _SD_T
     _dax_scan_scheduler: typing.Any
@@ -214,6 +215,7 @@ class DaxScan(dax.base.system.DaxBase, abc.ABC):
         assert isinstance(self.ENABLE_SCAN_INDEX, bool), 'Enable scan index flag must be of type bool'
         assert isinstance(self.SCAN_ARGS_KEY, str), 'Scan args keyword must be of type str'
         assert isinstance(self.SCAN_KWARGS_KEY, str), 'Scan kwargs keyword must be of type str'
+        assert isinstance(self.SCAN_CORE_ATTR, str), 'Scan core attribute name must be of type str'
 
         # Obtain the scan args and kwargs
         scan_args: typing.Sequence[typing.Any] = kwargs.pop(self.SCAN_ARGS_KEY, ())
@@ -245,8 +247,8 @@ class DaxScan(dax.base.system.DaxBase, abc.ABC):
         self.__in_build = False
 
         # Confirm we have a core attribute
-        if not hasattr(self, 'core'):
-            raise AttributeError('DaxScan could not find a "core" attribute')
+        if not hasattr(self, self.SCAN_CORE_ATTR):
+            raise AttributeError(f'DAX.scan could not find the core attribute "{self.SCAN_CORE_ATTR}"')
 
         if self.INFINITE_SCAN_ARGUMENT:
             # Add an argument for infinite scan
@@ -469,7 +471,7 @@ class DaxScan(dax.base.system.DaxBase, abc.ABC):
                 while self._dax_scan_scheduler.check_pause():
                     # Pause the scan
                     self.logger.debug('Pausing scan')
-                    self.core.comm.close()  # Close communications before pausing
+                    getattr(self, self.SCAN_CORE_ATTR).comm.close()  # Close communications before pausing
                     self._dax_scan_scheduler.pause()  # Can raise a TerminationRequested exception
                     self.logger.debug('Resuming scan')
 
