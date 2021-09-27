@@ -177,7 +177,7 @@ def enable_dax_sim(ddb: typing.Dict[str, typing.Any], *,
             # Device DB was already converted
             _logger.debug('Device DB was already converted')
 
-        # Add virtual device used for passing simulation configuration to device DB
+        # Add virtual device used for passing simulation configuration to device DB (overwrites existing configuration)
         _logger.debug('Updating simulation configuration in device DB')
         ddb[DAX_SIM_CONFIG_KEY] = {
             'type': 'local',
