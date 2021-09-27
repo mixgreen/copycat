@@ -3,6 +3,7 @@ import typing
 import operator
 import datetime
 import collections
+import heapq
 import numpy as np
 import vcd.writer
 import sortedcontainers
@@ -395,7 +396,7 @@ class VcdSignalManager(DaxSignalManager[VcdSignal]):
     _vcd: vcd.writer.VCDWriter
     _events: typing.List[VcdSignal.E_T]
 
-    def __init__(self, file_name: str, timescale: float = 1 * ns):
+    def __init__(self, file_name: str, *, timescale: float = 1 * ns):
         assert isinstance(file_name, str), 'Output file name must be of type str'
         assert isinstance(timescale, float), 'Timescale must be of type float'
         assert timescale > 0.0, 'Timescale must be > 0.0'
@@ -529,6 +530,10 @@ class PeekSignal(Signal):
         self._buffer.clear()
         self._events.clear()
 
+    def __iter__(self) -> typing.Iterator[typing.Tuple[_T_T, _SV_T]]:
+        """Return an iterator over the sorted events."""
+        return iter(self._events.items())
+
 
 class PeekSignalManager(DaxSignalManager[PeekSignal]):
     """Peek signal manager."""
@@ -544,6 +549,38 @@ class PeekSignalManager(DaxSignalManager[PeekSignal]):
         # Clear all signals
         for signal in self:
             signal.clear()
+
+    def write_vcd(self, file_name: str, ref_period: float, **kwargs: typing.Any) -> None:
+        """Write the contents of this signal manager into a VCD file.
+
+        :param file_name: The file name of the VCD output file
+        :param ref_period: The reference period (i.e. the time of one machine unit)
+        :param kwargs: Keyword arguments passed to the VCD signal manager (see :class:`VcdSignalManager`)`
+        """
+
+        # Create a VCD signal manager
+        vcd_ = VcdSignalManager(file_name, **kwargs)
+
+        try:
+            # Create signals
+            signals = {s: vcd_.register(s.scope, s.name, s.type, size=s.size) for s in self}
+
+            def repack(constant: typing.Any, iterator: typing.Iterator[typing.Tuple[typing.Any, ...]]) \
+                    -> typing.Iterator[typing.Tuple[typing.Any, ...]]:
+                for e in iterator:
+                    # noinspection PyRedundantParentheses
+                    yield (constant, *e)  # Parenthesis required for Python<3.8
+
+            # Use a heap to merge the sorted events
+            events = heapq.merge(*[repack(v, iter(s)) for s, v in signals.items()], key=operator.itemgetter(1))
+            # Push all sorted events into the VCD signal manager
+            for signal, time, value in events:
+                signal.push(value, time=time)
+
+        finally:
+            # Flush and close the VCD signal manager
+            vcd_.flush(ref_period)
+            vcd_.close()
 
 
 _signal_manager: DaxSignalManager[typing.Any] = NullSignalManager()
