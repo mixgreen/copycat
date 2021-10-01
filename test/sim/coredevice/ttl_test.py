@@ -263,8 +263,8 @@ class TTLInOutCompileTestCase(TTLOutCompileTestCase):
 class TTLClockGenCompileTestCase(compile_testcase.CoredeviceCompileTestCase):
     DEVICE_CLASS = dax.sim.coredevice.ttl.TTLClockGen
     FN_KWARGS = {
-        'frequency_to_ftw': {'frequency': 100000},
+        'frequency_to_ftw': {'frequency': 100000.0},
         'ftw_to_frequency': {'ftw': 100},
         'set_mu': {'frequency': 100},
-        'set': {'frequency': 100000},
+        'set': {'frequency': 100000.0},
     }
