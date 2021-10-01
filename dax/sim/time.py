@@ -1,5 +1,3 @@
-from __future__ import annotations  # Postponed evaluation of annotations
-
 import abc
 import typing
 import numpy as np
@@ -29,24 +27,24 @@ class _TimeContext(abc.ABC):
         return self._block_duration
 
     @abc.abstractmethod
-    def take_time(self, amount: _MU_T) -> None:  # pragma: no cover
+    def take_time(self, duration: _MU_T) -> None:  # pragma: no cover
         pass
 
 
 class _SequentialTimeContext(_TimeContext):
     """Sequential time context class."""
 
-    def take_time(self, amount: _MU_T) -> None:
-        self._current_time += amount
-        self._block_duration += amount
+    def take_time(self, duration: _MU_T) -> None:
+        self._current_time += duration
+        self._block_duration += duration
 
 
 class _ParallelTimeContext(_TimeContext):
     """Parallel time context class."""
 
-    def take_time(self, amount: _MU_T) -> None:
-        if amount > self._block_duration:
-            self._block_duration = amount
+    def take_time(self, duration: _MU_T) -> None:
+        if duration > self._block_duration:
+            self._block_duration = duration
 
 
 class DaxTimeManager:
