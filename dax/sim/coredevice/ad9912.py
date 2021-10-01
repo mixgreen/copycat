@@ -92,8 +92,8 @@ class AD9912(DaxSimDevice):
     def set(self, frequency: TFloat, phase: TFloat = 0.0):
         assert 0 * MHz <= frequency <= 400 * MHz, 'Frequency out of range'
         assert 0.0 <= phase < 1.0, 'Phase out of range'
-        self._freq.push(float(frequency))
-        self._phase.push(float(phase))
+        self._freq.push(frequency)
+        self._phase.push(phase)
 
     @kernel
     def cfg_sw(self, state: TBool):

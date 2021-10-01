@@ -294,7 +294,7 @@ class TTLClockGen(DaxSimDevice):
 
     @kernel
     def set(self, frequency):
-        self._freq.push(float(frequency))
+        self._freq.push(frequency)
 
     @kernel
     def stop(self):

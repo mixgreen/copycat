@@ -241,9 +241,9 @@ class AD9910(DaxSimDevice):
             phase_mode = self.phase_mode
 
         # Manage signals
-        self._freq.push(float(frequency))
-        self._phase.push(float(phase))
-        self._amp.push(float(amplitude))
+        self._freq.push(frequency)
+        self._phase.push(phase)
+        self._amp.push(amplitude)
         self._phase_mode.push(_PHASE_MODE_DICT[self.phase_mode])
 
         # Returns pow
