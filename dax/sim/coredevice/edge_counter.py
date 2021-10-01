@@ -95,7 +95,7 @@ class EdgeCounter(DaxSimDevice):
         assert isinstance(input_stdev, float)
 
         # Decide event frequency
-        event_freq = max(self._rng.normalvariate(input_freq, input_stdev), 0.0)
+        event_freq = max(self._rng.gauss(input_freq, input_stdev), 0.0)
         if edge_type is _EdgeType.BOTH:
             # Multiply by 2 in case we detect both edges
             event_freq *= 2

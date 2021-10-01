@@ -131,7 +131,7 @@ class TTLInOut(TTLOut):
         assert isinstance(input_stdev, float)
 
         # Decide event frequency
-        event_freq = max(self._rng.normalvariate(input_freq, input_stdev), 0.0)
+        event_freq = max(self._rng.gauss(input_freq, input_stdev), 0.0)
 
         # Calculate the number of events we expect to observe based on duration and frequency
         # Multiply by 2 to simulate a full duty cycle (rising and falling edge)
