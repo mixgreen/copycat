@@ -90,8 +90,15 @@ class _CompilerSupportExperiment(HasEnvironment):
         return acc
 
     @kernel
-    def notimplementederror_test(self):
+    def not_implemented_error_test(self):
         raise NotImplementedError
+
+    @kernel
+    def negative_delay_parallel_test(self) -> TInt64:
+        t = now_mu()
+        with parallel:
+            delay_mu(-100)
+        return now_mu() - t  # Should be 0
 
 
 class ArtiqKernelTestCase(test.hw_testbench.TestBenchCase):
@@ -157,7 +164,12 @@ class ArtiqKernelTestCase(test.hw_testbench.TestBenchCase):
         acc = env.array_test(arr, adder)
         self.assertEqual(acc, sum(arr) + len(arr) * adder)
 
-    def test_notimplementederror(self):
+    def test_not_implemented_error(self):
         env = self.construct_env(_CompilerSupportExperiment)
         with self.assertRaises(CompileError, msg='NotImplementedError does not result in a compile error'):
-            env.notimplementederror_test()
+            env.not_implemented_error_test()
+
+    def test_negative_delay_parallel(self):
+        env = self.construct_env(_CompilerSupportExperiment)
+        t = env.negative_delay_parallel_test()
+        self.assertEqual(t, 0)

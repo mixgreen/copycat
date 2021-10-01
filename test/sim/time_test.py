@@ -225,6 +225,13 @@ class TimeManagerTestCase(unittest.TestCase):
                 # Compare to reference time
                 self.assertEqual(now_mu(), ref_time, 'Reference does not match now_mu()')
 
+    def test_negative_delay_parallel(self):
+        t = now_mu()
+        with parallel:
+            delay_mu(-100)
+        result = now_mu() - t  # Should be 0
+        self.assertEqual(result, 0)
+
     def test_at_mu(self):
         for i in range(_NUM_SAMPLES):
             with self.subTest('at_mu() sub test', i=i):
