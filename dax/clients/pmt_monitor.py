@@ -380,6 +380,8 @@ class PmtMonitor(_PmtMonitorBase):
     APPLET_GROUP = 'dax.pmt_monitor'
     DEFAULT_DATASET = 'plot.dax.pmt_monitor'
 
+    MOVING_AVERAGE_PLOT_XY: typing.ClassVar[int] = 0
+    """Uniform moving average window size in samples for the plot XY applet."""
     NUM_DIGITS_BIG_NUMBER: typing.ClassVar[int] = 5
     """Number of digits to display for the big number applet."""
 
@@ -389,6 +391,7 @@ class PmtMonitor(_PmtMonitorBase):
     """Key for big number applet type."""
 
     def _add_arguments_internal(self) -> None:
+        assert self.MOVING_AVERAGE_PLOT_XY >= 0, 'Moving average window size must be zero or greater'
         assert self.NUM_DIGITS_BIG_NUMBER >= 0, 'Number of digits must be zero or greater'
 
         # Dict with available applet types
@@ -411,6 +414,7 @@ class PmtMonitor(_PmtMonitorBase):
         if self.applet_type == self._PLOT_XY:
             # Modify keyword arguments
             kwargs.setdefault('last', True)
+            kwargs.setdefault('moving_average', self.MOVING_AVERAGE_PLOT_XY)
         elif self.applet_type == self._BIG_NUMBER:
             # Modify keyword arguments
             kwargs = {k: v for k, v in kwargs.items() if k in {'group', 'update_delay'}}
