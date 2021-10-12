@@ -305,6 +305,7 @@ class CcbTool(CcbToolBase):
                 sliding_window: typing.Optional[int] = None,
                 crosshair: typing.Optional[bool] = None,
                 last: typing.Optional[bool] = None,
+                moving_average: typing.Optional[int] = None,
                 title: typing.Optional[str] = None,
                 x_label: typing.Optional[str] = None,
                 y_label: typing.Optional[str] = None,
@@ -320,7 +321,8 @@ class CcbTool(CcbToolBase):
         :param fit: Fit dataset
         :param v_lines: Vertical lines dataset
         :param h_lines: Horizontal lines dataset
-        :param sliding_window: Set size of the sliding window, or :const:`None` to disable
+        :param sliding_window: Only show the latest data points
+        :param moving_average: Automatic uniform moving average calculation with the given size
         :param crosshair: Enable crosshair feature
         :param last: Show the last value in the title
         :param title: Graph title
@@ -333,7 +335,8 @@ class CcbTool(CcbToolBase):
         # Assemble command
         command = generate_command(f'{self.DAX_APPLET}plot_xy', y,
                                    x=x, error=error, fit=fit, v_lines=v_lines, h_lines=h_lines,
-                                   sliding_window=sliding_window, title=title, crosshair=crosshair, last=last,
+                                   sliding_window=sliding_window, title=title,
+                                   crosshair=crosshair, last=last, moving_average=moving_average,
                                    x_label=x_label, y_label=y_label, update_delay=update_delay, **kwargs)
         # Create applet
         self.create_applet(name, command, group=group)
@@ -363,7 +366,7 @@ class CcbTool(CcbToolBase):
         :param v_lines: Vertical lines dataset
         :param h_lines: Horizontal lines dataset
         :param index: A single or multiple indices of the results to plot (default plots all)
-        :param sliding_window: Set size of the sliding window, or :const:`None` to disable
+        :param sliding_window: Only show the latest data points
         :param plot_names: Base names of the plots (numbered automatically, formatting with ``'{index}'`` possible)
         :param title: Graph title
         :param x_label: X-axis label
