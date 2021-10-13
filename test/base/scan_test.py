@@ -18,6 +18,8 @@ import test.helpers
 class _MockSystem(DaxSystem):
     SYS_ID = 'test_system'
     SYS_VER = 0
+    CORE_LOG_KEY = None
+    DAX_INFLUX_DB_KEY = None
 
 
 class _MockScan1(DaxScan, _MockSystem):
