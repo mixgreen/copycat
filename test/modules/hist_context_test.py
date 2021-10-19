@@ -650,12 +650,15 @@ class HistogramAnalyzerTestCase(unittest.TestCase):
         for a, b in zip(result, ref):
             self.assertListEqual(a, b, 'Flat state probabilities did not matched reference')
 
-    def _generate_hdf5_data(self, *, keep_raw=True, add_legacy=False):
+    def _generate_hdf5_data(self, *, keep_raw=True, add_legacy=False, binary_measurements=False):
         num_histograms = 8
         all_data = {
             'foo': [[1, 9], [2, 9], [2, 9], [3, 9], [3, 8], [3, 8]],  # Specific dataset
             None: [[4, 1, 0], [5, 2, 0], [6, 3, 0], [7, 4, 0], [8, 5, 0]],  # Default dataset
         }
+
+        if binary_measurements:
+            all_data = {k: [[c > 2 for c in a] for a in v] for k, v in all_data.items()}
 
         for key, data in all_data.items():
             # Store data
@@ -775,6 +778,24 @@ class HistogramAnalyzerTestCase(unittest.TestCase):
 
             with self.assertRaises(KeyError, msg='Absence of histogram data did not raise'):
                 HistogramAnalyzer(file_name)
+
+    def test_hdf5_read_no_probabilities(self, binary_measurements=False):
+        self._generate_hdf5_data(binary_measurements=binary_measurements)
+
+        with temp_dir():
+            # Write data to HDF5 file
+            file_name = 'result.h5'
+            with h5py.File(file_name, 'w') as f:
+                self.managers.dataset_mgr.write_hdf5(f)
+
+            # Read file with HistogramAnalyzer
+            a = HistogramAnalyzer(file_name)
+
+            # Verify probabilities attribute is not available
+            self.assertEqual(binary_measurements, hasattr(a, 'probabilities'))
+
+    def test_hdf5_read_binary_probabilities(self):
+        self.test_hdf5_read_no_probabilities(binary_measurements=True)
 
     @unittest.skipUnless(CI_ENABLED, 'Not in a CI environment, skipping slow plotting test')
     def test_plot(self):

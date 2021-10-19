@@ -726,7 +726,7 @@ class HistogramAnalyzer:
         assert isinstance(state_detection_threshold, int), 'State detection threshold must be of type int'
 
         if state_detection_threshold < 0:
-            if not all(isinstance(c, bool) for c in counter):
+            if not all(isinstance(c, (bool, np.bool_)) for c in counter):
                 raise TypeError('All measurements must be binary when no state detection threshold is given')
 
             # Count the number of one measurements, works only for binary measurements
@@ -1082,8 +1082,10 @@ class HistogramAnalyzer:
         assert isinstance(y_label, str) or y_label is None
         assert isinstance(labels, collections.abc.Sequence) or labels is None
         assert isinstance(ext, str)
+        assert hasattr(self, 'probabilities'), \
+            'Probability data not available, probably because no state detection threshold was provided'
 
-        # Get the probabilities associated with the provided key (assumes probabilities are available)
+        # Get the probabilities associated with the provided key
         probabilities = [np.asarray(p) for p in self.probabilities[key]]
 
         if not len(probabilities):
@@ -1266,8 +1268,9 @@ class HistogramAnalyzer:
         assert isinstance(y_label, str) or y_label is None
         assert isinstance(labels, collections.abc.Sequence) or labels is None
         assert isinstance(ext, str)
+        assert hasattr(self, 'raw'), 'Provided data source does not contain required raw data (DAX<0.4)'
 
-        # Get the state probabilities associated with the provided key (assumes raw data and threshold are available)
+        # Get the state probabilities associated with the provided key
         state_probabilities = np.asarray(self.raw_to_flat_state_probabilities(
             self.raw[key], state_detection_threshold=self.state_detection_threshold))
 
