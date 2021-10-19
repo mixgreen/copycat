@@ -2,22 +2,83 @@ import unittest
 import collections
 
 from dax.experiment import *
+from dax.base.exceptions import BuildError
 from dax.modules.safety_context import *
 from dax.util.artiq import get_managers
 
 import test.helpers
 
 
-class _ReentrantTestSystem(DaxSystem):
+class _TestSystem(DaxSystem):
     SYS_ID = 'unittest_system'
     SYS_VER = 0
+    CORE_LOG_KEY = None
+    DAX_INFLUX_DB_KEY = None
+
+
+class SafetyContextTestCase(unittest.TestCase):
+
+    def setUp(self) -> None:
+        self.managers = get_managers()
+        self.s = _TestSystem(self.managers)
+
+    def tearDown(self) -> None:
+        # Close managers
+        self.managers.close()
+
+    def _test_callback_decorators(self, *, rpc_=False, cb, error):
+        # Test if portable still works (should always work)
+        ReentrantSafetyContext(_TestSystem(self.managers), 'context',
+                               rpc_=rpc_, enter_cb=self._portable_fn, exit_cb=self._portable_fn)
+
+        if error:
+            # Expect error
+            with self.assertRaises(BuildError):
+                ReentrantSafetyContext(_TestSystem(self.managers), 'context',
+                                       rpc_=rpc_, enter_cb=cb, exit_cb=self._portable_fn)
+            with self.assertRaises(BuildError):
+                ReentrantSafetyContext(_TestSystem(self.managers), 'context',
+                                       rpc_=rpc_, enter_cb=self._portable_fn, exit_cb=cb)
+        else:
+            # No error
+            ReentrantSafetyContext(_TestSystem(self.managers), 'context', rpc_=rpc_, enter_cb=cb, exit_cb=cb)
+
+    def test_callback_decorators(self):
+        error_set = {
+            (False, self._host_only_fn),
+            (True, self._kernel_fn),
+        }
+        for rpc_ in [False, True]:
+            for cb in [self._kernel_fn, self._portable_fn, self._host_only_fn, self._rpc_fn]:
+                self._test_callback_decorators(rpc_=rpc_, cb=cb, error=(rpc_, cb) in error_set)
+
+    @kernel
+    def _kernel_fn(self):
+        pass
+
+    @portable
+    def _portable_fn(self):
+        pass
+
+    @host_only
+    def _host_only_fn(self):
+        pass
+
+    @rpc
+    def _rpc_fn(self):
+        pass
+
+
+class _ReentrantTestSystem(_TestSystem):
     SAFETY_CONTEXT_TYPE = ReentrantSafetyContext
     EXIT_ERROR = True
+    RPC = False
 
     def build(self) -> None:  # type: ignore[override]
         super(_ReentrantTestSystem, self).build()
         self.context = self.SAFETY_CONTEXT_TYPE(self, 'context',
-                                                enter_cb=self.enter, exit_cb=self.exit, exit_error=self.EXIT_ERROR)
+                                                enter_cb=self.enter, exit_cb=self.exit,
+                                                exit_error=self.EXIT_ERROR, rpc_=self.RPC)
         self.counter = collections.Counter({'enter': 0, 'exit': 0})
 
     def enter(self):
@@ -27,16 +88,34 @@ class _ReentrantTestSystem(DaxSystem):
         self.counter['exit'] += 1
 
 
+class _ReentrantRpcTestSystem(_ReentrantTestSystem):
+    RPC = True
+
+
 class _ReentrantExitErrorTestSystem(_ReentrantTestSystem):
     EXIT_ERROR = False
+
+
+class _ReentrantExitErrorRpcTestSystem(_ReentrantTestSystem):
+    EXIT_ERROR = False
+    RPC = True
 
 
 class _NonReentrantTestSystem(_ReentrantTestSystem):
     SAFETY_CONTEXT_TYPE = SafetyContext
 
 
+class _NonReentrantRpcTestSystem(_NonReentrantTestSystem):
+    RPC = True
+
+
 class _NonReentrantExitErrorTestSystem(_NonReentrantTestSystem):
     EXIT_ERROR = False
+
+
+class _NonReentrantExitErrorRpcTestSystem(_NonReentrantTestSystem):
+    EXIT_ERROR = False
+    RPC = True
 
 
 class ReentrantSafetyContextTestCase(unittest.TestCase):
@@ -115,8 +194,7 @@ class ReentrantSafetyContextTestCase(unittest.TestCase):
             self.fail()
 
         self.assertTrue(enter_flag, 'Context was never entered')
-        # Expect 1 as enter passed successfully but exit failed
-        self.assertEqual(self.context._in_context, 1, 'In context did not match expected value')
+        self.assertEqual(self.context._in_context, 0, 'In context did not match expected value')
         self.assertDictEqual(self.counter, {'enter': 1, 'exit': 0}, 'Counters did not match expected values')
 
     def test_enter_exit_exception(self):
@@ -190,8 +268,16 @@ class ReentrantSafetyContextTestCase(unittest.TestCase):
         self.assertDictEqual(self.counter, {'enter': 1, 'exit': 1}, 'Counters did not match expected values')
 
 
+class ReentrantExitRpcContextTestCase(ReentrantSafetyContextTestCase):
+    SYSTEM_TYPE = _ReentrantRpcTestSystem
+
+
 class ReentrantExitErrorSafetyContextTestCase(ReentrantSafetyContextTestCase):
     SYSTEM_TYPE = _ReentrantExitErrorTestSystem
+
+
+class ReentrantExitErrorRpcSafetyContextTestCase(ReentrantSafetyContextTestCase):
+    SYSTEM_TYPE = _ReentrantExitErrorRpcTestSystem
 
 
 class NonReentrantSafetyContextTestCase(ReentrantSafetyContextTestCase):
@@ -218,5 +304,13 @@ class NonReentrantSafetyContextTestCase(ReentrantSafetyContextTestCase):
         self.assertDictEqual(self.counter, {'enter': 1, 'exit': 1}, 'Counters did not match expected values')
 
 
+class NonReentrantRpcSafetyContextTestCase(NonReentrantSafetyContextTestCase):
+    SYSTEM_TYPE = _NonReentrantRpcTestSystem
+
+
 class NonReentrantExitErrorSafetyContextTestCase(NonReentrantSafetyContextTestCase):
     SYSTEM_TYPE = _NonReentrantExitErrorTestSystem
+
+
+class NonReentrantExitErrorRpcSafetyContextTestCase(NonReentrantSafetyContextTestCase):
+    SYSTEM_TYPE = _NonReentrantExitErrorRpcTestSystem
