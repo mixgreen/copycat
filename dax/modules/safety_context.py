@@ -40,10 +40,12 @@ class ReentrantSafetyContext(DaxModule):
     EXCEPTION_TYPE: typing.ClassVar[type] = SafetyContextError
     """The exception type raised (must be a subclass of :class:`SafetyContextError`)."""
 
-    _exit_error: bool
-    _exit_error_msg: str
-    _rpc: bool
-    _in_context: np.int32
+    _safety_context_enter_cb: __CB_T
+    _safety_context_exit_cb: __CB_T
+    _safety_context_exit_error: bool
+    _safety_context_exit_error_msg: str
+    _safety_context_rpc: bool
+    _safety_context_entries: np.int32
 
     def build(self, *, enter_cb: __CB_T, exit_cb: __CB_T,  # type: ignore[override]
               exit_error: bool = False, rpc_: bool = False) -> None:
@@ -65,19 +67,19 @@ class ReentrantSafetyContext(DaxModule):
         self.update_kernel_invariants('EXCEPTION_TYPE')
 
         # Store references to the callback functions
-        self._enter_cb: ReentrantSafetyContext.__CB_T = enter_cb
-        self._exit_cb: ReentrantSafetyContext.__CB_T = exit_cb
-        self.update_kernel_invariants('_enter_cb', '_exit_cb')
+        self._safety_context_enter_cb = enter_cb  # type: ignore[misc,assignment]
+        self._safety_context_exit_cb = exit_cb  # type: ignore[misc,assignment]
+        self.update_kernel_invariants('_safety_context_enter_cb', '_safety_context_exit_cb')
 
         # Store exit error flag and custom error message
-        self._exit_error = exit_error
-        self._exit_error_msg = f'Safety context "{self.get_name()}" has been exited more times than entered'
-        self.update_kernel_invariants('_exit_error', '_exit_error_msg')
+        self._safety_context_exit_error = exit_error
+        self._safety_context_exit_error_msg = f'Safety context "{self.get_name()}" has been exited too many times'
+        self.update_kernel_invariants('_safety_context_exit_error', '_safety_context_exit_error_msg')
 
         # Store RPC flag
-        self._rpc = rpc_
-        self.update_kernel_invariants('_rpc')
-        if self._rpc:
+        self._safety_context_rpc = rpc_
+        self.update_kernel_invariants('_safety_context_rpc')
+        if self._safety_context_rpc:
             assert not is_kernel(enter_cb), 'Enter callback can not be a kernel when RPC is enabled'
             assert not is_kernel(exit_cb), 'Exit callback can not be a kernel when RPC is enabled'
         else:
@@ -85,7 +87,7 @@ class ReentrantSafetyContext(DaxModule):
             assert not is_host_only(exit_cb), 'Exit callback can not be host only when RPC is disabled'
 
         # By default we are not in context
-        self._in_context = np.int32(0)  # This variable is NOT kernel invariant
+        self._safety_context_entries = np.int32(0)  # This variable is NOT kernel invariant
 
     def init(self) -> None:
         pass
@@ -108,22 +110,22 @@ class ReentrantSafetyContext(DaxModule):
         context was entered because context entering was handled on the host using RPC.
         Hence, this function should only be used in RPC calls or host-only functions.
         """
-        return bool(self._in_context)
+        return bool(self._safety_context_entries)
 
     @portable
-    def _enter(self):  # type: () -> None
+    def _safety_context_enter(self):  # type: () -> None
         """Handle context enter (portable)."""
-        if self._in_context == 0:
+        if self._safety_context_entries == 0:
             # Call enter callback function
-            self._enter_cb()
+            self._safety_context_enter_cb()  # type: ignore[misc]
 
         # Increment in context counter after enter callback was successfully executed
-        self._in_context += 1
+        self._safety_context_entries += 1
 
     @rpc(flags={'async'})
-    def _rpc_enter(self):  # type: () -> None
+    def _safety_context_enter_rpc(self):  # type: () -> None
         """Handle context enter (RPC)."""
-        self._enter()
+        self._safety_context_enter()
 
     @portable
     def __enter__(self):  # type: () -> None
@@ -131,30 +133,30 @@ class ReentrantSafetyContext(DaxModule):
 
         Normally this function should not be called directly but by the ``with`` statement instead.
         """
-        if self._rpc:
-            self._rpc_enter()
+        if self._safety_context_rpc:
+            self._safety_context_enter_rpc()
         else:
-            self._enter()
+            self._safety_context_enter()
 
     @portable
-    def _exit(self):  # type: () -> None
+    def _safety_context_exit(self):  # type: () -> None
         """Handle context exit (portable)."""
-        if self._exit_error and self._in_context <= 0:
+        if self._safety_context_exit_error and self._safety_context_entries <= 0:
             # Enter and exit calls were out of sync
-            raise self.EXCEPTION_TYPE(self._exit_error_msg)
+            raise self.EXCEPTION_TYPE(self._safety_context_exit_error_msg)
 
-        if self._in_context > 0:
+        if self._safety_context_entries > 0:
             # Decrement context counter before exit callback is executed
-            self._in_context -= 1
+            self._safety_context_entries -= 1
 
-            if self._in_context == 0:
+            if self._safety_context_entries == 0:
                 # Call exit callback function
-                self._exit_cb()
+                self._safety_context_exit_cb()  # type: ignore[misc]
 
     @rpc(flags={'async'})
-    def _rpc_exit(self):  # type: () -> None
+    def _safety_context_exit_rpc(self):  # type: () -> None
         """Handle context exit (RPC)."""
-        self._exit()
+        self._safety_context_exit()
 
     @portable  # noqa:ATQ306
     def __exit__(self, exc_type, exc_val, exc_tb):  # type: (typing.Any, typing.Any, typing.Any) -> None # noqa: ATQ306
@@ -165,10 +167,10 @@ class ReentrantSafetyContext(DaxModule):
         It is not possible to assign default values to the argument as the ARTIQ compiler only
         accepts :func:`__exit__` functions with exactly four positional arguments.
         """
-        if self._rpc:
-            self._rpc_exit()
+        if self._safety_context_rpc:
+            self._safety_context_exit_rpc()
         else:
-            self._exit()
+            self._safety_context_exit()
 
 
 class SafetyContext(ReentrantSafetyContext):
@@ -188,7 +190,7 @@ class SafetyContext(ReentrantSafetyContext):
     :attr:`EXCEPTION_TYPE` can be overridden if desired.
     """
 
-    _enter_err_msg: str
+    _safety_context_enter_error_msg: str
 
     def build(self, **kwargs: typing.Any) -> None:  # type: ignore[override]
         """Build the safety context module."""
@@ -197,8 +199,8 @@ class SafetyContext(ReentrantSafetyContext):
         super(SafetyContext, self).build(**kwargs)
 
         # Store custom error message
-        self._enter_err_msg = f'Safety context "{self.get_name()}" is non-reentrant'
-        self.update_kernel_invariants('_enter_err_msg')
+        self._safety_context_enter_error_msg = f'Safety context "{self.get_name()}" is non-reentrant'
+        self.update_kernel_invariants('_safety_context_enter_error_msg')
 
     @portable
     def __enter__(self):  # type: () -> None
@@ -206,15 +208,15 @@ class SafetyContext(ReentrantSafetyContext):
 
         Normally this function should not be called directly but by the ``with`` statement instead.
         """
-        if self._in_context != 0:
+        if self._safety_context_entries != 0:
             # Prevent nested context
-            raise self.EXCEPTION_TYPE(self._enter_err_msg)
+            raise self.EXCEPTION_TYPE(self._safety_context_enter_error_msg)
 
         # Note: not using super() because the ARTIQ compiler does not support it
         # Note: not using ReentrantSafetyContext.__enter__() because the ARTIQ compiler can not unify it
-        if self._in_context == 0:
+        if self._safety_context_entries == 0:
             # Call enter callback function
-            self._enter_cb()
+            self._safety_context_enter_cb()  # type: ignore[misc]
 
         # Increment in context counter after enter callback was successfully executed
-        self._in_context += 1
+        self._safety_context_entries += 1

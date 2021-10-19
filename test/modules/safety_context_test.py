@@ -142,7 +142,7 @@ class ReentrantSafetyContextTestCase(unittest.TestCase):
             self.context.__exit__(None, None, None)
             self.context.__exit__(None, None, None)
 
-        self.assertEqual(self.context._in_context, 0, 'In context counter is corrupted')
+        self.assertEqual(self.context._safety_context_entries, 0, 'In context counter is corrupted')
         self.assertDictEqual(self.counter, {'enter': 0, 'exit': 0}, 'Counters did not match expected values')
 
     def test_in_context(self):
@@ -169,21 +169,21 @@ class ReentrantSafetyContextTestCase(unittest.TestCase):
         def enter():
             raise ValueError
 
-        self.context._enter_cb = enter
+        self.context._safety_context_enter_cb = enter
 
         with self.assertRaises(ValueError, msg='Enter exception did not raise'):
             with self.context:
                 self.fail()
 
         # Expect 0 as enter failed and exit was never called
-        self.assertEqual(self.context._in_context, 0, 'In context did not match expected value')
+        self.assertEqual(self.context._safety_context_entries, 0, 'In context did not match expected value')
         self.assertDictEqual(self.counter, {'enter': 0, 'exit': 0}, 'Counters did not match expected values')
 
     def test_exit_exception(self):
         def exit_():
             raise ValueError
 
-        self.context._exit_cb = exit_
+        self.context._safety_context_exit_cb = exit_
 
         # noinspection PyUnusedLocal
         enter_flag = False
@@ -194,7 +194,7 @@ class ReentrantSafetyContextTestCase(unittest.TestCase):
             self.fail()
 
         self.assertTrue(enter_flag, 'Context was never entered')
-        self.assertEqual(self.context._in_context, 0, 'In context did not match expected value')
+        self.assertEqual(self.context._safety_context_entries, 0, 'In context did not match expected value')
         self.assertDictEqual(self.counter, {'enter': 1, 'exit': 0}, 'Counters did not match expected values')
 
     def test_enter_exit_exception(self):
@@ -204,15 +204,15 @@ class ReentrantSafetyContextTestCase(unittest.TestCase):
         def exit_():
             raise TypeError
 
-        self.context._enter_cb = enter
-        self.context._exit_cb = exit_
+        self.context._safety_context_enter_cb = enter
+        self.context._safety_context_exit_cb = exit_
 
         with self.assertRaises(ValueError, msg='Enter and exit exception did not raise'):
             with self.context:
                 self.fail()
 
         # Expect 0 as enter failed and exit was never called
-        self.assertEqual(self.context._in_context, 0, 'In context did not match expected value')
+        self.assertEqual(self.context._safety_context_entries, 0, 'In context did not match expected value')
         self.assertDictEqual(self.counter, {'enter': 0, 'exit': 0}, 'Counters did not match expected values')
 
     def test_multiple_context_objects(self):
