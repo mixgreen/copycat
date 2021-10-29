@@ -146,7 +146,8 @@ class _CoreDevice:
 
 
 _AVAILABLE_CORE_DEVICES: typing.List[_CoreDevice] = [
-    _CoreDevice(address=_KC705_CORE_ADDR, device_db=_KC705_DEVICE_DB),
+    # TODO: Legacy HW testbench disabled in preparation for new CI testing hardware
+    # _CoreDevice(address=_KC705_CORE_ADDR, device_db=_KC705_DEVICE_DB),
 ]
 """A list of available core devices."""
 
