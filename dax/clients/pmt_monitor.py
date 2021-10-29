@@ -144,12 +144,17 @@ class _PmtMonitorBase(DaxClient, Experiment, abc.ABC):
                                                          BooleanValue(default=True),
                                                          group='Applet',
                                                          tooltip='Close applet when experiment is terminated')
+        self._add_arguments_applet()
 
     def _add_arguments_internal(self) -> None:
         """Add custom arguments.
 
         **For internal usage only**. See also :func:`add_arguments`.
         """
+        pass
+
+    def _add_arguments_applet(self) -> None:
+        """Add custom arguments specifically in the applets group."""
         pass
 
     @abc.abstractmethod
@@ -380,10 +385,10 @@ class PmtMonitor(_PmtMonitorBase):
     APPLET_GROUP = 'dax.pmt_monitor'
     DEFAULT_DATASET = 'plot.dax.pmt_monitor'
 
-    MOVING_AVERAGE_PLOT_XY: typing.ClassVar[int] = 0
-    """Uniform moving average window size in samples for the plot XY applet."""
-    NUM_DIGITS_BIG_NUMBER: typing.ClassVar[int] = 5
-    """Number of digits to display for the big number applet."""
+    DEFAULT_MOVING_AVERAGE_PLOT_XY: typing.ClassVar[int] = 0
+    """Default uniform moving average window size in samples for the plot XY applet."""
+    DEFAULT_NUM_DIGITS_BIG_NUMBER: typing.ClassVar[int] = 5
+    """Default number of digits to display for the big number applet."""
 
     _PLOT_XY: typing.ClassVar[str] = 'Plot XY'
     """Key for plot XY applet type."""
@@ -391,8 +396,8 @@ class PmtMonitor(_PmtMonitorBase):
     """Key for big number applet type."""
 
     def _add_arguments_internal(self) -> None:
-        assert self.MOVING_AVERAGE_PLOT_XY >= 0, 'Moving average window size must be zero or greater'
-        assert self.NUM_DIGITS_BIG_NUMBER >= 0, 'Number of digits must be zero or greater'
+        assert self.DEFAULT_MOVING_AVERAGE_PLOT_XY >= 0, 'Default moving average window size must be zero or greater'
+        assert self.DEFAULT_NUM_DIGITS_BIG_NUMBER >= 0, 'Default number of digits must be zero or greater'
 
         # Dict with available applet types
         self._applet_types: typing.Dict[str, typing.Callable[..., None]] = {
@@ -410,15 +415,30 @@ class PmtMonitor(_PmtMonitorBase):
                                                   tooltip='Choose an applet type')
         self.update_kernel_invariants('pmt_channel')
 
+    def _add_arguments_applet(self) -> None:
+        # Plot XY applet args
+        self.moving_average: int = self.get_argument('Moving average',
+                                                     NumberValue(default=self.DEFAULT_MOVING_AVERAGE_PLOT_XY, step=1,
+                                                                 min=0, ndecimals=0),
+                                                     group='Applet',
+                                                     tooltip='Number of samples used for uniform moving average window '
+                                                             '(0 to disable moving average, for plot XY applet only)')
+        # Big number applet args
+        self.num_digits: int = self.get_argument('Num digits',
+                                                 NumberValue(default=self.DEFAULT_NUM_DIGITS_BIG_NUMBER, step=1,
+                                                             min=0, max=99, ndecimals=0),
+                                                 group='Applet',
+                                                 tooltip='Number of digits to show (for big number applet only)')
+
     def _create_applet(self, *args: typing.Any, **kwargs: typing.Any) -> None:
         if self.applet_type == self._PLOT_XY:
             # Modify keyword arguments
             kwargs.setdefault('last', True)
-            kwargs.setdefault('moving_average', self.MOVING_AVERAGE_PLOT_XY)
+            kwargs.setdefault('moving_average', self.moving_average)
         elif self.applet_type == self._BIG_NUMBER:
             # Modify keyword arguments
             kwargs = {k: v for k, v in kwargs.items() if k in {'group', 'update_delay'}}
-            kwargs.setdefault('digit_count', self.NUM_DIGITS_BIG_NUMBER)
+            kwargs.setdefault('digit_count', self.num_digits)
 
         # Create applet based on chosen applet type
         self._applet_types[self.applet_type](self.applet_type, *args, **kwargs)
