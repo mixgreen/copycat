@@ -207,10 +207,10 @@ class Core(BaseCore):
         # Configure compiler
         if compile:
             core_kwargs = {k: v for k, v in kwargs.items() if k in {'target'}}
+            core_dmgr: typing.Dict[str, typing.Any] = {}
             self._compiler = artiq.coredevice.core.Core(
-                {}, host=None, ref_period=ref_period, ref_multiplier=ref_multiplier, **core_kwargs)
-            # Set the compiler's device manager core to reference its own core
-            self._compiler.dmgr[self.key] = self._compiler
+                core_dmgr, host=None, ref_period=ref_period, ref_multiplier=ref_multiplier, **core_kwargs)
+            core_dmgr[self.key] = self._compiler  # Set the device manager core to reference itself
             _logger.debug('Kernel compilation during simulation enabled')
         else:
             self._compiler = None
@@ -219,7 +219,9 @@ class Core(BaseCore):
             args: typing.Tuple[typing.Any, ...], kwargs: typing.Dict[str, typing.Any]) -> typing.Any:
         if self._level == 0 and self._compiler is not None:
             # Compile the kernel
-            self._compiler.compile(function, args, kwargs)
+            _logger.debug('Compiling kernel...')
+            _, kernel_library, _, _ = self._compiler.compile(function, args, kwargs)
+            _logger.debug(f'Kernel size: {len(kernel_library)} bytes')
 
         # Unpack function
         kernel_fn = function.artiq_embedded.function

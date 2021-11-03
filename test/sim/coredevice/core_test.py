@@ -79,7 +79,8 @@ class CoreTestCase(BaseCoreTestCase):
 
         with unittest.mock.patch.object(self, 'core', core, create=True):
             if compile_flag:
-                with unittest.mock.patch.object(core._compiler, 'compile', autospec=True) as mock_method:
+                with unittest.mock.patch.object(core._compiler, 'compile', autospec=True,
+                                                return_value=(None, [], None, None)) as mock_method:
                     # Call kernel function
                     self._kernel_fn()
                     # Verify if compile function was called exactly once
