@@ -4,7 +4,7 @@ import logging
 import copy
 import numpy as np
 
-from artiq.language.core import kernel, rpc, portable, host_only
+from artiq.language.core import kernel, rpc, portable, host_only, now_mu
 from artiq.language.types import TInt32, TFloat
 from artiq.coredevice.core import CompileError
 
@@ -16,7 +16,7 @@ from dax.util.artiq import get_managers
 import test.sim.coredevice._compile_testcase as compile_testcase
 
 
-class BaseCoreTestCase(unittest.TestCase):
+class _BaseTestCase(unittest.TestCase):
     _DEVICE_DB = {
         'core': {
             'type': 'local',
@@ -37,12 +37,28 @@ class BaseCoreTestCase(unittest.TestCase):
         # Close managers
         self.managers.close()
 
+
+class BaseCoreTestCase(_BaseTestCase):
+
     def test_constructor_signature(self):
         # Should be able to construct base core without arguments
         self.assertIsNotNone(dax.sim.coredevice.core.BaseCore())
 
+    def test_default_break_realtime(self):
+        core = dax.sim.coredevice.core.BaseCore()
+        t = now_mu()
+        core.break_realtime()
+        self.assertEqual(now_mu() - t, dax.sim.coredevice.core.BaseCore.RESET_TIME_MU)
 
-class CoreTestCase(BaseCoreTestCase):
+    def test_variable_break_realtime(self):
+        for break_realtime_mu in [0, 125000, 200000]:
+            core = dax.sim.coredevice.core.BaseCore(break_realtime_mu=break_realtime_mu)
+            t = now_mu()
+            core.break_realtime()
+            self.assertEqual(now_mu() - t, break_realtime_mu)
+
+
+class CoreTestCase(_BaseTestCase):
 
     def test_constructor_signature(self):
         # Make sure the signature is as expected

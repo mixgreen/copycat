@@ -38,12 +38,17 @@ class BaseCore(DaxSimDevice):
     _ref_period: float
     _ref_multiplier: int
     _coarse_ref_period: float
+    _break_realtime_mu: np.int64
 
     def __init__(self, dmgr: typing.Any = None,
                  ref_period: float = 1e-9, ref_multiplier: int = 8,
-                 **kwargs: typing.Any):
-        assert isinstance(ref_period, float) and ref_period > 0.0, 'Reference period must be of type float'
-        assert isinstance(ref_multiplier, int) and ref_multiplier > 0, 'Reference multiplier must be of type int'
+                 break_realtime_mu: np.int64 = RESET_TIME_MU, **kwargs: typing.Any):
+        assert isinstance(ref_period, float), 'Reference period must be of type float'
+        assert ref_period > 0.0, 'Reference period must be greater than zero'
+        assert isinstance(ref_multiplier, int), 'Reference multiplier must be of type int'
+        assert ref_multiplier > 0, 'Reference multiplier must be greater than zero'
+        assert isinstance(break_realtime_mu, (int, np.int32, np.int64)), 'Break realtime mu must be of type int'
+        assert break_realtime_mu >= 0, 'Break realtime mu must be zero or greater'
 
         if type(self) is BaseCore:
             # If the base core was instantiated directly, use a default value for _key required by DaxSimDevice
@@ -56,6 +61,7 @@ class BaseCore(DaxSimDevice):
         self._ref_period = ref_period
         self._ref_multiplier = ref_multiplier
         self._coarse_ref_period = self._ref_period * self._ref_multiplier
+        self._break_realtime_mu = np.int64(break_realtime_mu)
 
         # Setup dummy comm object
         self._comm = CommKernelDummy()
@@ -131,7 +137,7 @@ class BaseCore(DaxSimDevice):
     @kernel
     def break_realtime(self):  # type: () -> None
         # Move cursor
-        delay_mu(self.RESET_TIME_MU)
+        delay_mu(self._break_realtime_mu)
 
 
 class Core(BaseCore):
