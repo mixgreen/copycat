@@ -36,6 +36,19 @@ test_conda:
     - flake8 --version; flake8
     - pytest -v -rs
 
+test_hardware:
+  extends: .nix_env
+  stage: test
+  tags:
+    - kasli
+  variables:
+    NIX_SHELL_FILE: "test/shell.nix"
+    HW_TEST_ENABLED: "1"
+  script:
+    # Run test commands
+    - python3 --version
+    - pytest -v -rs test/hw_test/
+
 pages:
   extends: .nix_env
   stage: deploy
