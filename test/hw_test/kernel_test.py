@@ -4,7 +4,7 @@ import numpy as np
 from artiq.experiment import *
 from artiq.coredevice.core import CompileError
 
-import test.hw_testbench
+import test.hw_test
 
 
 class _ContextExperiment(HasEnvironment):
@@ -101,7 +101,7 @@ class _CompilerSupportExperiment(HasEnvironment):
         return now_mu() - t  # Should be 0
 
 
-class ArtiqKernelTestCase(test.hw_testbench.TestBenchCase):
+class ArtiqKernelTestCase(test.hw_test.HardwareTestCase):
 
     def test_nested_context(self):
         env = self.construct_env(_ContextExperiment)
