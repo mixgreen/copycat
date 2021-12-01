@@ -228,6 +228,9 @@ class DaxScan(dax.base.system.DaxBase, abc.ABC):
         if any(dax.util.artiq.is_kernel(f) for f in [self.host_enter, self.host_setup,
                                                      self.host_cleanup, self.host_exit]):
             raise TypeError('host_*() functions can not be kernels')
+        # Check that _run_dax_scan_setup/cleanup aren't kernels
+        if any(dax.util.artiq.is_kernel(f) for f in [self._run_dax_scan_setup, self._run_dax_scan_cleanup]):
+            raise TypeError('_run_dax_scan_*() functions cannot be kernels')
 
         # Call super and forward arguments, for compatibility with other libraries
         # noinspection PyArgumentList
@@ -479,6 +482,8 @@ class DaxScan(dax.base.system.DaxBase, abc.ABC):
                     # Coming from a host context, perform host setup
                     self.logger.debug('Performing host setup')
                     self.host_setup()
+                    self.logger.debug('Performing run_dax_scan setup')
+                    self._run_dax_scan_setup()
 
                     # Run the scan
                     if dax.util.artiq.is_kernel(self.run_point):
@@ -490,6 +495,8 @@ class DaxScan(dax.base.system.DaxBase, abc.ABC):
 
                 finally:
                     # One time host cleanup
+                    self.logger.debug('Performing run_dax_scan cleanup')
+                    self._run_dax_scan_cleanup()
                     self.logger.debug('Performing host cleanup')
                     self.host_cleanup()
 
@@ -557,6 +564,14 @@ class DaxScan(dax.base.system.DaxBase, abc.ABC):
         """1. Setup on the host, called once at entry and after a pause."""
         pass
 
+    def _run_dax_scan_setup(self) -> None:  # pragma: no cover
+        """1.5. Called on the host after :func:`host_setup` and just before :func:`_run_dax_scan`.
+
+        Useful for e.g. confirming that necessary attributes created in :func:`host_enter` or :func:`host_setup`
+        haven't been overwritten by a subclass.
+        """
+        pass
+
     @portable
     def device_setup(self):  # type: () -> None  # pragma: no cover
         """2. Setup on the core device, called once at entry and after a pause.
@@ -582,6 +597,10 @@ class DaxScan(dax.base.system.DaxBase, abc.ABC):
         at the start of this function to make sure operations can execute in case of an
         underflow exception.
         """
+        pass
+
+    def _run_dax_scan_cleanup(self) -> None:  # pragma: no cover
+        """4.5. Called on the host after :func:`_run_dax_scan`."""
         pass
 
     def host_cleanup(self) -> None:  # pragma: no cover
