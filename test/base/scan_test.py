@@ -32,6 +32,10 @@ class _MockScan1(DaxScan, _MockSystem):
         # Scan
         self.add_scan('foo', 'foo', Scannable(RangeScan(1, self.FOO, self.FOO, randomize=False)))
 
+    def init_scan_elements(self) -> None:
+        super(_MockScan1, self).init_scan_elements()
+        self.counter['init_scan_elements'] += 1
+
     def host_enter(self) -> None:
         self.counter['host_enter'] += 1
 
@@ -252,6 +256,7 @@ class Scan1TestCase(unittest.TestCase):
 
         # Verify counters
         counter_ref = {
+            'init_scan_elements': 1,
             'host_enter': 1,
             'host_setup': 1,
             '_run_dax_scan_setup': 1,
@@ -263,6 +268,15 @@ class Scan1TestCase(unittest.TestCase):
             'host_exit': 1,
         }
         self.assertDictEqual(self.scan.counter, counter_ref, 'Function counters did not match expected values')
+
+    def test_early_scan_element_init(self):
+        # Call element init before run
+        self.scan.init_scan_elements()
+        # Run the scan
+        self.scan.run()
+        # Verify init was only called once
+        self.assertEqual(self.scan.counter['init_scan_elements'], 1,
+                         'init_scan_elements counter did not match expected value')
 
     def test_raise_add_scan(self):
         with self.assertRaises(TypeError, msg='Adding scan outside build did not raise'):
@@ -486,6 +500,7 @@ class Scan2TestCase(Scan1TestCase):
 
         # Verify counters
         counter_ref = {
+            'init_scan_elements': 1,
             'host_enter': 1,
             'host_setup': 1,
             '_run_dax_scan_setup': 1,
@@ -534,6 +549,7 @@ class ScanTerminateTestCase(unittest.TestCase):
 
         # Verify counters
         counter_ref = {
+            'init_scan_elements': 1,
             'host_enter': 1,
             'host_setup': 1,
             '_run_dax_scan_setup': 1,
@@ -563,6 +579,7 @@ class ScanStopTestCase(unittest.TestCase):
 
         # Verify counters
         counter_ref = {
+            'init_scan_elements': 1,
             'host_enter': 1,
             'host_setup': 1,
             '_run_dax_scan_setup': 1,
@@ -596,6 +613,7 @@ class InfiniteScanTestCase(unittest.TestCase):
 
         # Verify counters
         counter_ref = {
+            'init_scan_elements': 1,
             'host_enter': 1,
             'host_setup': 1,
             '_run_dax_scan_setup': 1,
@@ -637,6 +655,7 @@ class DisableIndexScanTestCase(unittest.TestCase):
 
         # Verify counters
         counter_ref = {
+            'init_scan_elements': 1,
             'host_enter': 1,
             'host_setup': 1,
             '_run_dax_scan_setup': 1,

@@ -424,16 +424,13 @@ class DaxScan(dax.base.system.DaxBase, abc.ABC):
         """
         return {key: list(scannable) for key, scannable in self._dax_scan_scannables.items()}
 
-    """Run functions"""
-
     @host_only
-    def run(self) -> None:
-        """Entry point of the experiment implemented by the scan class.
+    def init_scan_elements(self) -> None:
+        """Initialize the list of scan elements.
 
-        Normally users do not have to override this method.
-        Once-executed entry code can use the :func:`host_enter` function instead.
+        By default this is called at the beginning of :func:`run`, however it may be called in :func:`prepare` if the
+        user desires the ability to call :func:`get_scan_points` before :func:`run`.
         """
-
         # Check if build() was called
         assert hasattr(self, '_dax_scan_scannables'), 'DaxScan.build() was not called'
 
@@ -446,6 +443,20 @@ class DaxScan(dax.base.system.DaxBase, abc.ABC):
         self.update_kernel_invariants('_dax_scan_elements')
         self.logger.debug(f'Prepared {len(self._dax_scan_elements)} scan point(s) '
                           f'with {len(self._dax_scan_scannables)} scan parameter(s)')
+
+    """Run functions"""
+
+    @host_only
+    def run(self) -> None:
+        """Entry point of the experiment implemented by the scan class.
+
+        Normally users do not have to override this method.
+        Once-executed entry code can use the :func:`host_enter` function instead.
+        """
+
+        # Initialize scan elements if not already done
+        if not hasattr(self, '_dax_scan_elements'):
+            self.init_scan_elements()
 
         if not self._dax_scan_elements:
             # There are no scan points
