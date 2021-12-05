@@ -2,7 +2,7 @@ import typing
 import numpy as np
 
 from dax.experiment import *
-from dax.modules.rtio_benchmark import RtioBenchmarkModule, RtioLoopBenchmarkModule
+from dax.modules.rtio_benchmark import RtioBenchmarkModule, RtioLoopBenchmarkModule, RtioBenchmarkError
 import dax.sim.test_case
 
 
@@ -67,21 +67,21 @@ class RtioBenchmarkModuleTtlOutTestCase(dax.sim.test_case.PeekTestCase):
         s = self._construct_env()
         s.dax_init()
 
-        with self.assertRaises(RuntimeWarning, msg='Did not raise expected RuntimeWarning in simulation'):
+        with self.assertRaises(RtioBenchmarkError, msg='Did not raise expected RtioBenchmarkError in simulation'):
             s.rtio.benchmark_event_throughput(np.arange(200 * ns, 500 * ns, 10 * ns), 5, 100, 5)
 
     def test_dma_throughput(self):
         s = self._construct_env()
         s.dax_init()
 
-        with self.assertRaises(RuntimeWarning, msg='Did not raise expected RuntimeWarning in simulation'):
+        with self.assertRaises(RtioBenchmarkError, msg='Did not raise expected RtioBenchmarkError in simulation'):
             s.rtio.benchmark_dma_throughput(np.arange(200 * us, 500 * us, 10 * us), 5, 100, 5)
 
     def test_latency_core_rtio(self):
         s = self._construct_env()
         s.dax_init()
 
-        with self.assertRaises(RuntimeWarning, msg='Did not raise expected RuntimeWarning in simulation'):
+        with self.assertRaises(RtioBenchmarkError, msg='Did not raise expected RtioBenchmarkError in simulation'):
             s.rtio.benchmark_latency_core_rtio(1 * ms, 50 * ms, 1 * ms, 5, 5)
 
     def test_burst_slow(self):
@@ -308,7 +308,7 @@ class RtioLoopBenchmarkModuleTestCase(RtioBenchmarkModuleTestCase):
         s = self._construct_env()
         s.dax_init()
 
-        with self.assertRaises(RuntimeError,
+        with self.assertRaises(RtioBenchmarkError,
                                msg='Did not raise expected RuntimeError in simulation (loop not connected)'):
             s.rtio.benchmark_input_buffer_size(1, 32)
 
@@ -316,8 +316,8 @@ class RtioLoopBenchmarkModuleTestCase(RtioBenchmarkModuleTestCase):
         s = self._construct_env(loop_connected=True)
         s.dax_init()
 
-        with self.assertRaises(RuntimeWarning,
-                               msg='Did not raise expected RuntimeWarning in simulation '
+        with self.assertRaises(RtioBenchmarkError,
+                               msg='Did not raise expected RtioBenchmarkError in simulation '
                                    '(could not determine buffer size)'):
             s.rtio.benchmark_input_buffer_size(1, 32)
 
@@ -325,7 +325,7 @@ class RtioLoopBenchmarkModuleTestCase(RtioBenchmarkModuleTestCase):
         s = self._construct_env()
         s.dax_init()
 
-        with self.assertRaises(RuntimeError,
+        with self.assertRaises(RtioBenchmarkError,
                                msg='Did not raise expected RuntimeError in simulation (loop not connected)'):
             s.rtio.benchmark_latency_rtio_core(10)
 
@@ -340,7 +340,7 @@ class RtioLoopBenchmarkModuleTestCase(RtioBenchmarkModuleTestCase):
         s = self._construct_env()
         s.dax_init()
 
-        with self.assertRaises(RuntimeError,
+        with self.assertRaises(RtioBenchmarkError,
                                msg='Did not raise expected RuntimeError in simulation (loop not connected)'):
             s.rtio.benchmark_latency_rtt(1 * ms, 200 * ms, 10 * ms, 5, 5)
 
@@ -348,7 +348,7 @@ class RtioLoopBenchmarkModuleTestCase(RtioBenchmarkModuleTestCase):
         s = self._construct_env(loop_connected=True)
         s.dax_init()
 
-        with self.assertRaises(RuntimeWarning,
-                               msg='Did not raise expected RuntimeWarning in simulation '
+        with self.assertRaises(RtioBenchmarkError,
+                               msg='Did not raise expected RtioBenchmarkError in simulation '
                                    '(no underflow exceptions raised)'):
             s.rtio.benchmark_latency_rtt(1 * ms, 200 * ms, 10 * ms, 5, 5)
