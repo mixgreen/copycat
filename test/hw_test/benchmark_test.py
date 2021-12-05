@@ -1,8 +1,11 @@
 import typing
 import logging
 
+from artiq import __version__ as _artiq_version
+from dax import __version__ as _dax_version
+
 from dax.experiment import *
-from dax.modules.rtio_benchmark import RtioLoopBenchmarkModule
+from dax.modules.rtio_benchmark import RtioLoopBenchmarkModule, RtioBenchmarkError
 from dax.modules.rpc_benchmark import RpcBenchmarkModule
 
 import test.hw_test
@@ -16,9 +19,14 @@ class _CiTestSystem(DaxSystem):
 
     def build(self, *args: typing.Any, **kwargs: typing.Any) -> None:
         super(_CiTestSystem, self).build(*args, **kwargs)
-        self.rtio = RtioLoopBenchmarkModule(self, 'rtio', ttl_out='loop_out', ttl_in='loop_in')
+        self.rtio = RtioLoopBenchmarkModule(self, 'rtio', dma=False, init_kernel=True,
+                                            ttl_out='loop_out', ttl_in='loop_in')
         self.rpc = RpcBenchmarkModule(self, 'rpc')
         self.update_kernel_invariants('rtio', 'rpc')
+
+    def init(self) -> None:
+        self.logger.info(f'ARTIQ {_artiq_version}')
+        self.logger.info(f'DAX {_dax_version}')
 
 
 class _BenchmarkTestCase(test.hw_test.HardwareTestCase):
@@ -28,14 +36,16 @@ class _BenchmarkTestCase(test.hw_test.HardwareTestCase):
         # Configure logger
         env.logger.setLevel(logging.INFO)
 
-        # Run
+        # Prepare
         env.prepare()
         try:
+            # Run
             env.run()
-        except RuntimeError as e:
+        except RtioBenchmarkError as e:
+            # Skip tests that cause an RTIO benchmark error
             self.skipTest(str(e))
-        else:
-            env.analyze()
+        # Analyze
+        env.analyze()
 
 
 class RtioTestCase(_BenchmarkTestCase):

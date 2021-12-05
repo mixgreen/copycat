@@ -47,7 +47,7 @@ test_hardware:
   script:
     # Run test commands
     - python3 --version
-    - pytest -v -rs test/hw_test/
+    - pytest -v -rs --log-cli-level info test/hw_test/
 
 pages:
   extends: .nix_env
