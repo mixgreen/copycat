@@ -20,9 +20,9 @@ import dax.clients.pygsti
 import dax.clients.rpc_benchmark
 import dax.clients.rtio_benchmark
 import dax.clients.system_benchmark
+import dax.modules.hist_context
 
 import test.interfaces.operation_test
-import test.interfaces.data_context_test
 import test.helpers
 
 
@@ -53,9 +53,7 @@ class _TestDetectionModule(DaxModule, dax.interfaces.detection.DetectionInterfac
         return 100 * us
 
 
-class _TestSystem(DaxSystem,
-                  test.interfaces.operation_test.OperationInstance,
-                  test.interfaces.data_context_test.DataContextInstance):
+class _TestSystem(DaxSystem, test.interfaces.operation_test.OperationInstance):
     SYS_ID = 'unittest_system'
     SYS_VER = 0
     CORE_LOG_KEY = None
@@ -68,6 +66,7 @@ class _TestSystem(DaxSystem,
         _TestDetectionModule(self, 'detection')
         dax.modules.rtio_benchmark.RtioLoopBenchmarkModule(self, 'rtio_bench', ttl_out='ttl0', ttl_in='ttl1')
         dax.modules.rpc_benchmark.RpcBenchmarkModule(self, 'rpc_bench')
+        dax.modules.hist_context.HistogramContext(self, 'hist_context')
 
 
 class BuildClientTestCase(unittest.TestCase):
@@ -79,7 +78,8 @@ class BuildClientTestCase(unittest.TestCase):
         (dax.clients.pmt_monitor.PmtMonitor, {}, True),
         (dax.clients.pmt_monitor.MultiPmtMonitor, {}, True),
         (dax.clients.program.ProgramClient, {'file': ''}, False),
-        (dax.clients.pygsti.RandomizedBenchmarkingSQ, {'Max depth': '1'}, False),
+        (dax.clients.pygsti.RandomizedBenchmarkingSQ, {'Protocol type': 'DirectRB', 'Max depth': '1'}, False),
+        (dax.clients.pygsti.GateSetTomographySQ, {'Max depth': '1'}, False),
         (dax.clients.rpc_benchmark.RpcBenchmarkLatency, {}, True),
         (dax.clients.rpc_benchmark.RpcBenchmarkAsyncThroughput, {}, True),
         (dax.clients.rtio_benchmark.RtioBenchmarkEventThroughput, {}, True),
