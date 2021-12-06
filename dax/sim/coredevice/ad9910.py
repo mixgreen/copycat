@@ -108,25 +108,25 @@ class AD9910(DaxSimDevice):
     if ARTIQ_MAJOR_VERSION >= 6:
         @kernel
         def set_cfr1(self, power_down: TInt32 = 0b0000,
-                    phase_autoclear: TInt32 = 0,
-                    drg_load_lrr: TInt32 = 0, drg_autoclear: TInt32 = 0,
-                    internal_profile: TInt32 = 0, ram_destination: TInt32 = 0,
-                    ram_enable: TInt32 = 0, manual_osk_external: TInt32 = 0,
-                    osk_enable: TInt32 = 0, select_auto_osk: TInt32 = 0):
+                     phase_autoclear: TInt32 = 0,
+                     drg_load_lrr: TInt32 = 0, drg_autoclear: TInt32 = 0,
+                     internal_profile: TInt32 = 0, ram_destination: TInt32 = 0,
+                     ram_enable: TInt32 = 0, manual_osk_external: TInt32 = 0,
+                     osk_enable: TInt32 = 0, select_auto_osk: TInt32 = 0):
             raise NotImplementedError
 
-    else:   # pragma: no cover
+    else:  # pragma: no cover
         # ARTIQ 5
         @kernel
         def set_cfr1(self,
-            power_down=0b0000,
-            phase_autoclear=0,
-            drg_load_lrr=0,
-            drg_autoclear=0,
-            internal_profile=0,
-            ram_destination=0,
-            ram_enable=0
-        ):
+                     power_down=0b0000,
+                     phase_autoclear=0,
+                     drg_load_lrr=0,
+                     drg_autoclear=0,
+                     internal_profile=0,
+                     ram_destination=0,
+                     ram_enable=0
+                     ):
             raise NotImplementedError
 
     @kernel
