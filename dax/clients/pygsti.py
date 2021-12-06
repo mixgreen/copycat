@@ -1,3 +1,11 @@
+"""
+Clients that use pyGSTi. See https://github.com/pyGSTio/pyGSTi.
+
+Note that pyGSTi is an optional dependency of DAX.
+
+Author: Jacob Whitlow
+"""
+
 import abc
 import typing
 import pathlib
@@ -258,7 +266,7 @@ class _PygstiSingleQubitClientBase(DaxClient, Experiment):
         self._circuit_count = 0
 
     @abc.abstractmethod
-    def _get_exp_design(self, circuit_depths: typing.Sequence[int],
+    def _get_exp_design(self, circuit_depths: typing.Sequence[int],  # pragma: no cover
                         available_gates: typing.Collection[str]) -> typing.Any:
         """Create experiment design / protocol.
 
@@ -403,7 +411,7 @@ class _PygstiSingleQubitClientBase(DaxClient, Experiment):
             h.plot_all_histograms()
 
     @abc.abstractmethod
-    def _analyze_internal(self, protocol_data: typing.Any, base_path: pathlib.Path) -> None:
+    def _analyze_internal(self, protocol_data: typing.Any, base_path: pathlib.Path) -> None:  # pragma: no cover
         """Protocol-specific analysis.
 
         **For internal usage only**.
@@ -413,7 +421,7 @@ class _PygstiSingleQubitClientBase(DaxClient, Experiment):
     """Customization functions"""
 
     @abc.abstractmethod
-    def get_available_gates(self, gate: GateInterface) -> typing.Dict[str, typing.Callable[..., typing.Any]]:
+    def get_available_gates(self, gate: GateInterface) -> typing.Dict[str, typing.Any]:  # pragma: no cover
         """Given a gate interface, define a string to gate mapping.
 
         Users can override this function to modify the mapping.
@@ -539,7 +547,7 @@ class RandomizedBenchmarkingSQ(_PygstiSingleQubitClientBase):
         self.logger.info(f"r = {r:1.2e} +/- {2 * r_std:1.2e} (fit with a free asymptote)")
         self.logger.info(f"r = {r_a_fix:1.2e} +/- {2 * r_a_fix_std:1.2e} (fit with the asymptote fixed to 1/2^n)")
 
-    def get_available_gates(self, gate: GateInterface) -> typing.Dict[str, typing.Callable[..., typing.Any]]:
+    def get_available_gates(self, gate: GateInterface) -> typing.Dict[str, typing.Any]:
         return {
             self._CLIFFORD_RB_KEY: {
                 'Gxpi': gate.x,
@@ -606,7 +614,7 @@ class GateSetTomographySQ(_PygstiSingleQubitClientBase):
         report = pygsti.report.construct_standard_report(results, title="GST Report", verbosity=self._verbosity)
         report.write_html(str(base_path.joinpath('gst_report')), verbosity=self._verbosity)
 
-    def get_available_gates(self, gate: GateInterface) -> typing.Dict[str, typing.Callable[..., typing.Any]]:
+    def get_available_gates(self, gate: GateInterface) -> typing.Dict[str, typing.Any]:
         return {
             'Gxpi': gate.x,
             'Gxpi2': gate.sqrt_x,
