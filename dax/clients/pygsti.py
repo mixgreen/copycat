@@ -391,16 +391,20 @@ class _PygstiSingleQubitClientBase(DaxClient, Experiment):
         self.logger.info(f'Saving pyGSTi data to {dir_name}')
         protocol_data.write(dir_name)
 
-        # Perform further analysis
-        self._analyze(protocol_data, base_path)
+        # noinspection PyBroadException
+        try:
+            # Perform protocol-specific analysis
+            self._analyze_internal(protocol_data, base_path)
+        except Exception:
+            self.logger.exception('pyGSTi analysis failed')
 
         if self._save_histograms:
             # Save histograms
             h.plot_all_histograms()
 
     @abc.abstractmethod
-    def _analyze(self, protocol_data: typing.Any, base_path: pathlib.Path) -> None:
-        """Protocol-specific analysis
+    def _analyze_internal(self, protocol_data: typing.Any, base_path: pathlib.Path) -> None:
+        """Protocol-specific analysis.
 
         **For internal usage only**.
         """
@@ -525,7 +529,7 @@ class RandomizedBenchmarkingSQ(_PygstiSingleQubitClientBase):
             verbosity=self._verbosity, seed=self._seed if self._seed else None
         )
 
-    def _analyze(self, protocol_data: typing.Any, base_path: pathlib.Path) -> None:
+    def _analyze_internal(self, protocol_data: typing.Any, base_path: pathlib.Path) -> None:
         protocol = pygsti.protocols.RandomizedBenchmarking()
         results = protocol.run(protocol_data)
         r = results.fits['full'].estimates['r']
@@ -594,7 +598,7 @@ class GateSetTomographySQ(_PygstiSingleQubitClientBase):
             verbosity=self._verbosity
         )
 
-    def _analyze(self, protocol_data: typing.Any, base_path: pathlib.Path) -> None:
+    def _analyze_internal(self, protocol_data: typing.Any, base_path: pathlib.Path) -> None:
         # Run the GST protocol
         gst_protocol = pygsti.protocols.StandardGST()
         results = gst_protocol.run(protocol_data)
