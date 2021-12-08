@@ -158,11 +158,11 @@ class GateInterface(DaxInterface, abc.ABC):  # pragma: no cover
         raise NotImplementedError
 
     @optional
-    def rphi(self, phi: TFloat, theta: TFloat, qubit: TInt32):
-        """Arbitrary rotation with angle theta and phase phi.
+    def rphi(self, theta: TFloat, phi: TFloat, qubit: TInt32):
+        """Rotation theta around the cos(phi)X + sin(phi)Y axis.
 
-        :param phi: Phase in radians (:attr:`pi` available for usage)
         :param theta: Rotation angle in radians (:attr:`pi` available for usage)
+        :param phi: Angle of the rotation axis in the XY plane (:attr:`pi` available for usage)
         :param qubit: Target qubit
         """
         raise NotImplementedError
