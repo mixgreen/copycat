@@ -1,5 +1,5 @@
-import abc
 import typing
+import dataclasses
 import numpy as np
 
 __all__ = ['DaxTimeManager']
@@ -8,43 +8,33 @@ _MU_T = np.int64
 """The type of machine units (MU)."""
 
 
-class _TimeContext(abc.ABC):
+@dataclasses.dataclass
+class _TimeContext:
     """Abstract time context class."""
 
-    _current_time: _MU_T
-    _block_duration: _MU_T
+    current_time: _MU_T
+    block_duration: _MU_T = dataclasses.field(default=_MU_T(0), init=False)
 
-    def __init__(self, current_time: _MU_T):
-        self._current_time = current_time
-        self._block_duration = _MU_T(0)
-
-    @property
-    def current_time(self) -> _MU_T:
-        return self._current_time
-
-    @property
-    def block_duration(self) -> _MU_T:
-        return self._block_duration
-
-    @abc.abstractmethod
     def take_time(self, duration: _MU_T) -> None:  # pragma: no cover
-        pass
+        raise NotImplementedError
 
 
+@dataclasses.dataclass
 class _SequentialTimeContext(_TimeContext):
     """Sequential time context class."""
 
     def take_time(self, duration: _MU_T) -> None:
-        self._current_time += duration
-        self._block_duration += duration
+        self.current_time += duration
+        self.block_duration += duration
 
 
+@dataclasses.dataclass
 class _ParallelTimeContext(_TimeContext):
     """Parallel time context class."""
 
     def take_time(self, duration: _MU_T) -> None:
-        if duration > self._block_duration:
-            self._block_duration = duration
+        if duration > self.block_duration:
+            self.block_duration = duration
 
 
 class DaxTimeManager:
@@ -80,18 +70,15 @@ class DaxTimeManager:
 
     def enter_sequential(self) -> None:
         """Add a new sequential time context to the stack."""
-        new_context = _SequentialTimeContext(self.get_time_mu())
-        self._stack.append(new_context)
+        self._stack.append(_SequentialTimeContext(self.get_time_mu()))
 
     def enter_parallel(self) -> None:
         """Add a new parallel time context to the stack."""
-        new_context = _ParallelTimeContext(self.get_time_mu())
-        self._stack.append(new_context)
+        self._stack.append(_ParallelTimeContext(self.get_time_mu()))
 
     def exit(self) -> None:
         """Exit the last time context."""
-        old_context = self._stack.pop()
-        self.take_time_mu(old_context.block_duration)
+        self.take_time_mu(self._stack.pop().block_duration)
 
     def take_time_mu(self, duration: _MU_T) -> None:
         """Take time from the current context.
@@ -109,7 +96,6 @@ class DaxTimeManager:
 
         :param duration: The duration in natural time (float)
         """
-
         # Divide duration by the reference period and convert to machine units
         self.take_time_mu(self._seconds_to_mu(duration))
 
@@ -125,7 +111,5 @@ class DaxTimeManager:
 
         :param t: The specific point in time (machine units) to set the current time to
         """
-
         # Take time to match the given time point
-        dt = t - self.get_time_mu()
-        self.take_time_mu(dt)
+        self.take_time_mu(t - self.get_time_mu())
