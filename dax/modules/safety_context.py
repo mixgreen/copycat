@@ -86,7 +86,7 @@ class ReentrantSafetyContext(DaxModule):
             assert not is_host_only(enter_cb), 'Enter callback can not be host only when RPC is disabled'
             assert not is_host_only(exit_cb), 'Exit callback can not be host only when RPC is disabled'
 
-        # By default we are not in context
+        # By default, we are not in context
         self._safety_context_entries = np.int32(0)  # This variable is NOT kernel invariant
 
     def init(self) -> None:
@@ -219,20 +219,16 @@ class SafetyContext(ReentrantSafetyContext):
         self.update_kernel_invariants('_safety_context_enter_error_msg')
 
     @portable
-    def __enter__(self):  # type: () -> None
-        """Enter the safety context.
-
-        Normally this function should not be called directly but by the ``with`` statement instead.
-        """
-        if self._safety_context_entries != 0:
-            # Prevent nested context
-            raise self.EXCEPTION_TYPE(self._safety_context_enter_error_msg)
-
+    def _safety_context_enter(self):  # type: () -> None
         # Note: not using super() because the ARTIQ compiler does not support it
-        # Note: not using ReentrantSafetyContext.__enter__() because the ARTIQ compiler can not unify it
+        # Note: not using ReentrantSafetyContext._safety_context_enter() because the ARTIQ compiler cannot unify it
+
         if self._safety_context_entries == 0:
             # Call enter callback function
             self._safety_context_enter_cb()  # type: ignore[misc]
+        else:
+            # Prevent nested context
+            raise self.EXCEPTION_TYPE(self._safety_context_enter_error_msg)
 
         # Increment in context counter after enter callback was successfully executed
         self._safety_context_entries += 1
