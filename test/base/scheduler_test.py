@@ -2114,72 +2114,85 @@ class OptimusCalibrationTestCase(unittest.TestCase):
         num_reps = 5
         for num_nodes in range(5, 10):
             for _ in range(num_reps):
-                # initialize seed and rng for numpy.random calls
+                num_attempts = 2  # allow multiple attempts with a single seed
                 seed: int = time.time_ns()
-                rng: np.random.Generator = np.random.default_rng(seed)
-                # create graph
-                g: nx.DiGraph = self._random_dag(num_nodes, p, rng)
-                root_nodes: typing.Set[int] = self._get_root_nodes(g)
-                # randomly choose results for each experiment - no calibration failure though
-                timeouts: typing.List[bool] = [rng.choice([True, False]) for _ in range(num_nodes)]
-                results: typing.List[int] = [rng.choice([0, 1, 2]) for _ in range(num_nodes)]
-                # create the scheduler/experiment files - use reversed topological sort so that jobs are written
-                # in correct dependency order in scheduler file
-                ts_rev = list(reversed(list(nx.topological_sort(g))))
-                with open(os.path.join(self.wd, 'repository', 'scheduler.py'), 'w') as scheduler_file:
-                    with open(os.path.join(self.wd, 'repository', 'calibrations.py'), 'w') as experiment_file:
-                        scheduler_file.write(self._create_scheduler_imports())
-                        experiment_file.write(self._create_exp_imports())
-                        for idx in ts_rev:
-                            scheduler_file.write(self._create_calibration_job(idx, g.successors(idx), timeouts[idx]))
-                            experiment_file.write(self._create_check_exp(idx, results[idx]))
-                            experiment_file.write(self._create_cal_exp(idx, 0))
-                        scheduler_file.write(self._create_trigger(root_nodes))
-                        scheduler_file.write(self._create_scheduler_exp(set(g.nodes)))
+                while True:
+                    num_attempts -= 1
+                    # noinspection PyBroadException
+                    try:
+                        self._optimus_test(p, num_nodes, seed)
+                    except self.failureException:
+                        if num_attempts <= 0:
+                            raise
+                    else:
+                        break
 
-                rid: int = self._submit_scheduler_exp()
-                time.sleep(5)  # need to wait a bit for the DAX scheduler to submit jobs
-                datasets: typing.Dict[str, typing.Tuple[bool, typing.Any]] = self._wait_and_get_datasets(rid)
-                cal_order: typing.List[str] = datasets['cal_order'][1]
-                self._delete_exp(rid)
-                # again, not as robust as a regex for picking the \d+ out of 'CalJob\d+', but faster
-                initial_submit: typing.List[int] = [int(node_str[6:]) for node_str in cal_order[:num_nodes]]
-                last_cals: typing.List[float] = [0.0] * num_nodes
+    def _optimus_test(self, p, num_nodes, seed):
+        # initialize rng
+        rng: np.random.Generator = np.random.default_rng(seed)
+        # create graph
+        g: nx.DiGraph = self._random_dag(num_nodes, p, rng)
+        root_nodes: typing.Set[int] = self._get_root_nodes(g)
+        # randomly choose results for each experiment - no calibration failure though
+        timeouts: typing.List[bool] = [rng.choice([True, False]) for _ in range(num_nodes)]
+        results: typing.List[int] = [rng.choice([0, 1, 2]) for _ in range(num_nodes)]
+        # create the scheduler/experiment files - use reversed topological sort so that jobs are written
+        # in correct dependency order in scheduler file
+        ts_rev = list(reversed(list(nx.topological_sort(g))))
+        with open(os.path.join(self.wd, 'repository', 'scheduler.py'), 'w') as scheduler_file:
+            with open(os.path.join(self.wd, 'repository', 'calibrations.py'), 'w') as experiment_file:
+                scheduler_file.write(self._create_scheduler_imports())
+                experiment_file.write(self._create_exp_imports())
+                for idx in ts_rev:
+                    scheduler_file.write(self._create_calibration_job(idx, g.successors(idx), timeouts[idx]))
+                    experiment_file.write(self._create_check_exp(idx, results[idx]))
+                    experiment_file.write(self._create_cal_exp(idx, 0))
+                scheduler_file.write(self._create_trigger(root_nodes))
+                scheduler_file.write(self._create_scheduler_exp(set(g.nodes)))
 
-                def get_actions(node: int, diagnose: bool = False) -> typing.List:
-                    actions: typing.List = []
-                    # sort according to initial_submit order to preserve graph structure (kind of, at least)
-                    children = sorted(list(g.successors(node)), key=lambda item: initial_submit.index(item))
-                    if timeouts[node] or diagnose or any([last_cals[n] > last_cals[node] for n in children]):
-                        actions.append(f'Check{node}')
-                        if results[node] == 2:
-                            for n in children:
-                                actions.append(get_actions(n, diagnose=True))
-                        if results[node] != 0:
-                            last_cals[node] = time.time()
-                            actions.append(f'Cal{node}')
-                    return actions
+        rid: int = self._submit_scheduler_exp()
+        time.sleep(5)  # need to wait a bit for the DAX scheduler to submit jobs
+        datasets: typing.Dict[str, typing.Tuple[bool, typing.Any]] = self._wait_and_get_datasets(rid)
+        cal_order: typing.List[str] = datasets['cal_order'][1]
+        self._delete_exp(rid)
+        # again, not as robust as a regex for picking the \d+ out of 'CalJob\d+', but faster
+        initial_submit: typing.List[int] = [int(node_str[6:]) for node_str in cal_order[:num_nodes]]
+        last_cals: typing.List[float] = [0.0] * num_nodes
 
-                expected_actions = [get_actions(node) for node in initial_submit]
-                expected_actions_flat = list(self._flatten(expected_actions))
-                actual_actions = cal_order[num_nodes:]
-                error_str = textwrap.dedent(f'''
-                Expected and actual traversals do not match:
-                expected: {expected_actions}
-                expected (flat): {expected_actions_flat}
-                actual: {actual_actions}
+        def get_actions(node: int, diagnose: bool = False) -> typing.List:
+            actions: typing.List = []
+            # sort according to initial_submit order to preserve graph structure (kind of, at least)
+            children = sorted(list(g.successors(node)), key=lambda item: initial_submit.index(item))
+            if timeouts[node] or diagnose or any([last_cals[n] > last_cals[node] for n in children]):
+                actions.append(f'Check{node}')
+                if results[node] == 2:
+                    for n in children:
+                        actions.append(get_actions(n, diagnose=True))
+                if results[node] != 0:
+                    last_cals[node] = time.time()
+                    actions.append(f'Cal{node}')
+            return actions
 
-                num nodes: {num_nodes}
-                initial submit order: {initial_submit}
-                root nodes: {root_nodes}
-                deps: {' '.join([f'{node} -> {{{list(g.successors(node))}}}' for node in initial_submit])}
-                timeouts: {timeouts}
-                exp results: {results}
-                rng seed: {seed}
-                ''')
-                with self.subTest(num_nodes=num_nodes, p=p, expected_actions=expected_actions,
-                                  acutal_actions=actual_actions):
-                    self.assertTrue(self._verify_actions(expected_actions, actual_actions), error_str)
+        expected_actions = [get_actions(node) for node in initial_submit]
+        expected_actions_flat = list(self._flatten(expected_actions))
+        actual_actions = cal_order[num_nodes:]
+        error_str = textwrap.dedent(f'''
+        Expected and actual traversals do not match:
+        expected: {expected_actions}
+        expected (flat): {expected_actions_flat}
+        actual: {actual_actions}
+
+        num nodes: {num_nodes}
+        initial submit order: {initial_submit}
+        root nodes: {root_nodes}
+        deps: {' '.join([f'{node} -> {{{list(g.successors(node))}}}' for node in initial_submit])}
+        timeouts: {timeouts}
+        exp results: {results}
+        rng seed: {seed}
+        ''')
+        with self.subTest(num_nodes=num_nodes, p=p, expected_actions=expected_actions,
+                          acutal_actions=actual_actions):
+            self.assertTrue(self._verify_actions(expected_actions, actual_actions), error_str)
 
     @unittest.skipUnless(CI_ENABLED, 'Not in a CI environment, skipping long test')
     def test_barrier(self):
