@@ -137,10 +137,15 @@ class ReentrantSafetyContextTestCase(unittest.TestCase):
             with self.assertRaises(SafetyContextError, msg='Out of sync exit did not raise'):
                 # Call exit manually (which is bad)
                 self.context.__exit__(None, None, None)
+            with self.assertRaises(SafetyContextError, msg='Out of sync exit did not raise'):
+                # Call exit manually (which is bad)
+                self.context._exit()
         else:
             # Call exit manually is allowed
             self.context.__exit__(None, None, None)
             self.context.__exit__(None, None, None)
+            self.context._exit()
+            self.context._exit()
 
         self.assertEqual(self.context._safety_context_entries, 0, 'In context counter is corrupted')
         self.assertDictEqual(self.counter, {'enter': 0, 'exit': 0}, 'Counters did not match expected values')
@@ -164,6 +169,19 @@ class ReentrantSafetyContextTestCase(unittest.TestCase):
         self.assertFalse(self.context.in_context(), 'in_context() reported wrong value')
 
         self.assertDictEqual(self.counter, {'enter': 2, 'exit': 2}, 'Counters did not match expected values')
+
+        # Out of context
+        self.assertFalse(self.context.in_context(), 'in_context() reported wrong value')
+        # Open context manually
+        self.context._enter()
+        # In context
+        self.assertTrue(self.context.in_context(), 'in_context() reported wrong value')
+        # Close context manually
+        self.context._exit()
+        # Out of context
+        self.assertFalse(self.context.in_context(), 'in_context() reported wrong value')
+
+        self.assertDictEqual(self.counter, {'enter': 3, 'exit': 3}, 'Counters did not match expected values')
 
     def test_enter_exception(self):
         def enter():
