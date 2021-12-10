@@ -1516,6 +1516,10 @@ class DaxScheduler(dax.base.system.DaxHasKey, abc.ABC):
 
             while True:
                 while next_wave > time.time():
+                    if request_handler.done():
+                        # The request handler should never be done
+                        raise RuntimeError('The request handler stopped unexpectedly') from request_handler.exception()
+
                     if self._scheduler.check_pause():
                         # Pause
                         self.logger.debug('Pausing scheduler')
