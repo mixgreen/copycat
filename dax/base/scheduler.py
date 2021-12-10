@@ -1598,11 +1598,15 @@ class DaxScheduler(dax.base.system.DaxHasKey, abc.ABC):
             depth: int = request.depth
             start_depth: int = request.start_depth
             # Verify unchecked fields
-            assert isinstance(reverse, bool), 'Reverse flag must be of type bool'
-            assert isinstance(priority, int), 'Priority must be of type int'
-            assert isinstance(depth, int), 'Depth must be of type int'
-            assert isinstance(start_depth, int), 'Start depth must be of type int'
-        except (KeyError, AssertionError):
+            if not isinstance(reverse, bool):
+                raise TypeError('Reverse flag must be of type bool')
+            if not isinstance(priority, int):
+                raise TypeError('Priority must be of type int')
+            if not isinstance(depth, int):
+                raise TypeError('Depth must be of type int')
+            if not isinstance(start_depth, int):
+                raise TypeError('Start depth must be of type int')
+        except (KeyError, TypeError):
             # Log the error
             self.logger.exception(f'Dropping invalid request: {request}')
         else:
