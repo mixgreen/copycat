@@ -2,7 +2,6 @@ from __future__ import annotations  # Postponed evaluation of annotations
 
 import abc
 import logging
-import itertools
 import re
 import natsort
 import typing
@@ -1178,8 +1177,7 @@ class DaxNameRegistry:
 
         :return: A list with module keys
         """
-        module_key_list = natsort.natsorted(self._modules.keys())  # Natural sort the list
-        return module_key_list
+        return natsort.natsorted(self._modules.keys())  # Natural sort the list
 
     def get_module_list(self) -> typing.List[DaxModuleBase]:
         """Return the list of registered modules.
@@ -1289,8 +1287,7 @@ class DaxNameRegistry:
 
         :return: A list of unique device keys that were registered
         """
-        device_key_list = natsort.natsorted(self._devices.keys())  # Natural sort the list
-        return device_key_list
+        return natsort.natsorted(self._devices.keys())  # Natural sort the list
 
     def get_device_parents(self) -> typing.Dict[str, DaxHasSystem]:
         """Return a dict with device keys and their corresponding parent.
@@ -1393,8 +1390,7 @@ class DaxNameRegistry:
 
         :return: A list of service keys that were registered
         """
-        service_key_list = natsort.natsorted(self._services.keys())  # Natural sort the list
-        return service_key_list
+        return natsort.natsorted(self._services.keys())  # Natural sort the list
 
     def get_service_list(self) -> typing.List[DaxService]:
         """Return the list of registered services.
@@ -1433,6 +1429,8 @@ class DaxNameRegistry:
     def search_interfaces(self, type_: typing.Type[__I_T]) -> typing.Dict[str, __I_T]:
         """Search for interfaces that match the requested type and return results as a dict.
 
+        Keys for services are returned as system keys to clearly distinguish modules from services.
+
         Note: mypy type checker does not handle pure abstract base classes correctly.
         A ``# type: ignore[misc]`` annotation on the line using this function is probably
         required to pass type checking.
@@ -1443,10 +1441,12 @@ class DaxNameRegistry:
 
         assert issubclass(type_, dax.base.interface.DaxInterface), 'Provided type must be a subclass of DaxInterface'
 
-        # Search for all modules and services matching the interface type
-        iterator = itertools.chain(self._modules.values(), self._services.values())
-        results = {itf.get_system_key(): typing.cast(DaxNameRegistry.__I_T, itf)
-                   for itf in iterator if isinstance(itf, type_)}
+        # Search services matching the interface type and use system keys instead of service names
+        results = {s.get_system_key(): typing.cast(DaxNameRegistry.__I_T, s)
+                   for s in self._services.values() if isinstance(s, type_)}
+        # Search modules matching the interface type
+        results.update({k: typing.cast(DaxNameRegistry.__I_T, m)
+                        for k, m in self._modules.items() if isinstance(m, type_)})
 
         # Return the dict with results
         return results
