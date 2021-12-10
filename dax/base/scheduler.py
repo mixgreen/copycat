@@ -3,10 +3,10 @@ from __future__ import annotations  # Postponed evaluation of annotations
 import abc
 import typing
 import logging
+import collections
 import collections.abc
 import time
 import enum
-import networkx as nx
 import asyncio
 import json
 import hashlib
@@ -15,6 +15,7 @@ import os
 import os.path
 import inspect
 import pathlib
+import networkx as nx
 
 import artiq.experiment
 import artiq.master.worker_db
@@ -101,6 +102,18 @@ def _hash_dict(d: typing.Dict[str, typing.Any]) -> str:
     return arguments_hash.hexdigest()
 
 
+__E_T = typing.TypeVar('__E_T')  # Element type var
+
+
+def _unique_ordered(items: typing.Iterable[__E_T]) -> typing.Sequence[__E_T]:
+    """Return the unique elements of an iterable and preserve order if the iterable is ordered.
+
+    :param items: The iterable to process
+    :return: An ordered sequence of unique elements
+    """
+    return list(collections.OrderedDict.fromkeys(items))
+
+
 class NodeAction(enum.Enum):
     """Node action enumeration."""
 
@@ -122,7 +135,7 @@ class NodeAction(enum.Enum):
     def from_str(cls, string_: str) -> NodeAction:
         """Convert a string into its corresponding node action enumeration.
 
-        :param string_: The name of the node action as a string (case insensitive)
+        :param string_: The name of the node action as a string (case-insensitive)
         :return: The node action enumeration object
         :raises KeyError: Raised if the node action name does not exist
         """
@@ -188,7 +201,7 @@ class Policy(enum.Enum):
     def from_str(cls, string_: str) -> Policy:
         """Convert a string into its corresponding policy enumeration.
 
-        :param string_: The name of the policy as a string (case insensitive)
+        :param string_: The name of the policy as a string (case-insensitive)
         :return: The policy enumeration object
         :raises KeyError: Raised if the policy name does not exist
         """
@@ -614,9 +627,9 @@ class Trigger(Node):
     Users only have to override class attributes to create a trigger definition.
     The following main attributes can be overridden:
 
-    - :attr:`NODES`: A collection of nodes to trigger
+    - :attr:`NODES`: A collection of nodes to trigger, can be explicitly ordered
     - :attr:`ACTION`: The root node action of this trigger (defaults to :attr:`NodeAction.FORCE`)
-    - :attr:`POLICY`: The scheduling policy of this trigger (defaults to the schedulers policy)
+    - :attr:`POLICY`: The scheduling policy of this trigger (defaults to the scheduler's policy)
     - :attr:`REVERSE`: The reverse wave flag of this trigger (defaults to the schedulers reverse wave flag)
     - :attr:`PRIORITY`: The job priority of this trigger (defaults to the schedulers job priority)
     - :attr:`DEPTH`: Maximum recursion depth (:const:`-1` for infinite recursion depth, which is the default)
@@ -640,7 +653,7 @@ class Trigger(Node):
     START_DEPTH: typing.ClassVar[int] = 0
     """Depth to start visiting nodes (:const:`0` to start at the root nodes)."""
 
-    _nodes: typing.Set[str]
+    _nodes: typing.Sequence[str]
     _request_queue: _RQ_T
 
     def build(self) -> None:  # type: ignore[override]
@@ -654,8 +667,8 @@ class Trigger(Node):
         assert isinstance(self.DEPTH, int), 'Depth must be of type int'
         assert isinstance(self.START_DEPTH, int), 'Start depth must be of type int'
 
-        # Assemble the collection of node names
-        self._nodes = {node.get_name() for node in self.NODES}
+        # Assemble the collection of node names and preserve order
+        self._nodes = _unique_ordered(node.get_name() for node in self.NODES)
         if len(self._nodes) < len(self.NODES):
             self.logger.warning('Duplicate nodes were dropped')
 
@@ -1179,9 +1192,9 @@ class SchedulerController:
                      block: bool = True) -> None:
         """Submit a request to the scheduler.
 
-        :param nodes: A sequence of node names as strings (case sensitive)
+        :param nodes: A sequence of (ordered) node names as strings (case-sensitive)
         :param action: The root node action as a string (defaults to :attr:`NodeAction.FORCE`)
-        :param policy: The scheduling policy as a string (defaults to the schedulers policy)
+        :param policy: The scheduling policy as a string (defaults to the scheduler's policy)
         :param reverse: The reverse wave flag (defaults to the schedulers reverse wave flag)
         :param priority: The job priority of this trigger (defaults to the schedulers job priority)
         :param depth: Maximum recursion depth (:const:`-1` for infinite recursion depth, which is the default)
@@ -1205,7 +1218,7 @@ class SchedulerController:
     def get_foreign_key(self, node: str, *keys: str) -> str:
         """Obtain a system key of a foreign node.
 
-        :param node: The node name as a string (case sensitive)
+        :param node: The node name as a string (case-sensitive)
         :param keys: The keys to append to the system key of the foreign node
         :return: The foreign system key as a string
         :raises KeyError: Raised if the node is not in the scheduling graph
@@ -1570,8 +1583,10 @@ class DaxScheduler(dax.base.system.DaxHasKey, abc.ABC):
             return
 
         try:
-            # Convert the input parameters
-            root_nodes: typing.Collection[Node] = {self._node_name_map[node] for node in request.nodes}
+            # Process the request
+            root_nodes: typing.Collection[Node] = _unique_ordered(self._node_name_map[node] for node in request.nodes)
+            if len(root_nodes) < len(request.nodes):
+                self.logger.warning('Duplicate nodes in request were dropped')
             root_action: NodeAction = NodeAction.from_str(request.action)
             policy: Policy = self._policy if request.policy is None else Policy.from_str(request.policy)
             reverse: bool = self._reverse if request.reverse is None else request.reverse
