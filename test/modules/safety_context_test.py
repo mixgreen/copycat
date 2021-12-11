@@ -139,13 +139,13 @@ class ReentrantSafetyContextTestCase(unittest.TestCase):
                 self.context.__exit__(None, None, None)
             with self.assertRaises(SafetyContextError, msg='Out of sync exit did not raise'):
                 # Call exit manually (which is bad)
-                self.context._exit()
+                self.context._safety_context_exit()
         else:
             # Call exit manually is allowed
             self.context.__exit__(None, None, None)
             self.context.__exit__(None, None, None)
-            self.context._exit()
-            self.context._exit()
+            self.context._safety_context_exit()
+            self.context._safety_context_exit()
 
         self.assertEqual(self.context._safety_context_entries, 0, 'In context counter is corrupted')
         self.assertDictEqual(self.counter, {'enter': 0, 'exit': 0}, 'Counters did not match expected values')
@@ -173,11 +173,11 @@ class ReentrantSafetyContextTestCase(unittest.TestCase):
         # Out of context
         self.assertFalse(self.context.in_context(), 'in_context() reported wrong value')
         # Open context manually
-        self.context._enter()
+        self.context._safety_context_enter()
         # In context
         self.assertTrue(self.context.in_context(), 'in_context() reported wrong value')
         # Close context manually
-        self.context._exit()
+        self.context._safety_context_exit()
         # Out of context
         self.assertFalse(self.context.in_context(), 'in_context() reported wrong value')
 

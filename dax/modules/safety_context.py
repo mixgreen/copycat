@@ -113,7 +113,7 @@ class ReentrantSafetyContext(DaxModule):
         return bool(self._safety_context_entries)
 
     @portable
-    def _safety_context_enter(self):  # type: () -> None
+    def _safety_context_enter_portable(self):  # type: () -> None
         """Handle context enter (portable)."""
         if self._safety_context_entries == 0:
             # Call enter callback function
@@ -125,10 +125,10 @@ class ReentrantSafetyContext(DaxModule):
     @rpc(flags={'async'})
     def _safety_context_enter_rpc(self):  # type: () -> None
         """Handle context enter (RPC)."""
-        self._safety_context_enter()
+        self._safety_context_enter_portable()
 
     @portable
-    def _enter(self):  # type: () -> None
+    def _safety_context_enter(self):  # type: () -> None
         """Enter the safety context.
 
         This function can be used by subclasses to call the safety context enter procedure.
@@ -136,7 +136,7 @@ class ReentrantSafetyContext(DaxModule):
         if self._safety_context_rpc:
             self._safety_context_enter_rpc()
         else:
-            self._safety_context_enter()
+            self._safety_context_enter_portable()
 
     @portable
     def __enter__(self):  # type: () -> None
@@ -144,10 +144,10 @@ class ReentrantSafetyContext(DaxModule):
 
         Normally this function should not be called directly but by the ``with`` statement instead.
         """
-        self._enter()
+        self._safety_context_enter()
 
     @portable
-    def _safety_context_exit(self):  # type: () -> None
+    def _safety_context_exit_portable(self):  # type: () -> None
         """Handle context exit (portable)."""
         if self._safety_context_exit_error and self._safety_context_entries <= 0:
             # Enter and exit calls were out of sync
@@ -164,10 +164,10 @@ class ReentrantSafetyContext(DaxModule):
     @rpc(flags={'async'})
     def _safety_context_exit_rpc(self):  # type: () -> None
         """Handle context exit (RPC)."""
-        self._safety_context_exit()
+        self._safety_context_exit_portable()
 
     @portable
-    def _exit(self):  # type: () -> None
+    def _safety_context_exit(self):  # type: () -> None
         """Exit the safety context.
 
         This function can be used by subclasses to call the safety context exit procedure.
@@ -175,7 +175,7 @@ class ReentrantSafetyContext(DaxModule):
         if self._safety_context_rpc:
             self._safety_context_exit_rpc()
         else:
-            self._safety_context_exit()
+            self._safety_context_exit_portable()
 
     @portable  # noqa:ATQ306
     def __exit__(self, exc_type, exc_val, exc_tb):  # type: (typing.Any, typing.Any, typing.Any) -> None # noqa: ATQ306
@@ -186,7 +186,7 @@ class ReentrantSafetyContext(DaxModule):
         It is not possible to assign default values to the argument as the ARTIQ compiler only
         accepts :func:`__exit__` functions with exactly four positional arguments.
         """
-        self._exit()
+        self._safety_context_exit()
 
 
 class SafetyContext(ReentrantSafetyContext):
@@ -219,7 +219,7 @@ class SafetyContext(ReentrantSafetyContext):
         self.update_kernel_invariants('_safety_context_enter_error_msg')
 
     @portable
-    def _safety_context_enter(self):  # type: () -> None
+    def _safety_context_enter_portable(self):  # type: () -> None
         # Note: not using super() because the ARTIQ compiler does not support it
         # Note: not using ReentrantSafetyContext._safety_context_enter() because the ARTIQ compiler cannot unify it
 
