@@ -92,7 +92,7 @@ class DaxBase(artiq.language.environment.HasEnvironment, abc.ABC):
 
     @property
     def logger(self) -> logging.Logger:
-        """Get the logger of this object.
+        """Get the logger object of this object.
 
         The logging functions are decorated as async RPC functions and can be called from kernels.
 
@@ -258,7 +258,7 @@ class DaxHasKey(DaxBase, abc.ABC):
         """Mutate an existing system dataset at the given index.
 
         :param key: The key of the system dataset
-        :param index: The array index to mutate, slicing and multi-dimensional indexing allowed
+        :param index: The array index to mutate, slicing and multidimensional indexing allowed
         :param value: The value to store
         :param data_store: Flag to archive the value in the data store
         :raises KeyError: Raised if the key was not present
@@ -1139,7 +1139,7 @@ class DaxNameRegistry:
         :param type_: The type of the module
         :return: The unique module of the requested type
         :raises KeyError: Raised if no modules of the desired type were found
-        :raises LookupError: Raised if more then one module of the desired type was found
+        :raises LookupError: Raised if more than one module of the desired type was found
         """
 
         # Search for all modules matching the type
@@ -1409,7 +1409,7 @@ class DaxNameRegistry:
         :param type_: The type of the interface
         :return: The unique interface of the requested type
         :raises KeyError: Raised if no interfaces of the desired type were found
-        :raises LookupError: Raised if more then one interface of the desired type was found
+        :raises LookupError: Raised if more than one interface of the desired type was found
         """
 
         # Search for all interfaces matching the type
@@ -1459,7 +1459,7 @@ class DaxNameRegistry:
 
         - Zero or a single component is always independent.
         - For multiple components, only modules can be independent.
-        - Modules are independent if none is a submodule of an other
+        - Modules are independent if none is a submodule of another
 
         :param components: DAX components part of this system such as modules and services
         :return: :const:`True` if the components are independent

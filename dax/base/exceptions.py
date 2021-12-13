@@ -11,7 +11,7 @@ class BuildError(RuntimeError):
 
 
 class NonUniqueRegistrationError(LookupError):
-    """Exception when a name is registered more then once.
+    """Exception when a name is registered more than once.
 
     Raised when registering an object with a name that was already occupied.
     """

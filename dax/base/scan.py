@@ -122,7 +122,7 @@ class DaxScan(dax.base.system.DaxBase, abc.ABC):
     Static scans can be added using the :func:`add_static_scan` function.
     Regular ARTIQ functions are available to obtain other arguments.
 
-    Adding multiple scans results automatically in a multi-dimensional scan by scanning over
+    Adding multiple scans results automatically in a multidimensional scan by scanning over
     all value combinations in the cartesian product of the scans.
     The first scan added represents the dimension which is only scanned once.
     All next scans are repeatedly performed to form the cartesian product.
@@ -395,7 +395,7 @@ class DaxScan(dax.base.system.DaxBase, abc.ABC):
         """Get the cartesian product of scan points for analysis.
 
         A list of values is returned on a per-key basis.
-        The values are returned in the same sequence as was provided to the actual run,
+        The values are returned with the same order as provided to the actual run,
         as the cartesian product of all scannables.
 
         To get the values without applying the product, see :func:`get_scannables`.
@@ -428,7 +428,7 @@ class DaxScan(dax.base.system.DaxBase, abc.ABC):
     def init_scan_elements(self) -> None:
         """Initialize the list of scan elements.
 
-        By default this is called at the beginning of :func:`run`, however it may be called in :func:`prepare` if the
+        By default, this is called at the beginning of :func:`run`, however it may be called in :func:`prepare` if the
         user desires the ability to call :func:`get_scan_points` before :func:`run`.
         """
         # Check if build() was called
@@ -636,7 +636,7 @@ class DaxScanReader:
     These values are the individual values for each key, without applying the product.
 
     :attr:`scan_points` is a dict with for each key contains the list of scan points.
-    The values are returned in the same sequence as was provided to the actual run,
+    The values are returned with the same order as was provided to the actual run,
     as the cartesian product of all scannables.
     """
 
