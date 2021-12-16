@@ -2,8 +2,12 @@ import unittest
 import pathlib
 import os
 import os.path
+from textwrap import dedent
 
 from dax.util.output import *
+
+from test.environment import CI_ENABLED
+from test.artiq import master, client_submit
 
 
 class OutputTestCase(unittest.TestCase):
@@ -19,6 +23,23 @@ class OutputTestCase(unittest.TestCase):
             base = get_base_path(None)
             self.assertIsInstance(base, pathlib.Path)
             self.assertTrue(str(base).startswith(os.getcwd()))
+
+    @unittest.skipUnless(CI_ENABLED, 'Not in a CI environment, skipping slow test')
+    def test_experiment_cwd(self):
+        with master() as (path, process):
+            with open('experiment.py', mode='w') as file:
+                file.write(dedent("""
+                import pathlib
+                from artiq.experiment import EnvExperiment
+                class BasePathExperiment(EnvExperiment):
+                    def run(self):
+                        print(pathlib.Path().absolute())
+                """))
+
+            self.assertEqual(client_submit(os.path.join(path, 'experiment.py')), 0, 'Unexpected RID returned')
+            line = process.stdout.readline().rstrip()
+            self.assertTrue(line.split(':print:')[-1].startswith(os.path.join(path, 'results')),
+                            'CWD of experiment does not match expected location for dax.util.output.get_base_path()')
 
     def test_base_file_name_generator(self):
         with temp_dir():
