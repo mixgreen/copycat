@@ -29,7 +29,7 @@ class DdbTestCase(unittest.TestCase):
             'type': 'controller',
             'host': '::1',
             'port': 1,
-            'command': 'some_command'
+            'command': 'foo -p {port} --bind {bind}'
         },
         'ttl0': {
             'type': 'local',
@@ -42,13 +42,13 @@ class DdbTestCase(unittest.TestCase):
             'type': 'controller',
             'host': 'some_host',
             'port': 2,
-            'command': 'some_command'
+            'command': 'foo -p {port} --bind {bind}'
         },
         'controller2': {
             'type': 'controller',
             'host': 'some_host',
             'port': 3,
-            'command': 'some_command'
+            'command': 'bar -p {port} --bind {bind}'
         },
     }
 
@@ -63,13 +63,11 @@ class DdbTestCase(unittest.TestCase):
             'type': 'controller',
             'host': 'some_host',
             'port': 1,
-            'command': 'some_command'
         },
         'controller2': {
             'type': 'controller',
             'host': 'some_host',
             'port': 1,
-            'command': 'some_command'
         },
     }
 
@@ -83,7 +81,6 @@ class DdbTestCase(unittest.TestCase):
         'controller': {
             'type': 'controller',
             'port': 1,
-            'command': 'some_command'
         },
     }
 
@@ -97,7 +94,36 @@ class DdbTestCase(unittest.TestCase):
         'controller': {
             'type': 'controller',
             'host': 'some_host',
-            'command': 'some_command'
+        },
+    }
+
+    DEVICE_DB_MISSING_BIND_ARG = {
+        'core': {
+            'type': 'local',
+            'module': 'artiq.coredevice.core',
+            'class': 'Core',
+            'arguments': {'host': None, 'ref_period': 1e-9}
+        },
+        'controller': {
+            'type': 'controller',
+            'host': 'some_host',
+            'port': 1,
+            'command': 'foo -p {port}'
+        },
+    }
+
+    DEVICE_DB_MISSING_PORT_ARG = {
+        'core': {
+            'type': 'local',
+            'module': 'artiq.coredevice.core',
+            'class': 'Core',
+            'arguments': {'host': None, 'ref_period': 1e-9}
+        },
+        'controller': {
+            'type': 'controller',
+            'host': 'some_host',
+            'port': 1,
+            'command': 'foo --bind {bind}'
         },
     }
 
@@ -228,6 +254,16 @@ class DdbTestCase(unittest.TestCase):
         with self.assertRaises(KeyError, msg='Missing port did not raise'):
             enable_dax_sim(copy.deepcopy(self.DEVICE_DB_MISSING_PORT), enable=True,
                            logging_level=logging.CRITICAL, moninj_service=False)
+
+    def test_missing_bind_arg(self):
+        with self.assertRaises(ValueError, msg='Missing bind argument in command did not raise'):
+            enable_dax_sim(copy.deepcopy(self.DEVICE_DB_MISSING_BIND_ARG), enable=True,
+                           logging_level=logging.CRITICAL, moninj_service=False)
+
+    def test_missing_port_arg(self):
+        with self.assertLogs(dax.sim.ddb._logger, logging.WARNING):
+            enable_dax_sim(copy.deepcopy(self.DEVICE_DB_MISSING_PORT_ARG), enable=True,
+                           logging_level=logging.WARNING, moninj_service=False)
 
     def test_core_address(self, *, ddb=None, core_device='core', localhost='::1'):
         if ddb is None:
