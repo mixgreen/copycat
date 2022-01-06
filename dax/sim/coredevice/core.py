@@ -32,21 +32,30 @@ class BaseCore(DaxSimDevice):
     for testing device drivers without a full ARTIQ environment.
     """
 
-    RESET_TIME_MU: typing.ClassVar[np.int64] = np.int64(125000)
-    """The reset time in machine units."""
+    DEFAULT_RESET_TIME_MU: typing.ClassVar[np.int64] = np.int64(125000)
+    """The default reset time in machine units."""
 
     _ref_period: float
     _ref_multiplier: int
     _coarse_ref_period: float
+    _reset_mu: np.int64
     _break_realtime_mu: np.int64
 
+    kernel_invariants: typing.Set[str] = {
+        'core', 'ref_period', 'ref_multiplier', 'coarse_ref_period',
+        '_reset_mu', '_break_realtime_mu',
+    }
+
     def __init__(self, dmgr: typing.Any = None,
-                 ref_period: float = 1e-9, ref_multiplier: int = 8,
-                 break_realtime_mu: np.int64 = RESET_TIME_MU, **kwargs: typing.Any):
+                 ref_period: float = 1e-9, ref_multiplier: int = 8, *,
+                 reset_mu: np.int64 = DEFAULT_RESET_TIME_MU, break_realtime_mu: np.int64 = DEFAULT_RESET_TIME_MU,
+                 **kwargs: typing.Any):
         assert isinstance(ref_period, float), 'Reference period must be of type float'
         assert ref_period > 0.0, 'Reference period must be greater than zero'
         assert isinstance(ref_multiplier, int), 'Reference multiplier must be of type int'
         assert ref_multiplier > 0, 'Reference multiplier must be greater than zero'
+        assert isinstance(reset_mu, (int, np.int32, np.int64)), 'Reset mu must be of type int'
+        assert reset_mu >= 0, 'Reset mu must be zero or greater'
         assert isinstance(break_realtime_mu, (int, np.int32, np.int64)), 'Break realtime mu must be of type int'
         assert break_realtime_mu >= 0, 'Break realtime mu must be zero or greater'
 
@@ -61,6 +70,7 @@ class BaseCore(DaxSimDevice):
         self._ref_period = ref_period
         self._ref_multiplier = ref_multiplier
         self._coarse_ref_period = self._ref_period * self._ref_multiplier
+        self._reset_mu = np.int64(reset_mu)
         self._break_realtime_mu = np.int64(break_realtime_mu)
 
         # Setup dummy comm object
@@ -132,7 +142,7 @@ class BaseCore(DaxSimDevice):
     @kernel
     def reset(self):  # type: () -> None
         # Move cursor
-        delay_mu(self.RESET_TIME_MU)
+        delay_mu(self._reset_mu)
 
     @kernel
     def break_realtime(self):  # type: () -> None
@@ -282,13 +292,14 @@ class Core(BaseCore):
 
     @kernel
     def reset(self):  # type: () -> None
+        # Note: super() is not used here to allow compilation of this function
+
         # Reset signal to 1
         self._reset_signal.push(True)
         # Reset devices
         self._reset_devices()
-
         # Move cursor
-        delay_mu(self.RESET_TIME_MU)
+        delay_mu(self._reset_mu)
         # Reset signal back to 0
         self._reset_signal.push(False)
 
