@@ -1,5 +1,6 @@
 import typing
 import numpy as np
+from dax.base.system import DaxHasSystem
 
 from dax.experiment import *
 from dax.util.artiq import is_kernel, is_host_only
@@ -16,8 +17,8 @@ class SafetyContextError(RuntimeError):
     pass
 
 
-class ReentrantSafetyContext(DaxModule):
-    """Context class for safety controls when entering and exiting a context.
+class BaseReentrantSafetyContext(DaxHasSystem):
+    """Base context class for services and modules for safety controls when entering and exiting a context.
 
     Callback functions for enter and exit should be provided by the
     ``enter_cb`` and ``exit_cb`` kwargs respectively.
@@ -49,7 +50,7 @@ class ReentrantSafetyContext(DaxModule):
 
     def build(self, *, enter_cb: __CB_T, exit_cb: __CB_T,  # type: ignore[override]
               exit_error: bool = False, rpc_: bool = False) -> None:
-        """Build the safety context module.
+        """Build the base safety context.
 
         :param enter_cb: The callback function for entering the context
         :param exit_cb: The callback function for exiting the context
@@ -173,8 +174,13 @@ class ReentrantSafetyContext(DaxModule):
             self._safety_context_exit()
 
 
-class SafetyContext(ReentrantSafetyContext):
-    """Context class for safety controls when entering and exiting a context.
+class ReentrantSafetyContext(BaseReentrantSafetyContext, DaxModule):
+    """Context class for a module for safety controls when entering and exiting a context"""
+    pass
+
+
+class BaseNonReentrantSafetyContext(BaseReentrantSafetyContext):
+    """Base Context class for modules and services for safety controls when entering and exiting a context.
 
     Callback functions for enter and exit should be provided by the
     ``enter_cb`` and ``exit_cb`` kwargs respectively.
@@ -196,7 +202,7 @@ class SafetyContext(ReentrantSafetyContext):
         """Build the safety context module."""
 
         # Call super
-        super(SafetyContext, self).build(**kwargs)
+        super(BaseNonReentrantSafetyContext, self).build(**kwargs)
 
         # Store custom error message
         self._safety_context_enter_error_msg = f'Safety context "{self.get_name()}" is non-reentrant'
@@ -220,3 +226,8 @@ class SafetyContext(ReentrantSafetyContext):
 
         # Increment in context counter after enter callback was successfully executed
         self._safety_context_entries += 1
+
+
+class SafetyContext(BaseNonReentrantSafetyContext, DaxModule):
+    """Context class for a module for safety controls when entering and exiting a non reentrant context"""
+    pass
