@@ -2,11 +2,8 @@ from dax.services.safety_context import *
 from test.modules.safety_context_test import *
 
 
-class _TestSystem(DaxSystem):
-    SYS_ID = 'unittest_system'
-    SYS_VER = 0
-    CORE_LOG_KEY = None
-    DAX_INFLUX_DB_KEY = None
+class _TestSystem(test.modules.safety_context_test._TestSystem):
+    pass
 
 
 class SafetyContextServiceTestCase(SafetyContextTestCase):
