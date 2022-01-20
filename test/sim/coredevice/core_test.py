@@ -44,11 +44,24 @@ class BaseCoreTestCase(_BaseTestCase):
         # Should be able to construct base core without arguments
         self.assertIsNotNone(dax.sim.coredevice.core.BaseCore())
 
+    def test_default_reset(self):
+        core = dax.sim.coredevice.core.BaseCore()
+        t = now_mu()
+        core.reset()
+        self.assertEqual(now_mu() - t, dax.sim.coredevice.core.BaseCore.DEFAULT_RESET_TIME_MU)
+
+    def test_variable_reset(self):
+        for reset_mu in [0, 125000, 200000]:
+            core = dax.sim.coredevice.core.BaseCore(reset_mu=reset_mu)
+            t = now_mu()
+            core.reset()
+            self.assertEqual(now_mu() - t, reset_mu)
+
     def test_default_break_realtime(self):
         core = dax.sim.coredevice.core.BaseCore()
         t = now_mu()
         core.break_realtime()
-        self.assertEqual(now_mu() - t, dax.sim.coredevice.core.BaseCore.RESET_TIME_MU)
+        self.assertEqual(now_mu() - t, dax.sim.coredevice.core.BaseCore.DEFAULT_RESET_TIME_MU)
 
     def test_variable_break_realtime(self):
         for break_realtime_mu in [0, 125000, 200000]:

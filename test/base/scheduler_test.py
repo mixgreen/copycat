@@ -11,11 +11,12 @@ import sys
 import os
 import os.path
 import subprocess
-import numpy as np
-import networkx as nx
 import textwrap
 import io
+import itertools
 from unittest.mock import Mock, call
+import numpy as np
+import networkx as nx
 
 from artiq.language.scan import *
 from artiq.language.types import TBool
@@ -179,6 +180,7 @@ class _Scheduler(DaxScheduler):
         self._data_store = Mock(spec=dax.base.system.DaxDataStore)
         # Variable for testing purposes
         self.testing_handled_requests = 0
+        self.testing_num_waves = 0
         # Call super
         super(_Scheduler, self).__init__(*args, **kwargs)
         # Replace scheduler with custom dummy scheduler
@@ -210,6 +212,8 @@ class _Scheduler(DaxScheduler):
         if priority is None:
             priority = self._job_priority
 
+        # Count waves and call super
+        self.testing_num_waves += 1
         super(_Scheduler, self).wave(wave=wave, root_nodes=root_nodes, root_action=root_action,
                                      policy=policy, reverse=reverse, priority=priority, **kwargs)
 
@@ -920,12 +924,10 @@ class LazySchedulerTestCase(unittest.TestCase):
 
         class S(_Scheduler):
             NODES = {_Job1, _Job2, _Job3, _Job4, _JobA, _JobB, _JobC}
-            counter = 0
 
             def wave(self, **kwargs) -> None:
                 super(S, self).wave(**kwargs)
-                self.counter += 1
-                if self.counter >= _NUM_WAVES:
+                if self.testing_num_waves >= _NUM_WAVES:
                     raise TerminationRequested
 
         self.arguments.update(self.FAST_WAVE_ARGUMENTS)
@@ -951,14 +953,12 @@ class LazySchedulerTestCase(unittest.TestCase):
 
         class S(_Scheduler):
             NODES = {_Job1, _Job2, _Job3, _Job4, _JobA, _JobB, _JobC}
-            counter = 0
 
             def wave(self, **kwargs) -> None:
                 # Explicitly set depth
                 kwargs['depth'] = 1
                 super(S, self).wave(**kwargs)
-                self.counter += 1
-                if self.counter >= _NUM_WAVES:
+                if self.testing_num_waves >= _NUM_WAVES:
                     raise TerminationRequested
 
         self.arguments.update(self.FAST_WAVE_ARGUMENTS)
@@ -986,14 +986,12 @@ class LazySchedulerTestCase(unittest.TestCase):
 
         class S(_Scheduler):
             NODES = {_Job1, _Job2, _Job3, _Job4, _JobA, _JobB, _JobC}
-            counter = 0
 
             def wave(self, **kwargs) -> None:
                 # Explicitly set start depth
                 kwargs['start_depth'] = 1
                 super(S, self).wave(**kwargs)
-                self.counter += 1
-                if self.counter >= _NUM_WAVES:
+                if self.testing_num_waves >= _NUM_WAVES:
                     raise TerminationRequested
 
         self.arguments.update(self.FAST_WAVE_ARGUMENTS)
@@ -1017,18 +1015,22 @@ class LazySchedulerTestCase(unittest.TestCase):
     }
 
     def _test_scheduler_controller(self, requests):
+        root_nodes = [r[0] for r in requests[::-1]]
+
         class S(_Scheduler):
             NODES = {_Job1, _Job2, _Job3, _Job4, _JobA, _JobB, _JobC}
             CONTROLLER = 'dax_scheduler'
 
-            counter = 0
-
             def wave(self, **kwargs) -> None:
                 super(S, self).wave(**kwargs)
-
-                self.counter += 1
-                if self.counter >= _NUM_WAVES + len(requests):
+                if self.testing_num_waves >= _NUM_WAVES + len(requests):
                     raise TerminationRequested
+
+            # noinspection PyMethodParameters
+            def _handle_request(self_, *, request):
+                # Verify order of nodes in request
+                self.assertListEqual(list(root_nodes.pop()), list(request.nodes))
+                super(S, self_)._handle_request(request=request)
 
             async def controller_callback(self, request_queue) -> None:
                 # Construct a separate controller with the same queue
@@ -1047,6 +1049,9 @@ class LazySchedulerTestCase(unittest.TestCase):
 
             # Run the scheduler
             s.run()
+
+        # Verify root node list
+        self.assertEqual(len(root_nodes), 0, 'Not all requests were handled')
 
         # Return the scheduler
         return s
@@ -1254,6 +1259,55 @@ class LazySchedulerTestCase(unittest.TestCase):
                 with self.subTest(task='cancel'):
                     t.cancel()
 
+    @unittest.skipUnless(CI_ENABLED, 'Not in a CI environment, skipping long test')
+    def test_trigger_node_order(self):
+        class J0(_Job):
+            pass
+
+        class J1(_Job):
+            pass
+
+        class J2(_Job):
+            pass
+
+        self.arguments.update(self.FAST_WAVE_ARGUMENTS)
+
+        for node_order in itertools.permutations([J0, J1, J2]):
+            with get_managers(arguments=self.arguments) as managers:
+                class T0(_Trigger):
+                    NODES = node_order
+                    INTERVAL = '10m'
+
+                class S(_Scheduler):
+                    NODES = {J0, J1, J2, T0}
+                    ROOT_NODES = {T0}
+
+                    # noinspection PyMethodParameters
+                    def wave(self_, *, root_nodes, **kwargs) -> None:  # type: ignore[override]
+                        if s._node_name_map[T0.get_name()] in root_nodes:
+                            self.assertLess(self_.testing_num_waves, 1)
+                        else:
+                            self.assertIsInstance(root_nodes, list)
+                            self.assertListEqual([r.get_name() for r in root_nodes], [o.get_name() for o in node_order],
+                                                 'Node order of trigger was not preserved')
+                            raise TerminationRequested
+                        super(S, self_).wave(root_nodes=root_nodes, **kwargs)
+
+                s = S(managers)
+                s.prepare()
+
+                # Run the scheduler
+                s.run()
+                self.assertEqual(s.testing_num_waves, 1)
+
+                for n in s._graph:
+                    with self.subTest(job=n.get_name()):
+                        if isinstance(n, T0):
+                            ref_counter = {'init': 1, 'visit': 2, 'submit': 1, 'schedule': 1}
+                        else:
+                            ref_counter = {'init': 1}
+                        self.assertDictEqual(n.counter, ref_counter, 'Node call pattern did not match expected pattern')
+
     def test_create_trigger_bad(self):
         s = _Scheduler(self.managers)
 
@@ -1308,8 +1362,7 @@ class LazySchedulerTestCase(unittest.TestCase):
 
             def wave(self, **kwargs) -> None:
                 super(S, self).wave(**kwargs)
-                self.counter += 1
-                if self.counter >= _NUM_WAVES:
+                if self.testing_num_waves >= _NUM_WAVES:
                     raise TerminationRequested
 
         self.arguments.update(self.FAST_WAVE_ARGUMENTS)
@@ -1350,12 +1403,10 @@ class LazySchedulerTestCase(unittest.TestCase):
 
         class S(_Scheduler):
             NODES = {J0, J1, T0}
-            counter = num_waves + num_submits
 
             def wave(self, **kwargs) -> None:
                 super(S, self).wave(**kwargs)
-                self.counter -= 1
-                if self.counter <= 0:
+                if self.testing_num_waves >= num_waves + num_submits:
                     raise TerminationRequested
 
         self.arguments.update(self.FAST_WAVE_ARGUMENTS)
@@ -2114,72 +2165,85 @@ class OptimusCalibrationTestCase(unittest.TestCase):
         num_reps = 5
         for num_nodes in range(5, 10):
             for _ in range(num_reps):
-                # initialize seed and rng for numpy.random calls
+                num_attempts = 2  # allow multiple attempts with a single seed
                 seed: int = time.time_ns()
-                rng: np.random.Generator = np.random.default_rng(seed)
-                # create graph
-                g: nx.DiGraph = self._random_dag(num_nodes, p, rng)
-                root_nodes: typing.Set[int] = self._get_root_nodes(g)
-                # randomly choose results for each experiment - no calibration failure though
-                timeouts: typing.List[bool] = [rng.choice([True, False]) for _ in range(num_nodes)]
-                results: typing.List[int] = [rng.choice([0, 1, 2]) for _ in range(num_nodes)]
-                # create the scheduler/experiment files - use reversed topological sort so that jobs are written
-                # in correct dependency order in scheduler file
-                ts_rev = list(reversed(list(nx.topological_sort(g))))
-                with open(os.path.join(self.wd, 'repository', 'scheduler.py'), 'w') as scheduler_file:
-                    with open(os.path.join(self.wd, 'repository', 'calibrations.py'), 'w') as experiment_file:
-                        scheduler_file.write(self._create_scheduler_imports())
-                        experiment_file.write(self._create_exp_imports())
-                        for idx in ts_rev:
-                            scheduler_file.write(self._create_calibration_job(idx, g.successors(idx), timeouts[idx]))
-                            experiment_file.write(self._create_check_exp(idx, results[idx]))
-                            experiment_file.write(self._create_cal_exp(idx, 0))
-                        scheduler_file.write(self._create_trigger(root_nodes))
-                        scheduler_file.write(self._create_scheduler_exp(set(g.nodes)))
+                while True:
+                    num_attempts -= 1
+                    # noinspection PyBroadException
+                    try:
+                        self._optimus_test(p, num_nodes, seed)
+                    except self.failureException:
+                        if num_attempts <= 0:
+                            raise
+                    else:
+                        break
 
-                rid: int = self._submit_scheduler_exp()
-                time.sleep(5)  # need to wait a bit for the DAX scheduler to submit jobs
-                datasets: typing.Dict[str, typing.Tuple[bool, typing.Any]] = self._wait_and_get_datasets(rid)
-                cal_order: typing.List[str] = datasets['cal_order'][1]
-                self._delete_exp(rid)
-                # again, not as robust as a regex for picking the \d+ out of 'CalJob\d+', but faster
-                initial_submit: typing.List[int] = [int(node_str[6:]) for node_str in cal_order[:num_nodes]]
-                last_cals: typing.List[float] = [0.0] * num_nodes
+    def _optimus_test(self, p, num_nodes, seed):
+        # initialize rng
+        rng: np.random.Generator = np.random.default_rng(seed)
+        # create graph
+        g: nx.DiGraph = self._random_dag(num_nodes, p, rng)
+        root_nodes: typing.Set[int] = self._get_root_nodes(g)
+        # randomly choose results for each experiment - no calibration failure though
+        timeouts: typing.List[bool] = [rng.choice([True, False]) for _ in range(num_nodes)]
+        results: typing.List[int] = [rng.choice([0, 1, 2]) for _ in range(num_nodes)]
+        # create the scheduler/experiment files - use reversed topological sort so that jobs are written
+        # in correct dependency order in scheduler file
+        ts_rev = list(reversed(list(nx.topological_sort(g))))
+        with open(os.path.join(self.wd, 'repository', 'scheduler.py'), 'w') as scheduler_file:
+            with open(os.path.join(self.wd, 'repository', 'calibrations.py'), 'w') as experiment_file:
+                scheduler_file.write(self._create_scheduler_imports())
+                experiment_file.write(self._create_exp_imports())
+                for idx in ts_rev:
+                    scheduler_file.write(self._create_calibration_job(idx, g.successors(idx), timeouts[idx]))
+                    experiment_file.write(self._create_check_exp(idx, results[idx]))
+                    experiment_file.write(self._create_cal_exp(idx, 0))
+                scheduler_file.write(self._create_trigger(root_nodes))
+                scheduler_file.write(self._create_scheduler_exp(set(g.nodes)))
 
-                def get_actions(node: int, diagnose: bool = False) -> typing.List:
-                    actions: typing.List = []
-                    # sort according to initial_submit order to preserve graph structure (kind of, at least)
-                    children = sorted(list(g.successors(node)), key=lambda item: initial_submit.index(item))
-                    if timeouts[node] or diagnose or any([last_cals[n] > last_cals[node] for n in children]):
-                        actions.append(f'Check{node}')
-                        if results[node] == 2:
-                            for n in children:
-                                actions.append(get_actions(n, diagnose=True))
-                        if results[node] != 0:
-                            last_cals[node] = time.time()
-                            actions.append(f'Cal{node}')
-                    return actions
+        rid: int = self._submit_scheduler_exp()
+        time.sleep(5)  # need to wait a bit for the DAX scheduler to submit jobs
+        datasets: typing.Dict[str, typing.Tuple[bool, typing.Any]] = self._wait_and_get_datasets(rid)
+        cal_order: typing.List[str] = datasets['cal_order'][1]
+        self._delete_exp(rid)
+        # again, not as robust as a regex for picking the \d+ out of 'CalJob\d+', but faster
+        initial_submit: typing.List[int] = [int(node_str[6:]) for node_str in cal_order[:num_nodes]]
+        last_cals: typing.List[float] = [0.0] * num_nodes
 
-                expected_actions = [get_actions(node) for node in initial_submit]
-                expected_actions_flat = list(self._flatten(expected_actions))
-                actual_actions = cal_order[num_nodes:]
-                error_str = textwrap.dedent(f'''
-                Expected and actual traversals do not match:
-                expected: {expected_actions}
-                expected (flat): {expected_actions_flat}
-                actual: {actual_actions}
+        def get_actions(node: int, diagnose: bool = False) -> typing.List:
+            actions: typing.List = []
+            # sort according to initial_submit order to preserve graph structure (kind of, at least)
+            children = sorted(list(g.successors(node)), key=lambda item: initial_submit.index(item))
+            if timeouts[node] or diagnose or any([last_cals[n] > last_cals[node] for n in children]):
+                actions.append(f'Check{node}')
+                if results[node] == 2:
+                    for n in children:
+                        actions.append(get_actions(n, diagnose=True))
+                if results[node] != 0:
+                    last_cals[node] = time.time()
+                    actions.append(f'Cal{node}')
+            return actions
 
-                num nodes: {num_nodes}
-                initial submit order: {initial_submit}
-                root nodes: {root_nodes}
-                deps: {' '.join([f'{node} -> {{{list(g.successors(node))}}}' for node in initial_submit])}
-                timeouts: {timeouts}
-                exp results: {results}
-                rng seed: {seed}
-                ''')
-                with self.subTest(num_nodes=num_nodes, p=p, expected_actions=expected_actions,
-                                  acutal_actions=actual_actions):
-                    self.assertTrue(self._verify_actions(expected_actions, actual_actions), error_str)
+        expected_actions = [get_actions(node) for node in initial_submit]
+        expected_actions_flat = list(self._flatten(expected_actions))
+        actual_actions = cal_order[num_nodes:]
+        error_str = textwrap.dedent(f'''
+        Expected and actual traversals do not match:
+        expected: {expected_actions}
+        expected (flat): {expected_actions_flat}
+        actual: {actual_actions}
+
+        num nodes: {num_nodes}
+        initial submit order: {initial_submit}
+        root nodes: {root_nodes}
+        deps: {' '.join([f'{node} -> {{{list(g.successors(node))}}}' for node in initial_submit])}
+        timeouts: {timeouts}
+        exp results: {results}
+        rng seed: {seed}
+        ''')
+        with self.subTest(num_nodes=num_nodes, p=p, expected_actions=expected_actions,
+                          acutal_actions=actual_actions):
+            self.assertTrue(self._verify_actions(expected_actions, actual_actions), error_str)
 
     @unittest.skipUnless(CI_ENABLED, 'Not in a CI environment, skipping long test')
     def test_barrier(self):

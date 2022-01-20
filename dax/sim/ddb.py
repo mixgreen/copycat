@@ -312,6 +312,11 @@ def _mutate_controller(key: str, value: typing.Dict[str, typing.Any], *,
         # No command was set
         _logger.debug(f'Controller "{key}": no command found')
     elif isinstance(command, str):
+        # Check for the bind and port argument
+        if any(s not in command for s in ['--bind', '{bind}']):
+            raise ValueError(f'Controller "{key}" is missing the "--bind {{bind}}" argument')
+        if '{port}' not in command:
+            _logger.warning(f'Controller "{key}" is missing the "--port {{port}}" argument')
         # See which simulation arguments are not present
         args: typing.List[str] = [a for a in _SIMULATION_ARGS if a not in command]
         if args:

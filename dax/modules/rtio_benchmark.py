@@ -6,7 +6,12 @@ import artiq.coredevice.ttl  # type: ignore[import]
 from dax.experiment import *
 import dax.util.units
 
-__all__ = ['RtioBenchmarkModule', 'RtioLoopBenchmarkModule']
+__all__ = ['RtioBenchmarkError', 'RtioBenchmarkModule', 'RtioLoopBenchmarkModule']
+
+
+class RtioBenchmarkError(RuntimeError):
+    """Error raised when a benchmark fails."""
+    pass
 
 
 class RtioBenchmarkModule(DaxModule):
@@ -196,12 +201,12 @@ class RtioBenchmarkModule(DaxModule):
             # Last data point was an underflow, assuming all data points raised an underflow
             msg = 'Could not determine event throughput: All data points raised an underflow exception'
             self.logger.warning(msg)
-            raise RuntimeWarning(msg)
+            raise RtioBenchmarkError(msg)
         elif not underflow_flag:
             # No underflow occurred
             msg = 'Could not determine event throughput: No data points raised an underflow exception'
             self.logger.warning(msg)
-            raise RuntimeWarning(msg)
+            raise RtioBenchmarkError(msg)
         else:
             # Store result in system dataset
             self.set_dataset_sys(self.EVENT_PERIOD_KEY, last_period)
@@ -333,11 +338,11 @@ class RtioBenchmarkModule(DaxModule):
         if no_underflow_count == 0:
             msg = 'Could not determine event burst size: All data points raised an underflow exception'
             self.logger.warning(msg)
-            raise RuntimeWarning(msg)
+            raise RtioBenchmarkError(msg)
         elif not underflow_flag:
             msg = 'Could not determine event burst size: No data points raised an underflow exception'
             self.logger.warning(msg)
-            raise RuntimeWarning(msg)
+            raise RtioBenchmarkError(msg)
         else:
             # Store result in system dataset
             self.set_dataset_sys(self.EVENT_BURST_KEY, last_num_events)
@@ -460,12 +465,12 @@ class RtioBenchmarkModule(DaxModule):
             # Last data point was an underflow, assuming all data points raised an underflow
             msg = 'Could not determine DMA throughput: All data points raised an underflow exception'
             self.logger.warning(msg)
-            raise RuntimeWarning(msg)
+            raise RtioBenchmarkError(msg)
         elif not underflow_flag:
             # No underflow occurred
             msg = 'Could not determine DMA throughput: No data points raised an underflow exception'
             self.logger.warning(msg)
-            raise RuntimeWarning(msg)
+            raise RtioBenchmarkError(msg)
         else:
             # Store result in system dataset
             self.set_dataset_sys(self.DMA_EVENT_PERIOD_KEY, last_period)
@@ -608,12 +613,12 @@ class RtioBenchmarkModule(DaxModule):
             # Last data point was an underflow, assuming all data points raised an underflow
             msg = 'Could not determine core-RTIO latency: All data points raised an underflow exception'
             self.logger.warning(msg)
-            raise RuntimeWarning(msg)
+            raise RtioBenchmarkError(msg)
         elif not underflow_flag:
             # No underflow occurred
             msg = 'Could not determine core-RTIO latency: No data points raised an underflow exception'
             self.logger.warning(msg)
-            raise RuntimeWarning(msg)
+            raise RtioBenchmarkError(msg)
         else:
             # Store result in system dataset
             self.set_dataset_sys(self.LATENCY_CORE_RTIO_KEY, last_latency)
@@ -787,7 +792,7 @@ class RtioLoopBenchmarkModule(RtioBenchmarkModule):
         if not self.test_loop_connection():
             msg = 'Could not determine input buffer size: Loop not connected'
             self.logger.error(msg)
-            raise RuntimeError(msg)
+            raise RtioBenchmarkError(msg)
 
         # Call the kernel
         self._benchmark_input_buffer_size(min_events, max_events)
@@ -800,7 +805,7 @@ class RtioLoopBenchmarkModule(RtioBenchmarkModule):
             # No buffer overflow, so we did not found the limit
             msg = 'Could not determine input buffer size: No overflow occurred'
             self.logger.warning(msg)
-            raise RuntimeWarning(msg)
+            raise RtioBenchmarkError(msg)
         else:
             # Process results directly (next experiment might need these values)
             self.set_dataset_sys(self.INPUT_BUFFER_SIZE_KEY, num_events)
@@ -864,7 +869,7 @@ class RtioLoopBenchmarkModule(RtioBenchmarkModule):
         if not self.test_loop_connection():
             msg = 'Could not determine RTIO-core latency: Loop not connected'
             self.logger.error(msg)
-            raise RuntimeError(msg)
+            raise RtioBenchmarkError(msg)
 
         # Prepare datasets for results
         self.set_dataset('t_zero', [])
@@ -883,7 +888,7 @@ class RtioLoopBenchmarkModule(RtioBenchmarkModule):
             # One or more tests did not return a timestamp, test failed
             msg = 'Could not determine RTIO-core latency: One or more tests did not return a valid timestamp'
             self.logger.warning(msg)
-            raise RuntimeWarning(msg)
+            raise RtioBenchmarkError(msg)
         else:
             # Convert values to times
             t_zero = np.array([self.core.mu_to_seconds(t) for t in t_zero])  # type: ignore[union-attr,arg-type]
@@ -972,7 +977,7 @@ class RtioLoopBenchmarkModule(RtioBenchmarkModule):
         if not self.test_loop_connection():
             msg = 'Could not determine RTT: Loop not connected'
             self.logger.error(msg)
-            raise RuntimeError(msg)
+            raise RtioBenchmarkError(msg)
 
         # Run kernel
         self._benchmark_latency_rtt(latency_min, latency_max, latency_step, num_samples, no_underflow_cutoff)
@@ -987,12 +992,12 @@ class RtioLoopBenchmarkModule(RtioBenchmarkModule):
             # Last data point was an underflow, assuming all data points raised an underflow
             msg = 'Could not determine RTT: All data points raised an underflow exception'
             self.logger.warning(msg)
-            raise RuntimeWarning(msg)
+            raise RtioBenchmarkError(msg)
         elif not underflow_flag:
             # No underflow occurred
             msg = 'Could not determine RTT: No data points raised an underflow exception'
             self.logger.warning(msg)
-            raise RuntimeWarning(msg)
+            raise RtioBenchmarkError(msg)
         else:
             # Store result in system dataset
             self.set_dataset_sys(self.LATENCY_RTT_KEY, last_latency)

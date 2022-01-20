@@ -44,7 +44,7 @@ def get_base_path(scheduler: typing.Any) -> pathlib.Path:
         rid = int(scheduler.rid)
         class_name = str(scheduler.expid.get('class_name'))
     except AttributeError:
-        # Reset to defaults if data could not be obtained from the scheduler
+        # Reset to default values if data could not be obtained from the scheduler
         rid = 0
         class_name = str(None)
 

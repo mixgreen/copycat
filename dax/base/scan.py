@@ -122,7 +122,7 @@ class DaxScan(dax.base.system.DaxBase, abc.ABC):
     Static scans can be added using the :func:`add_static_scan` function.
     Regular ARTIQ functions are available to obtain other arguments.
 
-    Adding multiple scans results automatically in a multi-dimensional scan by scanning over
+    Adding multiple scans results automatically in a multidimensional scan by scanning over
     all value combinations in the cartesian product of the scans.
     The first scan added represents the dimension which is only scanned once.
     All next scans are repeatedly performed to form the cartesian product.
@@ -228,6 +228,9 @@ class DaxScan(dax.base.system.DaxBase, abc.ABC):
         if any(dax.util.artiq.is_kernel(f) for f in [self.host_enter, self.host_setup,
                                                      self.host_cleanup, self.host_exit]):
             raise TypeError('host_*() functions can not be kernels')
+        # Check that _run_dax_scan_setup/cleanup aren't kernels
+        if any(dax.util.artiq.is_kernel(f) for f in [self._run_dax_scan_setup, self._run_dax_scan_cleanup]):
+            raise TypeError('_run_dax_scan_*() functions cannot be kernels')
 
         # Call super and forward arguments, for compatibility with other libraries
         # noinspection PyArgumentList
@@ -392,7 +395,7 @@ class DaxScan(dax.base.system.DaxBase, abc.ABC):
         """Get the cartesian product of scan points for analysis.
 
         A list of values is returned on a per-key basis.
-        The values are returned in the same sequence as was provided to the actual run,
+        The values are returned with the same order as provided to the actual run,
         as the cartesian product of all scannables.
 
         To get the values without applying the product, see :func:`get_scannables`.
@@ -421,16 +424,13 @@ class DaxScan(dax.base.system.DaxBase, abc.ABC):
         """
         return {key: list(scannable) for key, scannable in self._dax_scan_scannables.items()}
 
-    """Run functions"""
-
     @host_only
-    def run(self) -> None:
-        """Entry point of the experiment implemented by the scan class.
+    def init_scan_elements(self) -> None:
+        """Initialize the list of scan elements.
 
-        Normally users do not have to override this method.
-        Once-executed entry code can use the :func:`host_enter` function instead.
+        By default, this is called at the beginning of :func:`run`, however it may be called in :func:`prepare` if the
+        user desires the ability to call :func:`get_scan_points` before :func:`run`.
         """
-
         # Check if build() was called
         assert hasattr(self, '_dax_scan_scannables'), 'DaxScan.build() was not called'
 
@@ -443,6 +443,20 @@ class DaxScan(dax.base.system.DaxBase, abc.ABC):
         self.update_kernel_invariants('_dax_scan_elements')
         self.logger.debug(f'Prepared {len(self._dax_scan_elements)} scan point(s) '
                           f'with {len(self._dax_scan_scannables)} scan parameter(s)')
+
+    """Run functions"""
+
+    @host_only
+    def run(self) -> None:
+        """Entry point of the experiment implemented by the scan class.
+
+        Normally users do not have to override this method.
+        Once-executed entry code can use the :func:`host_enter` function instead.
+        """
+
+        # Initialize scan elements if not already done
+        if not hasattr(self, '_dax_scan_elements'):
+            self.init_scan_elements()
 
         if not self._dax_scan_elements:
             # There are no scan points
@@ -479,6 +493,8 @@ class DaxScan(dax.base.system.DaxBase, abc.ABC):
                     # Coming from a host context, perform host setup
                     self.logger.debug('Performing host setup')
                     self.host_setup()
+                    self.logger.debug('Performing run_dax_scan setup')
+                    self._run_dax_scan_setup()
 
                     # Run the scan
                     if dax.util.artiq.is_kernel(self.run_point):
@@ -490,6 +506,8 @@ class DaxScan(dax.base.system.DaxBase, abc.ABC):
 
                 finally:
                     # One time host cleanup
+                    self.logger.debug('Performing run_dax_scan cleanup')
+                    self._run_dax_scan_cleanup()
                     self.logger.debug('Performing host cleanup')
                     self.host_cleanup()
 
@@ -557,6 +575,14 @@ class DaxScan(dax.base.system.DaxBase, abc.ABC):
         """1. Setup on the host, called once at entry and after a pause."""
         pass
 
+    def _run_dax_scan_setup(self) -> None:  # pragma: no cover
+        """1.5. Called on the host after :func:`host_setup` and just before :func:`_run_dax_scan`.
+
+        Useful for e.g. confirming that necessary attributes created in :func:`host_enter` or :func:`host_setup`
+        haven't been overwritten by a subclass.
+        """
+        pass
+
     @portable
     def device_setup(self):  # type: () -> None  # pragma: no cover
         """2. Setup on the core device, called once at entry and after a pause.
@@ -584,6 +610,10 @@ class DaxScan(dax.base.system.DaxBase, abc.ABC):
         """
         pass
 
+    def _run_dax_scan_cleanup(self) -> None:  # pragma: no cover
+        """4.5. Called on the host after :func:`_run_dax_scan`."""
+        pass
+
     def host_cleanup(self) -> None:  # pragma: no cover
         """5. Cleanup on the host, called once after scanning and before a pause."""
         pass
@@ -606,7 +636,7 @@ class DaxScanReader:
     These values are the individual values for each key, without applying the product.
 
     :attr:`scan_points` is a dict with for each key contains the list of scan points.
-    The values are returned in the same sequence as was provided to the actual run,
+    The values are returned with the same order as was provided to the actual run,
     as the cartesian product of all scannables.
     """
 

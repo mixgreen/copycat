@@ -111,7 +111,7 @@ class OperationInstance(_MinimalOperationInstance):
         pass
 
     @kernel
-    def rphi(self, phi: TFloat, theta: TFloat, qubit: TInt32):
+    def rphi(self, theta: TFloat, phi: TFloat, qubit: TInt32):
         pass
 
     @kernel
