@@ -129,7 +129,7 @@ class ndarray(collections.abc.Sequence, typing.Generic[__E_T]):
         ...
 
     def mean(self, axis: __AXIS_T = ..., dtype: typing.Optional[type] = ...,
-             out: typing.Optional['ndarray[__E_T]'] = ..., keepdims: bool = ...):
+             out: typing.Optional[ndarray[__E_T]] = ..., keepdims: bool = ...):
         ...
 
     def transpose(self, *axes: typing.Union[typing.Tuple[int, ...], int]) -> ndarray[__E_T]:
@@ -141,6 +141,13 @@ class ndarray(collections.abc.Sequence, typing.Generic[__E_T]):
 
     @typing.overload
     def __getitem__(self, s: slice) -> ndarray[__E_T]:
+        ...
+
+    @typing.overload
+    def __getitem__(self, a: typing.Sequence[int]) -> ndarray[__E_T]:
+        ...
+
+    def __setitem__(self, key: int, value: __E_T) -> None:
         ...
 
     def __len__(self) -> int:
@@ -168,6 +175,32 @@ class ndarray(collections.abc.Sequence, typing.Generic[__E_T]):
         ...
 
     def __itruediv__(self, other: __A_T) -> ndarray[__E_T]:
+        ...
+
+    def __le__(self, other: __A_T) -> ndarray[bool]:
+        ...
+
+    def __lt__(self, other: __A_T) -> ndarray[bool]:
+        ...
+
+    def __ge__(self, other: __A_T) -> ndarray[bool]:
+        ...
+
+    def __gt__(self, other: __A_T) -> ndarray[bool]:
+        ...
+
+    def __eq__(self, other: __A_T) -> ndarray[bool]:  # type: ignore[override]
+        ...
+
+    def __ne__(self, other: __A_T) -> ndarray[bool]:  # type: ignore[override]
+        ...
+
+    def min(self, axis: __AXIS_T = ..., out: typing.Optional[ndarray[__E_T]] = ..., keepdims: bool = ...,
+            initial: typing.Any = ..., where: __E_T = ...) -> __E_T:
+        ...
+
+    def max(self, axis: __AXIS_T = ..., out: typing.Optional[ndarray[__E_T]] = ..., keepdims: bool = ...,
+            initial: typing.Any = ..., where: __E_T = ...) -> __E_T:
         ...
 
 
@@ -248,4 +281,16 @@ def size(a: typing.Any, axis: typing.Optional[int] = ...) -> int:
 
 def log2(x: __E_T, out: typing.Optional[ndarray[__E_T]] = ..., *, where: __E_T = ..., **kwargs: typing.Any) -> __E_T:
     # Left out positional-only parameters `/` for compatibility with Python<3.8
+    ...
+
+
+def power(x1: __E_T, x2: __E_T, out: typing.Optional[ndarray[__E_T]] = ..., *, where: __E_T = ...,
+          **kwargs: typing.Any) -> __E_T:
+    # Left out positional-only parameters `/` for compatibility with Python<3.8
+    ...
+
+
+def vectorize(pyfunc: typing.Callable[..., typing.Any], otypes: typing.Optional[type] = ...,
+              doc: typing.Optional[str] = ..., excluded: typing.Optional[typing.Set[str]] = ..., cache: bool = ...,
+              signature: typing.Optional[str] = ...) -> typing.Callable[..., ndarray[typing.Any]]:
     ...

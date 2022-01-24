@@ -6,7 +6,7 @@ import time
 from dax.experiment import *
 from dax.util.units import freq_to_str, time_to_str
 
-import artiq.coredevice.ad9910
+import artiq.coredevice.ad9910  # type: ignore[import]
 
 __all__ = ['TrapRfModule']
 
@@ -66,7 +66,7 @@ class TrapRfModule(DaxModule):
     _ramp_compression: bool
     _max_amp: float
 
-    def build(self, *, key: str,
+    def build(self, *, key: str,  # type: ignore[override]
               default_resonance_freq: float,
               default_resonance_diff: float,
               default_ramp_slope: float = 1.0 * dB,
@@ -203,9 +203,10 @@ class TrapRfModule(DaxModule):
         self.logger.debug(f'Ramp trap RF, generating ramp from {amp_list[0]:f} to {amp_list[-1]:f} dB')
 
         # Transform values to DDS amplitude scale
-        amp_scale_list = 10 ** (amp_list / 20)
-        assert max(amp_scale_list) <= 1.0, 'Amplitude scale can not be greater than 1.0'
-        assert min(amp_scale_list) >= 0.0, 'Amplitude scale can not be less than 0.0'
+        amp_scale_list = np.power(10.0, (amp_list / 20))  # type: ignore
+        assert isinstance(amp_scale_list, np.ndarray)  # To help the type checker
+        assert amp_scale_list.max() <= 1.0, 'Amplitude scale can not be greater than 1.0'
+        assert amp_scale_list.max() >= 0.0, 'Amplitude scale can not be less than 0.0'
 
         # Transform amplitudes to machine units (ASF)
         asf_list = np.vectorize(self._trap_rf.amplitude_to_asf)(amp_scale_list)
@@ -229,7 +230,7 @@ class TrapRfModule(DaxModule):
         self.set_dataset_sys(self._LAST_FREQ_KEY, freq)
 
     @kernel
-    def _ramp(self, ftw: TInt32, asf_list: TArray(TInt32), boot: TBool, enabled: TBool):
+    def _ramp(self, ftw: TInt32, asf_list: TArray(TInt32), boot: TBool, enabled: TBool):  # type: ignore[valid-type]
         # Reset core
         self.core.reset()
 
@@ -414,7 +415,8 @@ class TrapRfModule(DaxModule):
         :return: Last trap RF frequency
         :raises KeyError: Raised if no previous value was available
         """
-        return self.get_dataset_sys(self._LAST_FREQ_KEY)
+        freq: float = self.get_dataset_sys(self._LAST_FREQ_KEY)  # Helps the type checker
+        return freq
 
     @host_only
     def is_enabled(self) -> bool:
@@ -438,7 +440,8 @@ class TrapRfModule(DaxModule):
 
         # Return the enabled flag stored as a system dataset
         # Can raise a KeyError if the key was not set before, which means the state is ambiguous
-        return self.get_dataset_sys(self._ENABLED_KEY)
+        enabled: bool = self.get_dataset_sys(self._ENABLED_KEY)  # Helps the type checker
+        return enabled
 
     @host_only
     def update_resonance_freq(self, freq: float) -> None:
