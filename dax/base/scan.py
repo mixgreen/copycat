@@ -47,29 +47,30 @@ class _ScanProductGenerator:
         kernel_invariants: typing.Set[str]
 
         def __init__(self, **kwargs: typing.Any):
-            # Mark all attributes as kernel invariant
-            self.kernel_invariants = set(kwargs)
+            # Create kernel invariants attribute
+            super(_ScanProductGenerator._ScanItem, self).__setattr__('kernel_invariants', set())
+            # Set all kwargs as attributes
+            for k, v in kwargs.items():
+                setattr(self, k, v)
 
         def __repr__(self) -> str:
             """Return a string representation of this object."""
             attributes: str = ', '.join(f'{k}={getattr(self, k)}' for k in self.kernel_invariants)
             return f'{self.__class__.__name__}: {attributes}'
 
+        def __setattr__(self, key: str, value: typing.Any) -> None:
+            # Set attribute by calling super
+            super(_ScanProductGenerator._ScanItem, self).__setattr__(key, value)
+            # Add attribute to kernel invariants
+            self.kernel_invariants.add(key)
+
     class ScanPoint(_ScanItem):
-        def __init__(self, **kwargs: typing.Any):
-            # Call super
-            super(_ScanProductGenerator.ScanPoint, self).__init__(**kwargs)
-            # Set the attributes of this object
-            for k, v in kwargs.items():
-                setattr(self, k, v)
+        pass
 
     class ScanIndex(_ScanItem):
         def __init__(self, **kwargs: int):
-            # Call super
-            super(_ScanProductGenerator.ScanIndex, self).__init__(**kwargs)
-            # Set the attributes of this object
-            for k, v in kwargs.items():
-                setattr(self, k, np.int32(v))
+            # Convert all values and call super
+            super(_ScanProductGenerator.ScanIndex, self).__init__(**{k: np.int32(v) for k, v in kwargs.items()})
 
     def __init__(self, scans: _SD_T, *, enable_index: bool = True):
         """Create a new scan product generator.
