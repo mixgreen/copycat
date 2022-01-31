@@ -1,3 +1,4 @@
+import typing
 import unittest
 import collections
 
@@ -28,20 +29,17 @@ class SafetyContextTestCase(unittest.TestCase):
 
     def _test_callback_decorators(self, *, rpc_=False, cb, error):
         # Test if portable still works (should always work)
-        ReentrantSafetyContext(_TestSystem(self.managers), 'context',
-                               rpc_=rpc_, enter_cb=self._portable_fn, exit_cb=self._portable_fn)
+        self._init_context(self.managers, rpc_=rpc_, enter_cb=self._portable_fn, exit_cb=self._portable_fn)
 
         if error:
             # Expect error
             with self.assertRaises(BuildError):
-                ReentrantSafetyContext(_TestSystem(self.managers), 'context',
-                                       rpc_=rpc_, enter_cb=cb, exit_cb=self._portable_fn)
+                self._init_context(self.managers, rpc_=rpc_, enter_cb=cb, exit_cb=self._portable_fn)
             with self.assertRaises(BuildError):
-                ReentrantSafetyContext(_TestSystem(self.managers), 'context',
-                                       rpc_=rpc_, enter_cb=self._portable_fn, exit_cb=cb)
+                self._init_context(self.managers, rpc_=rpc_, enter_cb=self._portable_fn, exit_cb=cb)
         else:
             # No error
-            ReentrantSafetyContext(_TestSystem(self.managers), 'context', rpc_=rpc_, enter_cb=cb, exit_cb=cb)
+            self._init_context(self.managers, rpc_=rpc_, enter_cb=cb, exit_cb=cb)
 
     def test_callback_decorators(self):
         error_set = {
@@ -51,6 +49,9 @@ class SafetyContextTestCase(unittest.TestCase):
         for rpc_ in [False, True]:
             for cb in [self._kernel_fn, self._portable_fn, self._host_only_fn, self._rpc_fn]:
                 self._test_callback_decorators(rpc_=rpc_, cb=cb, error=(rpc_, cb) in error_set)
+
+    def _init_context(self, managers, *, module_name='context', **kwargs):
+        ReentrantSafetyContext(_TestSystem(managers), module_name, **kwargs)
 
     @kernel
     def _kernel_fn(self):
@@ -76,9 +77,8 @@ class _ReentrantTestSystem(_TestSystem):
 
     def build(self) -> None:  # type: ignore[override]
         super(_ReentrantTestSystem, self).build()
-        self.context = self.SAFETY_CONTEXT_TYPE(self, 'context',
-                                                enter_cb=self.enter, exit_cb=self.exit,
-                                                exit_error=self.EXIT_ERROR, rpc_=self.RPC)
+        self.context = self._init_context(enter_cb=self.enter, exit_cb=self.exit,
+                                          exit_error=self.EXIT_ERROR, rpc_=self.RPC)
         self.counter = collections.Counter({'enter': 0, 'exit': 0})
 
     def enter(self):
@@ -86,6 +86,9 @@ class _ReentrantTestSystem(_TestSystem):
 
     def exit(self):
         self.counter['exit'] += 1
+
+    def _init_context(self, *, module_name='context', **kwargs):
+        return self.SAFETY_CONTEXT_TYPE(self, module_name, **kwargs)
 
 
 class _ReentrantRpcTestSystem(_ReentrantTestSystem):
@@ -102,7 +105,7 @@ class _ReentrantExitErrorRpcTestSystem(_ReentrantTestSystem):
 
 
 class _NonReentrantTestSystem(_ReentrantTestSystem):
-    SAFETY_CONTEXT_TYPE = SafetyContext
+    SAFETY_CONTEXT_TYPE: typing.Any = SafetyContext
 
 
 class _NonReentrantRpcTestSystem(_NonReentrantTestSystem):
@@ -286,7 +289,7 @@ class ReentrantSafetyContextTestCase(unittest.TestCase):
         self.assertDictEqual(self.counter, {'enter': 1, 'exit': 1}, 'Counters did not match expected values')
 
 
-class ReentrantExitRpcContextTestCase(ReentrantSafetyContextTestCase):
+class ReentrantRpcSafetyContextTestCase(ReentrantSafetyContextTestCase):
     SYSTEM_TYPE = _ReentrantRpcTestSystem
 
 
