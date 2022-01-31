@@ -49,7 +49,7 @@ class SafetyContextTestCase(unittest.TestCase):
             for cb in [self._kernel_fn, self._portable_fn, self._host_only_fn, self._rpc_fn]:
                 self._test_callback_decorators(rpc_=rpc_, cb=cb, error=(rpc_, cb) in error_set)
 
-    def _init_context(self, managers, module_name='context', **kwargs):
+    def _init_context(self, managers, *, module_name='context', **kwargs):
         ReentrantSafetyContext(_TestSystem(managers), module_name, **kwargs)
 
     @kernel
@@ -86,7 +86,7 @@ class _ReentrantTestSystem(_TestSystem):
     def exit(self):
         self.counter['exit'] += 1
 
-    def _init_context(self, module_name='context', **kwargs):
+    def _init_context(self, *, module_name='context', **kwargs):
         return self.SAFETY_CONTEXT_TYPE(self, module_name, **kwargs)
 
 

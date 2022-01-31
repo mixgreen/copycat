@@ -1,7 +1,7 @@
 import typing
 import numpy as np
-from dax.base.system import DaxHasSystem
 
+import dax.base.system
 from dax.experiment import *
 from dax.util.artiq import is_kernel, is_host_only
 
@@ -11,13 +11,12 @@ __all__ = ['ReentrantSafetyContext', 'SafetyContext', 'SafetyContextError']
 class SafetyContextError(RuntimeError):
     """Class for safety context errors.
 
-    The constructor of this class should not be modified to maintain compatibility
-    with the ARTIQ compiler.
+    The constructor of this class should not be modified to maintain compatibility with the ARTIQ compiler.
     """
     pass
 
 
-class BaseReentrantSafetyContext(DaxHasSystem):
+class BaseReentrantSafetyContext(dax.base.system.DaxHasSystem):
     """Base context class for services and modules for safety controls when entering and exiting a context.
 
     Callback functions for enter and exit should be provided by the
@@ -241,5 +240,5 @@ class BaseNonReentrantSafetyContext(BaseReentrantSafetyContext):
 
 
 class SafetyContext(BaseNonReentrantSafetyContext, DaxModule):
-    """Context class for a module for safety controls when entering and exiting a non reentrant context"""
+    """Context class for a module for safety controls when entering and exiting a non-reentrant context"""
     pass

@@ -1,5 +1,9 @@
+import collections
+
+from dax.experiment import *
 from dax.services.safety_context import *
-from test.modules.safety_context_test import *
+
+import test.modules.safety_context_test as _test
 
 
 class _TestSystem(DaxSystem):
@@ -9,14 +13,22 @@ class _TestSystem(DaxSystem):
     DAX_INFLUX_DB_KEY = None
 
 
-class SafetyContextServiceTestCase(SafetyContextTestCase):
+class _ReentrantSafetyContextService(ReentrantSafetyContextService):
+    SERVICE_NAME = 'safety_context_service'
+
+
+class _SafetyContextService(SafetyContextService):
+    SERVICE_NAME = 'safety_context_service'
+
+
+class SafetyContextServiceTestCase(_test.SafetyContextTestCase):
 
     def _init_context(self, managers, **kwargs):
-        ReentrantSafetyContextService(_TestSystem(managers), **kwargs)
+        _ReentrantSafetyContextService(_TestSystem(managers), **kwargs)
 
 
 class _ReentrantServiceTestSystem(_TestSystem):
-    SAFETY_CONTEXT_TYPE = ReentrantSafetyContextService
+    SAFETY_CONTEXT_TYPE = _ReentrantSafetyContextService
     EXIT_ERROR = True
     RPC = False
 
@@ -50,7 +62,7 @@ class _ReentrantServiceExitErrorRpcTestSystem(_ReentrantServiceTestSystem):
 
 
 class _NonReentrantServiceTestSystem(_ReentrantServiceTestSystem):
-    SAFETY_CONTEXT_TYPE = SafetyContextService
+    SAFETY_CONTEXT_TYPE = _SafetyContextService
 
 
 class _NonReentrantServiceRpcTestSystem(_NonReentrantServiceTestSystem):
@@ -66,9 +78,8 @@ class _NonReentrantServiceExitErrorRpcTestSystem(_NonReentrantServiceTestSystem)
     RPC = True
 
 
-class ReentrantSafetyContextServiceTestCase(ReentrantSafetyContextTestCase):
+class ReentrantSafetyContextServiceTestCase(_test.ReentrantSafetyContextTestCase):
     SYSTEM_TYPE = _ReentrantServiceTestSystem
-    pass
 
 
 class ReentrantRpcSafetyContextServiceTestCase(ReentrantSafetyContextServiceTestCase):
@@ -83,10 +94,9 @@ class ReentrantExitErrorRpcSafetyContextServiceTestCase(ReentrantSafetyContextSe
     SYSTEM_TYPE = _ReentrantServiceExitErrorRpcTestSystem
 
 
-class NonReentrantSafetyContextServiceTestCase(NonReentrantSafetyContextTestCase,
+class NonReentrantSafetyContextServiceTestCase(_test.NonReentrantSafetyContextTestCase,
                                                ReentrantSafetyContextServiceTestCase):
     SYSTEM_TYPE = _NonReentrantServiceTestSystem
-    pass
 
 
 class NonReentrantRpcSafetyContextServiceTestCase(NonReentrantSafetyContextServiceTestCase):
