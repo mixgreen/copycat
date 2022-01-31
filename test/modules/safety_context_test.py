@@ -1,3 +1,4 @@
+import typing
 import unittest
 import collections
 
@@ -104,7 +105,7 @@ class _ReentrantExitErrorRpcTestSystem(_ReentrantTestSystem):
 
 
 class _NonReentrantTestSystem(_ReentrantTestSystem):
-    SAFETY_CONTEXT_TYPE = SafetyContext
+    SAFETY_CONTEXT_TYPE: typing.Any = SafetyContext
 
 
 class _NonReentrantRpcTestSystem(_NonReentrantTestSystem):

@@ -1,3 +1,5 @@
+import typing
+
 from dax.experiment import *
 from dax.modules.safety_context import SafetyContext, ReentrantSafetyContext, SafetyContextError
 
@@ -10,7 +12,7 @@ class _ReentrantTestSystem(DaxSystem):
     CORE_LOG_KEY = None
     DAX_INFLUX_DB_KEY = None
 
-    SAFETY_CONTEXT_TYPE = ReentrantSafetyContext
+    SAFETY_CONTEXT_TYPE: typing.Any = ReentrantSafetyContext
     EXIT_ERROR = True
     RPC = False
 

@@ -1,4 +1,5 @@
 import collections
+import typing
 
 from dax.experiment import *
 from dax.services.safety_context import *
@@ -28,7 +29,7 @@ class SafetyContextServiceTestCase(_test.SafetyContextTestCase):
 
 
 class _ReentrantServiceTestSystem(_TestSystem):
-    SAFETY_CONTEXT_TYPE = _ReentrantSafetyContextService
+    SAFETY_CONTEXT_TYPE: typing.Any = _ReentrantSafetyContextService
     EXIT_ERROR = True
     RPC = False
 
@@ -79,7 +80,7 @@ class _NonReentrantServiceExitErrorRpcTestSystem(_NonReentrantServiceTestSystem)
 
 
 class ReentrantSafetyContextServiceTestCase(_test.ReentrantSafetyContextTestCase):
-    SYSTEM_TYPE = _ReentrantServiceTestSystem
+    SYSTEM_TYPE: typing.Any = _ReentrantServiceTestSystem
 
 
 class ReentrantRpcSafetyContextServiceTestCase(ReentrantSafetyContextServiceTestCase):
@@ -96,7 +97,7 @@ class ReentrantExitErrorRpcSafetyContextServiceTestCase(ReentrantSafetyContextSe
 
 class NonReentrantSafetyContextServiceTestCase(_test.NonReentrantSafetyContextTestCase,
                                                ReentrantSafetyContextServiceTestCase):
-    SYSTEM_TYPE = _NonReentrantServiceTestSystem
+    SYSTEM_TYPE: typing.Any = _NonReentrantServiceTestSystem
 
 
 class NonReentrantRpcSafetyContextServiceTestCase(NonReentrantSafetyContextServiceTestCase):
