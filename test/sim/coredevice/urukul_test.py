@@ -68,6 +68,7 @@ class UrukulPeekTestCase(dax.sim.test_case.PeekTestCase):
         self.expect(self.env.dut, 'init', 'x')
         self.env.dut.init()
         self.expect(self.env.dut, 'init', 1)
+        self.expect(self.env.dut, 'profile', dax.sim.coredevice.urukul.DEFAULT_PROFILE)
 
     def test_get_att_mu(self):
         self.expect(self.env.dut, 'init_att', 'x')
@@ -127,6 +128,25 @@ class UrukulPeekTestCase(dax.sim.test_case.PeekTestCase):
             with self.subTest(state=state, ref=ref):
                 self.env.dut.cfg_switches(state)
                 self.expect(self.env.dut, 'sw', ref)
+
+    def test_set_profile(self):
+        self.expect(self.env.dut, 'profile', 'x')
+        self.env.dut.set_profile(dax.sim.coredevice.urukul.DEFAULT_PROFILE)
+        self.expect(self.env.dut, 'profile', dax.sim.coredevice.urukul.DEFAULT_PROFILE)
+
+    def test_io_update_notify(self):
+        notified = 0
+
+        def fn():
+            nonlocal notified
+            notified += 1
+
+        self.env.dut.io_update.subscribe(fn)
+        self.assertEqual(notified, 0)
+        self.env.dut.io_update.pulse(1 * us)
+        self.assertEqual(notified, 1)
+        self.env.dut.io_update.pulse_mu(8)
+        self.assertEqual(notified, 2)
 
 
 class CompileTestCase(compile_testcase.CoredeviceCompileTestCase):

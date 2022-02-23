@@ -1,8 +1,10 @@
 import random
 
 from artiq.experiment import *
+from artiq.coredevice.ad9910 import RAM_DEST_ASF  # type: ignore[import]
 
 import dax.sim.test_case
+import dax.sim.coredevice.urukul
 import dax.sim.coredevice.ad9910
 
 import test.sim.coredevice._compile_testcase as compile_testcase
@@ -58,11 +60,15 @@ class AD9910TestCase(dax.sim.test_case.PeekTestCase):
         self.expect(self.env.dut, 'phase', 'x')
         self.expect(self.env.dut, 'phase_mode', 'x')
         self.expect(self.env.dut, 'amp', 'x')
+        self.expect(self.env.dut, 'ram_enable', 'x')
+        self.expect(self.env.dut, 'ram_dest', 'x')
 
     def test_init(self):
         self._test_uninitialized()
         self.env.dut.init()
         self.expect(self.env.dut, 'init', 1)
+        self.expect(self.env.dut, 'ram_enable', 0)
+        self.expect(self.env.dut, 'ram_dest', '00')
 
     def test_phase_mode_timing(self):
         self._test_uninitialized()
@@ -120,6 +126,36 @@ class AD9910TestCase(dax.sim.test_case.PeekTestCase):
             value = ref[index:4 + index] if state else '0000'
             assert value[-1 - index] == str(state)
             self.expect(self.env.dut.cpld, 'sw', value)
+
+    def test_ram_conversion(self):
+        self.env.dut.frequency_to_ram([100 * MHz], [0])
+        self.env.dut.turns_to_ram([0.1], [0])
+        self.env.dut.amplitude_to_ram([0.1], [0])
+        self.env.dut.turns_amplitude_to_ram([0.1], [0.5], [0])
+
+    def test_ram_mode(self, *, num_steps=100):
+        amps = [i / num_steps for i in range(num_steps)]
+        amps_ram = [0] * num_steps
+        self.env.dut.amplitude_to_ram(amps, amps_ram)
+
+        self.env.dut.cpld.init()
+        self.env.dut.init()
+        self.env.dut.set_cfr1(ram_enable=0)
+        self.env.dut.cpld.io_update.pulse_mu(8)
+        self.expect(self.env.dut, 'ram_enable', 0)
+
+        self.env.dut.cpld.set_profile(dax.sim.coredevice.urukul.DEFAULT_PROFILE)
+        self.env.dut.set_profile_ram(start=0, end=100)
+        self.env.dut.cpld.io_update.pulse_mu(8)
+        self.env.dut.write_ram(amps_ram)
+        self.env.dut.set_frequency(200 * MHz)
+        self.env.dut.set_phase(0.0)
+        self.env.dut.set_amplitude(1.0)  # Just added for testing coverage
+        self.env.dut.set_cfr1(ram_enable=1, ram_destination=RAM_DEST_ASF)
+        self.expect(self.env.dut, 'ram_enable', 0)
+        self.env.dut.cpld.io_update.pulse_mu(8)
+        self.expect(self.env.dut, 'ram_enable', 1)
+        self.expect(self.env.dut, 'ram_dest', f'{RAM_DEST_ASF:02b}')
 
 
 class CompileTestCase(compile_testcase.CoredeviceCompileTestCase):
