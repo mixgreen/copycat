@@ -109,7 +109,8 @@ class Signal(abc.ABC):
             return value.lower()  # Value is legal (bool vector) (store lower case)
 
         # Value did not pass check
-        raise ValueError(f'Invalid value "{value}" for signal type "{self.type}"')
+        raise ValueError(f'Invalid value "{value}" for signal type {self.type.__name__}'
+                         f'{"" if self.size is None else f" with size {self.size}"}')
 
     @abc.abstractmethod
     def push(self, value: typing.Any, *,  # pragma: no cover
@@ -361,8 +362,9 @@ class VcdSignal(ConstantSignal):
         # Store reference to shared and mutable event buffer
         self._events = events
 
-        # Workaround for str init values (shows up as `z` instead of string value 'x')
-        init = '' if type_ is str and init is None else init
+        if type_ is str and init is None:
+            # Workaround for str init values (shows up as `z` instead of string value 'x')
+            init = ''
 
         # Register this variable with the VCD writer
         self._vcd = vcd_.register_var(scope.key, name, var_type=self._VCD_TYPE[type_], size=size, init=init)

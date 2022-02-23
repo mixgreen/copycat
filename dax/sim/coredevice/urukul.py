@@ -5,7 +5,7 @@
 import typing
 import numpy as np
 
-from artiq.language.core import kernel, delay, portable
+from artiq.language.core import kernel, delay, delay_mu, portable
 from artiq.language.units import us, ms, dB
 from artiq.language.types import TInt32, TFloat, TBool
 
@@ -13,6 +13,7 @@ from dax.sim.device import DaxSimDevice, ARTIQ_MAJOR_VERSION
 from dax.sim.signal import get_signal_manager
 
 DEFAULT_PROFILE = 0
+NUM_PROFILES = 8
 
 _NUM_CHANNELS = 4
 
@@ -32,6 +33,34 @@ def _state_to_sw_reg(state: typing.Union[int, np.int32]) -> typing.List[str]:
     return ['1' if (state >> i) & 0x1 else '0' for i in range(4)]
 
 
+class _IOUpdate:
+    """Dummy IO update device to capture updates and notify subscribers."""
+
+    def __init__(self):
+        self._subscribers = []
+
+    def pulse(self, t):
+        delay(t)
+        self._notify()
+
+    def pulse_mu(self, t):
+        delay_mu(t)
+        self._notify()
+
+    def _notify(self):
+        """Notify subscribers."""
+        for fn in self._subscribers:
+            fn()
+
+    def subscribe(self, fn):
+        """Subscribe to this IO update.
+
+        For internal simulation usage only.
+        """
+        assert callable(fn)
+        self._subscribers.append(fn)
+
+
 class CPLD(DaxSimDevice):
 
     def __init__(self, dmgr, clk_div=0, rf_sw=0, refclk=125e6, att=0x00000000, **kwargs):
@@ -44,16 +73,21 @@ class CPLD(DaxSimDevice):
         self.clk_div = clk_div
         self.att_reg: np.int32 = np.int32(np.int64(att))
 
+        # Add a dummy IO update device for subscribers
+        self.io_update = _IOUpdate()
+
         # Register signals
         signal_manager = get_signal_manager()
         self._init = signal_manager.register(self, 'init', bool, size=1)
         self._init_att = signal_manager.register(self, 'init_att', bool, size=1)
         self._att = [signal_manager.register(self, f'att_{i}', float) for i in range(4)]
         self._sw = signal_manager.register(self, 'sw', bool, size=4)
+        self._profile = signal_manager.register(self, 'profile', int, init='x')
 
         # Internal registers
         self._att_reg = [_mu_to_att(att >> (i * 8)) for i in range(4)]
         self._sw_reg = _state_to_sw_reg(rf_sw)
+        self._profile_reg = DEFAULT_PROFILE
 
     @kernel
     def cfg_write(self, cfg: TInt32):
@@ -69,6 +103,7 @@ class CPLD(DaxSimDevice):
         # Delays from ARTIQ code
         delay(100 * us)  # reset, slack
         delay(1 * ms)  # DDS wake up
+        self._profile.push(self._profile_reg)
         self._init.push(True)
 
     @kernel
@@ -138,7 +173,13 @@ class CPLD(DaxSimDevice):
 
     @kernel
     def set_profile(self, profile: TInt32):
-        raise NotImplementedError
+        assert 0 <= profile < NUM_PROFILES, 'Profile out of range'
+
+        if profile != DEFAULT_PROFILE:
+            raise NotImplementedError('CPLD simulation only supports the default profile at this moment')
+
+        self._profile_reg = profile
+        self._profile.push(self._profile_reg)
 
     if ARTIQ_MAJOR_VERSION >= 7:  # pragma: no cover
         @portable(flags={"fast-math"})

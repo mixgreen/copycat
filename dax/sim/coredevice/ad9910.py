@@ -8,16 +8,18 @@ from artiq.language.core import kernel, delay, portable, now_mu
 from artiq.language.units import us, ms, MHz
 from artiq.language.types import TBool, TInt32, TInt64, TFloat, TList, TTuple
 from artiq.coredevice.ad9910 import (PHASE_MODE_CONTINUOUS, PHASE_MODE_ABSOLUTE,  # type: ignore[import]
-                                     PHASE_MODE_TRACKING)
+                                     PHASE_MODE_TRACKING, RAM_DEST_FTW, RAM_DEST_POW, RAM_DEST_ASF, RAM_DEST_POWASF)
 
 from dax.sim.device import DaxSimDevice, ARTIQ_MAJOR_VERSION
 from dax.sim.signal import get_signal_manager
-from dax.sim.coredevice.urukul import CPLD, DEFAULT_PROFILE
+from dax.sim.coredevice.urukul import CPLD, DEFAULT_PROFILE, NUM_PROFILES
 
-_NUM_PROFILES = 8
 _PHASE_MODE_DEFAULT = -1
 _PHASE_MODE_DICT = {m: f'{m:02b}' for m in [PHASE_MODE_CONTINUOUS, PHASE_MODE_ABSOLUTE, PHASE_MODE_TRACKING]}
 """Phase mode conversion dict."""
+
+_RAM_DEST_DICT = {m: f'{m:02b}' for m in [RAM_DEST_FTW, RAM_DEST_POW, RAM_DEST_ASF, RAM_DEST_POWASF]}
+"""RAM destination conversion dict."""
 
 
 class AD9910(DaxSimDevice):
@@ -29,6 +31,7 @@ class AD9910(DaxSimDevice):
 
         # CPLD device
         self.cpld: CPLD = dmgr.get(cpld_device)
+        self.cpld.io_update.subscribe(self._io_update)
         # Chip select
         assert 4 <= chip_select <= 7
         self.chip_select = chip_select
@@ -67,6 +70,16 @@ class AD9910(DaxSimDevice):
         self._phase = signal_manager.register(self, 'phase', float)
         self._phase_mode = signal_manager.register(self, 'phase_mode', bool, size=2)
         self._amp = signal_manager.register(self, 'amp', float)
+        self._ram_enable = signal_manager.register(self, 'ram_enable', bool, size=1)
+        self._ram_dest = signal_manager.register(self, 'ram_dest', bool, size=2)
+
+        # Internal registers
+        self._ram_enable_reg = 0
+        self._ram_dest_reg = 0
+
+    def _io_update(self):
+        self._ram_enable.push(self._ram_enable_reg)
+        self._ram_dest.push(_RAM_DEST_DICT[self._ram_dest_reg])
 
     @kernel
     def set_phase_mode(self, phase_mode: TInt32):
@@ -99,7 +112,7 @@ class AD9910(DaxSimDevice):
 
     @kernel
     def write_ram(self, data: TList(TInt32)):  # type: ignore[valid-type]
-        raise NotImplementedError
+        pass  # Simplified RAM mode simulation
 
     @kernel
     def read_ram(self, data: TList(TInt32)):  # type: ignore[valid-type]
@@ -113,7 +126,18 @@ class AD9910(DaxSimDevice):
                      internal_profile: TInt32 = 0, ram_destination: TInt32 = 0,
                      ram_enable: TInt32 = 0, manual_osk_external: TInt32 = 0,
                      osk_enable: TInt32 = 0, select_auto_osk: TInt32 = 0):
-            raise NotImplementedError
+            assert power_down == 0
+            assert phase_autoclear == 0
+            assert drg_load_lrr == 0
+            assert drg_autoclear == 0
+            assert internal_profile == 0
+            assert manual_osk_external == 0
+            assert osk_enable == 0
+            assert select_auto_osk == 0
+
+            # Store configuration in registers
+            self._ram_enable_reg = ram_enable & 0x1
+            self._ram_dest_reg = ram_destination & 0x3
 
     else:  # pragma: no cover
         # ARTIQ 5
@@ -133,10 +157,19 @@ class AD9910(DaxSimDevice):
     def init(self, blind: TBool = False):
         # Delays from ARTIQ
         delay(50 * ms)  # slack
+        self.set_cfr1()
+        self.cpld.io_update.pulse(1 * us)
         delay(1 * ms)
         if not blind:
             delay(50 * us)  # slack
-        delay(1 * ms)
+        self.cpld.io_update.pulse(1 * us)
+        self.cpld.io_update.pulse(1 * us)
+        if self.pll_en:
+            self.cpld.io_update.pulse(1 * us)
+            if blind:
+                delay(100 * ms)
+            else:
+                delay(1 * ms)
         delay(10 * us)  # slack
         delay(1 * ms)
 
@@ -170,7 +203,9 @@ class AD9910(DaxSimDevice):
     def set_profile_ram(self, start: TInt32, end: TInt32, step: TInt32 = 1,
                         profile: TInt32 = DEFAULT_PROFILE, nodwell_high: TInt32 = 0,
                         zero_crossing: TInt32 = 0, mode: TInt32 = 1):
-        raise NotImplementedError
+        # Simplified RAM mode simulation
+        if profile != DEFAULT_PROFILE:
+            raise NotImplementedError('AD9910 simulation only supports the default profile at this moment')
 
     @kernel
     def set_ftw(self, ftw: TInt32):
@@ -213,32 +248,39 @@ class AD9910(DaxSimDevice):
 
     @portable(flags={"fast-math"})
     def frequency_to_ram(self, frequency: TList(TFloat), ram: TList(TInt32)):  # type: ignore[valid-type]
-        raise NotImplementedError
+        for i in range(len(ram)):
+            ram[i] = self.frequency_to_ftw(frequency[i])
 
     @portable(flags={"fast-math"})
     def turns_to_ram(self, turns: TList(TFloat), ram: TList(TInt32)):  # type: ignore[valid-type]
-        raise NotImplementedError
+        for i in range(len(ram)):
+            ram[i] = self.turns_to_pow(turns[i]) << 16
 
     @portable(flags={"fast-math"})
     def amplitude_to_ram(self, amplitude: TList(TFloat), ram: TList(TInt32)):  # type: ignore[valid-type]
-        raise NotImplementedError
+        for i in range(len(ram)):
+            ram[i] = self.amplitude_to_asf(amplitude[i]) << 18
 
     @portable(flags={"fast-math"})
     def turns_amplitude_to_ram(self, turns: TList(TFloat),  # type: ignore[valid-type]
                                amplitude: TList(TFloat), ram: TList(TInt32)):  # type: ignore[valid-type]
-        raise NotImplementedError
+        for i in range(len(ram)):
+            ram[i] = ((self.turns_to_pow(turns[i]) << 16) | self.amplitude_to_asf(amplitude[i]) << 2)
 
     @kernel
     def set_frequency(self, frequency: TFloat):
-        raise NotImplementedError
+        # Simplified RAM mode simulation
+        assert 0 * MHz <= frequency <= 400 * MHz, 'Frequency out of range'
 
     @kernel
     def set_amplitude(self, amplitude: TFloat):
-        raise NotImplementedError
+        # Simplified RAM mode simulation
+        assert 0.0 <= amplitude <= 1.0, 'Amplitude out of range'
 
     @kernel
     def set_phase(self, turns: TFloat):
-        raise NotImplementedError
+        # Simplified RAM mode simulation
+        assert 0.0 <= turns < 1.0, 'Phase out of range'
 
     def _set(self, frequency: TFloat, phase: TFloat = 0.0,
              amplitude: TFloat = 1.0, phase_mode: TInt32 = _PHASE_MODE_DEFAULT,
@@ -246,14 +288,19 @@ class AD9910(DaxSimDevice):
         assert 0 * MHz <= frequency <= 400 * MHz, 'Frequency out of range'
         assert 0.0 <= phase < 1.0, 'Phase out of range'
         assert 0.0 <= amplitude <= 1.0, 'Amplitude out of range'
-        assert 0 <= profile < _NUM_PROFILES, 'Profile out of range'
+        assert 0 <= profile < NUM_PROFILES, 'Profile out of range'
 
         if profile != DEFAULT_PROFILE:
-            raise NotImplementedError('AD9910 simulation does not support profiles at this moment')
+            raise NotImplementedError('AD9910 simulation only supports the default profile at this moment')
 
         # From ARTIQ
         if phase_mode == _PHASE_MODE_DEFAULT:
             phase_mode = self.phase_mode
+        if phase_mode != PHASE_MODE_CONTINUOUS:
+            self.set_cfr1()
+        self.cpld.io_update.pulse_mu(8)  # assumes 8 mu > t_SYN_CCLK
+        if phase_mode != PHASE_MODE_CONTINUOUS:
+            self.set_cfr1()
 
         # Manage signals
         self._freq.push(frequency)
@@ -293,8 +340,7 @@ class AD9910(DaxSimDevice):
         raise NotImplementedError
 
     @kernel
-    def tune_sync_delay(self,
-                        search_seed: TInt32 = 15) -> TTuple([TInt32, TInt32]):  # type: ignore[valid-type]
+    def tune_sync_delay(self, search_seed: TInt32 = 15) -> TTuple([TInt32, TInt32]):  # type: ignore[valid-type]
         raise NotImplementedError
 
     @kernel
