@@ -109,7 +109,8 @@ class Signal(abc.ABC):
             return value.lower()  # Value is legal (bool vector) (store lower case)
 
         # Value did not pass check
-        raise ValueError(f'Invalid value "{value}" for signal type "{self.type}"')
+        raise ValueError(f'Invalid value "{value}" for signal type {self.type.__name__}'
+                         f'{"" if self.size is None else f" with size {self.size}"}')
 
     @abc.abstractmethod
     def push(self, value: typing.Any, *,  # pragma: no cover
