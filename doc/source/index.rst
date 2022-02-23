@@ -26,6 +26,7 @@ User entry points
     dax.base
     dax.sim
     dax.modules
+    dax.services
     dax.interfaces
     dax.util
     dax

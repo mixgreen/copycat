@@ -1,10 +1,11 @@
 dax.services package
 ====================
 
-Module contents
----------------
+dax.services.safety\_context module
+-----------------------------------
 
-.. automodule:: dax.services
+.. automodule:: dax.services.safety_context
     :members:
     :undoc-members:
     :show-inheritance:
+    :ignore-module-all:

@@ -201,14 +201,14 @@ class BaseNonReentrantSafetyContext(BaseReentrantSafetyContext):
     ``enter_cb`` and ``exit_cb`` kwargs respectively.
 
     For the safety context to work correct, **host and kernel synchronization must be taken into account**.
-    See :func:`in_context` for more information.
+    See :func:`BaseReentrantSafetyContext.in_context` for more information.
 
     **This context is not reentrant** and has all portable functions.
     Other objects can check if the context is entered by using
-    the :func:`in_context` function.
+    the :func:`BaseReentrantSafetyContext.in_context` function.
 
     This class can optionally be subclassed and the class attribute
-    :attr:`EXCEPTION_TYPE` can be overridden if desired.
+    :attr:`BaseReentrantSafetyContext.EXCEPTION_TYPE` can be overridden if desired.
     """
 
     _safety_context_enter_error_msg: str

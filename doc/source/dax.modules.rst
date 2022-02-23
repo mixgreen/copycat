@@ -56,6 +56,7 @@ dax.modules.safety\_context module
     :members:
     :undoc-members:
     :show-inheritance:
+    :ignore-module-all:
 
 dax.modules.time\_resolved\_context module
 ------------------------------------------
