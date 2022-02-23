@@ -361,8 +361,9 @@ class VcdSignal(ConstantSignal):
         # Store reference to shared and mutable event buffer
         self._events = events
 
-        # Workaround for str init values (shows up as `z` instead of string value 'x')
-        init = '' if type_ is str and init is None else init
+        if type_ is str and init is None:
+            # Workaround for str init values (shows up as `z` instead of string value 'x')
+            init = ''
 
         # Register this variable with the VCD writer
         self._vcd = vcd_.register_var(scope.key, name, var_type=self._VCD_TYPE[type_], size=size, init=init)
