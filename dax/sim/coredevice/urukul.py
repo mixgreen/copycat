@@ -12,7 +12,7 @@ from artiq.language.types import TInt32, TFloat, TBool
 from dax.sim.device import DaxSimDevice, ARTIQ_MAJOR_VERSION
 from dax.sim.signal import get_signal_manager
 
-DEFAULT_PROFILE = 0
+DEFAULT_PROFILE = 0 if ARTIQ_MAJOR_VERSION < 7 else 7
 NUM_PROFILES = 8
 
 _NUM_CHANNELS = 4
