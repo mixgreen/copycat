@@ -205,30 +205,31 @@ class TTLInOutTestCase(TTLOutTestCase):
             s = self.env.dut.sample_get_nonrt()
             self.assertIn(s, {0, 1})
 
-    class TTLClockGenTestCase(_BaseTTLTestCase):
-        DUT = 'TTLClockGen'
 
-        def test_conversion(self):
-            for _ in range(_NUM_SAMPLES):
-                ftw = self.rng.uniform(0.0, 1 * GHz)
-                o = self.env.dut.frequency_to_ftw(self.env.dut.ftw_to_frequency(ftw))
-                self.assertAlmostEqual(ftw, o, delta=1 * Hz)
+class TTLClockGenTestCase(_BaseTTLTestCase):
+    DUT = 'TTLClockGen'
 
-        def test_set(self):
-            for _ in range(_NUM_SAMPLES):
-                f = self.rng.uniform(0.0, 1 * GHz)
-                self.env.dut.set(f)
-                self.expect(self.env.dut, 'freq', f)
+    def test_conversion(self):
+        for _ in range(_NUM_SAMPLES):
+            ftw = self.rng.uniform(0.0, 1 * GHz)
+            o = self.env.dut.frequency_to_ftw(self.env.dut.ftw_to_frequency(ftw))
+            self.assertAlmostEqual(ftw, o, delta=1 * Hz)
 
-        def test_set_mu(self):
-            for _ in range(_NUM_SAMPLES):
-                f = self.rng.uniform(0.0, 1 * GHz)
-                self.env.dut.set_mu(self.env.dut.frequency_to_ftw(f))
-                self.expect_close(self.env.dut, 'freq', f, places=-1)
+    def test_set(self):
+        for _ in range(_NUM_SAMPLES):
+            f = self.rng.uniform(0.0, 1 * GHz)
+            self.env.dut.set(f)
+            self.expect(self.env.dut, 'freq', f)
 
-        def test_stop(self):
-            self.env.dut.stop()
-            self.expect(self.env.dut, 'freq', 0 * Hz)
+    def test_set_mu(self):
+        for _ in range(_NUM_SAMPLES):
+            f = self.rng.uniform(0.0, 1 * GHz)
+            self.env.dut.set_mu(self.env.dut.frequency_to_ftw(f))
+            self.expect_close(self.env.dut, 'freq', f, places=-1)
+
+    def test_stop(self):
+        self.env.dut.stop()
+        self.expect(self.env.dut, 'freq', 0 * Hz)
 
 
 class TTLOutCompileTestCase(compile_testcase.CoredeviceCompileTestCase):
