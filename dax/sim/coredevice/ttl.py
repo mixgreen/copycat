@@ -9,7 +9,7 @@ import enum
 import numpy as np
 import typing
 
-from artiq.language.core import kernel, portable, delay, delay_mu, now_mu
+from artiq.language.core import kernel, portable, host_only, delay, delay_mu, now_mu
 from artiq.language.types import TInt32, TInt64
 
 from dax.sim.device import DaxSimDevice
@@ -17,10 +17,14 @@ from dax.sim.signal import get_signal_manager
 
 
 class TTLOut(DaxSimDevice):
+    _subscribers: typing.List[typing.Callable[[], typing.Any]]
 
     def __init__(self, dmgr: typing.Any, **kwargs: typing.Any):
         # Call super
         super(TTLOut, self).__init__(dmgr, **kwargs)
+
+        # Subscribers
+        self._subscribers = []
 
         # Register signals
         signal_manager = get_signal_manager()
@@ -47,12 +51,26 @@ class TTLOut(DaxSimDevice):
         self.on()
         delay_mu(duration)
         self.off()
+        self._pulse_notify()
 
     @kernel
     def pulse(self, duration):
         self.on()
         delay(duration)
         self.off()
+        self._pulse_notify()
+
+    @host_only
+    def pulse_subscribe(self, fn: typing.Callable[[], typing.Any]) -> None:
+        """Subscribe to :func:`pulse` and :func:`pulse_mu` calls of this device.
+
+        :param fn: Callback function for the notification
+        """
+        self._subscribers.append(fn)
+
+    def _pulse_notify(self):
+        for fn in self._subscribers:
+            fn()
 
 
 class TTLInOut(TTLOut):
@@ -85,7 +103,6 @@ class TTLInOut(TTLOut):
 
         # Random number generator for generating values
         self._rng = random.Random(seed)
-
         # Buffers to store simulated events
         self._edge_buffer = collections.deque()
         self._sample_buffer = collections.deque()

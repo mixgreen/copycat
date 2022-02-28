@@ -104,6 +104,19 @@ class TTLOutTestCase(_BaseTTLTestCase):
                     delay_mu(duration - 1)
                     self.expect(self.env.dut, 'state', True)
 
+    def test_pulse_notify(self):
+        notifications = 0
+
+        def notify():
+            nonlocal notifications
+            notifications += 1
+
+        self.env.dut.pulse_subscribe(notify)
+        self.env.dut.pulse_mu(10000)
+        self.assertEqual(notifications, 1)
+        self.env.dut.pulse(0.1)
+        self.assertEqual(notifications, 2)
+
 
 class TTLInOutTestCase(TTLOutTestCase):
     DUT = 'TTLInOut'
@@ -205,30 +218,40 @@ class TTLInOutTestCase(TTLOutTestCase):
             s = self.env.dut.sample_get_nonrt()
             self.assertIn(s, {0, 1})
 
-    class TTLClockGenTestCase(_BaseTTLTestCase):
-        DUT = 'TTLClockGen'
+    def test_core_reset(self):
+        self.assertTupleEqual((len(self.env.dut._edge_buffer), len(self.env.dut._sample_buffer)), (0, 0))
+        self.env.dut.gate_rising_mu(int(1e9 / _INPUT_FREQ))
+        self.assertTupleEqual((len(self.env.dut._edge_buffer), len(self.env.dut._sample_buffer)), (1, 0))
+        self.env.dut.sample_input()
+        self.assertTupleEqual((len(self.env.dut._edge_buffer), len(self.env.dut._sample_buffer)), (1, 1))
+        self.env.core.reset()
+        self.assertTupleEqual((len(self.env.dut._edge_buffer), len(self.env.dut._sample_buffer)), (0, 0))
 
-        def test_conversion(self):
-            for _ in range(_NUM_SAMPLES):
-                ftw = self.rng.uniform(0.0, 1 * GHz)
-                o = self.env.dut.frequency_to_ftw(self.env.dut.ftw_to_frequency(ftw))
-                self.assertAlmostEqual(ftw, o, delta=1 * Hz)
 
-        def test_set(self):
-            for _ in range(_NUM_SAMPLES):
-                f = self.rng.uniform(0.0, 1 * GHz)
-                self.env.dut.set(f)
-                self.expect(self.env.dut, 'freq', f)
+class TTLClockGenTestCase(_BaseTTLTestCase):
+    DUT = 'TTLClockGen'
 
-        def test_set_mu(self):
-            for _ in range(_NUM_SAMPLES):
-                f = self.rng.uniform(0.0, 1 * GHz)
-                self.env.dut.set_mu(self.env.dut.frequency_to_ftw(f))
-                self.expect_close(self.env.dut, 'freq', f, places=-1)
+    def test_conversion(self):
+        for _ in range(_NUM_SAMPLES):
+            ftw = self.rng.uniform(0.0, 1 * GHz)
+            o = self.env.dut.frequency_to_ftw(self.env.dut.ftw_to_frequency(ftw))
+            self.assertAlmostEqual(ftw, o, delta=1 * Hz)
 
-        def test_stop(self):
-            self.env.dut.stop()
-            self.expect(self.env.dut, 'freq', 0 * Hz)
+    def test_set(self):
+        for _ in range(_NUM_SAMPLES):
+            f = self.rng.uniform(0.0, 1 * GHz)
+            self.env.dut.set(f)
+            self.expect(self.env.dut, 'freq', f)
+
+    def test_set_mu(self):
+        for _ in range(_NUM_SAMPLES):
+            f = self.rng.uniform(0.0, 1 * GHz)
+            self.env.dut.set_mu(self.env.dut.frequency_to_ftw(f))
+            self.expect_close(self.env.dut, 'freq', f, places=-1)
+
+    def test_stop(self):
+        self.env.dut.stop()
+        self.expect(self.env.dut, 'freq', 0 * Hz)
 
 
 class TTLOutCompileTestCase(compile_testcase.CoredeviceCompileTestCase):
