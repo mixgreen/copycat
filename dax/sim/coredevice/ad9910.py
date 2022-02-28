@@ -33,7 +33,7 @@ class AD9910(DaxSimDevice):
 
         # CPLD device
         self.cpld: CPLD = dmgr.get(cpld_device)
-        self.cpld.io_update.subscribe(self._io_update)
+        self.cpld.io_update.pulse_subscribe(self._io_update)
         # Chip select
         assert 4 <= chip_select <= 7
         self.chip_select = chip_select
@@ -246,6 +246,7 @@ class AD9910(DaxSimDevice):
                 pow_ += dt * ftw * self.sysclk_per_mu >> 16
         return pow_
 
+    # noinspection PyUnusedLocal
     @kernel
     def set_profile_ram(self, start: TInt32, end: TInt32, step: TInt32 = 1,
                         profile: TInt32 = _DEFAULT_PROFILE_RAM, nodwell_high: TInt32 = 0,

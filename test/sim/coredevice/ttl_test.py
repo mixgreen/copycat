@@ -104,6 +104,19 @@ class TTLOutTestCase(_BaseTTLTestCase):
                     delay_mu(duration - 1)
                     self.expect(self.env.dut, 'state', True)
 
+    def test_pulse_notify(self):
+        notifications = 0
+
+        def notify():
+            nonlocal notifications
+            notifications += 1
+
+        self.env.dut.pulse_subscribe(notify)
+        self.env.dut.pulse_mu(10000)
+        self.assertEqual(notifications, 1)
+        self.env.dut.pulse(0.1)
+        self.assertEqual(notifications, 2)
+
 
 class TTLInOutTestCase(TTLOutTestCase):
     DUT = 'TTLInOut'
@@ -204,6 +217,15 @@ class TTLInOutTestCase(TTLOutTestCase):
         for _ in range(_NUM_SAMPLES):
             s = self.env.dut.sample_get_nonrt()
             self.assertIn(s, {0, 1})
+
+    def test_core_reset(self):
+        self.assertTupleEqual((len(self.env.dut._edge_buffer), len(self.env.dut._sample_buffer)), (0, 0))
+        self.env.dut.gate_rising_mu(int(1e9 / _INPUT_FREQ))
+        self.assertTupleEqual((len(self.env.dut._edge_buffer), len(self.env.dut._sample_buffer)), (1, 0))
+        self.env.dut.sample_input()
+        self.assertTupleEqual((len(self.env.dut._edge_buffer), len(self.env.dut._sample_buffer)), (1, 1))
+        self.env.core.reset()
+        self.assertTupleEqual((len(self.env.dut._edge_buffer), len(self.env.dut._sample_buffer)), (0, 0))
 
 
 class TTLClockGenTestCase(_BaseTTLTestCase):

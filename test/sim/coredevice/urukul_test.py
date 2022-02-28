@@ -28,29 +28,6 @@ class UrukulTestCase(unittest.TestCase):
                 self.assertEqual(a, o)
 
 
-_DEVICE_DB = {
-    'core': {
-        'type': 'local',
-        'module': 'artiq.coredevice.core',
-        'class': 'Core',
-        'arguments': {'host': None, 'ref_period': 1e-9}
-    },
-    "dut": {
-        "type": "local",
-        "module": "artiq.coredevice.urukul",
-        "class": "CPLD",
-        "arguments": {
-            "spi_device": "spi_urukul1",
-            "sync_device": None,
-            "io_update_device": "ttl_urukul1_io_update",
-            "refclk": 1e9,
-            "clk_sel": 1,
-            "clk_div": 3
-        }
-    },
-}
-
-
 class _Environment(HasEnvironment):
     def build(self):
         self.core = self.get_device('core')
@@ -59,10 +36,37 @@ class _Environment(HasEnvironment):
 
 class UrukulPeekTestCase(dax.sim.test_case.PeekTestCase):
     SEED = None
+    DEVICE_DB = {
+        'core': {
+            'type': 'local',
+            'module': 'artiq.coredevice.core',
+            'class': 'Core',
+            'arguments': {'host': None, 'ref_period': 1e-9}
+        },
+        'io_update': {
+            'type': 'local',
+            'module': 'artiq.coredevice.ttl',
+            'class': 'TTLOut',
+            'arguments': {},
+        },
+        "dut": {
+            "type": "local",
+            "module": "artiq.coredevice.urukul",
+            "class": "CPLD",
+            "arguments": {
+                "spi_device": "spi_urukul1",
+                "sync_device": None,
+                "io_update_device": "io_update",
+                "refclk": 1e9,
+                "clk_sel": 1,
+                "clk_div": 3
+            }
+        },
+    }
 
     def setUp(self) -> None:
         self.rng = random.Random(self.SEED)
-        self.env = self.construct_env(_Environment, device_db=_DEVICE_DB)
+        self.env = self.construct_env(_Environment, device_db=self.DEVICE_DB)
 
     def test_init(self):
         self.expect(self.env.dut, 'init', 'x')
@@ -141,12 +145,32 @@ class UrukulPeekTestCase(dax.sim.test_case.PeekTestCase):
             nonlocal notified
             notified += 1
 
-        self.env.dut.io_update.subscribe(fn)
+        self.env.dut.io_update.pulse_subscribe(fn)
         self.assertEqual(notified, 0)
         self.env.dut.io_update.pulse(1 * us)
         self.assertEqual(notified, 1)
-        self.env.dut.io_update.pulse_mu(8)
-        self.assertEqual(notified, 2)
+
+
+class UrukulRegIOUpdatePeekTestCase(UrukulPeekTestCase):
+    DEVICE_DB = {
+        'core': {
+            'type': 'local',
+            'module': 'artiq.coredevice.core',
+            'class': 'Core',
+            'arguments': {'host': None, 'ref_period': 1e-9}
+        },
+        "dut": {
+            "type": "local",
+            "module": "artiq.coredevice.urukul",
+            "class": "CPLD",
+            "arguments": {
+                "sync_device": None,
+                "refclk": 1e9,
+                "clk_sel": 1,
+                "clk_div": 3
+            }
+        },
+    }
 
 
 class CompileTestCase(compile_testcase.CoredeviceCompileTestCase):

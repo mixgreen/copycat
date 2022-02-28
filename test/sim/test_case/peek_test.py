@@ -436,6 +436,12 @@ _DEVICE_DB = {
     },
 
     # CPLD and DDS devices
+    'io_update': {
+        'type': 'local',
+        'module': 'artiq.coredevice.ttl',
+        'class': 'TTLOut',
+        'arguments': {},
+    },
     "cpld": {
         "type": "local",
         "module": "artiq.coredevice.urukul",
@@ -443,7 +449,7 @@ _DEVICE_DB = {
         "arguments": {
             "spi_device": "spi_urukul1",
             "sync_device": None,
-            "io_update_device": "ttl_urukul1_io_update",
+            "io_update_device": "io_update",
             "refclk": 1e9,
             "clk_sel": 1,
             "clk_div": 3

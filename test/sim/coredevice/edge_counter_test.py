@@ -118,6 +118,13 @@ class EdgeCounterTestCase(dax.sim.test_case.PeekTestCase):
             t, _ = self.env.ec.fetch_timestamped_count()
             self.assertEqual(t, -1)
 
+    def test_core_reset(self):
+        self.assertEqual(len(self.env.ec._count_buffer), 0)
+        self.env.ec.gate_rising_mu(100000)
+        self.assertEqual(len(self.env.ec._count_buffer), 1)
+        self.env.core.reset()
+        self.assertEqual(len(self.env.ec._count_buffer), 0)
+
 
 class CompileTestCase(compile_testcase.CoredeviceCompileTestCase):
     DEVICE_CLASS = dax.sim.coredevice.edge_counter.EdgeCounter

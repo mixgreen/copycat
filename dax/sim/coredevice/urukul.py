@@ -5,7 +5,7 @@
 import typing
 import numpy as np
 
-from artiq.language.core import kernel, delay, delay_mu, portable
+from artiq.language.core import kernel, host_only, delay, delay_mu, portable
 from artiq.language.units import us, ms, dB
 from artiq.language.types import TInt32, TFloat, TBool
 
@@ -33,37 +33,37 @@ def _state_to_sw_reg(state: typing.Union[int, np.int32]) -> typing.List[str]:
     return ['1' if (state >> i) & 0x1 else '0' for i in range(4)]
 
 
-class _IOUpdate:
-    """Dummy IO update device to capture updates and notify subscribers."""
+class _RegIOUpdate:
+    _subscribers: typing.List[typing.Callable[[], typing.Any]]
 
-    def __init__(self):
+    def __init__(self, cpld):
+        # Store attributes
+        self.cpld = cpld
+        # Subscribers
         self._subscribers = []
-
-    def pulse(self, t):
-        delay(t)
-        self._notify()
 
     def pulse_mu(self, t):
         delay_mu(t)
-        self._notify()
 
-    def _notify(self):
-        """Notify subscribers."""
+        # Notify
         for fn in self._subscribers:
             fn()
 
-    def subscribe(self, fn):
-        """Subscribe to this IO update.
+    def pulse(self, t):
+        self.pulse_mu(self.cpld.core.seconds_to_mu(t))
 
-        For internal simulation usage only.
+    @host_only
+    def pulse_subscribe(self, fn: typing.Callable[[], typing.Any]) -> None:
+        """Subscribe to :func:`pulse` and :func:`pulse_mu` calls of this device.
+
+        :param fn: Callback function for the notification
         """
-        assert callable(fn)
         self._subscribers.append(fn)
 
 
 class CPLD(DaxSimDevice):
 
-    def __init__(self, dmgr, clk_div=0, rf_sw=0, refclk=125e6, att=0x00000000, **kwargs):
+    def __init__(self, dmgr, io_update_device=None, clk_div=0, rf_sw=0, refclk=125e6, att=0x00000000, **kwargs):
         # Call super
         super(CPLD, self).__init__(dmgr, **kwargs)
 
@@ -71,10 +71,11 @@ class CPLD(DaxSimDevice):
         self.refclk = refclk
         assert 0 <= clk_div <= 3
         self.clk_div = clk_div
+        if io_update_device is not None:
+            self.io_update = dmgr.get(io_update_device)
+        else:
+            self.io_update = _RegIOUpdate(self)
         self.att_reg: np.int32 = np.int32(np.int64(att))
-
-        # Add a dummy IO update device for subscribers
-        self.io_update = _IOUpdate()
 
         # Register signals
         signal_manager = get_signal_manager()
