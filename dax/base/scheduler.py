@@ -21,7 +21,7 @@ import artiq.experiment
 import artiq.master.worker_db
 import artiq.tools
 import sipyco.pc_rpc
-from sipyco import pyon
+import sipyco.pyon
 
 import dax.base.system
 import dax.base.exceptions
@@ -973,7 +973,7 @@ class CalibrationJob(BaseJob):
                     finally:
                         check_meta = {
                             'rid': self._scheduler.rid,
-                            'arguments': pyon.encode(self._check_args)
+                            'arguments': sipyco.pyon.encode(self._check_args)
                         }
                         self._check_managers.write_hdf5(check_name, metadata=check_meta)
                 if self._cal_analyze:
@@ -982,7 +982,7 @@ class CalibrationJob(BaseJob):
                     finally:
                         cal_meta = {
                             'rid': self._scheduler.rid,
-                            'arguments': pyon.encode(self._cal_args)
+                            'arguments': sipyco.pyon.encode(self._cal_args)
                         }
                         self._cal_managers.write_hdf5(cal_name, metadata=cal_meta)
 
