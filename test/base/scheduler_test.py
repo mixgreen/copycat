@@ -633,6 +633,14 @@ class LazySchedulerTestCase(unittest.TestCase):
         self.assertEqual(_JobA.get_name(), '_JobA')
         self.assertEqual(_JobA.__name__, '_JobA')
 
+    def test_custom_job_name(self):
+
+        class CustomNameJob(Job):
+            NAME = 'Foo'
+
+        self.assertEqual(CustomNameJob.__name__, 'CustomNameJob')
+        self.assertEqual(CustomNameJob.get_name(), CustomNameJob.NAME)
+
     def test_create_scheduler(self):
         with self.assertRaises(AssertionError, msg='Scheduler without name did not raise'):
             class S(DaxScheduler):

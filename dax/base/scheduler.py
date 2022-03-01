@@ -21,7 +21,7 @@ import artiq.experiment
 import artiq.master.worker_db
 import artiq.tools
 import sipyco.pc_rpc
-from sipyco import pyon
+import sipyco.pyon
 
 import dax.base.system
 import dax.base.exceptions
@@ -237,6 +237,8 @@ else:
 class Node(dax.base.system.DaxHasKey, abc.ABC):
     """Abstract node class for the scheduler."""
 
+    NAME: typing.ClassVar[str] = ''
+    """Name of this node (class name by default)."""
     INTERVAL: typing.ClassVar[typing.Optional[str]] = None
     """Interval to run this node, defaults to no interval."""
     DEPENDENCIES: typing.ClassVar[typing.Collection[typing.Type[Node]]] = []
@@ -258,7 +260,8 @@ class Node(dax.base.system.DaxHasKey, abc.ABC):
         :param kwargs: Keyword arguments passed to the superclass
         """
 
-        # Check interval and dependencies
+        # Check class attributes
+        assert isinstance(self.NAME, str), 'Name must be of type str'
         assert isinstance(self.INTERVAL, str) or self.INTERVAL is None, 'Interval must be of type str or None'
         assert isinstance(self.DEPENDENCIES, collections.abc.Collection), 'The dependencies must be a collection'
         assert all(issubclass(node, Node) for node in self.DEPENDENCIES), 'All dependencies must be subclasses of Node'
@@ -416,7 +419,7 @@ class Node(dax.base.system.DaxHasKey, abc.ABC):
 
         :return: The name of this node as a string
         """
-        return cls.__name__
+        return cls.NAME if cls.NAME else cls.__name__
 
 
 class BaseJob(Node, abc.ABC):
@@ -796,7 +799,7 @@ class CalibrationJob(BaseJob):
 
     @classmethod
     def _meta_exp_name(cls) -> str:
-        return f'_{cls.__name__}MetaExp'
+        return f'_{cls.get_name()}MetaExp'
 
     @classmethod  # noqa: C901
     def build_meta_exp(cls, file: str) -> typing.Tuple[typing.Type[artiq.experiment.Experiment], str]:  # noqa: C901
@@ -927,7 +930,7 @@ class CalibrationJob(BaseJob):
                         for name, key_dict in self._dep_dataset_keys.items():
                             self.set_dataset(key_dict[cls.DIAGNOSE_FLAG_KEY], True,
                                              broadcast=True, persist=True, archive=False)
-                        self._dax_scheduler.submit(cls.__name__, policy=str(Policy.GREEDY), depth=1, start_depth=1,
+                        self._dax_scheduler.submit(cls.get_name(), policy=str(Policy.GREEDY), depth=1, start_depth=1,
                                                    priority=self._scheduler.priority + 1)
                         dax.util.artiq.pause_strict_priority(self._scheduler)
                         self.logger.info('Diagnose finished, continuing to calibration')
@@ -973,7 +976,7 @@ class CalibrationJob(BaseJob):
                     finally:
                         check_meta = {
                             'rid': self._scheduler.rid,
-                            'arguments': pyon.encode(self._check_args)
+                            'arguments': sipyco.pyon.encode(self._check_args)
                         }
                         self._check_managers.write_hdf5(check_name, metadata=check_meta)
                 if self._cal_analyze:
@@ -982,7 +985,7 @@ class CalibrationJob(BaseJob):
                     finally:
                         cal_meta = {
                             'rid': self._scheduler.rid,
-                            'arguments': pyon.encode(self._cal_args)
+                            'arguments': sipyco.pyon.encode(self._cal_args)
                         }
                         self._cal_managers.write_hdf5(cal_name, metadata=cal_meta)
 
