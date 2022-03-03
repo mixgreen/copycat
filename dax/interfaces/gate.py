@@ -170,6 +170,34 @@ class GateInterface(DaxInterface, abc.ABC):  # pragma: no cover
     """Two-qubit gates"""
 
     @optional
+    def xx(self, control: TInt32, target: TInt32):
+        """Pi/4 XX rotation on two qubits.
+
+        :param control: Control qubit
+        :param target: Target qubit
+        """
+        raise NotImplementedError
+
+    @optional
+    def xx_dag(self, control: TInt32, target: TInt32):
+        """-Pi/4 XX rotation on two qubits.
+
+        :param control: Control qubit
+        :param target: Target qubit
+        """
+        raise NotImplementedError
+
+    @optional
+    def rxx(self, theta: TFloat, control: TInt32, target: TInt32):
+        """Arbitrary XX rotation on two qubits.
+
+        :param theta: Rotation angle in radians (:attr:`pi` available for usage)
+        :param control: Control qubit
+        :param target: Target qubit
+        """
+        raise NotImplementedError
+
+    @optional
     def cz(self, control: TInt32, target: TInt32):
         """Controlled Z gate.
 

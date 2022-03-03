@@ -36,7 +36,7 @@ class _MinimalOperationInstance(dax.interfaces.operation.OperationInterface):
 
 
 class OperationInstance(_MinimalOperationInstance):
-    """This should be a correct implementation of the operation interface."""
+    """This should be a complete implementation of the operation interface."""
 
     @kernel
     def prep_0(self, qubit: TInt32):
@@ -112,6 +112,18 @@ class OperationInstance(_MinimalOperationInstance):
 
     @kernel
     def rphi(self, theta: TFloat, phi: TFloat, qubit: TInt32):
+        pass
+
+    @kernel
+    def xx(self, control: TInt32, target: TInt32):
+        pass
+
+    @kernel
+    def xx_dag(self, control: TInt32, target: TInt32):
+        pass
+
+    @kernel
+    def rxx(self, theta: TFloat, control: TInt32, target: TInt32):
         pass
 
     @kernel
