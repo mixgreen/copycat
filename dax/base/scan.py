@@ -28,7 +28,7 @@ else:
 
 
 def _is_valid_key(key: str) -> bool:
-    """Return true if the given key is valid."""
+    """Return :const:'True' if the given key is valid."""
     assert isinstance(key, str), 'The given key should be a string'
     return bool(_KEY_RE.fullmatch(key))
 
@@ -195,6 +195,7 @@ class DaxScan(dax.base.system.DaxBase, abc.ABC):
     """Attribute name of the core device."""
 
     __in_build: bool
+    __terminated: bool
     _dax_scan_scannables: _SD_T
     _dax_scan_scheduler: typing.Any
     _dax_scan_infinite: bool
@@ -232,6 +233,9 @@ class DaxScan(dax.base.system.DaxBase, abc.ABC):
         # Check that _run_dax_scan_setup/cleanup aren't kernels
         if any(dax.util.artiq.is_kernel(f) for f in [self._run_dax_scan_setup, self._run_dax_scan_cleanup]):
             raise TypeError('_run_dax_scan_*() functions cannot be kernels')
+
+        # Initialize variables
+        self.__terminated = False
 
         # Call super and forward arguments, for compatibility with other libraries
         # noinspection PyArgumentList
@@ -280,11 +284,16 @@ class DaxScan(dax.base.system.DaxBase, abc.ABC):
 
     @property
     def is_infinite_scan(self) -> bool:
-        """True if the scan was set to be an infinite scan."""
+        """:const:`True` if the scan was set to be an infinite scan."""
         if hasattr(self, '_dax_scan_infinite'):
             return self._dax_scan_infinite
         else:
             raise AttributeError('is_scan_infinite can only be obtained after build() was called')
+
+    @property
+    def is_terminated_scan(self) -> bool:
+        """:const:`True` if the scan was terminated."""
+        return self.__terminated
 
     def add_scan(self, key: str, name: str, scannable: Scannable, *,
                  group: typing.Optional[str] = None, tooltip: typing.Optional[str] = None) -> None:
@@ -514,6 +523,7 @@ class DaxScan(dax.base.system.DaxBase, abc.ABC):
 
         except TerminationRequested:
             # Scan was terminated
+            self.__terminated = True
             if self.is_infinite_scan:
                 self.logger.info('Infinite scan was terminated by user request')
             else:

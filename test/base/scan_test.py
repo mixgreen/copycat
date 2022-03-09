@@ -250,6 +250,9 @@ class Scan1TestCase(unittest.TestCase):
     def test_is_infinite(self):
         self.assertFalse(self.scan.is_infinite_scan, 'Scan reported incorrectly it was infinite')
 
+    def test_is_terminated(self):
+        self.assertFalse(self.scan.is_terminated_scan)
+
     def test_call_counters(self):
         # Run the scan
         self.scan.run()
@@ -544,8 +547,12 @@ class ScanTerminateTestCase(unittest.TestCase):
         self.managers.close()
 
     def test_call_counters(self):
+        # Verify flag
+        self.assertFalse(self.scan.is_terminated_scan)
         # Run the scan
         self.scan.run()
+        # Verify flag
+        self.assertTrue(self.scan.is_terminated_scan)
 
         # Verify counters
         counter_ref = {
