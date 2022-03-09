@@ -32,7 +32,11 @@ class _PmtMonitorBase(DaxClient, Experiment, abc.ABC):
     """Default buffer size in samples."""
     MAX_BUFFER_SIZE: typing.ClassVar[int] = 32
     """Maximum buffer size in samples."""
-    DATA_CLEANUP_THRESHOLD_MULTIPLIER: typing.ClassVar[int] = 12
+    DEFAULT_SLIDING_WINDOW_SIZE: typing.ClassVar[int] = 120
+    """Default sliding window size in seconds (zero for no sliding window)."""
+    DEFAULT_APPLET_UPDATE_DELAY: typing.ClassVar[float] = 0.1
+    """Default applet update delay in seconds."""
+    DATA_CLEANUP_THRESHOLD_MULTIPLIER: typing.ClassVar[int] = 4
     """Data cleanup will occur when the number of samples exceeds the window size multiplied by this value."""
     DATA_CLEANUP_PRESERVE_MULTIPLIER: typing.ClassVar[int] = 2
     """Data cleanup will preserve the number of samples in a window multiplied by this value."""
@@ -57,6 +61,10 @@ class _PmtMonitorBase(DaxClient, Experiment, abc.ABC):
         assert isinstance(self.MAX_BUFFER_SIZE, int), 'Maximum buffer size must be of type int'
         assert self.MAX_BUFFER_SIZE > 0, 'Maximum buffer size must be greater than zero'
         assert self.DEFAULT_BUFFER_SIZE <= self.MAX_BUFFER_SIZE, 'Default buffer size greater than the max buffer size'
+        assert isinstance(self.DEFAULT_SLIDING_WINDOW_SIZE, int), 'Default sliding window size must be of type int'
+        assert self.DEFAULT_SLIDING_WINDOW_SIZE >= 0, 'Default sliding window size must be zero or greater'
+        assert isinstance(self.DEFAULT_APPLET_UPDATE_DELAY, float), 'Default applet update delay must be of type float'
+        assert self.DEFAULT_APPLET_UPDATE_DELAY > 0.0, 'Default applet update delay must be greater than zero'
         assert isinstance(self.DATA_CLEANUP_THRESHOLD_MULTIPLIER, int), \
             'Data cleanup threshold multiplier must be of type int'
         assert self.DATA_CLEANUP_THRESHOLD_MULTIPLIER > 0, 'Data cleanup threshold multiplier must be greater than zero'
@@ -85,23 +93,31 @@ class _PmtMonitorBase(DaxClient, Experiment, abc.ABC):
         self.update_kernel_invariants('scheduler')
 
         # Standard arguments
-        self.detection_window: float = self.get_argument('PMT detection window size',
-                                                         NumberValue(default=100 * ms, unit='ms', min=0.0),
-                                                         tooltip='Detection window duration')
-        self.detection_delay: float = self.get_argument('PMT detection delay',
-                                                        NumberValue(default=0 * ms, unit='ms', min=0.0),
-                                                        tooltip='Delay between detection windows (when set to zero, '
-                                                                'the delay will be 10 machine units)')
-        self.buffer_size: int = self.get_argument('Buffer size',
-                                                  NumberValue(default=self.DEFAULT_BUFFER_SIZE, min=1,
-                                                              max=self.MAX_BUFFER_SIZE, ndecimals=0, step=1),
-                                                  tooltip='Buffer size in number of samples')
-        self.count_scale_label: str = self.get_argument('PMT count scale',
-                                                        EnumerationValue(list(self._COUNT_SCALES), default='kHz'),
-                                                        tooltip='Scaling factor for the PMT counts graph')
-        self.sliding_window: int = self.get_argument('Data window size',
-                                                     NumberValue(default=120 * s, unit='s', min=0, ndecimals=0, step=1),
-                                                     tooltip='Data window size (use 0 for infinite window size)')
+        self.detection_window: float = self.get_argument(
+            'PMT detection window size',
+            NumberValue(100 * ms, unit='ms', min=0.0),
+            tooltip='Detection window duration'
+        )
+        self.detection_delay: float = self.get_argument(
+            'PMT detection delay',
+            NumberValue(0 * ms, unit='ms', min=0.0),
+            tooltip='Delay between detection windows (when set to zero, the delay will be 8 machine units)'
+        )
+        self.buffer_size: int = self.get_argument(
+            'Buffer size',
+            NumberValue(self.DEFAULT_BUFFER_SIZE, min=1, max=self.MAX_BUFFER_SIZE, ndecimals=0, step=1),
+            tooltip='Buffer size in number of samples'
+        )
+        self.count_scale_label: str = self.get_argument(
+            'PMT count scale',
+            EnumerationValue(list(self._COUNT_SCALES), default='kHz'),
+            tooltip='Scaling factor for the PMT counts graph'
+        )
+        self.sliding_window: int = self.get_argument(
+            'Data window size',
+            NumberValue(self.DEFAULT_SLIDING_WINDOW_SIZE, unit='s', min=0, ndecimals=0, step=10),
+            tooltip='Data window size (use 0 for infinite window size)'
+        )
         self.update_kernel_invariants('detection_window', 'buffer_size')
 
         # Add extra arguments
@@ -109,41 +125,56 @@ class _PmtMonitorBase(DaxClient, Experiment, abc.ABC):
         self.add_arguments()
 
         # Dataset related arguments
-        self.reset_data: bool = self.get_argument('Reset data',
-                                                  BooleanValue(default=True),
-                                                  group='Dataset',
-                                                  tooltip='Clear old data at start')
-        self.reset_data_resume: bool = self.get_argument('Reset data when resuming',
-                                                         BooleanValue(default=False),
-                                                         group='Dataset',
-                                                         tooltip='Clear old data when resuming from a pause')
-        self.auto_data_cleanup: bool = self.get_argument('Automatic data cleanup',
-                                                         BooleanValue(default=True),
-                                                         group='Dataset',
-                                                         tooltip='Clean data outside the window periodically (does not '
-                                                                 'clean data if data window size is infinite)')
-        self.archive_data: bool = self.get_argument('Archive data',
-                                                    BooleanValue(default=False),
-                                                    group='Dataset',
-                                                    tooltip='Archive the obtained data in the HDF5 output file')
-        self.dataset_key: str = self.get_argument('Dataset key',
-                                                  StringValue(default=self.DEFAULT_DATASET),
-                                                  group='Dataset',
-                                                  tooltip='Dataset key to which plotting data will be written')
+        self.reset_data: bool = self.get_argument(
+            'Reset data',
+            BooleanValue(True),
+            group='Dataset',
+            tooltip='Clear old data at start'
+        )
+        self.reset_data_resume: bool = self.get_argument(
+            'Reset data when resuming',
+            BooleanValue(False),
+            group='Dataset',
+            tooltip='Clear old data when resuming from a pause'
+        )
+        self.auto_data_cleanup: bool = self.get_argument(
+            'Automatic data cleanup',
+            BooleanValue(True),
+            group='Dataset',
+            tooltip='Clean data outside the window periodically (does not clean data if data window size is infinite)'
+        )
+        self.archive_data: bool = self.get_argument(
+            'Archive data',
+            BooleanValue(False),
+            group='Dataset',
+            tooltip='Archive the obtained data in the HDF5 output file'
+        )
+        self.dataset_key: str = self.get_argument(
+            'Dataset key',
+            StringValue(self.DEFAULT_DATASET),
+            group='Dataset',
+            tooltip='Dataset key to which plotting data will be written'
+        )
 
         # Applet specific arguments
-        self.create_applet: bool = self.get_argument('Create applet',
-                                                     BooleanValue(default=True),
-                                                     group='Applet',
-                                                     tooltip='Call CCB create applet command at start')
-        self.applet_update_delay: float = self.get_argument('Applet update delay',
-                                                            NumberValue(default=0.1 * s, unit='s', min=0.0),
-                                                            group='Applet',
-                                                            tooltip='Delay between plot interface updates')
-        self.applet_auto_close: bool = self.get_argument('Close applet automatically',
-                                                         BooleanValue(default=True),
-                                                         group='Applet',
-                                                         tooltip='Close applet when experiment is terminated')
+        self.create_applet: bool = self.get_argument(
+            'Create applet',
+            BooleanValue(True),
+            group='Applet',
+            tooltip='Call CCB create applet command at start'
+        )
+        self.applet_update_delay: float = self.get_argument(
+            'Applet update delay',
+            NumberValue(self.DEFAULT_APPLET_UPDATE_DELAY, unit='s', min=0.1, step=0.1),
+            group='Applet',
+            tooltip='Delay between plot interface updates'
+        )
+        self.applet_auto_close: bool = self.get_argument(
+            'Close applet automatically',
+            BooleanValue(True),
+            group='Applet',
+            tooltip='Close applet when experiment is terminated'
+        )
         self._add_arguments_applet()
 
     def _add_arguments_internal(self) -> None:
@@ -396,7 +427,9 @@ class PmtMonitor(_PmtMonitorBase):
     """Key for big number applet type."""
 
     def _add_arguments_internal(self) -> None:
+        assert isinstance(self.DEFAULT_MOVING_AVERAGE_PLOT_XY, int)
         assert self.DEFAULT_MOVING_AVERAGE_PLOT_XY >= 0, 'Default moving average window size must be zero or greater'
+        assert isinstance(self.DEFAULT_NUM_DIGITS_BIG_NUMBER, int)
         assert self.DEFAULT_NUM_DIGITS_BIG_NUMBER >= 0, 'Default number of digits must be zero or greater'
 
         # Dict with available applet types
@@ -406,29 +439,34 @@ class PmtMonitor(_PmtMonitorBase):
         }
 
         # Arguments
-        self.pmt_channel: int = self.get_argument('PMT channel',
-                                                  NumberValue(default=0, step=1, min=0, max=len(self.pmt_array) - 1,
-                                                              ndecimals=0),
-                                                  tooltip='PMT channel to monitor')
-        self.applet_type: str = self.get_argument('Applet type',
-                                                  EnumerationValue(list(self._applet_types), default=self._PLOT_XY),
-                                                  tooltip='Choose an applet type')
+        self.pmt_channel: int = self.get_argument(
+            'PMT channel',
+            NumberValue(0, step=1, min=0, max=len(self.pmt_array) - 1, ndecimals=0),
+            tooltip='PMT channel to monitor'
+        )
+        self.applet_type: str = self.get_argument(
+            'Applet type',
+            EnumerationValue(list(self._applet_types), default=self._PLOT_XY),
+            tooltip='Choose an applet type'
+        )
         self.update_kernel_invariants('pmt_channel')
 
     def _add_arguments_applet(self) -> None:
         # Plot XY applet args
-        self.moving_average: int = self.get_argument('Moving average',
-                                                     NumberValue(default=self.DEFAULT_MOVING_AVERAGE_PLOT_XY, step=1,
-                                                                 min=0, ndecimals=0),
-                                                     group='Applet',
-                                                     tooltip='Number of samples used for uniform moving average window '
-                                                             '(0 to disable moving average, for plot XY applet only)')
+        self.moving_average: int = self.get_argument(
+            'Moving average',
+            NumberValue(self.DEFAULT_MOVING_AVERAGE_PLOT_XY, step=1, min=0, ndecimals=0),
+            group='Applet',
+            tooltip='Number of samples used for uniform moving average window '
+                    '(0 to disable moving average, for plot XY applet only)'
+        )
         # Big number applet args
-        self.num_digits: int = self.get_argument('Num digits',
-                                                 NumberValue(default=self.DEFAULT_NUM_DIGITS_BIG_NUMBER, step=1,
-                                                             min=0, max=99, ndecimals=0),
-                                                 group='Applet',
-                                                 tooltip='Number of digits to show (for big number applet only)')
+        self.num_digits: int = self.get_argument(
+            'Num digits',
+            NumberValue(self.DEFAULT_NUM_DIGITS_BIG_NUMBER, step=1, min=0, max=99, ndecimals=0),
+            group='Applet',
+            tooltip='Number of digits to show (for big number applet only)'
+        )
 
     def _create_applet(self, *args: typing.Any, **kwargs: typing.Any) -> None:
         if self.applet_type == self._PLOT_XY:
@@ -480,14 +518,19 @@ class MultiPmtMonitor(_PmtMonitorBase):
         assert all(t is None or isinstance(t, str) for t in self.TITLES), 'Titles must be of type str or None'
 
         # Arguments
-        self.separate_applets: bool = self.get_argument('Separate applets',
-                                                        BooleanValue(False),
-                                                        tooltip='Create a separate applet for each PMT')
+        self.separate_applets: bool = self.get_argument(
+            'Separate applets',
+            BooleanValue(False),
+            tooltip='Create a separate applet for each PMT'
+        )
 
         # Channels
         self.enabled_channels: typing.List[bool] = [
-            self.get_argument(f'Channel {i}', BooleanValue(True), group='Channels',
-                              tooltip=f'Enable monitoring for channel {i}')
+            self.get_argument(
+                f'Channel {i}',
+                BooleanValue(True), group='Channels',
+                tooltip=f'Enable monitoring for channel {i}'
+            )
             for i in range(len(self.pmt_array))]
         self.update_kernel_invariants('enabled_channels')
 
