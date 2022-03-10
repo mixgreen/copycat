@@ -100,6 +100,14 @@ dax.util.output module
     :undoc-members:
     :show-inheritance:
 
+dax.util.sub\_experiment module
+-------------------------------
+
+.. automodule:: dax.util.sub_experiment
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 dax.util.units module
 ---------------------
 
