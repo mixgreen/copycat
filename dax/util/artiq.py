@@ -350,11 +350,12 @@ def clone_managers(managers: typing.Any, *,
     are shared, which can be undesired for certain situations (e.g. dataset aliasing or argument aliasing).
     This function allows you to clone ARTIQ manager objects which will decouple the dataset manager,
     the argument manager, and the scheduling defaults from the parent while still sharing the device manager.
+    See also :class:`dax.util.sub_experiment.SubExperiment`.
 
     This function is mainly used when creating and running multiple sub-experiments from a parent
     experiment class where the dataset manager archives and arguments are preferably decoupled.
     Contents of the decoupled dataset manager are not automatically archived to an HDF5 file.
-    If desired, the user has to to so explicitly (see :func:`ManagersTuple.write_hdf5`).
+    If desired, the user has to do so explicitly (see :func:`ManagersTuple.write_hdf5`).
 
     Note that the dataset DB is still shared, which means broadcast and persistent datasets are shared.
     To isolate a sub-experiment completely, see :func:`isolate_managers`.
