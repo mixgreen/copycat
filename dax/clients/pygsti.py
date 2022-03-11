@@ -191,10 +191,15 @@ class _PygstiSingleQubitClientBase(DaxClient, Experiment):
             group='Plot',
             tooltip='Plot histograms at runtime'
         )
-        self._save_histograms: bool = self.get_argument(
-            'Save Histogram PDFs', BooleanValue(False),
+        self._plot_probability: bool = self.get_argument(
+            'Plot probability', BooleanValue(False),
             group='Plot',
-            tooltip='Histograms will be saved as PDF files'
+            tooltip='Plot state probability at runtime'
+        )
+        self._save_probability: bool = self.get_argument(
+            'Save probability plot', BooleanValue(False),
+            group='Plot',
+            tooltip='Probability plot will be saved as a PDF file'
         )
 
     def _add_arguments_internal(self) -> None:
@@ -251,16 +256,17 @@ class _PygstiSingleQubitClientBase(DaxClient, Experiment):
 
         # Convert experiment design to circuit list
         self.logger.debug('Converting circuits')
-        circuit_list = [_get_gates(c.str, available_gates, target_qubit=0)  # Fixed to a single qubit
-                        for c in self._exp_design.all_circuits_needing_data]
+        self._all_circuits = [_get_gates(c.str, available_gates, target_qubit=0)  # Fixed to a single qubit
+                              for c in self._exp_design.all_circuits_needing_data]
 
         # Partition circuit list
         self.logger.debug('Partitioning circuits')
         if self._partition_size == 0:
-            self._partitions = [circuit_list]
+            self._partitions = [self._all_circuits]
         else:
-            self._partitions = _partition_circuit_list(circuit_list, self._partition_size)
-        self.logger.info(f'Number of circuits = {len(circuit_list)}, number of partitions = {len(self._partitions)}')
+            self._partitions = _partition_circuit_list(self._all_circuits, self._partition_size)
+        self.logger.info(f'Number of circuits = {len(self._all_circuits)}, '
+                         f'number of partitions = {len(self._partitions)}')
 
         # Initialize circuit counter
         self._circuit_count = 0
@@ -291,9 +297,12 @@ class _PygstiSingleQubitClientBase(DaxClient, Experiment):
         # Set realtime
         self._operation.set_realtime(self._real_time)
 
+        # Enable plots
         if self._plot_histograms:
-            # Plot histograms
-            self._histogram_context.plot_histogram()
+            self._histogram_context.plot_histogram(x_label='State')
+        if self._plot_probability:
+            # Mean counts will show the same as the probability plot (plus error bars) due to binary measurements
+            self._histogram_context.plot_mean_count(x_label='Circuit', y_label='State')
 
         try:
             # Perform host setup
@@ -377,9 +386,10 @@ class _PygstiSingleQubitClientBase(DaxClient, Experiment):
 
     @rpc(flags={'async'})
     def _circuit_msg(self):  # type: () -> None
-        # Update circuit counter
+        # Message and update circuit counter
+        self.logger.info(f'  Running circuit {self._circuit_count + 1}/{len(self._all_circuits)} '
+                         f'(depth {len(self._all_circuits[self._circuit_count])})')
         self._circuit_count += 1
-        self.logger.info(f'  Running circuit {self._circuit_count}/{sum(len(p) for p in self._partitions)}')
 
     def analyze(self) -> None:
         # Create Histogram Analyzer
@@ -399,16 +409,17 @@ class _PygstiSingleQubitClientBase(DaxClient, Experiment):
         self.logger.info(f'Saving pyGSTi data to {dir_name}')
         protocol_data.write(dir_name)
 
+        # Save plots
+        if self._save_probability:
+            # Mean counts will show the same as the probability plot (plus error bars) due to binary measurements
+            h.plot_all_mean_counts(x_label='Circuit', y_label='State')
+
         # noinspection PyBroadException
         try:
             # Perform protocol-specific analysis
             self._analyze_internal(protocol_data, base_path)
         except Exception:
             self.logger.exception('pyGSTi analysis failed')
-
-        if self._save_histograms:
-            # Save histograms
-            h.plot_all_histograms()
 
     @abc.abstractmethod
     def _analyze_internal(self, protocol_data: typing.Any, base_path: pathlib.Path) -> None:  # pragma: no cover
