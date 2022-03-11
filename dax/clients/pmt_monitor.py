@@ -34,6 +34,8 @@ class _PmtMonitorBase(DaxClient, Experiment, abc.ABC):
     """Maximum buffer size in samples."""
     DEFAULT_SLIDING_WINDOW_SIZE: typing.ClassVar[int] = 120
     """Default sliding window size in seconds (zero for no sliding window)."""
+    DEFAULT_SUBSAMPLE_FACTOR: typing.ClassVar[int] = 0
+    """Default subsampling factor (<=1 for no subsampling)."""
     DEFAULT_APPLET_UPDATE_DELAY: typing.ClassVar[float] = 0.1
     """Default applet update delay in seconds."""
     DATA_CLEANUP_THRESHOLD_MULTIPLIER: typing.ClassVar[int] = 4
@@ -63,6 +65,8 @@ class _PmtMonitorBase(DaxClient, Experiment, abc.ABC):
         assert self.DEFAULT_BUFFER_SIZE <= self.MAX_BUFFER_SIZE, 'Default buffer size greater than the max buffer size'
         assert isinstance(self.DEFAULT_SLIDING_WINDOW_SIZE, int), 'Default sliding window size must be of type int'
         assert self.DEFAULT_SLIDING_WINDOW_SIZE >= 0, 'Default sliding window size must be zero or greater'
+        assert isinstance(self.DEFAULT_SUBSAMPLE_FACTOR, int), 'Default subsample factor must be of type int'
+        assert self.DEFAULT_SUBSAMPLE_FACTOR >= 0, 'Default subsample factor must be zero or greater'
         assert isinstance(self.DEFAULT_APPLET_UPDATE_DELAY, float), 'Default applet update delay must be of type float'
         assert self.DEFAULT_APPLET_UPDATE_DELAY > 0.0, 'Default applet update delay must be greater than zero'
         assert isinstance(self.DATA_CLEANUP_THRESHOLD_MULTIPLIER, int), \
@@ -162,6 +166,12 @@ class _PmtMonitorBase(DaxClient, Experiment, abc.ABC):
             BooleanValue(True),
             group='Applet',
             tooltip='Call CCB create applet command at start'
+        )
+        self.subsample: int = self.get_argument(
+            'Subsample',
+            NumberValue(self.DEFAULT_SUBSAMPLE_FACTOR, min=0, ndecimals=0, step=1),
+            group='Applet',
+            tooltip='Subsample data by the given factor before plotting (<=1 for no subsampling)'
         )
         self.applet_update_delay: float = self.get_argument(
             'Applet update delay',
@@ -281,8 +291,10 @@ class _PmtMonitorBase(DaxClient, Experiment, abc.ABC):
                 y_label = 'Raw counts'
 
             # Create the applet
-            self._create_applet(self.dataset_key, group=self.APPLET_GROUP, update_delay=self.applet_update_delay,
-                                sliding_window=self.window_size_samples, x_label=x_label, y_label=y_label)
+            self._create_applet(
+                self.dataset_key, group=self.APPLET_GROUP, update_delay=self.applet_update_delay,
+                sliding_window=self.window_size_samples, subsample=self.subsample, x_label=x_label, y_label=y_label
+            )
 
         try:
             # Only stop when termination is requested
