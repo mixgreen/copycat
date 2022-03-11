@@ -373,6 +373,7 @@ class DaxHasKey(DaxBase, abc.ABC):
     @artiq.language.core.host_only
     def setattr_dataset_sys(self, key: str, default: typing.Any = artiq.language.environment.NoDefault, *,
                             fallback: typing.Any = artiq.language.environment.NoDefault,
+                            attr_name: typing.Optional[str] = None,
                             data_store: bool = True, kernel_invariant: bool = True) -> None:
         """Sets the contents of a system dataset as attribute.
 
@@ -396,31 +397,41 @@ class DaxHasKey(DaxBase, abc.ABC):
         :param key: The key of the system dataset
         :param default: The default value to set the system dataset to if not present
         :param fallback: The fallback value to set if the system dataset is not present and no default provided
+        :param attr_name: If given, assign the value to this attribute name instead of using the key as attribute name
         :param data_store: Flag to archive the value in the data store if the default value is used
         :param kernel_invariant: Flag to set the attribute as kernel invariant
         :raises KeyError: Raised if the key was not present and no default or fallback was provided
         :raises ValueError: Raised if the key has an invalid format
         """
 
+        assert isinstance(attr_name, str) or attr_name is None, 'Attribute name must be of type str or None'
         assert isinstance(kernel_invariant, bool), 'Kernel invariant flag must be of type bool'
+
+        if attr_name is None:
+            # Fallback on the key
+            attr_name = key
+
+        if not attr_name.isidentifier():
+            # Attribute name must be a valid identifier
+            raise ValueError(f'Attribute name not a valid identifier: {attr_name}')
 
         try:
             # Get the value from system dataset
             value: typing.Any = self.get_dataset_sys(key, default, fallback=fallback, data_store=data_store)
         except KeyError:
             # The value was not available in the system dataset and no default was provided, attribute will not be set
-            self.logger.debug(f'System attribute "{key}" not set')
+            self.logger.debug(f'System dataset "{key}" not available')
         else:
             # Set the value as attribute (reassigning is possible, required for re-loading attributes)
-            setattr(self, key, value)
+            setattr(self, attr_name, value)
 
             if kernel_invariant:
                 # Update kernel invariants
-                self.update_kernel_invariants(key)
+                self.update_kernel_invariants(attr_name)
 
             # Debug message
             msg_postfix: str = ' (kernel invariant)' if kernel_invariant else ''
-            self.logger.debug(f'System attribute "{key}" set to value "{value}"{msg_postfix}')
+            self.logger.debug(f'Attribute "{attr_name}" set to value "{value}"{msg_postfix}')
 
     @artiq.language.core.host_only
     def hasattr(self, *keys: str) -> bool:

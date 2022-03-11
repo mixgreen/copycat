@@ -1381,6 +1381,27 @@ class DaxModuleBaseTestCase(unittest.TestCase):
         self.assertEqual(s.get_dataset_sys(key), 80,
                          'setattr_dataset_sys() did not write the default value to the dataset')
 
+        for key in ['foo#', ' foo', 'foo ', '2ab']:  # Bad identifiers
+            with self.assertRaises(ValueError):
+                s.setattr_dataset_sys(key)
+            with self.assertRaises(ValueError):
+                s.setattr_dataset_sys('foo', attr_name=key)
+
+        key = 'key9'
+        attr_name = 'foo'
+        value = 4
+        s.setattr_dataset_sys(key, attr_name=attr_name)
+        for k in [key, attr_name]:
+            self.assertNotIn(k, s.kernel_invariants)
+        s.set_dataset_sys(key, value, data_store=False)  # Set dataset
+        s.setattr_dataset_sys(key, attr_name=attr_name)
+        self.assertIn(attr_name, s.kernel_invariants)
+        self.assertNotIn(key, s.kernel_invariants)
+        self.assertFalse(s.hasattr(key))
+        self.assertTrue(s.hasattr(attr_name))
+        self.assertFalse(hasattr(s, key))
+        self.assertEqual(getattr(s, attr_name, None), value)
+
         # Check data store calls
         self.assertListEqual(s.data_store.method_calls, [call.set(s.get_system_key('key3'), 10),
                                                          call.set(s.get_system_key('key1'), 100),
