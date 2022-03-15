@@ -120,10 +120,7 @@ class HistogramContext(DaxModule, DataContextInterface):
             'Plot group base key must be None or of type str'
 
         # Store default dataset key
-        if default_dataset_key is None:
-            self._default_dataset_key = self.DEFAULT_DATASET_KEY
-        else:
-            self._default_dataset_key = default_dataset_key
+        self._default_dataset_key = self.DEFAULT_DATASET_KEY if default_dataset_key is None else default_dataset_key
 
         # Get CCB tool
         self._ccb = get_ccb_tool(self)
