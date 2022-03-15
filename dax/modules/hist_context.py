@@ -82,6 +82,7 @@ class HistogramContext(DaxModule, DataContextInterface):
     _histogram_cache: typing.Dict[str, typing.List[typing.Sequence[typing.Counter[_DATA_T]]]]
     _dataset_key: str
     _plot_base_key: str
+    _plot_group_base_key: str
     _open_datasets: typing.Counter[str]
     _histogram_plot_key: str
     _probability_plot_key: str
@@ -91,19 +92,32 @@ class HistogramContext(DaxModule, DataContextInterface):
     _plot_group: str
 
     def build(self, *,  # type: ignore[override]
-              default_dataset_key: typing.Optional[str] = None, plot_base_key: str = 'dax') -> None:
+              default_dataset_key: typing.Optional[str] = None,
+              plot_base_key: str = 'dax',
+              plot_group_base_key: typing.Optional[str] = None) -> None:
         """Build the histogram context module.
 
         The plot base key can be used to group plot datasets and applets as desired.
-        The base key is formatted with the ARTIQ ``scheduler`` object which allows users to
-        add experiment-specific information in the base key.
+        The base keys are formatted with the ARTIQ ``scheduler`` object which allows users to
+        add experiment-specific information in the base keys.
+
+        By default, plot datasets and applets both are reused. Examples of common settings include:
+
+         - Reuse plot datasets and applets (default)
+         - Create unique plot datasets and applets based on the experiment RID:
+           ``plot_base_key="{scheduler.rid}"``
+         - Create unique plot datasets based on the experiment RID but reuse applets:
+           ``plot_base_key="{scheduler.rid}", plot_group_base_key=""``
 
         :param default_dataset_key: Default dataset name used for storing histogram data
-        :param plot_base_key: Base key for plot dataset keys and applets
+        :param plot_base_key: Base key for plot dataset keys
+        :param plot_group_base_key: Base key for the plot group, same as ``plot_base_key`` if :const:`None`
         """
         assert isinstance(default_dataset_key, str) or default_dataset_key is None, \
             'Provided default dataset key must be None or of type str'
         assert isinstance(plot_base_key, str), 'Plot base key must be of type str'
+        assert isinstance(plot_group_base_key, str) or plot_group_base_key is None, \
+            'Plot group base key must be None or of type str'
 
         # Store default dataset key
         if default_dataset_key is None:
@@ -134,6 +148,8 @@ class HistogramContext(DaxModule, DataContextInterface):
         self._dataset_key = self._default_dataset_key
         # Store plot base key
         self._plot_base_key = plot_base_key
+        # Store plot group base key
+        self._plot_group_base_key = plot_base_key if plot_group_base_key is None else plot_group_base_key
         # Open datasets stored as counters, which represent the length of the data
         self._open_datasets = collections.Counter()
 
@@ -146,6 +162,7 @@ class HistogramContext(DaxModule, DataContextInterface):
         self._stdev_count_plot_key = self.STDEV_COUNT_PLOT_KEY_FORMAT.format(base=base)
         self._state_probability_plot_key = self.STATE_PROBABILITY_PLOT_KEY_FORMAT.format(base=base)
         # Generate applet plot group
+        base = self._plot_group_base_key.format(scheduler=self._scheduler)
         self._plot_group = self.PLOT_GROUP_FORMAT.format(base=base)
 
     def post_init(self) -> None:
