@@ -47,6 +47,18 @@ class CcbTestCase(unittest.TestCase):
         g = g.split(sep)
         self.assertEqual(_convert_group(g), g, 'Convert group unintentionally altered list notation')
 
+        data = [
+            (None, None),
+            ('', None),
+            ('...', None),
+            (['', ''], None),
+            ('a.b', ['a', 'b']),
+            ('a..b', ['a', 'b']),
+            (['a', '', 'b'], ['a', 'b']),
+        ]
+        for g, ref in data:
+            self.assertEqual(_convert_group(g), ref)
+
     def test_generate_command(self):
         # noinspection PyProtectedMember
         from dax.util.ccb import generate_command

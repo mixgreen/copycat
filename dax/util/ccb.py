@@ -13,16 +13,26 @@ __all__ = ['CcbWrapper', 'CcbToolBase', 'CcbTool', 'get_ccb_tool']
 _G_T = typing.Union[str, typing.List[str]]  # Type of a group
 
 
-def _convert_group(group: typing.Optional[_G_T]) -> typing.Optional[_G_T]:
+def _convert_group(group: typing.Optional[_G_T]) -> typing.Optional[typing.List[str]]:
     """Convert a group string to the desired format for ARTIQ applet hierarchies.
 
-    Enables users to define group hierarchies using the dot "." character,
-    similar as with datasets.
+    Enables users to define group hierarchies using the dot "." character, similar as with datasets.
+    Any empty group names will be automatically removed.
 
     :param group: The group name as a single string, a list of strings, or :const:`None`
+    :return: The group as a list of strings, or :const:`None`
     """
-    # Strings are split to enable applet group hierarchies in the dashboard
-    return group.split('.') if isinstance(group, str) else group
+    if group is None:
+        # No group
+        return None
+
+    if isinstance(group, str):
+        # Split the string
+        group = group.split('.')
+
+    # # Only return non-empty elements
+    group = [e for e in group if e]
+    return group if group else None
 
 
 def generate_command(base_command: str, *args: str, **kwargs: typing.Any) -> str:
