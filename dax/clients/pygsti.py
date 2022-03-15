@@ -194,12 +194,12 @@ class _PygstiSingleQubitClientBase(DaxClient, Experiment):
         self._plot_probability: bool = self.get_argument(
             'Plot probability', BooleanValue(False),
             group='Plot',
-            tooltip='Plot state probability at runtime'
+            tooltip='Plot state probability at runtime (shows up as the mean count plot to include error bars)'
         )
         self._save_probability: bool = self.get_argument(
             'Save probability plot', BooleanValue(False),
             group='Plot',
-            tooltip='Probability plot will be saved as a PDF file'
+            tooltip='Probability plot will be saved as a PDF file (stored as mean count plots to include error bars)'
         )
 
     def _add_arguments_internal(self) -> None:
