@@ -20,4 +20,4 @@ let
     '';
   };
 in
-  builtins.readFile dax-version
+builtins.readFile dax-version

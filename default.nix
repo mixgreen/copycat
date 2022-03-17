@@ -1,5 +1,7 @@
-{ pkgs ? import <nixpkgs> {}, artiqpkgs ? import <artiq-full> { inherit pkgs; },
-daxVersion ? null }:
+{ pkgs ? import <nixpkgs> { }
+, artiqpkgs ? import <artiq-full> { inherit pkgs; }
+, daxVersion ? null
+}:
 
 with pkgs;
 python3Packages.buildPythonPackage rec {
@@ -17,8 +19,18 @@ python3Packages.buildPythonPackage rec {
 
   condaDependencies = [
     "python>=3.7"
-    "artiq" "sipyco"
-    "numpy" "scipy" "pyvcd" "natsort" "pygit2" "matplotlib" "python-graphviz" "h5py" "networkx" "sortedcontainers"
+    "artiq"
+    "sipyco"
+    "numpy"
+    "scipy"
+    "pyvcd"
+    "natsort"
+    "pygit2"
+    "matplotlib"
+    "python-graphviz"
+    "h5py"
+    "networkx"
+    "sortedcontainers"
   ];
 
   meta = with lib; {
