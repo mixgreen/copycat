@@ -6,6 +6,10 @@ from dax.modules.safety_context import SafetyContext, ReentrantSafetyContext, Sa
 import test.hw_test
 
 
+class _TestException(RuntimeError):
+    pass
+
+
 class _ReentrantTestSystem(DaxSystem):
     SYS_ID = 'unittest_system'
     SYS_VER = 0
@@ -70,6 +74,7 @@ class ReentrantSafetyContextTestCase(test.hw_test.HardwareTestCase):
                     self.core.reset()
                 return self.get_kernel()
 
+        # With RPC enabled, the counters get overwritten by attribute synchronization at kernel exit
         self.assertEqual(self.construct_env(Env).run(), (0, 0) if self.SYSTEM_TYPE.RPC else (1, 1))
 
     def test_kernel_entry_host_check(self):
@@ -80,6 +85,7 @@ class ReentrantSafetyContextTestCase(test.hw_test.HardwareTestCase):
                     self.core.reset()
                 return self.get_rpc()
 
+        # With RPC enabled, the counters get overwritten by attribute synchronization at kernel exit
         self.assertEqual(self.construct_env(Env).run(), (1, 1) if self.SYSTEM_TYPE.RPC else (0, 0))
 
     def test_host_entry_kernel_check(self):
@@ -147,6 +153,42 @@ class ReentrantSafetyContextTestCase(test.hw_test.HardwareTestCase):
         # `self.context` was never used, the counters do NOT get overwritten by attribute synchronization at kernel exit
         self.assertEqual(env.get_portable(), (1, 1))
 
+    def test_kernel_exception(self):
+        class Env(self.SYSTEM_TYPE, Experiment):
+            @kernel
+            def run(self):
+                try:
+                    with self.context:
+                        self.core.reset()
+                        raise _TestException
+                except _TestException:
+                    pass  # Catching exception, otherwise attribute syncing is not performed
+
+        env = self.construct_env(Env)
+        env.run()
+
+        # With RPC enabled, the counters get overwritten by attribute synchronization at kernel exit
+        self.assertEqual(env.get_portable(), (0, 0) if self.SYSTEM_TYPE.RPC else (1, 1))
+
+    def test_kernel_exception_reentry(self):
+        class Env(self.SYSTEM_TYPE, Experiment):
+            @kernel
+            def run(self):
+                try:
+                    with self.context:
+                        with self.context:
+                            self.core.reset()
+                            raise _TestException
+                except _TestException:
+                    pass  # Catching exception, otherwise attribute syncing is not performed
+
+        env = self.construct_env(Env)
+        env.run()
+
+        # Even with reentry, enter and exit are only called once
+        # With RPC enabled, the counters get overwritten by attribute synchronization at kernel exit
+        self.assertEqual(env.get_portable(), (0, 0) if self.SYSTEM_TYPE.RPC else (1, 1))
+
 
 class ReentrantRpcSafetyContextTestCase(ReentrantSafetyContextTestCase):
     SYSTEM_TYPE = _ReentrantRpcTestSystem
@@ -162,6 +204,10 @@ class NonReentrantSafetyContextTestCase(ReentrantSafetyContextTestCase):
     def test_host_reentry(self):
         with self.assertRaises(SafetyContextError):
             super(NonReentrantSafetyContextTestCase, self).test_host_reentry()
+
+    def test_kernel_exception_reentry(self):
+        with self.assertRaises(SafetyContextError):
+            super(NonReentrantSafetyContextTestCase, self).test_kernel_exception_reentry()
 
 
 class NonReentrantRpcSafetyContextTestCase(NonReentrantSafetyContextTestCase):
