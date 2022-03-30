@@ -136,6 +136,17 @@ class _MockScanInfinite(_MockScan1):
         self.counter['run_point'] += 1
 
 
+class _MockScanChain(_MockScan1):
+    def build_scan(self) -> None:
+        # Counter
+        self.counter: typing.Counter[str] = collections.Counter()
+
+        # Scan
+        with DaxScanChain(self, 'foo', group='bar') as chain:
+            chain.add_scan('1', Scannable(RangeScan(1, self.FOO, self.FOO, randomize=False)))
+            chain.add_scan('2', Scannable(RangeScan(1, self.FOO, self.FOO, randomize=False)))
+
+
 class _MockScanInfiniteNoArgument(_MockScanInfinite):
     INFINITE_SCAN_ARGUMENT = False
     INFINITE_SCAN_DEFAULT = True
@@ -282,11 +293,11 @@ class Scan1TestCase(unittest.TestCase):
                          'init_scan_elements counter did not match expected value')
 
     def test_raise_add_scan(self):
-        with self.assertRaises(TypeError, msg='Adding scan outside build did not raise'):
+        with self.assertRaises(RuntimeError, msg='Adding scan outside build did not raise'):
             self.scan.add_scan('bar', 'bar', Scannable(NoScan(1)))
 
     def test_raise_add_static_scan(self):
-        with self.assertRaises(TypeError, msg='Adding scan outside build did not raise'):
+        with self.assertRaises(RuntimeError, msg='Adding scan outside build did not raise'):
             self.scan.add_static_scan('bar', [])
 
     def test_get_scan_points_too_early(self):
@@ -336,6 +347,70 @@ class Scan1TestCase(unittest.TestCase):
                                      'Scannable in readers did not match')
                 self.assertListEqual(list(r_.scan_points[k]), list(r.scan_points[k]),
                                      'Scan points in readers did not match')
+
+
+class ChainScanTestCase(Scan1TestCase):
+    # Run all the same tests as before to ensure that nothing breaks
+    # Note: chain was created with two of the same scannable
+    SCAN_CLASS = _MockScanChain
+
+    def test_get_scannables(self):
+        scannables = self.scan.get_scannables()
+        self.assertIn('foo', scannables)
+        self.assertEqual(len(scannables['foo']), self.scan.FOO * 2)
+
+    def test_call_counters(self):
+        # Run the scan
+        self.scan.run()
+
+        # Verify counters
+        counter_ref = {
+            'init_scan_elements': 1,
+            'host_enter': 1,
+            'host_setup': 1,
+            '_run_dax_scan_setup': 1,
+            'device_setup': 1,
+            'run_point': self.scan.FOO * 2,
+            'device_cleanup': 1,
+            '_run_dax_scan_cleanup': 1,
+            'host_cleanup': 1,
+            'host_exit': 1,
+        }
+
+        self.assertDictEqual(self.scan.counter, counter_ref, 'Function counters did not match expected values')
+
+    def test_raise_reentrant_context_in_order(self):
+        class MockChainScan(_MockScanCallback):
+            def callback(self_scan):
+                with DaxScanChain(self_scan, key='foo') as chain:
+                    chain.add_scan('bar', Scannable(NoScan(1)))
+                with self.assertRaises(RuntimeError, msg='Reentering scan context after exit did not raise'):
+                    with chain:
+                        pass
+
+        MockChainScan(self.managers)
+
+    def test_raise_reentrant_context_in_context(self):
+        class MockChainScan(_MockScanCallback):
+            def callback(self_scan):
+                with DaxScanChain(self_scan, key='foo') as chain:
+                    chain.add_scan('bar', Scannable(NoScan(1)))
+                    with self.assertRaises(RuntimeError, msg='Reentering scan context in context did not raise'):
+                        with chain:
+                            pass
+
+        MockChainScan(self.managers)
+
+    def test_raise_duplicate_scan_key(self):
+        class MockChainScan(_MockScanCallback):
+            def callback(self_scan):
+                self_scan.add_scan('foo', 'foo', Scannable(NoScan(1)))
+                with self.assertRaises(LookupError, msg='Reusing scan key did not raise'):
+                    self_scan.add_scan('foo', 'foo', Scannable(NoScan(1)))
+                with self.assertRaises(LookupError, msg='Reusing scan key for static scan did not raise'):
+                    self_scan.add_static_scan('foo', [1])
+
+        MockChainScan(self.managers)
 
 
 class BuildScanTestCase(unittest.TestCase):
@@ -693,5 +768,5 @@ class ScanValueReorderedTestCase(Scan2TestCase):
     SCAN_CLASS = _MockScan2ValueCheckReordered
 
     def test_raise_scan_order(self):
-        with self.assertRaises(TypeError, msg='Reordering scan outside build did not raise'):
+        with self.assertRaises(RuntimeError, msg='Reordering scan outside build did not raise'):
             self.scan.set_scan_order()
