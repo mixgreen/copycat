@@ -1,22 +1,22 @@
+from __future__ import annotations
+
 import abc
 import typing
 import itertools
-import re
 import numpy as np
 import collections
 import collections.abc
 import os.path
 import h5py
 
-from artiq.experiment import *
+from artiq.language.core import kernel, portable, host_only, TerminationRequested
+from artiq.language.environment import BooleanValue
+from artiq.language.scan import ScanObject, Scannable
 
 import dax.base.system
 import dax.util.artiq
 
-__all__ = ['DaxScan', 'DaxScanReader']
-
-_KEY_RE: typing.Pattern[str] = re.compile(r'[a-zA-Z_]\w*')
-"""Regex for matching valid keys."""
+__all__ = ['DaxScan', 'DaxScanReader', 'DaxScanChain']
 
 _S_T = typing.Union[ScanObject, typing.Sequence[typing.Any]]  # Scan object type
 
@@ -25,12 +25,6 @@ if typing.TYPE_CHECKING:  # pragma: no cover
     _SD_T = collections.OrderedDict[str, _S_T]  # Scan dict type
 else:
     _SD_T = collections.OrderedDict
-
-
-def _is_valid_key(key: str) -> bool:
-    """Return :const:'True' if the given key is valid."""
-    assert isinstance(key, str), 'The given key should be a string'
-    return bool(_KEY_RE.fullmatch(key))
 
 
 class _ScanProductGenerator:
@@ -323,14 +317,14 @@ class DaxScan(dax.base.system.DaxBase, abc.ABC):
 
         # Verify this function was called in the build_scan() function
         if not self.__in_build:
-            raise TypeError('add_scan() can only be called in the build_scan() method')
+            raise RuntimeError('add_scan() can only be called in the build_scan() method')
 
         # Verify type of the given scannable
         if not isinstance(scannable, Scannable):
             raise TypeError('The given processor is not a scannable')
 
         # Verify the key is valid and not in use
-        if not _is_valid_key(key):
+        if not key.isidentifier():
             raise ValueError(f'Provided key "{key}" is not valid')
         if key in self._dax_scan_scannables:
             raise LookupError(f'Provided key "{key}" is already in use')
@@ -352,7 +346,7 @@ class DaxScan(dax.base.system.DaxBase, abc.ABC):
 
         # Verify this function was called in the build_scan() function
         if not self.__in_build:
-            raise TypeError('add_scan() can only be called in the build_scan() method')
+            raise RuntimeError('add_scan() can only be called in the build_scan() method')
 
         # Verify type of the points
         if not isinstance(points, collections.abc.Sequence):
@@ -370,7 +364,7 @@ class DaxScan(dax.base.system.DaxBase, abc.ABC):
                 raise TypeError('The point type is not supported')
 
         # Verify the key is valid and not in use
-        if not _is_valid_key(key):
+        if not key.isidentifier():
             raise ValueError(f'Provided key "{key}" is not valid')
         if key in self._dax_scan_scannables:
             raise LookupError(f'Provided key "{key}" is already in use')
@@ -394,7 +388,7 @@ class DaxScan(dax.base.system.DaxBase, abc.ABC):
 
         # Verify this function was called in the build_scan() function
         if not self.__in_build:
-            raise TypeError('set_scan_order() can only be called in the build_scan() method')
+            raise RuntimeError('set_scan_order() can only be called in the build_scan() method')
 
         for k in keys:
             # Move key to the end of the list
@@ -660,7 +654,7 @@ class DaxScanReader:
 
     def __init__(self, source: typing.Union[DaxScan, str, h5py.File], *,
                  hdf5_group: typing.Optional[str] = None):
-        """Create a new DAX scan reader object.
+        """Create a new DAX.scan reader object.
 
         :param source: The source of the scan data
         :param hdf5_group: HDF5 group containing the data, defaults to root of the HDF5 file
@@ -697,3 +691,123 @@ class DaxScanReader:
 
         else:
             raise TypeError('Unsupported source type')
+
+
+class DaxScanChain:
+    """DAX.scan utility class to allow linear chaining of multiple scan ranges.
+
+    Users may use this class within :class:`DaxScan` experiments to create a single scan of disparate ranges.
+    The resulting scan will be treated as a single value with a key defined in the :func:`__init__` method.
+    As a result, this class must be only used within the :func:`build_scan` function.
+
+    The :func:`add_scan` will allow the scans to appear in the ARTIQ Dashboard. Take care to call the
+    function from this class, not from the :class:`DaxScan` experiment class.
+
+    This class must be used as a context, with example code below::
+
+        with DaxScanChain(self, 'key', group='group') as chain:
+            chain.add_scan('name', scannable, tooltip='tooltip')
+    """
+
+    __in_context: typing.ClassVar[bool] = False  # Treat as a static class variable to ensure no reentrant context
+
+    _dax_scan: DaxScan
+    _key: str
+    _group: typing.Optional[str]
+    _scannables: _SD_T
+    _added_scan: bool
+
+    def __init__(self, dax_scan: DaxScan, key: str, *, group: typing.Optional[str] = None):
+        """Create a new :class:`DaxScanChain` object.
+
+        :param dax_scan: The :class:`DaxScan` object to which this chain will be added
+        :param key: Unique key of the chained scan, used to obtain the value later
+        :param group: The argument group name
+        """
+        assert isinstance(dax_scan, DaxScan), 'Must be given a DaxScan class'
+        assert isinstance(key, str), 'Key must be of type str'
+        assert isinstance(group, str) or group is None, 'Group must be of type str or None'
+
+        # The DaxScan class and key will be used to add the chained scans into the experiment
+        self._dax_scan = dax_scan
+        self._key = key
+        self._group = group
+
+        # Set default values
+        self._scannables = collections.OrderedDict()
+        self._added_scan = False
+
+    def add_scan(self, name: str, scannable: Scannable, *, tooltip: typing.Optional[str] = None) -> None:
+        """Register a scannable.
+
+        Scans will be chained linearly. The first scan will represent the first range to be scanned over, the second
+        scan the second range, etc.
+
+        Note that scans can be reordered using the :func:`set_scan_order` function, but only in the context.
+        The order in the ARTIQ dashboard will not change, but the scans will be scanned over in a different order.
+
+        Scannables are normal ARTIQ :class:`Scannable` objects and will appear in the user interface.
+
+        This function can only be called in the :class:`DaxScanChain` context,
+        and it may only be used in the :func:`DaxScan.build_scan` function.
+
+        :param name: The name of the argument
+        :param scannable: An ARTIQ :class:`Scannable` object
+        :param tooltip: The shown tooltip
+        """
+        assert isinstance(name, str), 'Name must be of type str'
+        assert isinstance(tooltip, str) or tooltip is None, 'Tooltip must be of type str or None'
+
+        # Verify this function was called in the DaxScanChain context
+        if not DaxScanChain.__in_context:
+            raise RuntimeError('add_scan() can only be called in the DaxScanChain context')
+
+        # Verify type of the given scannable
+        if not isinstance(scannable, Scannable):
+            raise TypeError('The given processor is not a scannable')
+
+        # Verify that names are unique within the group
+        if name in self._scannables.keys():
+            raise LookupError('Scan names must be unique within a group')
+
+        # Add argument to the ordered dict of scannables
+        self._scannables[name] = self._dax_scan.get_argument(name, scannable, group=self._group, tooltip=tooltip)
+
+    def _get_chained_scan(self) -> typing.Sequence[typing.Any]:
+        """Get the scan points chained into a single list.
+
+        Create the chained scan object. The values are returned in the same order as provided on the actual run.
+
+        :return: All the scan points chained into a single list
+        """
+        # Function will only need to run successfully during actual experiment runs, not during the build phase
+        return [] if None in self._scannables.values() else [p for s in self._scannables.values() for p in s]
+
+    def __enter__(self) -> DaxScanChain:
+        """Enter the scan chain context.
+
+        Normally this function should not be called directly but by the ``with`` statement instead.
+        """
+        if DaxScanChain.__in_context or self._added_scan:
+            raise RuntimeError('DaxScanChain is not reentrant')
+        if self._added_scan:
+            raise RuntimeError('DaxScanChain cannot be entered twice')
+
+        # Set flags
+        DaxScanChain.__in_context = True
+
+        # Must return self to allow setting variables using the with statement
+        return self
+
+    def __exit__(self, exc_type: typing.Any, exc_val: typing.Any, exc_tb: typing.Any) -> None:
+        """Exit the scan chain context.
+
+        Normally this function should not be called directly but by the ``with`` statement instead.
+        """
+
+        # Add all scan points as a static scan
+        self._dax_scan.add_static_scan(self._key, self._get_chained_scan())
+
+        # Set flags
+        DaxScanChain.__in_context = False
+        self._added_scan = True
