@@ -314,6 +314,7 @@ class CcbTool(CcbToolBase):
                 h_lines: typing.Optional[str] = None,
                 sliding_window: typing.Optional[int] = None,
                 subsample: typing.Optional[int] = None,
+                multiplier: typing.Optional[float] = None,
                 crosshair: typing.Optional[bool] = None,
                 last: typing.Optional[bool] = None,
                 moving_average: typing.Optional[int] = None,
@@ -334,6 +335,7 @@ class CcbTool(CcbToolBase):
         :param h_lines: Horizontal lines dataset
         :param sliding_window: Only show the latest data points
         :param subsample: Subsample data by the given factor before plotting
+        :param multiplier: Multiply data before plotting
         :param moving_average: Automatic uniform moving average calculation with the given size
         :param crosshair: Enable crosshair feature
         :param last: Show the last value in the title
@@ -347,8 +349,8 @@ class CcbTool(CcbToolBase):
         # Assemble command
         command = generate_command(f'{self.DAX_APPLET}plot_xy', y,
                                    x=x, error=error, fit=fit, v_lines=v_lines, h_lines=h_lines,
-                                   sliding_window=sliding_window, subsample=subsample, title=title,
-                                   crosshair=crosshair, last=last, moving_average=moving_average,
+                                   sliding_window=sliding_window, subsample=subsample, multiplier=multiplier,
+                                   title=title, crosshair=crosshair, last=last, moving_average=moving_average,
                                    x_label=x_label, y_label=y_label, update_delay=update_delay, **kwargs)
         # Create applet
         self.create_applet(name, command, group=group)
@@ -362,6 +364,7 @@ class CcbTool(CcbToolBase):
                       index: typing.Union[None, int, typing.Collection[int]] = None,
                       sliding_window: typing.Optional[int] = None,
                       subsample: typing.Optional[int] = None,
+                      multiplier: typing.Optional[float] = None,
                       plot_names: typing.Optional[str] = None,
                       title: typing.Optional[str] = None,
                       x_label: typing.Optional[str] = None,
@@ -381,6 +384,7 @@ class CcbTool(CcbToolBase):
         :param index: A single or multiple indices of the results to plot (default plots all)
         :param sliding_window: Only show the latest data points
         :param subsample: Subsample data by the given factor before plotting
+        :param multiplier: Multiply data before plotting
         :param plot_names: Base names of the plots (numbered automatically, formatting with ``'{index}'`` possible)
         :param title: Graph title
         :param x_label: X-axis label
@@ -392,8 +396,9 @@ class CcbTool(CcbToolBase):
         # Assemble command
         command = generate_command(f'{self.DAX_APPLET}plot_xy_multi', y,
                                    x=x, error=error, fit=fit, v_lines=v_lines, h_lines=h_lines, index=index,
-                                   sliding_window=sliding_window, subsample=subsample, plot_names=plot_names,
-                                   title=title, x_label=x_label, y_label=y_label, update_delay=update_delay, **kwargs)
+                                   sliding_window=sliding_window, subsample=subsample, multiplier=multiplier,
+                                   plot_names=plot_names, title=title, x_label=x_label, y_label=y_label,
+                                   update_delay=update_delay, **kwargs)
         # Create applet
         self.create_applet(name, command, group=group)
 
