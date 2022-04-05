@@ -25,7 +25,30 @@ _O_T = typing.Union[int, np.int32, np.int64]  # Time offset type
 _ST_T = typing.Union[typing.Type[bool], typing.Type[int], typing.Type[float],  # The signal type type
                      typing.Type[str], typing.Type[object]]
 _SS_T = typing.Optional[int]  # The signal size type
-_SV_T = typing.Union[bool, int, np.int32, np.int64, float, str]  # The signal value type
+
+_BOOL_T = typing.Union[bool, int, str]
+_INT_T = typing.Union[int, np.int32, np.int64, str]
+_FLOAT_T = float
+_STR_T = str
+_OBJ_T = bool
+_SV_T = typing.Union[_BOOL_T, _INT_T, _FLOAT_T, _STR_T, _OBJ_T]  # The signal value type
+
+_INT_SPECIAL_VALUES: typing.FrozenSet[str] = frozenset('xXzZ')
+"""Special values for int signals."""
+_BOOL_VEC_VALUES: typing.FrozenSet[str] = frozenset('01xXzZ')
+"""Legal characters for bool vector strings."""
+_BOOL_VALUES: typing.FrozenSet[_BOOL_T] = _INT_SPECIAL_VALUES | {True, False, 0, 1}
+"""Legal values for bool signals with size 1 (also matches float and NumPy int)."""
+
+
+class _NormalizationError(ValueError):
+    """Normalization error type."""
+
+    def __init__(self, signal: 'Signal', value: typing.Any):  # Prevent using postponed evaluation of annotations
+        super(_NormalizationError, self).__init__(
+            f'Invalid value "{value}" for signal type {signal.type.__name__}'
+            f'{"" if signal.size is None else f" with size {signal.size}"}'
+        )
 
 
 class Signal(abc.ABC):
@@ -35,41 +58,42 @@ class Signal(abc.ABC):
     __name: str
     __type: _ST_T
     __size: _SS_T
+    __normalize: typing.Callable[['Signal', typing.Any], _SV_T]  # Prevent using postponed evaluation of annotations
 
-    _EXPECTED_TYPES: typing.ClassVar[typing.Dict[_ST_T, typing.Union[type, typing.Tuple[type, ...]]]] = {
-        bool: bool,
-        int: (int, np.int32, np.int64),
-        float: float,
-        str: str,
-        object: bool,
-    }
-    """Valid value types for each signal type."""
-
-    _SPECIAL_VALUES: typing.ClassVar[typing.Dict[_ST_T, typing.Set[typing.Any]]] = {
-        bool: {'x', 'X', 'z', 'Z', 0, 1},  # Also matches float and NumPy int
-        int: {'x', 'X', 'z', 'Z'},
-        float: set(),
-        str: set(),
-        object: set(),
-    }
-    """Valid special values for each signal type."""
+    _SIGNAL_TYPES: typing.ClassVar[typing.FrozenSet[_ST_T]] = frozenset([bool, int, float, str, object])
+    """Valid signal types."""
 
     def __init__(self, scope: DaxSimDevice, name: str, type_: _ST_T, size: _SS_T = None):
         """Initialize a new signal object."""
         assert isinstance(scope, DaxSimDevice), 'Signal scope must be of type DaxSimDevice'
         assert isinstance(name, str), 'Signal name must be of type str'
-        assert name.isidentifier(), 'Invalid signal name (must be a valid identifier)'
-        assert type_ in self._EXPECTED_TYPES, 'Invalid signal type'
+
+        if not name.isidentifier():
+            raise ValueError('Invalid signal name (must be a valid identifier)')
+        if type_ not in self._SIGNAL_TYPES:
+            raise ValueError('Invalid signal type')
         if type_ is bool:
-            assert isinstance(size, int) and size > 0, 'Signal size must be an integer > 0 for signal type bool'
+            if not isinstance(size, int) or not size > 0:
+                raise ValueError('Signal size must be an integer > 0 for signal type bool')
         else:
-            assert size is None, f'Size not supported for signal type "{type_}"'
+            if size is not None:
+                raise ValueError(f'Size not supported for signal type "{type_}"')
 
         # Store attributes
         self.__scope = scope
         self.__name = name
         self.__type = type_
         self.__size = size
+
+        # Select normalization function
+        normalize_fn: typing.Dict[_ST_T, typing.Callable[[typing.Any], _SV_T]] = {
+            bool: self._normalize_bool,
+            int: self._normalize_int,
+            float: self._normalize_float,
+            str: self._normalize_str,
+            object: self._normalize_object,
+        }
+        self.__normalize = normalize_fn[type_]  # type: ignore[assignment]
 
     @property
     def scope(self) -> DaxSimDevice:
@@ -98,19 +122,40 @@ class Signal(abc.ABC):
         :return: The normalized value
         :raises ValueError: Raised if the value is invalid
         """
-        if self.size in {None, 1}:
-            # noinspection PyTypeHints
-            if isinstance(value, self._EXPECTED_TYPES[self.type]):
-                return typing.cast(_SV_T, value)  # Value is legal (expected type), cast required for mypy
-            if value in self._SPECIAL_VALUES[self.type]:
-                return typing.cast(_SV_T, value)  # Value is legal (special value), cast required for mypy
-        elif self.type is bool and isinstance(value, str) and len(value) == self.size and all(
-                v in {'x', 'X', 'z', 'Z', '0', '1'} for v in value):
-            return value.lower()  # Value is legal (bool vector) (store lower case)
+        return self.__normalize(value)
 
-        # Value did not pass check
-        raise ValueError(f'Invalid value "{value}" for signal type {self.type.__name__}'
-                         f'{"" if self.size is None else f" with size {self.size}"}')
+    def _normalize_bool(self, value: typing.Any) -> _BOOL_T:
+        if self.size == 1 and value in _BOOL_VALUES:
+            return value  # type: ignore[no-any-return]
+        elif self.size is not None and isinstance(value, str) and 1 < self.size == len(value) and all(
+                v in _BOOL_VEC_VALUES for v in value):
+            return value.lower()  # Normalize to lower case
+        else:
+            raise _NormalizationError(self, value)
+
+    def _normalize_int(self, value: typing.Any) -> _INT_T:
+        if isinstance(value, (int, np.int32, np.int64)) or value in _INT_SPECIAL_VALUES:
+            return value  # type: ignore[no-any-return]
+        else:
+            raise _NormalizationError(self, value)
+
+    def _normalize_float(self, value: typing.Any) -> _FLOAT_T:
+        if isinstance(value, float):
+            return value
+        else:
+            raise _NormalizationError(self, value)
+
+    def _normalize_str(self, value: typing.Any) -> _STR_T:
+        if isinstance(value, str):
+            return value
+        else:
+            raise _NormalizationError(self, value)
+
+    def _normalize_object(self, value: typing.Any) -> _OBJ_T:
+        if isinstance(value, bool):
+            return value
+        else:
+            raise _NormalizationError(self, value)
 
     @abc.abstractmethod
     def push(self, value: typing.Any, *,  # pragma: no cover
@@ -374,12 +419,12 @@ class VcdSignal(ConstantSignal):
         # Add event
         self._events.append((_get_timestamp(time, offset), self, self.normalize(value)))
 
-    def normalize(self, value: typing.Any) -> _SV_T:
+    def _normalize_int(self, value: typing.Any) -> _INT_T:
         # Call super
-        v = super(VcdSignal, self).normalize(value)
+        v = super(VcdSignal, self)._normalize_int(value)
 
         # Workaround for int values (NumPy int objects are not accepted)
-        if self.type is int and isinstance(v, (np.int32, np.int64)):
+        if isinstance(v, (np.int32, np.int64)):
             v = int(v)
 
         # Return value

@@ -39,7 +39,7 @@ class _TestSystem(DaxSystem):
 class GTKWaveTestCase(unittest.TestCase):
 
     def test_signal_types(self):
-        self.assertSetEqual(set(Signal._EXPECTED_TYPES), set(GTKWSaveGenerator._GTKW_TYPE))
+        self.assertSetEqual(set(Signal._SIGNAL_TYPES), set(GTKWSaveGenerator._GTKW_TYPE))
 
     def _test_gtk_wave_save_generator(self, *, signal_manager):
         with temp_dir():
