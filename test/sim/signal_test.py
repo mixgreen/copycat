@@ -35,9 +35,6 @@ class NullSignalManagerTestCase(unittest.TestCase):
         self.sm.close()
         self.managers.close()
 
-    def test_signal_types(self):
-        self.assertSetEqual(set(Signal._EXPECTED_TYPES), set(Signal._SPECIAL_VALUES))
-
     def test_signal_manager_type(self):
         # Verify the signal manager type
         self.assertIsInstance(self.sm, self.SIGNAL_MANAGER_CLASS)
@@ -213,7 +210,7 @@ class VcdSignalManagerTestCase(NullSignalManagerTestCase):
 
     def test_signal_types(self):
         import dax.sim.signal
-        self.assertSetEqual(set(dax.sim.signal.VcdSignal._VCD_TYPE), set(Signal._EXPECTED_TYPES))
+        self.assertSetEqual(set(dax.sim.signal.VcdSignal._VCD_TYPE), set(Signal._SIGNAL_TYPES))
 
 
 class PeekSignalManagerTestCase(NullSignalManagerTestCase):
