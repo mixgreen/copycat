@@ -1,6 +1,6 @@
 """Test :mod:`dax.sim.coredevice.spi2`."""
 import artiq.language.environment as artiq_env
-import artiq.coredevice.spi2 as spi
+import artiq.coredevice.spi2 as spi  # type: ignore[import]
 
 import dax.sim.test_case
 import dax.sim.coredevice.spi2

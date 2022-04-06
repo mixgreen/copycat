@@ -9,7 +9,7 @@ import artiq.coredevice.comm_kernel
 import artiq.coredevice.core
 import artiq.coredevice.dma  # type: ignore[import]
 import artiq.coredevice.edge_counter
-import artiq.coredevice.spi2
+import artiq.coredevice.spi2  # type: ignore[import]
 import artiq.coredevice.ttl  # type: ignore[import]
 import artiq.coredevice.urukul  # type: ignore[import]
 import artiq.coredevice.zotino  # type: ignore[import]
