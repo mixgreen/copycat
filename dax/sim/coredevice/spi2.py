@@ -15,7 +15,7 @@ from dax.sim.signal import get_signal_manager
 class SPIMaster(DaxSimDevice, _SPIMaster):
     """Wraps calls to ARTIQ SPI devices."""
 
-    def __init__(self, dmgr: typing.Any, channel: int, **kwargs) -> None:
+    def __init__(self, dmgr: typing.Any, **kwargs) -> None:
         kwargs_without_key = kwargs.copy()
         kwargs_without_key.pop("_key")
         super().__init__(dmgr, **kwargs)
@@ -25,12 +25,12 @@ class SPIMaster(DaxSimDevice, _SPIMaster):
         self._config_clk_div = signal_manager.register(self, "cfg_clk_divider", int)
         self._config_flags = signal_manager.register(self, "cfg_flags", int)
         self._out_data = signal_manager.register(self, "mosi", int)
-        self._init_spi_device(channel, **kwargs_without_key)
+        self._init_spi_device(**kwargs_without_key)
         self._config_set = False
 
     def _init_spi_device(self, channel: int, div: int = 0, length: int = 0) -> None:
+        """Roughly equivalent to SPIMaster's __init__()."""
         self.ref_period_mu = self.core.seconds_to_mu(self.core.coarse_ref_period)
-        self.channel = channel
         self.update_xfer_duration_mu(div, length)
 
     @kernel
