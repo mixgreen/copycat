@@ -9,6 +9,7 @@ import artiq.coredevice.comm_kernel
 import artiq.coredevice.core
 import artiq.coredevice.dma  # type: ignore[import]
 import artiq.coredevice.edge_counter
+import artiq.coredevice.spi2  # type: ignore[import]
 import artiq.coredevice.ttl  # type: ignore[import]
 import artiq.coredevice.urukul  # type: ignore[import]
 import artiq.coredevice.zotino  # type: ignore[import]
@@ -21,6 +22,7 @@ import dax.sim.coredevice.comm_kernel
 import dax.sim.coredevice.core
 import dax.sim.coredevice.dma
 import dax.sim.coredevice.edge_counter
+import dax.sim.coredevice.spi2
 import dax.sim.coredevice.ttl
 import dax.sim.coredevice.urukul
 import dax.sim.coredevice.zotino
@@ -36,6 +38,7 @@ class CoredeviceSignatureTestCase(unittest.TestCase):
         (dax.sim.coredevice.core.Core, artiq.coredevice.core.Core),
         (dax.sim.coredevice.dma.CoreDMA, artiq.coredevice.dma.CoreDMA),
         (dax.sim.coredevice.edge_counter.EdgeCounter, artiq.coredevice.edge_counter.EdgeCounter),
+        (dax.sim.coredevice.spi2.SPIMaster, artiq.coredevice.spi2.SPIMaster),
         (dax.sim.coredevice.ttl.TTLOut, artiq.coredevice.ttl.TTLOut),
         (dax.sim.coredevice.ttl.TTLInOut, artiq.coredevice.ttl.TTLInOut),
         (dax.sim.coredevice.ttl.TTLClockGen, artiq.coredevice.ttl.TTLClockGen),
