@@ -4,6 +4,7 @@ import logging
 import importlib
 import typing
 import dataclasses
+import re
 
 import sipyco.pyon
 
@@ -38,6 +39,7 @@ DAX_SIM_CONFIG_KEY: str = '_dax_sim_config'
 class _ConfigData:
     """Dataclass to hold configuration."""
     coredevice_packages: typing.List[str]
+    exclude: typing.List[typing.Pattern[str]]
     core_device: str
     localhost: str
     _config: dax.util.configparser.DaxConfigParser
@@ -56,18 +58,26 @@ class _ConfigData:
         else:
             return {}
 
+    def is_excluded(self, key: str) -> bool:
+        """Check if a device is excluded.
+
+        :param key: The key of the device
+        :return: :const:`True` if the device is excluded
+        """
+        return any(p.fullmatch(key) for p in self.exclude)
+
     @classmethod
     def create(cls, config: dax.util.configparser.DaxConfigParser) -> _ConfigData:
         """Create a configuration dataclass given a config parser."""
 
-        # Get coredevice packages
+        # Get coredevice packages and append the DAX coredevice package
         coredevice_packages: typing.List[str] = config.get(_CONFIG_SECTION, 'coredevice_packages', fallback='').split()
-        # Append the DAX coredevice package
         coredevice_packages.append(_DAX_COREDEVICE_PACKAGE)
 
         # Create and return the dataclass object
         return cls(
             coredevice_packages=coredevice_packages,
+            exclude=[re.compile(p) for p in config.get(_CONFIG_SECTION, 'exclude', fallback='').split()],
             core_device=config.get(_CONFIG_SECTION, 'core_device', fallback='core'),
             localhost=config.get(_CONFIG_SECTION, 'localhost', fallback='::1'),
             _config=config
@@ -94,6 +104,7 @@ def enable_dax_sim(ddb: typing.Dict[str, typing.Any], *,
 
      - ``enable``, required if not provided as a function parameter
      - ``coredevice_packages``, additional packages to search for coredevice drivers (in order of priority)
+     - ``exclude``, regex patterns to match excluded keys in the device DB (full match)
      - ``config_module``, the module of the simulation configuration class (defaults to DAX.sim config module)
      - ``config_class``, the class of the simulation configuration object (defaults to DAX.sim config class)
      - ``core_device``, the name of the core device (defaults to ``'core'``)
@@ -167,8 +178,11 @@ def enable_dax_sim(ddb: typing.Dict[str, typing.Any], *,
                 used_ports: typing.Set[int] = set()
 
                 for k, v in ddb.items():
-                    # Mutate every entry in-place
-                    _mutate_ddb_entry(k, v, config=config_data, used_ports=used_ports)
+                    if config_data.is_excluded(k):
+                        _logger.debug(f'Excluded entry "{k}"')
+                    else:
+                        # Mutate entry in-place
+                        _mutate_ddb_entry(k, v, config=config_data, used_ports=used_ports)
             except Exception as e:
                 # Log exception to provide more context
                 _logger.exception(e)
@@ -223,9 +237,6 @@ def _mutate_ddb_entry(key: str, value: typing.Any, *,
             _mutate_controller(key, value, config=config, used_ports=used_ports)
         else:
             _logger.debug(f'Skipped entry "{key}" with unknown type "{type_}"')
-    else:
-        # Value is not a dict, it can be ignored
-        pass
 
     # Return the potentially modified value
     return value
