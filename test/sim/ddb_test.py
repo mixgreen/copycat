@@ -17,41 +17,47 @@ def _clear_cache():
     get_dax_config(clear_cache=True)
 
 
-class DdbTestCase(unittest.TestCase):
-    DEVICE_DB = {
-        'core': {
-            'type': 'local',
-            'module': 'artiq.coredevice.core',
-            'class': 'Core',
-            'arguments': {'host': None, 'ref_period': 1e-9}
-        },
-        'core_log': {
-            'type': 'controller',
-            'host': '::1',
-            'port': 1,
-            'command': 'foo -p {port} --bind {bind}'
-        },
-        'ttl0': {
-            'type': 'local',
-            'module': 'artiq.coredevice.ttl',
-            'class': 'TTLInOut',
-            'arguments': {'channel': 0},
-            'sim_args': {'input_prob': 0.9}
-        },
-        'controller': {
-            'type': 'controller',
-            'host': 'some_host',
-            'port': 2,
-            'command': 'foo -p {port} --bind {bind}'
-        },
-        'controller2': {
-            'type': 'controller',
-            'host': 'some_host',
-            'port': 3,
-            'command': 'bar -p {port} --bind {bind}'
-        },
-    }
+_DEFAULT_KWARGS = {
+    'logging_level': logging.WARNING,
+    'moninj_service': False,
+}
 
+_DEVICE_DB = {
+    'core': {
+        'type': 'local',
+        'module': 'artiq.coredevice.core',
+        'class': 'Core',
+        'arguments': {'host': None, 'ref_period': 1e-9}
+    },
+    'core_log': {
+        'type': 'controller',
+        'host': '::1',
+        'port': 1,
+        'command': 'foo -p {port} --bind {bind}'
+    },
+    'ttl0': {
+        'type': 'local',
+        'module': 'artiq.coredevice.ttl',
+        'class': 'TTLInOut',
+        'arguments': {'channel': 0},
+        'sim_args': {'input_prob': 0.9}
+    },
+    'controller': {
+        'type': 'controller',
+        'host': 'some_host',
+        'port': 2,
+        'command': 'foo -p {port} --bind {bind}'
+    },
+    'controller2': {
+        'type': 'controller',
+        'host': 'some_host',
+        'port': 3,
+        'command': 'bar -p {port} --bind {bind}'
+    },
+}
+
+
+class DdbTestCase(unittest.TestCase):
     DEVICE_DB_CONFLICTING_PORTS = {
         'core': {
             'type': 'local',
@@ -167,46 +173,43 @@ class DdbTestCase(unittest.TestCase):
 
     def setUp(self) -> None:
         # Always make a deep copy at the start to make sure we do not mutate the dict
-        self.DEVICE_DB = copy.deepcopy(self.DEVICE_DB)
+        self.DEVICE_DB = copy.deepcopy(_DEVICE_DB)
         _clear_cache()
 
     def test_no_config(self):
         with temp_dir():
             _clear_cache()
             with self.assertRaises(FileNotFoundError):
-                enable_dax_sim(copy.deepcopy(self.DEVICE_DB), logging_level=logging.WARNING, moninj_service=False)
+                enable_dax_sim(self.DEVICE_DB, **_DEFAULT_KWARGS)
 
     def test_missing_config(self):
         with temp_dir():
             _clear_cache()
             pathlib.Path('.dax').touch()  # Create empty config file
             with self.assertRaises(Exception):
-                enable_dax_sim(copy.deepcopy(self.DEVICE_DB), logging_level=logging.WARNING, moninj_service=False)
+                enable_dax_sim(self.DEVICE_DB, **_DEFAULT_KWARGS)
 
     def test_disable(self):
-        self.assertDictEqual(enable_dax_sim(copy.deepcopy(self.DEVICE_DB), enable=False, logging_level=logging.WARNING,
-                                            moninj_service=False),
+        self.assertDictEqual(enable_dax_sim(copy.deepcopy(self.DEVICE_DB), enable=False, **_DEFAULT_KWARGS),
                              self.DEVICE_DB, 'Disabled DAX sim did alter device DB')
 
     def test_application_styles(self):
         # Substitute style
-        d0 = enable_dax_sim(copy.deepcopy(self.DEVICE_DB), enable=True, logging_level=logging.WARNING,
-                            moninj_service=False)
+        d0 = enable_dax_sim(copy.deepcopy(self.DEVICE_DB), enable=True, **_DEFAULT_KWARGS)
 
         # In-place style
         d1 = copy.deepcopy(self.DEVICE_DB)
-        enable_dax_sim(d1, enable=True, logging_level=logging.WARNING, moninj_service=False)
+        enable_dax_sim(d1, enable=True, **_DEFAULT_KWARGS)
 
         # Compare if the dicts are the same
         self.assertDictEqual(d0, d1, 'Substitute and in-place usage of enable_dax_sim() did not yielded same result')
 
     def test_double_application(self):
         # Apply once
-        d0 = enable_dax_sim(copy.deepcopy(self.DEVICE_DB), enable=True, logging_level=logging.WARNING,
-                            moninj_service=False)
+        d0 = enable_dax_sim(copy.deepcopy(self.DEVICE_DB), enable=True, **_DEFAULT_KWARGS)
 
         # Apply twice on deep copy
-        d1 = enable_dax_sim(copy.deepcopy(d0), enable=True, logging_level=logging.WARNING, moninj_service=False)
+        d1 = enable_dax_sim(copy.deepcopy(d0), enable=True, **_DEFAULT_KWARGS)
 
         # Compare if the dicts are the same
         self.assertDictEqual(d0, d1, 'Second application did modify ddb while it should not')
@@ -215,8 +218,7 @@ class DdbTestCase(unittest.TestCase):
         # Signal manager kwargs
         sm_kwargs = {'_some_random': 1, '_random_random': 2, '_keyword_random': 3, '_arguments_random': 4}
 
-        ddb = enable_dax_sim(self.DEVICE_DB, enable=True, logging_level=logging.WARNING, **sm_kwargs,
-                             moninj_service=False)
+        ddb = enable_dax_sim(self.DEVICE_DB, enable=True, **sm_kwargs, **_DEFAULT_KWARGS)
         self.assertIn(DAX_SIM_CONFIG_KEY, ddb, 'Sim config device not found')
         self.assertEqual(ddb[DAX_SIM_CONFIG_KEY]['type'], 'local')
         self.assertEqual(ddb[DAX_SIM_CONFIG_KEY]['module'], config_module)
@@ -225,7 +227,7 @@ class DdbTestCase(unittest.TestCase):
                              'Signal manager kwargs do not match expected dict')
 
     def test_mutate_entries(self, *, localhost='::1'):
-        ddb = enable_dax_sim(self.DEVICE_DB, enable=True, logging_level=logging.WARNING, moninj_service=False)
+        ddb = enable_dax_sim(copy.deepcopy(self.DEVICE_DB), enable=True, **_DEFAULT_KWARGS)
         for k, v in ddb.items():
             type_ = v['type']
             if type_ == 'local':
@@ -262,27 +264,26 @@ class DdbTestCase(unittest.TestCase):
 
     def test_missing_port_arg(self):
         with self.assertLogs(dax.sim.ddb._logger, logging.WARNING):
-            enable_dax_sim(copy.deepcopy(self.DEVICE_DB_MISSING_PORT_ARG), enable=True,
-                           logging_level=logging.WARNING, moninj_service=False)
+            enable_dax_sim(copy.deepcopy(self.DEVICE_DB_MISSING_PORT_ARG), enable=True, **_DEFAULT_KWARGS)
 
     def test_core_address(self, *, ddb=None, core_device='core', localhost='::1'):
         if ddb is None:
             ddb = self.DEVICE_DB
-        ddb = enable_dax_sim(copy.deepcopy(ddb), enable=True, logging_level=logging.WARNING, moninj_service=False)
+        ddb = enable_dax_sim(copy.deepcopy(ddb), enable=True, **_DEFAULT_KWARGS)
         # Core host address should be mutated to localhost
         self.assertIn(core_device, ddb)
         self.assertEqual(ddb[core_device]['arguments']['host'], localhost)
 
     def test_core_compile_flag(self, *, core_device='core', compile_flag=None):
-        ddb = enable_dax_sim(copy.deepcopy(self.DEVICE_DB), enable=True, logging_level=logging.WARNING,
-                             moninj_service=False)
+        # Requires deep copy for multiple entry points
+        ddb = enable_dax_sim(copy.deepcopy(self.DEVICE_DB), enable=True, **_DEFAULT_KWARGS)
         # Core compile flag should be added
         self.assertIn(core_device, ddb)
         self.assertEqual(ddb[core_device]['arguments'].get('compile'), compile_flag)
 
     def test_generic(self):
         for ddb in [copy.deepcopy(self.DEVICE_DB_GENERIC_0), copy.deepcopy(self.DEVICE_DB_GENERIC_1)]:
-            ddb = enable_dax_sim(ddb, enable=True, logging_level=logging.WARNING, moninj_service=False)
+            ddb = enable_dax_sim(ddb, enable=True, **_DEFAULT_KWARGS)
             self.assertEqual(ddb['generic']['module'], 'dax.sim.coredevice.generic')
             self.assertEqual(ddb['generic']['class'], 'Generic')
 
@@ -300,8 +301,7 @@ class DdbTestCase(unittest.TestCase):
                     # Clear DAX config parser cache
                     get_dax_config(clear_cache=True)
 
-                    ddb = enable_dax_sim(copy.deepcopy(self.DEVICE_DB),
-                                         logging_level=logging.WARNING, moninj_service=False)
+                    ddb = enable_dax_sim(copy.deepcopy(self.DEVICE_DB), **_DEFAULT_KWARGS)
                     if dax_enable:
                         self.assertIn(DAX_SIM_CONFIG_KEY, ddb, 'DAX.sim was not enabled')
                     else:
@@ -322,7 +322,7 @@ class DdbTestCase(unittest.TestCase):
                 # Clear DAX config parser cache
                 get_dax_config(clear_cache=True)
 
-                ddb = enable_dax_sim(copy.deepcopy(self.DEVICE_DB), logging_level=logging.WARNING, moninj_service=False)
+                ddb = enable_dax_sim(copy.deepcopy(self.DEVICE_DB), **_DEFAULT_KWARGS)
                 if dax_enable:
                     self.assertIn(DAX_SIM_CONFIG_KEY, ddb, 'DAX.sim was not enabled')
                 else:
@@ -357,7 +357,7 @@ class DdbTestCase(unittest.TestCase):
             # Clear DAX config parser cache
             get_dax_config(clear_cache=True)
 
-            self.test_core_address(ddb=self.DEVICE_DB_FOO_CORE, core_device=core_device)
+            self.test_core_address(ddb=copy.deepcopy(self.DEVICE_DB_FOO_CORE), core_device=core_device)
 
             with self.assertRaises(KeyError, msg='Non-existing core device key did not raise'):
                 self.test_core_address(core_device=core_device)
@@ -400,8 +400,7 @@ class DdbTestCase(unittest.TestCase):
             # Clear DAX config parser cache
             get_dax_config(clear_cache=True)
 
-            ddb = enable_dax_sim(copy.deepcopy(self.DEVICE_DB), enable=True, logging_level=logging.WARNING,
-                                 moninj_service=False)
+            ddb = enable_dax_sim(self.DEVICE_DB, enable=True, **_DEFAULT_KWARGS)
             # Check if configuration args are correctly overwritten, both 'arguments' values and 'sim_args'
             self.assertDictEqual(ddb[device]['arguments'], ref)
 
@@ -419,3 +418,59 @@ class DdbTestCase(unittest.TestCase):
                 get_dax_config(clear_cache=True)
 
                 self.test_core_compile_flag(compile_flag=compile_flag)
+
+    def test_cfg_exclude(self):
+        special_ddb_entries = {
+            'key_a': {'type': 'local', 'module': 'artiq.coredevice.ttl', 'class': 'TTLInOut'},
+            'key_b': {'type': 'local', 'module': 'artiq.coredevice.ttl', 'class': 'TTLInOut'},
+            'key_c': {'type': 'local', 'module': 'artiq.coredevice.ttl', 'class': 'TTLInOut'},
+            'foo': {'type': 'local', 'module': 'artiq.coredevice.ttl', 'class': 'TTLInOut'},
+            'contains_key_a': {'type': 'local', 'module': 'artiq.coredevice.ttl', 'class': 'TTLInOut'},
+            '_foo': {'type': 'local', 'module': 'artiq.coredevice.ttl', 'class': 'TTLInOut'},
+            '_bar': {'type': 'local', 'module': 'artiq.coredevice.ttl', 'class': 'TTLInOut'},
+            'bar': {'type': 'local', 'module': 'artiq.coredevice.ttl', 'class': 'TTLInOut'},
+            'ttl0': {'type': 'local', 'module': 'artiq.coredevice.ttl', 'class': 'TTLInOut'},
+            'ttl0_ec': {'type': 'local', 'module': 'artiq.coredevice.ttl', 'class': 'TTLInOut'},
+            'ttl0_ec_': {'type': 'local', 'module': 'artiq.coredevice.ttl', 'class': 'TTLInOut'},
+            'ttl5_ec': {'type': 'local', 'module': 'artiq.coredevice.ttl', 'class': 'TTLInOut'},
+            'ttl6_ec': {'type': 'local', 'module': 'artiq.coredevice.ttl', 'class': 'TTLInOut'},
+        }
+        self.DEVICE_DB.update(copy.deepcopy(special_ddb_entries))
+        exclude_reference = {
+            'key_a': True,
+            'key_b': True,
+            'key_c': False,
+            'foo': False,
+            'contains_key_a': False,
+            '_foo': True,
+            '_bar': True,
+            'bar': False,
+            'ttl0': False,
+            'ttl0_ec': True,
+            'ttl0_ec_': False,
+            'ttl5_ec': True,
+            'ttl6_ec': False,
+        }
+
+        with temp_dir():
+            cfg = """
+            [dax.sim]
+            exclude =
+                key_a
+                key_b
+                _.*
+                ttl[0-5]_ec
+            """
+            # Write configuration
+            with open('.dax', mode='w') as f:
+                f.write(textwrap.dedent(cfg))
+            # Clear DAX config parser cache
+            get_dax_config(clear_cache=True)
+
+            ddb = enable_dax_sim(self.DEVICE_DB, enable=True, **_DEFAULT_KWARGS)
+            for k, v in exclude_reference.items():
+                if v:
+                    self.assertDictEqual(ddb[k], special_ddb_entries[k])
+                else:
+                    print(k)
+                    self.assertNotEqual(ddb[k], special_ddb_entries[k])
