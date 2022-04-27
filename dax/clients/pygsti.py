@@ -128,11 +128,6 @@ class _PygstiSingleQubitClientBase(DaxClient, Experiment):
             tooltip='Maximum circuit depth (excluding inversion), automatically generates every power of 2 below '
                     'this value as well'
         )
-        self._num_circuits: int = self.get_argument(
-            'Number of circuits',
-            NumberValue(10, min=1, ndecimals=0, step=1),
-            tooltip='Number of circuits to sample from'
-        )
         self._num_samples: int = self.get_argument(
             'Number of samples',
             NumberValue(100, min=1, ndecimals=0, step=1),
@@ -225,9 +220,9 @@ class _PygstiSingleQubitClientBase(DaxClient, Experiment):
         # Save configuration
         self.set_dataset('pygsti_version', pygsti_version)
         self.set_dataset('protocol_type', self._protocol_type)
-        self.set_dataset('operation_interface', self._operation_interface_key)
+        self.set_dataset('operation_interface_key', self._operation_interface_key)
+        self.set_dataset('histogram_context_key', self._histogram_context_key)
         self.set_dataset('max_depth', self._max_depth)
-        self.set_dataset('num_circuits', self._num_circuits)
         self.set_dataset('num_samples', self._num_samples)
         self.set_dataset('target_qubit', self._target_qubit)
         self.set_dataset('real_time', self._real_time)
@@ -497,6 +492,11 @@ class RandomizedBenchmarkingSQ(_PygstiSingleQubitClientBase):
     _PROTOCOL_TYPES = [_DIRECT_RB_KEY, _CLIFFORD_RB_KEY]
 
     def _add_arguments_internal(self) -> None:
+        self._num_circuits: int = self.get_argument(
+            'Number of circuits',
+            NumberValue(10, min=1, ndecimals=0, step=1),
+            tooltip='Number of circuits to sample from'
+        )
         self._randomize_output: bool = self.get_argument(
             'Randomize Output',
             BooleanValue(True),
@@ -514,11 +514,21 @@ class RandomizedBenchmarkingSQ(_PygstiSingleQubitClientBase):
             NumberValue(max(1, cpu_count // 4), min=1, max=cpu_count, ndecimals=0, step=1),
             tooltip='Number of processes to spawn for circuit compilation'
         )
-        self._seed: typing.Optional[int] = self.get_argument(
+        self._seed: int = self.get_argument(
             'Seed',
             NumberValue(0, ndecimals=0, step=1),
             tooltip='pyGSTi rng seed (0 for random seed)'
         )
+
+    def prepare(self) -> None:
+        # Call super
+        super().prepare()
+
+        # Save configuration
+        self.set_dataset('num_circuits', self._num_circuits)
+        self.set_dataset('randomize_output', self._randomize_output)
+        self.set_dataset('citerations', self._citerations)
+        self.set_dataset('seed', self._seed)
 
     def _get_exp_design(self, circuit_depths: typing.Sequence[int],
                         available_gates: typing.Collection[str]) -> typing.Any:
