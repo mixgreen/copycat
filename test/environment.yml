@@ -6,6 +6,7 @@ channels:
   - conda-forge
 dependencies:
   # DAX dependencies
+  - trap-dac-utils
   - artiq
   - sipyco
   - numpy
