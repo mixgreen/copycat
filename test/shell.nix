@@ -13,6 +13,7 @@ pkgs.mkShell {
       ps.mypy
       ps.pycodestyle
       ps.coverage
+      dax-full.trap-dac-utils
       dax-full.flake8-artiq
       dax-full.artiq-stubs
     ]))
