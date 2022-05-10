@@ -989,6 +989,7 @@ class HistogramAnalyzer:
                        legend_loc: typing.Optional[typing.Union[str, typing.Tuple[float, float]]] = None,
                        fig_size: typing.Optional[typing.Tuple[float, float]] = None,
                        ext: str = 'pdf',
+                       show: bool = False,
                        **kwargs: typing.Any) -> None:
         """Plot the histograms for a given key.
 
@@ -1000,6 +1001,7 @@ class HistogramAnalyzer:
         :param legend_loc: Location of the legend
         :param fig_size: The figure size
         :param ext: Output file extension
+        :param show: Show the figure in a popup window (execution blocks until the window is closed)
         :param kwargs: Keyword arguments for the plot function
         """
         assert isinstance(key, str)
@@ -1008,6 +1010,7 @@ class HistogramAnalyzer:
         assert isinstance(labels, collections.abc.Sequence) or labels is None
         assert isinstance(width, float)
         assert isinstance(ext, str)
+        assert isinstance(show, bool)
 
         # Lazy import
         import matplotlib.pyplot as plt
@@ -1048,9 +1051,11 @@ class HistogramAnalyzer:
             ax.xaxis.set_major_locator(matplotlib.ticker.MaxNLocator(integer=True))  # Only integer ticks
             ax.legend(loc=legend_loc)
 
-            # Save figure
+            # Save and show figure
             file_name = self._file_name_generator(self.HISTOGRAM_PLOT_FILE_FORMAT.format(key=key, index=index), ext)
             fig.savefig(file_name, bbox_inches='tight')
+            if show:
+                plt.show()
 
         # Close the figure
         plt.close(fig)
@@ -1071,6 +1076,7 @@ class HistogramAnalyzer:
                          legend_loc: typing.Optional[typing.Union[str, typing.Tuple[float, float]]] = None,
                          fig_size: typing.Optional[typing.Tuple[float, float]] = None,
                          ext: str = 'pdf',
+                         show: bool = False,
                          **kwargs: typing.Any) -> None:
         """Plot the individual state probability graph for a given key.
 
@@ -1088,6 +1094,7 @@ class HistogramAnalyzer:
         :param legend_loc: Location of the legend
         :param fig_size: The figure size
         :param ext: Output file extension
+        :param show: Show the figure in a popup window (execution blocks until the window is closed)
         :param kwargs: Keyword arguments for the plot function
         """
         assert isinstance(key, str)
@@ -1096,6 +1103,7 @@ class HistogramAnalyzer:
         assert isinstance(y_label, str) or y_label is None
         assert isinstance(labels, collections.abc.Sequence) or labels is None
         assert isinstance(ext, str)
+        assert isinstance(show, bool)
         assert hasattr(self, 'probabilities'), \
             'Probability data not available, probably because no state detection threshold was provided'
 
@@ -1140,9 +1148,11 @@ class HistogramAnalyzer:
         ax.ticklabel_format(axis='x', scilimits=(0, 1))
         ax.legend(loc=legend_loc)
 
-        # Save and close figure
+        # Save, show, and close figure
         file_name = self._file_name_generator(self.PROBABILITY_PLOT_FILE_FORMAT.format(key=key), ext)
         fig.savefig(file_name, bbox_inches='tight')
+        if show:
+            plt.show()
         plt.close(fig)
 
     def plot_all_probabilities(self, **kwargs: typing.Any) -> None:
@@ -1167,6 +1177,7 @@ class HistogramAnalyzer:
                         legend_loc: typing.Optional[typing.Union[str, typing.Tuple[float, float]]] = None,
                         fig_size: typing.Optional[typing.Tuple[float, float]] = None,
                         ext: str = 'pdf',
+                        show: bool = False,
                         **kwargs: typing.Any) -> None:
         """Plot the mean count graph for a given key.
 
@@ -1181,6 +1192,7 @@ class HistogramAnalyzer:
         :param legend_loc: Location of the legend
         :param fig_size: The figure size
         :param ext: Output file extension
+        :param show: Show the figure in a popup window (execution blocks until the window is closed)
         :param kwargs: Keyword arguments for the plot function
         """
         assert isinstance(key, str)
@@ -1189,6 +1201,7 @@ class HistogramAnalyzer:
         assert isinstance(y_label, str) or y_label is None
         assert isinstance(labels, collections.abc.Sequence) or labels is None
         assert isinstance(ext, str)
+        assert isinstance(show, bool)
 
         # Get the data associated with the provided key
         mean_counts = [np.asarray(p) for p in self.mean_counts[key]]
@@ -1233,9 +1246,11 @@ class HistogramAnalyzer:
         ax.ticklabel_format(axis='x', scilimits=(0, 1))
         ax.legend(loc=legend_loc)
 
-        # Save and close figure
+        # Save, show, and close figure
         file_name = self._file_name_generator(self.MEAN_COUNT_PLOT_FILE_FORMAT.format(key=key), ext)
         fig.savefig(file_name, bbox_inches='tight')
+        if show:
+            plt.show()
         plt.close(fig)
 
     def plot_all_mean_counts(self, **kwargs: typing.Any) -> None:
@@ -1257,6 +1272,7 @@ class HistogramAnalyzer:
                                legend_loc: typing.Optional[typing.Union[str, typing.Tuple[float, float]]] = None,
                                fig_size: typing.Optional[typing.Tuple[float, float]] = None,
                                ext: str = 'pdf',
+                               show: bool = False,
                                **kwargs: typing.Any) -> None:
         """Plot the full state probability graph for a given key.
 
@@ -1274,6 +1290,7 @@ class HistogramAnalyzer:
         :param legend_loc: Location of the legend
         :param fig_size: The figure size
         :param ext: Output file extension
+        :param show: Show the figure in a popup window (execution blocks until the window is closed)
         :param kwargs: Keyword arguments for the plot function
         """
         assert isinstance(key, str)
@@ -1282,6 +1299,7 @@ class HistogramAnalyzer:
         assert isinstance(y_label, str) or y_label is None
         assert isinstance(labels, collections.abc.Sequence) or labels is None
         assert isinstance(ext, str)
+        assert isinstance(show, bool)
         assert hasattr(self, 'raw'), 'Provided data source does not contain required raw data (DAX<0.4)'
 
         # Get the state probabilities associated with the provided key
@@ -1334,9 +1352,11 @@ class HistogramAnalyzer:
         ax.ticklabel_format(axis='x', scilimits=(0, 1))
         ax.legend(loc=legend_loc)
 
-        # Save and close figure
+        # Save, show, and close figure
         file_name = self._file_name_generator(self.STATE_PROBABILITY_PLOT_FILE_FORMAT.format(key=key), ext)
         fig.savefig(file_name, bbox_inches='tight')
+        if show:
+            plt.show()
         plt.close(fig)
 
     def plot_all_state_probabilities(self, **kwargs: typing.Any) -> None:
