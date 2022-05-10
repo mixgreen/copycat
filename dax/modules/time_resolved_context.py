@@ -726,6 +726,7 @@ class TimeResolvedAnalyzer:
                    legend_loc: typing.Optional[typing.Union[str, typing.Tuple[float, float]]] = None,
                    fig_size: typing.Optional[typing.Tuple[float, float]] = None,
                    ext: str = 'pdf',
+                   show: bool = False,
                    **kwargs: typing.Any) -> None:
         """Plot the traces for a given key.
 
@@ -736,6 +737,7 @@ class TimeResolvedAnalyzer:
         :param legend_loc: Location of the legend
         :param fig_size: The figure size
         :param ext: Output file extension
+        :param show: Show the figure in a popup window (execution blocks until the window is closed)
         :param kwargs: Keyword arguments for the plot function
         """
         assert isinstance(key, str)
@@ -743,6 +745,7 @@ class TimeResolvedAnalyzer:
         assert isinstance(y_label, str) or y_label is None
         assert isinstance(labels, collections.abc.Sequence) or labels is None
         assert isinstance(ext, str)
+        assert isinstance(show, bool)
 
         # Get the traces associated with the given key
         traces = self.traces[key]
@@ -788,9 +791,11 @@ class TimeResolvedAnalyzer:
             ax.ticklabel_format(axis='x', scilimits=(0, 10))
             ax.legend(loc=legend_loc)
 
-            # Save figure
+            # Save and show figure
             file_name = self._file_name_generator(self.PLOT_FILE_FORMAT.format(key=key, index=index), ext)
             fig.savefig(file_name, bbox_inches='tight')
+            if show:
+                plt.show()
 
         # Close the figure
         plt.close(fig)
