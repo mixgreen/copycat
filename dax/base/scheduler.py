@@ -2,6 +2,7 @@ from __future__ import annotations  # Postponed evaluation of annotations
 
 import abc
 import typing
+import types
 import logging
 import collections
 import collections.abc
@@ -114,14 +115,15 @@ def _unique_ordered(items: typing.Iterable[__E_T]) -> typing.Sequence[__E_T]:
     return list(collections.OrderedDict.fromkeys(items))
 
 
+@enum.unique
 class NodeAction(enum.Enum):
     """Node action enumeration."""
 
-    PASS = enum.auto()
+    PASS = 'pass'
     """Pass this node."""
-    RUN = enum.auto()
+    RUN = 'run'
     """Run this node."""
-    FORCE = enum.auto()
+    FORCE = 'force'
     """Force this node."""
 
     def submittable(self) -> bool:
@@ -131,16 +133,6 @@ class NodeAction(enum.Enum):
         """
         return self in {NodeAction.RUN, NodeAction.FORCE}
 
-    @classmethod
-    def from_str(cls, string_: str) -> NodeAction:
-        """Convert a string into its corresponding node action enumeration.
-
-        :param string_: The name of the node action as a string (case-insensitive)
-        :return: The node action enumeration object
-        :raises KeyError: Raised if the node action name does not exist
-        """
-        return {str(p).lower(): p for p in cls}[string_.lower()]
-
     def __str__(self) -> str:
         """String representation of this node action.
 
@@ -149,17 +141,16 @@ class NodeAction(enum.Enum):
         return self.name
 
 
+_P_T = typing.Mapping[typing.Tuple[NodeAction, NodeAction], NodeAction]  # Policy enum type
+
+
 class Policy(enum.Enum):
     """Policy enumeration for the scheduler.
 
     The policy enumeration includes definitions for the policies using a mapping table.
     """
 
-    if typing.TYPE_CHECKING:  # pragma: no cover
-        # Only add type when type checking is enabled to not conflict with iterations over the Policy enum
-        __P_T = typing.Dict[typing.Tuple[NodeAction, NodeAction], NodeAction]  # Policy enum type
-
-    LAZY: __P_T = {
+    LAZY: _P_T = types.MappingProxyType({
         (NodeAction.PASS, NodeAction.PASS): NodeAction.PASS,
         (NodeAction.PASS, NodeAction.RUN): NodeAction.RUN,
         (NodeAction.PASS, NodeAction.FORCE): NodeAction.RUN,
@@ -169,10 +160,10 @@ class Policy(enum.Enum):
         (NodeAction.FORCE, NodeAction.PASS): NodeAction.RUN,
         (NodeAction.FORCE, NodeAction.RUN): NodeAction.RUN,
         (NodeAction.FORCE, NodeAction.FORCE): NodeAction.RUN,
-    }
+    })
     """Lazy scheduling policy."""
 
-    GREEDY: __P_T = {
+    GREEDY: _P_T = types.MappingProxyType({
         (NodeAction.PASS, NodeAction.PASS): NodeAction.PASS,
         (NodeAction.PASS, NodeAction.RUN): NodeAction.RUN,
         (NodeAction.PASS, NodeAction.FORCE): NodeAction.RUN,
@@ -182,7 +173,7 @@ class Policy(enum.Enum):
         (NodeAction.FORCE, NodeAction.PASS): NodeAction.RUN,
         (NodeAction.FORCE, NodeAction.RUN): NodeAction.RUN,
         (NodeAction.FORCE, NodeAction.FORCE): NodeAction.RUN,
-    }
+    })
     """Greedy scheduling policy."""
 
     def action(self, previous: NodeAction, current: NodeAction) -> NodeAction:
@@ -194,7 +185,7 @@ class Policy(enum.Enum):
         """
         assert isinstance(previous, NodeAction)
         assert isinstance(current, NodeAction)
-        policy: Policy.__P_T = self.value
+        policy: _P_T = self.value
         return policy[previous, current]
 
     @classmethod
@@ -1594,7 +1585,7 @@ class DaxScheduler(dax.base.system.DaxHasKey, abc.ABC):
             root_nodes: typing.Collection[Node] = _unique_ordered(self._node_name_map[node] for node in request.nodes)
             if len(root_nodes) < len(request.nodes):
                 self.logger.warning('Duplicate nodes in request were dropped')
-            root_action: NodeAction = NodeAction.from_str(request.action)
+            root_action: NodeAction = NodeAction(request.action.lower())
             policy: Policy = self._policy if request.policy is None else Policy.from_str(request.policy)
             reverse: bool = self._reverse if request.reverse is None else request.reverse
             priority: int = self._job_priority if request.priority is None else request.priority
@@ -1609,7 +1600,7 @@ class DaxScheduler(dax.base.system.DaxHasKey, abc.ABC):
                 raise TypeError('Depth must be of type int')
             if not isinstance(start_depth, int):
                 raise TypeError('Start depth must be of type int')
-        except (KeyError, TypeError):
+        except (KeyError, ValueError, TypeError):
             # Log the error
             self.logger.exception(f'Dropping invalid request: {request}')
         else:
