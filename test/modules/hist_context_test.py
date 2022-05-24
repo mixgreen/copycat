@@ -3,7 +3,6 @@ import unittest
 import collections
 import numpy as np
 import h5py
-import logging
 
 import artiq.coredevice
 
@@ -383,9 +382,23 @@ class HistogramContextTestCase(unittest.TestCase):
         self.assertSetEqual(set(keys), set(self.h.get_keys()))
 
     def test_applets(self):
-        with self.assertLogs(self.h.logger, logging.ERROR):
-            # Expect error log because there is no data
+        self.assertFalse(self.h._plot_state_probability)
+
+        def plot_fn():
+            # In simulation, we can only call these functions, but nothing will happen
+            self.h.plot_histogram()
+            self.h.plot_probability()
+            self.h.plot_mean_count()
             self.h.plot_state_probability()
+            self.h.clear_probability_plot()
+            self.h.clear_mean_count_plot()
+            self.h.disable_histogram_plot()
+            self.h.disable_probability_plot()
+            self.h.disable_mean_count_plot()
+            self.h.disable_state_probability_plot()
+            self.h.disable_all_plots()
+
+        plot_fn()
 
         # Add data to the archive
         num_histograms = 4
@@ -402,18 +415,7 @@ class HistogramContextTestCase(unittest.TestCase):
                 for d in data:
                     self.h.append(d)
 
-        # In simulation we can only call these functions, but nothing will happen
-        self.h.plot_histogram()
-        self.h.plot_probability()
-        self.h.plot_mean_count()
-        self.h.plot_state_probability()
-        self.h.clear_probability_plot()
-        self.h.clear_mean_count_plot()
-        self.h.disable_histogram_plot()
-        self.h.disable_probability_plot()
-        self.h.disable_mean_count_plot()
-        self.h.disable_state_probability_plot()
-        self.h.disable_all_plots()
+        plot_fn()
 
     def test_kernel_invariants(self):
         # Test kernel invariants

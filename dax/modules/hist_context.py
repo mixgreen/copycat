@@ -78,6 +78,7 @@ class HistogramContext(DaxModule, DataContextInterface):
     _in_context: np.int32
     _buffer: typing.List[typing.Sequence[_DATA_T]]
     _first_close: bool
+    _plot_state_probability: bool
     _raw_cache: typing.Dict[str, typing.List[typing.Sequence[typing.Sequence[_DATA_T]]]]
     _histogram_cache: typing.Dict[str, typing.List[typing.Sequence[typing.Counter[_DATA_T]]]]
     _dataset_key: str
@@ -135,6 +136,8 @@ class HistogramContext(DaxModule, DataContextInterface):
         self._buffer = []
         # Flag for the first call to close()
         self._first_close = True
+        # Flag to plot state probability at runtime
+        self._plot_state_probability = False
 
         # Cache for raw data
         self._raw_cache = {}
@@ -266,6 +269,8 @@ class HistogramContext(DaxModule, DataContextInterface):
             # Prepare the probability and mean count plot datasets by clearing them
             self.clear_probability_plot()
             self.clear_mean_count_plot()
+            if self._plot_state_probability:
+                self.clear_state_probability_plot()
             # Clear flag
             self._first_close = False
 
@@ -307,6 +312,12 @@ class HistogramContext(DaxModule, DataContextInterface):
             # Append results to count mean and standard deviation plotting datasets
             self.append_to_dataset(self._mean_count_plot_key, mean_counts)
             self.append_to_dataset(self._stdev_count_plot_key, stdev_counts)
+
+            if self._plot_state_probability:
+                # Calculate state probability only if the feature is enabled
+                state_probability = HistogramAnalyzer.raw_to_flat_state_probability(
+                    self._buffer, self._state_detection_threshold)
+                self.append_to_dataset(self._state_probability_plot_key, state_probability)
 
         else:
             # Add empty element to the caches (keeps indexing consistent)
@@ -391,38 +402,38 @@ class HistogramContext(DaxModule, DataContextInterface):
                                **kwargs):  # type: (typing.Optional[str], typing.Any) -> None
         """Open the applet that shows the full state probability graph.
 
-        **This function can only be called after all data was obtained.**
-        Plotting state probabilities does not scale well and therefore we do not support real-time plotting.
-        Instead, the contents of the graph are computed once when calling this function.
-        If this function is called before data is available, an error will be logged but no exception is raised.
-
-        Note that this function computes and redraws the plot for each call.
-        Therefore, this function should preferably be called only once after the experiment finished.
+        If this function is called before data is available, the histogram context will be configured to plot the state
+        probability real-time. Calculating state probabilities is computationally intensive, and doing so in real-time
+        might degrade the performance of the experiment.
+        Alternatively, this function can be called after the experiment finished and all data is available.
+        The contents of the graph will then be computed at once when calling this function.
 
         :param dataset_key: Key of the dataset to plot
         :param kwargs: Extra keyword arguments for the plot
         """
 
+        # Set flag
+        self._plot_state_probability = True
+
         try:
-            # Obtain raw data
+            # Obtain raw data from cache
             raw = self.get_raw(dataset_key)
         except KeyError:
-            # No data available (yet)
-            self.logger.error('No data available, state probability can only be plotted after all data is obtained')
+            # No data available at this moment
+            pass
         else:
-            # Transform and broadcast data
+            # Transform and broadcast data immediately from cache
             state_probabilities = HistogramAnalyzer.raw_to_flat_state_probabilities(
                 raw, state_detection_threshold=self._state_detection_threshold)
-            self.set_dataset(self._state_probability_plot_key, state_probabilities,
-                             broadcast=True, archive=False)
+            self.set_dataset(self._state_probability_plot_key, state_probabilities, broadcast=True, archive=False)
 
-            # Set defaults
-            kwargs.setdefault('y_label', '|State> probability')
-            kwargs.setdefault('title', f'RID {self._scheduler.rid}')
-            kwargs.setdefault('plot_names', '|{index}>')
-            # Plot
-            self._ccb.plot_xy_multi(self.STATE_PROBABILITY_PLOT_NAME, self._state_probability_plot_key,
-                                    group=self._plot_group, **kwargs)
+        # Set defaults
+        kwargs.setdefault('y_label', '|State> probability')
+        kwargs.setdefault('title', f'RID {self._scheduler.rid}')
+        kwargs.setdefault('plot_names', '|{index}>')
+        # Plot
+        self._ccb.plot_xy_multi(self.STATE_PROBABILITY_PLOT_NAME, self._state_probability_plot_key,
+                                group=self._plot_group, **kwargs)
 
     @rpc(flags={'async'})
     def clear_probability_plot(self):  # type: () -> None
@@ -442,6 +453,14 @@ class HistogramContext(DaxModule, DataContextInterface):
         # Set the mean/stdev count datasets to empty lists
         self.set_dataset(self._mean_count_plot_key, [], broadcast=True, archive=False)
         self.set_dataset(self._stdev_count_plot_key, [], broadcast=True, archive=False)
+
+    @rpc(flags={'async'})
+    def clear_state_probability_plot(self):  # type: () -> None
+        """Clear the state probability plot.
+
+        This function can only be called after the module is initialized.
+        """
+        self.set_dataset(self._state_probability_plot_key, [], broadcast=True, archive=False)
 
     @rpc(flags={'async'})
     def disable_histogram_plot(self):  # type: () -> None
@@ -953,6 +972,33 @@ class HistogramAnalyzer:
 
         # Return the converted result
         return [cls._states_to_probabilities(states) for states in cls.raw_to_states(raw, state_detection_threshold)]
+
+    @classmethod
+    def raw_to_flat_state_probability(cls, raw: typing.Sequence[typing.Sequence[_DATA_T]],
+                                      state_detection_threshold: int) -> typing.List[float]:
+        """Convert raw data into a flattened full state probability.
+
+        :param raw: The raw data to process
+        :param state_detection_threshold: The state detection threshold to use
+        :return: A list containing full state probability data (integer state)
+        """
+
+        # Get the state probabilities as dicts
+        state_probability = cls._states_to_probabilities(
+            [cls._vector_to_int(point, state_detection_threshold) for point in raw]
+        )
+
+        try:
+            # Obtain the number of bits and states (assumes there is at least one measurement)
+            num_bits = len(raw[0])
+        except IndexError:
+            # No data, return empty list
+            return []
+        else:
+            # Calculate the number of states
+            num_states = 2 ** num_bits
+            # Flatten data and return result
+            return [state_probability.get(i, 0.0) for i in range(num_states)]
 
     @classmethod
     def raw_to_flat_state_probabilities(cls, raw: typing.Sequence[typing.Sequence[typing.Sequence[_DATA_T]]],
