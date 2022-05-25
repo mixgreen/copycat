@@ -481,7 +481,7 @@ class VcdSignalManager(DaxSignalManager[VcdSignal]):
         # Create the shared buffer for events
         self._events = []
         # Time horizon of flushed events
-        self._flushed_horizon = _TIMESTAMP_MIN
+        self._flushed_horizon = 0  # VCD does not support negative timestamps, the initial horizon should be 0
 
     def _create_signal(self, scope: DaxSimDevice, name: str, type_: _ST_T, *,
                        size: _SS_T = None, init: typing.Optional[_SV_T] = None) -> VcdSignal:
@@ -491,7 +491,7 @@ class VcdSignalManager(DaxSignalManager[VcdSignal]):
         # Sort existing events to easily get the maximum timestamp
         self._events.sort(key=operator.itemgetter(0))
         # Return the max of the latest event if available, the flushed horizon, and the current timestamp
-        return max(self._events[-1][0] if self._events else _TIMESTAMP_MIN, self._flushed_horizon, _get_timestamp())
+        return max(self._events[-1][0] if self._events else 0, self._flushed_horizon, _get_timestamp())
 
     def flush(self, ref_period: float) -> None:
         # Get a timestamp for the new horizon
@@ -606,9 +606,10 @@ class PeekSignal(Signal):
     def horizon(self) -> _T_T:
         """Return the time horizon of this signal.
 
-        See also :func:`DaxSignalManager.horizon`.
+        See also :func:`DaxSignalManager.horizon`. For a :class:`PeekSignal`, the horizon is the timestamp of the
+        latest event or a constant minimum timestamp value in case there are no events.
 
-        :return: The time horizon in machine units or None if no events are available
+        :return: The time horizon in machine units
         """
         return self._events.keys()[-1] if self._events else _TIMESTAMP_MIN
 

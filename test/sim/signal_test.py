@@ -25,6 +25,7 @@ from dax.util.output import temp_dir
 class NullSignalManagerTestCase(unittest.TestCase):
     SIGNAL_MANAGER: typing.ClassVar[str] = 'null'
     SIGNAL_MANAGER_CLASS: typing.ClassVar[typing.Type[DaxSignalManager]] = NullSignalManager
+    MIN_HORIZON: typing.ClassVar[typing.Optional[int]] = None
 
     def setUp(self) -> None:
         ddb = enable_dax_sim(_DEVICE_DB.copy(), enable=True, output=self.SIGNAL_MANAGER, moninj_service=False)
@@ -200,6 +201,16 @@ class NullSignalManagerTestCase(unittest.TestCase):
             t_sum += t
             self.assertEqual(self.sm.horizon(), t_sum)
 
+    def test_horizon_reset_negative_timestamp(self, t=-100):
+        min_horizon = t if self.MIN_HORIZON is None else max(t, self.MIN_HORIZON)
+
+        delay_mu(t)
+        self.assertEqual(self.sm.horizon(), min_horizon)
+        self.assertEqual(now_mu(), t)
+        self.sys.core.reset()
+        self.assertEqual(self.sm.horizon(), min_horizon + BaseCore.DEFAULT_RESET_TIME_MU)
+        self.assertEqual(now_mu(), min_horizon + BaseCore.DEFAULT_RESET_TIME_MU)
+
     def _test_horizon_with_event(self, t=1000):  # Test disabled by default, must be called manually
         # Forward and reverse time, horizon will move along
         delay_mu(t)
@@ -239,6 +250,7 @@ class NullSignalManagerTestCase(unittest.TestCase):
 class VcdSignalManagerTestCase(NullSignalManagerTestCase):
     SIGNAL_MANAGER = 'vcd'
     SIGNAL_MANAGER_CLASS = VcdSignalManager
+    MIN_HORIZON = 0  # The VCD signal manager starts with a fixed horizon of 0 (in addition to init events)
 
     def setUp(self) -> None:
         # Enter temp dir
@@ -297,6 +309,7 @@ class VcdSignalManagerTestCase(NullSignalManagerTestCase):
 class PeekSignalManagerTestCase(NullSignalManagerTestCase):
     SIGNAL_MANAGER = 'peek'
     SIGNAL_MANAGER_CLASS = PeekSignalManager
+    MIN_HORIZON = 0  # The Peek signal manager starts with a minimum horizon of 0 due to init events
 
     def test_horizon_no_events(self):
         super(PeekSignalManagerTestCase, self).test_horizon_no_events()
