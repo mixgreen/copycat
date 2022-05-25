@@ -33,6 +33,8 @@ _STR_T = str
 _OBJ_T = bool
 _SV_T = typing.Union[_BOOL_T, _INT_T, _FLOAT_T, _STR_T, _OBJ_T]  # The signal value type
 
+_TIMESTAMP_MIN: _T_T = np.iinfo(np.int64).min  # type: ignore[attr-defined]
+"""Minimum value for a timestamp."""
 _INT_SPECIAL_VALUES: typing.FrozenSet[str] = frozenset('xXzZ')
 """Special values for int signals."""
 _BOOL_VEC_VALUES: typing.FrozenSet[str] = frozenset('01xXzZ')
@@ -320,6 +322,16 @@ class DaxSignalManager(abc.ABC, typing.Generic[_S_T]):
         pass
 
     @abc.abstractmethod
+    def horizon(self) -> _T_T:
+        """Return the time horizon.
+
+        The time horizon is defined as the maximum of all event timestamps and the timeline cursor position.
+
+        :return: The time horizon in machine units
+        """
+        pass
+
+    @abc.abstractmethod
     def flush(self, ref_period: float) -> None:  # pragma: no cover
         """Flush the output of the signal manager.
 
@@ -374,6 +386,9 @@ class NullSignalManager(DaxSignalManager[ConstantSignal]):
     def _create_signal(self, scope: DaxSimDevice, name: str, type_: _ST_T, *,
                        size: _SS_T = None, init: typing.Optional[_SV_T] = None) -> ConstantSignal:
         return ConstantSignal(scope, name, type_, size, init=init)
+
+    def horizon(self) -> _T_T:
+        return _get_timestamp()
 
     def flush(self, ref_period: float) -> None:
         pass
@@ -442,6 +457,7 @@ class VcdSignalManager(DaxSignalManager[VcdSignal]):
     _file: typing.IO[str]
     _vcd: vcd.writer.VCDWriter
     _events: typing.List[VcdSignal.E_T]
+    _flushed_horizon: _T_T
 
     def __init__(self, file_name: str, *, timescale: float = 1 * ns):
         assert isinstance(file_name, str), 'Output file name must be of type str'
@@ -464,16 +480,26 @@ class VcdSignalManager(DaxSignalManager[VcdSignal]):
 
         # Create the shared buffer for events
         self._events = []
+        # Time horizon of flushed events
+        self._flushed_horizon = _TIMESTAMP_MIN
 
     def _create_signal(self, scope: DaxSimDevice, name: str, type_: _ST_T, *,
                        size: _SS_T = None, init: typing.Optional[_SV_T] = None) -> VcdSignal:
         return VcdSignal(scope, name, type_, size, init=init, vcd_=self._vcd, events=self._events)
 
-    def flush(self, ref_period: float) -> None:
-        # Sort the list of events (VCD writer can only handle a linear timeline)
+    def horizon(self) -> _T_T:
+        # Sort existing events to easily get the maximum timestamp
         self._events.sort(key=operator.itemgetter(0))
-        # Get a timestamp for now
-        now: int = int(_get_timestamp())
+        # Return the max of the latest event if available, the flushed horizon, and the current timestamp
+        return max(self._events[-1][0] if self._events else _TIMESTAMP_MIN, self._flushed_horizon, _get_timestamp())
+
+    def flush(self, ref_period: float) -> None:
+        # Get a timestamp for the new horizon
+        horizon: _T_T = self.horizon()
+        # Update the flushed horizon
+        self._flushed_horizon = horizon
+
+        # NOTE: self.horizon() sorts the events, which is required (VCD writer can only handle a linear timeline)
 
         if ref_period == self._timescale:
             # Just iterate over the events
@@ -482,8 +508,8 @@ class VcdSignalManager(DaxSignalManager[VcdSignal]):
             # Scale the timestamps if the reference period does not match the timescale
             scalar = ref_period / self._timescale
             events_iter = ((int(time * scalar), signal, value) for time, signal, value in self._events)
-            # Scale the timestamp for now
-            now = int(now * scalar)
+            # Scale the timestamp for the horizon
+            horizon = np.int64(horizon * scalar)
 
         try:
             # Submit sorted events to the VCD writer
@@ -494,7 +520,7 @@ class VcdSignalManager(DaxSignalManager[VcdSignal]):
             raise RuntimeError('Attempt to go back in time too much') from e
         else:
             # Flush the VCD writer
-            self._vcd.flush(now)
+            self._vcd.flush(int(horizon))
 
         # Clear the event buffer
         self._events.clear()
@@ -577,6 +603,15 @@ class PeekSignal(Signal):
         self._buffer.clear()
         self._events.clear()
 
+    def horizon(self) -> _T_T:
+        """Return the time horizon of this signal.
+
+        See also :func:`DaxSignalManager.horizon`.
+
+        :return: The time horizon in machine units or None if no events are available
+        """
+        return self._events.keys()[-1] if self._events else _TIMESTAMP_MIN
+
     def __iter__(self) -> typing.Iterator[typing.Tuple[_T_T, _SV_T]]:
         """Return an iterator over the sorted events."""
         return iter(self._events.items())
@@ -588,6 +623,9 @@ class PeekSignalManager(DaxSignalManager[PeekSignal]):
     def _create_signal(self, scope: DaxSimDevice, name: str, type_: _ST_T, *,
                        size: _SS_T = None, init: typing.Optional[_SV_T] = None) -> PeekSignal:
         return PeekSignal(scope, name, type_, size, init=init)
+
+    def horizon(self) -> _T_T:
+        return max(max(signal.horizon() for signal in self), _get_timestamp())
 
     def flush(self, ref_period: float) -> None:
         pass

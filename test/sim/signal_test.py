@@ -17,12 +17,13 @@ from dax.sim import enable_dax_sim
 from dax.sim.device import DaxSimDevice
 from dax.sim.signal import get_signal_manager, Signal, SignalNotSetError, SignalNotFoundError, \
     DaxSignalManager, NullSignalManager, VcdSignalManager, PeekSignalManager
+from dax.sim.coredevice.core import BaseCore
 from dax.util.artiq import get_managers
 from dax.util.output import temp_dir
 
 
 class NullSignalManagerTestCase(unittest.TestCase):
-    SIGNAL_MANAGER: str = 'null'
+    SIGNAL_MANAGER: typing.ClassVar[str] = 'null'
     SIGNAL_MANAGER_CLASS: typing.ClassVar[typing.Type[DaxSignalManager]] = NullSignalManager
 
     def setUp(self) -> None:
@@ -190,6 +191,50 @@ class NullSignalManagerTestCase(unittest.TestCase):
                     with self.assertRaises(ValueError, msg='Bad push value for signal did not raise'):
                         signal.push(v)
 
+    def test_horizon_no_events(self):
+        self.assertEqual(self.sm.horizon(), 0)
+        t_sum = 0
+
+        for t in [99, 1000000, -1000, -930]:  # Do not go negative, init events will limit the horizon to >=0
+            delay_mu(t)
+            t_sum += t
+            self.assertEqual(self.sm.horizon(), t_sum)
+
+    def _test_horizon_with_event(self, t=1000):  # Test disabled by default, must be called manually
+        # Forward and reverse time, horizon will move along
+        delay_mu(t)
+        self.assertEqual(self.sm.horizon(), t)
+        delay_mu(-t)
+        self.assertEqual(self.sm.horizon(), 0)
+
+        # Forward time, event, and reverse time, horizon will stay
+        delay_mu(t)
+        self.assertEqual(self.sm.horizon(), t)
+        self.sys.ttl0.on()
+        delay_mu(-t)
+        self.assertEqual(self.sm.horizon(), t)
+
+    def _test_horizon_reset(self, t=1000):  # Test disabled by default, must be called manually
+        # Forward and reverse time, horizon will move along
+        delay_mu(t)
+        self.assertEqual(self.sm.horizon(), t)
+        delay_mu(-t)
+        self.assertEqual(self.sm.horizon(), 0)
+        self.assertEqual(now_mu(), 0)
+        # Reset, which inserts events
+        self.sys.core.reset()
+        self.assertEqual(self.sm.horizon(), BaseCore.DEFAULT_RESET_TIME_MU)
+        self.assertEqual(now_mu(), BaseCore.DEFAULT_RESET_TIME_MU)
+        # Reverts still works, but the horizon will stay
+        at_mu(0)
+        self.assertEqual(self.sm.horizon(), BaseCore.DEFAULT_RESET_TIME_MU)
+        self.assertEqual(now_mu(), 0)
+
+        # Reset works from the horizon
+        self.sys.core.reset()
+        self.assertEqual(self.sm.horizon(), BaseCore.DEFAULT_RESET_TIME_MU * 2)
+        self.assertEqual(now_mu(), BaseCore.DEFAULT_RESET_TIME_MU * 2)
+
 
 class VcdSignalManagerTestCase(NullSignalManagerTestCase):
     SIGNAL_MANAGER = 'vcd'
@@ -208,6 +253,42 @@ class VcdSignalManagerTestCase(NullSignalManagerTestCase):
         # Exit temp dir
         self._temp_dir.__exit__(None, None, None)
 
+    def test_horizon_with_event(self):
+        self._test_horizon_with_event()
+
+    def test_horizon_break_realtime(self, t=1000):
+        # Forward and reverse time, horizon will move along
+        delay_mu(t)
+        self.assertEqual(self.sm.horizon(), t)
+        delay_mu(-t)
+        self.assertEqual(self.sm.horizon(), 0)
+        self.assertEqual(now_mu(), 0)
+        # Break realtime, which does NOT insert an event but does flush
+        self.sys.core.break_realtime()
+        self.assertEqual(self.sm.horizon(), BaseCore.DEFAULT_RESET_TIME_MU)
+        self.assertEqual(now_mu(), BaseCore.DEFAULT_RESET_TIME_MU)
+        # Reverts still works, but the horizon does not shift due to the flush
+        at_mu(0)
+        self.assertEqual(self.sm.horizon(), BaseCore.DEFAULT_RESET_TIME_MU)
+        self.assertEqual(now_mu(), 0)
+
+        # Forward time, event, and reverse time, horizon will stay at the event
+        at_mu(BaseCore.DEFAULT_RESET_TIME_MU)
+        delay_mu(t)
+        self.assertEqual(self.sm.horizon(), t + BaseCore.DEFAULT_RESET_TIME_MU)
+        self.assertEqual(now_mu(), t + BaseCore.DEFAULT_RESET_TIME_MU)
+        self.sys.ttl0.on()
+        delay_mu(-t)
+        self.assertEqual(self.sm.horizon(), t + BaseCore.DEFAULT_RESET_TIME_MU)
+        self.assertEqual(now_mu(), BaseCore.DEFAULT_RESET_TIME_MU)
+        # Break realtime works from the horizon
+        self.sys.core.break_realtime()
+        self.assertEqual(self.sm.horizon(), t + BaseCore.DEFAULT_RESET_TIME_MU * 2)
+        self.assertEqual(now_mu(), t + BaseCore.DEFAULT_RESET_TIME_MU * 2)
+
+    def test_horizon_reset(self):
+        self._test_horizon_reset()
+
     def test_signal_types(self):
         import dax.sim.signal
         self.assertSetEqual(set(dax.sim.signal.VcdSignal._VCD_TYPE), set(Signal._SIGNAL_TYPES))
@@ -216,6 +297,53 @@ class VcdSignalManagerTestCase(NullSignalManagerTestCase):
 class PeekSignalManagerTestCase(NullSignalManagerTestCase):
     SIGNAL_MANAGER = 'peek'
     SIGNAL_MANAGER_CLASS = PeekSignalManager
+
+    def test_horizon_no_events(self):
+        super(PeekSignalManagerTestCase, self).test_horizon_no_events()
+
+        at_mu(0)
+        self.assertEqual(self.sm.horizon(), 0)
+        t_sum = 0
+
+        for t in [-200, 99, 1000000, -1000, -930, -100000000]:  # Go negative, init events will limit the horizon to >=0
+            delay_mu(t)
+            t_sum += t
+            self.assertEqual(self.sm.horizon(), max(0, t_sum))
+
+    def test_horizon_with_event(self):
+        self._test_horizon_with_event()
+
+    def test_horizon_break_realtime(self, t=1000):
+        # Forward and reverse time, horizon will move along
+        delay_mu(t)
+        self.assertEqual(self.sm.horizon(), t)
+        delay_mu(-t)
+        self.assertEqual(self.sm.horizon(), 0)
+        self.assertEqual(now_mu(), 0)
+        # Break realtime, which does NOT insert an event but does flush
+        self.sys.core.break_realtime()
+        self.assertEqual(self.sm.horizon(), BaseCore.DEFAULT_RESET_TIME_MU)
+        self.assertEqual(now_mu(), BaseCore.DEFAULT_RESET_TIME_MU)
+        # Reverts still work
+        at_mu(0)
+        self.assertEqual(self.sm.horizon(), 0)
+        self.assertEqual(now_mu(), 0)
+
+        # Forward time, event, and reverse time, horizon will stay at the event
+        delay_mu(t)
+        self.assertEqual(self.sm.horizon(), t)
+        self.assertEqual(now_mu(), t)
+        self.sys.ttl0.on()
+        delay_mu(-t)
+        self.assertEqual(self.sm.horizon(), t)
+        self.assertEqual(now_mu(), 0)
+        # Break realtime works from the horizon
+        self.sys.core.break_realtime()
+        self.assertEqual(self.sm.horizon(), t + BaseCore.DEFAULT_RESET_TIME_MU)
+        self.assertEqual(now_mu(), t + BaseCore.DEFAULT_RESET_TIME_MU)
+
+    def test_horizon_reset(self):
+        self._test_horizon_reset()
 
     def test_push_pull(self):
         self.test_push(pull=True)
