@@ -1,7 +1,9 @@
 import typing
+import time
 import collections.abc
 
 import artiq.language.environment
+import sipyco.pyon
 
 import dax.util.artiq
 import dax.util.output
@@ -76,6 +78,8 @@ class SubExperiment:
                 'All keys in arguments, metadata, and build_kwargs must be of type str'
 
         with dax.util.artiq.clone_managers(self._managers, arguments=arguments) as managers:
+            # Capture start time
+            start_time = time.time()
             # Create the sub-experiment class
             # noinspection PyArgumentList
             exp = experiment_class(managers, *build_args, **build_kwargs)
@@ -87,7 +91,16 @@ class SubExperiment:
                 exp.analyze()
             finally:
                 # Store HDF5 file
-                meta = {'rid': self._scheduler.rid}
+                meta = {
+                    'rid': self._scheduler.rid,
+                    'start_time': start_time,
+                    'expid': sipyco.pyon.encode({
+                        'repo_rev': self._scheduler.expid.get('repo_rev', 'N/A'),
+                        'file': self._scheduler.expid.get('file', '<none>'),
+                        'class_name': experiment_class.__name__,
+                        'arguments': dax.util.artiq.process_arguments(arguments),
+                    }),
+                }
                 meta.update(metadata)
                 managers.write_hdf5(self._file_name_generator(name, 'h5'), metadata=meta)
 
