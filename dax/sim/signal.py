@@ -380,15 +380,43 @@ class ConstantSignal(Signal):
             return self._init
 
 
-class NullSignalManager(DaxSignalManager[ConstantSignal]):
+class NullSignal(ConstantSignal):
+    """Class to represent a null signal."""
+
+    _update_horizon: typing.Callable[[_T_T], None]
+
+    def __init__(self, scope: DaxSimDevice, name: str, type_: _ST_T, size: _SS_T, *,
+                 init: typing.Optional[_SV_T], update_horizon_fn: typing.Callable[[_T_T], None]):
+        assert callable(update_horizon_fn)
+        self._update_horizon = update_horizon_fn  # type: ignore[misc,assignment]
+        super(NullSignal, self).__init__(scope, name, type_, size, init=init)
+        if init is not None:
+            self.push(init, time=np.int64(0))
+
+    def push(self, value: typing.Any, *,
+             time: typing.Optional[_T_T] = None, offset: _O_T = 0) -> None:
+        self._update_horizon(_get_timestamp(time, offset))  # type: ignore[misc,call-arg]
+        super(NullSignal, self).push(value, time=time, offset=offset)
+
+
+class NullSignalManager(DaxSignalManager[NullSignal]):
     """A signal manager with constant signals (i.e. all push events to signals are dropped)."""
 
+    _horizon: _T_T
+
+    def __init__(self) -> None:
+        super(NullSignalManager, self).__init__()
+        self._horizon = _TIMESTAMP_MIN
+
     def _create_signal(self, scope: DaxSimDevice, name: str, type_: _ST_T, *,
-                       size: _SS_T = None, init: typing.Optional[_SV_T] = None) -> ConstantSignal:
-        return ConstantSignal(scope, name, type_, size, init=init)
+                       size: _SS_T = None, init: typing.Optional[_SV_T] = None) -> NullSignal:
+        return NullSignal(scope, name, type_, size, init=init, update_horizon_fn=self._update_horizon)
+
+    def _update_horizon(self, t: _T_T) -> None:
+        self._horizon = max(t, self._horizon)
 
     def horizon(self) -> _T_T:
-        return _get_timestamp()
+        return max(self._horizon, _get_timestamp())
 
     def flush(self, ref_period: float) -> None:
         pass
@@ -417,10 +445,10 @@ class VcdSignal(ConstantSignal):
 
     def __init__(self, scope: DaxSimDevice, name: str, type_: _ST_T, size: _SS_T, *, init: typing.Optional[_SV_T],
                  vcd_: vcd.writer.VCDWriter, events: typing.List[E_T]):
-        # Call super
-        super(VcdSignal, self).__init__(scope, name, type_, size, init=init)
         # Store reference to shared and mutable event buffer
         self._events = events
+        # Call super
+        super(VcdSignal, self).__init__(scope, name, type_, size, init=init)
 
         if type_ is str and init is None:
             # Workaround for str init values (shows up as `z` instead of string value 'x')
@@ -557,10 +585,11 @@ class PeekSignal(Signal):
         self._buffer = collections.deque()
         # Create buffer for events
         self._events = sortedcontainers.SortedDict()
-        if init is not None:
-            self._events[np.int64(0)] = self.normalize(init)
         # Create timestamp view
         self._timestamps = self._events.keys()
+
+        if init is not None:
+            self.push(init, time=np.int64(0))
 
     def push(self, value: typing.Any, *,
              time: typing.Optional[_T_T] = None, offset: _O_T = 0) -> None:

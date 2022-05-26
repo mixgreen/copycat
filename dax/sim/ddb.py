@@ -3,6 +3,7 @@ from __future__ import annotations  # Postponed evaluation of annotations
 import logging
 import importlib
 import typing
+import collections.abc
 import dataclasses
 import re
 
@@ -39,7 +40,7 @@ DAX_SIM_CONFIG_KEY: str = '_dax_sim_config'
 class _ConfigData:
     """Dataclass to hold configuration."""
     coredevice_packages: typing.List[str]
-    exclude: typing.List[typing.Pattern[str]]
+    exclude: typing.Sequence[typing.Pattern[str]]
     core_device: str
     localhost: str
     _config: dax.util.configparser.DaxConfigParser
@@ -67,17 +68,22 @@ class _ConfigData:
         return any(p.fullmatch(key) for p in self.exclude)
 
     @classmethod
-    def create(cls, config: dax.util.configparser.DaxConfigParser) -> _ConfigData:
+    def create(cls, config: dax.util.configparser.DaxConfigParser, *,
+               exclude: typing.Collection[str] = ()) -> _ConfigData:
         """Create a configuration dataclass given a config parser."""
 
         # Get coredevice packages and append the DAX coredevice package
         coredevice_packages: typing.List[str] = config.get(_CONFIG_SECTION, 'coredevice_packages', fallback='').split()
         coredevice_packages.append(_DAX_COREDEVICE_PACKAGE)
 
+        # Join exclude patterns
+        exclude = set(exclude)  # Use a set to get rid of duplicates
+        exclude.update(config.get(_CONFIG_SECTION, 'exclude', fallback='').split())
+
         # Create and return the dataclass object
         return cls(
             coredevice_packages=coredevice_packages,
-            exclude=[re.compile(p) for p in config.get(_CONFIG_SECTION, 'exclude', fallback='').split()],
+            exclude=[re.compile(p) for p in exclude],
             core_device=config.get(_CONFIG_SECTION, 'core_device', fallback='core'),
             localhost=config.get(_CONFIG_SECTION, 'localhost', fallback='::1'),
             _config=config
@@ -88,6 +94,7 @@ def enable_dax_sim(ddb: typing.Dict[str, typing.Any], *,
                    enable: typing.Optional[bool] = None,
                    logging_level: typing.Union[int, str] = logging.NOTSET,
                    output: str = 'vcd',
+                   exclude: typing.Collection[str] = (),
                    moninj_service: bool = True,
                    **signal_mgr_kwargs: typing.Any) -> typing.Dict[str, typing.Any]:
     """Enable the DAX simulation package by applying this function on your device DB.
@@ -104,7 +111,8 @@ def enable_dax_sim(ddb: typing.Dict[str, typing.Any], *,
 
      - ``enable``, required if not provided as a function parameter
      - ``coredevice_packages``, additional packages to search for coredevice drivers (in order of priority)
-     - ``exclude``, regex patterns to match excluded keys in the device DB (full match)
+     - ``exclude``, regex patterns to match excluded keys in the device DB (full match), merged with exclude patterns
+       provided through the ``exclude`` argument
      - ``config_module``, the module of the simulation configuration class (defaults to DAX.sim config module)
      - ``config_class``, the class of the simulation configuration object (defaults to DAX.sim config class)
      - ``core_device``, the name of the core device (defaults to ``'core'``)
@@ -127,6 +135,7 @@ def enable_dax_sim(ddb: typing.Dict[str, typing.Any], *,
     :param enable: Flag to enable DAX simulation
     :param logging_level: The logging level
     :param output: Simulation output type (``'null'``, ``'vcd'``, or ``'peek'``)
+    :param exclude: Regex patterns to match excluded keys in the device DB (full match)
     :param moninj_service: Start the dummy MonInj service for the dashboard to connect to
     :param signal_mgr_kwargs: Arguments for the signal manager if output is enabled
     :return: The updated device DB
@@ -137,6 +146,8 @@ def enable_dax_sim(ddb: typing.Dict[str, typing.Any], *,
     assert isinstance(enable, bool) or enable is None, 'The enable flag must be None or of type bool'
     assert isinstance(logging_level, (int, str)), 'Logging level must be of type int or str'
     assert isinstance(output, str), 'Output parameter must be of type str'
+    assert isinstance(exclude, collections.abc.Collection), 'Exclude must be a collection'
+    assert all(isinstance(s, str) for s in exclude), 'All exclude patterns must be of type str'
     assert isinstance(moninj_service, bool), 'MonInj service flag must be of type bool'
 
     # Set the logging level to the given value
@@ -165,7 +176,7 @@ def enable_dax_sim(ddb: typing.Dict[str, typing.Any], *,
             _logger.debug('Converting device DB')
 
             # Construct configuration data object
-            config_data: _ConfigData = _ConfigData.create(config)
+            config_data: _ConfigData = _ConfigData.create(config, exclude=exclude)
 
             # Check core device in the device DB
             if config_data.core_device not in ddb:

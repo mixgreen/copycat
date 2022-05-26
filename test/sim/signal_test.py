@@ -25,7 +25,8 @@ from dax.util.output import temp_dir
 class NullSignalManagerTestCase(unittest.TestCase):
     SIGNAL_MANAGER: typing.ClassVar[str] = 'null'
     SIGNAL_MANAGER_CLASS: typing.ClassVar[typing.Type[DaxSignalManager]] = NullSignalManager
-    MIN_HORIZON: typing.ClassVar[typing.Optional[int]] = None
+    MIN_HORIZON: typing.ClassVar[typing.Optional[int]]
+    MIN_HORIZON = 0  # The null signal manager starts with a minimum horizon of 0 due to init events
 
     def setUp(self) -> None:
         ddb = enable_dax_sim(_DEVICE_DB.copy(), enable=True, output=self.SIGNAL_MANAGER, moninj_service=False)
@@ -211,7 +212,7 @@ class NullSignalManagerTestCase(unittest.TestCase):
         self.assertEqual(self.sm.horizon(), min_horizon + BaseCore.DEFAULT_RESET_TIME_MU)
         self.assertEqual(now_mu(), min_horizon + BaseCore.DEFAULT_RESET_TIME_MU)
 
-    def _test_horizon_with_event(self, t=1000):  # Test disabled by default, must be called manually
+    def test_horizon_with_event(self, t=1000):  # Test disabled by default, must be called manually
         # Forward and reverse time, horizon will move along
         delay_mu(t)
         self.assertEqual(self.sm.horizon(), t)
@@ -225,7 +226,7 @@ class NullSignalManagerTestCase(unittest.TestCase):
         delay_mu(-t)
         self.assertEqual(self.sm.horizon(), t)
 
-    def _test_horizon_reset(self, t=1000):  # Test disabled by default, must be called manually
+    def test_horizon_reset(self, t=1000):  # Test disabled by default, must be called manually
         # Forward and reverse time, horizon will move along
         delay_mu(t)
         self.assertEqual(self.sm.horizon(), t)
@@ -265,9 +266,6 @@ class VcdSignalManagerTestCase(NullSignalManagerTestCase):
         # Exit temp dir
         self._temp_dir.__exit__(None, None, None)
 
-    def test_horizon_with_event(self):
-        self._test_horizon_with_event()
-
     def test_horizon_break_realtime(self, t=1000):
         # Forward and reverse time, horizon will move along
         delay_mu(t)
@@ -298,9 +296,6 @@ class VcdSignalManagerTestCase(NullSignalManagerTestCase):
         self.assertEqual(self.sm.horizon(), t + BaseCore.DEFAULT_RESET_TIME_MU * 2)
         self.assertEqual(now_mu(), t + BaseCore.DEFAULT_RESET_TIME_MU * 2)
 
-    def test_horizon_reset(self):
-        self._test_horizon_reset()
-
     def test_signal_types(self):
         import dax.sim.signal
         self.assertSetEqual(set(dax.sim.signal.VcdSignal._VCD_TYPE), set(Signal._SIGNAL_TYPES))
@@ -322,9 +317,6 @@ class PeekSignalManagerTestCase(NullSignalManagerTestCase):
             delay_mu(t)
             t_sum += t
             self.assertEqual(self.sm.horizon(), max(0, t_sum))
-
-    def test_horizon_with_event(self):
-        self._test_horizon_with_event()
 
     def test_horizon_break_realtime(self, t=1000):
         # Forward and reverse time, horizon will move along
@@ -354,9 +346,6 @@ class PeekSignalManagerTestCase(NullSignalManagerTestCase):
         self.sys.core.break_realtime()
         self.assertEqual(self.sm.horizon(), t + BaseCore.DEFAULT_RESET_TIME_MU)
         self.assertEqual(now_mu(), t + BaseCore.DEFAULT_RESET_TIME_MU)
-
-    def test_horizon_reset(self):
-        self._test_horizon_reset()
 
     def test_push_pull(self):
         self.test_push(pull=True)
