@@ -287,6 +287,47 @@ class DdbTestCase(unittest.TestCase):
             self.assertEqual(ddb['generic']['module'], 'dax.sim.coredevice.generic')
             self.assertEqual(ddb['generic']['class'], 'Generic')
 
+    def test_exclude(self):
+        special_ddb_entries = {
+            'key_a': {'type': 'local', 'module': 'artiq.coredevice.ttl', 'class': 'TTLInOut'},
+            'key_b': {'type': 'local', 'module': 'artiq.coredevice.ttl', 'class': 'TTLInOut'},
+            'key_c': {'type': 'local', 'module': 'artiq.coredevice.ttl', 'class': 'TTLInOut'},
+            'foo': {'type': 'local', 'module': 'artiq.coredevice.ttl', 'class': 'TTLInOut'},
+            'contains_key_a': {'type': 'local', 'module': 'artiq.coredevice.ttl', 'class': 'TTLInOut'},
+            '_foo': {'type': 'local', 'module': 'artiq.coredevice.ttl', 'class': 'TTLInOut'},
+            '_bar': {'type': 'local', 'module': 'artiq.coredevice.ttl', 'class': 'TTLInOut'},
+            'bar': {'type': 'local', 'module': 'artiq.coredevice.ttl', 'class': 'TTLInOut'},
+            'ttl0': {'type': 'local', 'module': 'artiq.coredevice.ttl', 'class': 'TTLInOut'},
+            'ttl0_ec': {'type': 'local', 'module': 'artiq.coredevice.ttl', 'class': 'TTLInOut'},
+            'ttl0_ec_': {'type': 'local', 'module': 'artiq.coredevice.ttl', 'class': 'TTLInOut'},
+            'ttl5_ec': {'type': 'local', 'module': 'artiq.coredevice.ttl', 'class': 'TTLInOut'},
+            'ttl6_ec': {'type': 'local', 'module': 'artiq.coredevice.ttl', 'class': 'TTLInOut'},
+        }
+        self.DEVICE_DB.update(copy.deepcopy(special_ddb_entries))
+        exclude_reference = {
+            'key_a': True,
+            'key_b': True,
+            'key_c': False,
+            'foo': False,
+            'contains_key_a': False,
+            '_foo': True,
+            '_bar': True,
+            'bar': False,
+            'ttl0': False,
+            'ttl0_ec': True,
+            'ttl0_ec_': False,
+            'ttl5_ec': True,
+            'ttl6_ec': False,
+        }
+
+        ddb = enable_dax_sim(self.DEVICE_DB, enable=True, exclude=['key_a', 'key_b', '_.*', 'ttl[0-5]_ec'],
+                             **_DEFAULT_KWARGS)
+        for k, v in exclude_reference.items():
+            if v:
+                self.assertDictEqual(ddb[k], special_ddb_entries[k])
+            else:
+                self.assertNotEqual(ddb[k], special_ddb_entries[k])
+
     def test_cfg_enable(self):
         cfg = """
         [dax.sim]
@@ -472,5 +513,4 @@ class DdbTestCase(unittest.TestCase):
                 if v:
                     self.assertDictEqual(ddb[k], special_ddb_entries[k])
                 else:
-                    print(k)
                     self.assertNotEqual(ddb[k], special_ddb_entries[k])
