@@ -298,20 +298,25 @@ class Core(BaseCore):
     def compile(self, *args: typing.Any, **kwargs: typing.Any) -> typing.Any:
         super(Core, self).compile(*args, **kwargs)
 
-    def _reset(self):  # type: () -> None
+    # noinspection PyTypeHints
+    def _reset(self, *, push_start=True, push_end=True):  # type: (bool, bool) -> None
         # Set timeline cursor to the time horizon
         at_mu(self._signal_manager.horizon())
 
-        # Reset signal to 1
-        self._reset_signal.push(True)
+        if push_start:
+            # Reset signal to 1
+            self._reset_signal.push(True)
+
         # Reset devices to clear buffers
         for _, d in self._device_manager.active_devices:
             if isinstance(d, DaxSimDevice):
                 d.core_reset()
         # Call super
         super(Core, self)._reset()
-        # Reset signal back to 0
-        self._reset_signal.push(False)
+
+        if push_end:
+            # Reset signal back to 0
+            self._reset_signal.push(False)
 
     def _break_realtime(self):  # type: () -> None
         # Set timeline cursor to the time horizon
