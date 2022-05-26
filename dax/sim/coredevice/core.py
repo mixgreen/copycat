@@ -298,8 +298,7 @@ class Core(BaseCore):
     def compile(self, *args: typing.Any, **kwargs: typing.Any) -> typing.Any:
         super(Core, self).compile(*args, **kwargs)
 
-    # noinspection PyTypeHints
-    def _reset(self, *, push_start=True, push_end=True):  # type: (bool, bool) -> None
+    def _reset(self, *, push_start: bool = True, push_end: bool = True) -> None:
         # Set timeline cursor to the time horizon
         at_mu(self._signal_manager.horizon())
 
@@ -318,7 +317,7 @@ class Core(BaseCore):
             # Reset signal back to 0
             self._reset_signal.push(False)
 
-    def _break_realtime(self):  # type: () -> None
+    def _break_realtime(self) -> None:
         # Set timeline cursor to the time horizon
         at_mu(self._signal_manager.horizon())
         # Call super
