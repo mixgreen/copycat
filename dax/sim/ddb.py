@@ -124,6 +124,7 @@ def enable_dax_sim(ddb: typing.Dict[str, typing.Any], *,
     Extra simulation-specific arguments can also be passed through the configuration file.
     To add arguments for a device with key ``'device_key'`` add a section ``[dax.sim.device_key]``.
     Values in the section are decoded as PYON values.
+    Excluded keys will not be mutated at all, and users are responsible for providing the correct arguments.
 
     The DAX.sim package provides a limited list of simulated coredevice drivers.
     Additional packages with simulated coredevice drivers can be added using the configuration files.
