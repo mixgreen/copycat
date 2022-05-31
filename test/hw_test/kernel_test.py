@@ -4,6 +4,8 @@ import numpy as np
 from artiq.experiment import *
 from artiq.coredevice.core import CompileError
 
+from dax.base.system import DaxSystem
+
 import test.hw_test
 
 
@@ -101,6 +103,17 @@ class _CompilerSupportExperiment(HasEnvironment):
         return now_mu() - t  # Should be 0
 
 
+class _DaxSystemExperiment(DaxSystem):
+    SYS_ID = 'unittest_system'
+    SYS_VER = 0
+    CORE_LOG_KEY = None
+    DAX_INFLUX_DB_KEY = None
+
+    @kernel
+    def get_system_key_kernel(self, bar: TStr = 'bar') -> TStr:
+        return self.get_system_key('foo', bar)
+
+
 class ArtiqKernelTestCase(test.hw_test.HardwareTestCase):
 
     def test_nested_context(self):
@@ -173,3 +186,8 @@ class ArtiqKernelTestCase(test.hw_test.HardwareTestCase):
         env = self.construct_env(_CompilerSupportExperiment)
         t = env.negative_delay_parallel_test()
         self.assertEqual(t, 0)
+
+    def test_get_system_key_kernel(self):
+        env = self.construct_env(_DaxSystemExperiment)
+        r = env.get_system_key_kernel()
+        self.assertEqual(r, env.get_system_key('foo', 'bar'))

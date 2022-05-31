@@ -10,6 +10,7 @@ import types
 import numpy as np
 
 from artiq import __version__ as _artiq_version
+from artiq.language.types import TStr
 import artiq.language.core
 import artiq.language.environment
 import artiq.master.worker_db
@@ -198,8 +199,8 @@ class DaxHasKey(DaxBase, abc.ABC):
         """Get the name of this component."""
         return self.__name
 
-    @artiq.language.core.host_only
-    def get_system_key(self, *keys: str) -> str:
+    @artiq.language.core.rpc
+    def get_system_key(self, *keys: str) -> TStr:
         """Get the full key based on the system key.
 
         If no keys are provided, the system key is returned.
