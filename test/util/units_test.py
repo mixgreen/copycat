@@ -176,3 +176,15 @@ class UnitsFormatterTestCase(unittest.TestCase):
         for fstring, args, kwargs, ref in test_data:
             with self.subTest(input=fstring):
                 self.assertEqual(self.f.format(fstring, *args, **kwargs), ref)
+
+    def test_other_format(self):
+        test_data = [
+            ('no formatting', [], {}, 'no formatting'),
+            ('aa{}', [1], {}, 'aa1'),
+            ('{!r}', ['foo'], {}, repr('foo')),
+            ('{!s}', [30], {}, str(30)),
+        ]
+
+        for fstring, args, kwargs, ref in test_data:
+            with self.subTest(input=fstring):
+                self.assertEqual(self.f.format(fstring, *args, **kwargs), ref)

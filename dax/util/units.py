@@ -130,6 +130,14 @@ class UnitsFormatter(string.Formatter):
     - ``'{!w}'``, conversion to watt
     """
 
+    _CONVERSIONS: typing.ClassVar[typing.Dict[str, typing.Callable[..., typing.Any]]] = {
+        't': time_to_str,
+        'f': freq_to_str,
+        'v': volt_to_str,
+        'a': ampere_to_str,
+        'w': watt_to_str,
+    }
+
     _precision: int
 
     def __init__(self, *, precision: int = 6):
@@ -141,15 +149,7 @@ class UnitsFormatter(string.Formatter):
         self._precision = precision
 
     def convert_field(self, value: typing.Any, conversion: str) -> typing.Any:
-        if conversion == 't':
-            return time_to_str(value, precision=self._precision)
-        elif conversion == 'f':
-            return freq_to_str(value, precision=self._precision)
-        elif conversion == 'v':
-            return volt_to_str(value, precision=self._precision)
-        elif conversion == 'a':
-            return ampere_to_str(value, precision=self._precision)
-        elif conversion == 'w':
-            return watt_to_str(value, precision=self._precision)
+        if conversion in self._CONVERSIONS:
+            return self._CONVERSIONS[conversion](value, precision=self._precision)
         else:
             return super(UnitsFormatter, self).convert_field(value, conversion)
