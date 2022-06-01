@@ -1,6 +1,6 @@
 from __future__ import annotations  # Postponed evaluation of annotations
 
-from cmath import nan
+import math
 import typing
 import pathlib
 import numpy as np
@@ -373,8 +373,7 @@ class ZotinoReader(BaseReader[_ZOTINO_SOLUTION_T]):
             for key, val in d.items():
                 if isinstance(val, SpecialCharacter):
                     voltage = self.process_specials(val)
-                    # since nan != nan, must only add when voltage equals itself
-                    if voltage == voltage:
+                    if not math.isnan(voltage):
                         voltages.append(voltage)
                         channels.append(int(channel_map_dict[key]))
                 else:
@@ -394,7 +393,7 @@ class ZotinoReader(BaseReader[_ZOTINO_SOLUTION_T]):
         :return: Handled value based on solution and zotino characteristics
         """
         if val == SpecialCharacter.X:
-            return nan
+            return math.nan
         elif val == SpecialCharacter.INF:
             return self.voltage_high
         elif val == SpecialCharacter.NEG_INF:
