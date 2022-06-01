@@ -24,11 +24,10 @@ __all__ = ['TrapDcModule', 'ZotinoReader']
 
 
 class TrapDcModule(DaxModule):
-
     _zotino: artiq.coredevice.zotino.Zotino
     _reader: ZotinoReader
 
-    def build(self,   # type: ignore[override]
+    def build(self,  # type: ignore[override]
               *,
               key: str,
               solution_path: str,
@@ -62,7 +61,7 @@ class TrapDcModule(DaxModule):
 
     @host_only
     def read_line_mu(self,
-                     path_key: str,
+                     file_name: str,
                      index: int = 0,
                      multiplier: float = 1.0) -> _ZOTINO_LINE_T_MU:
         """Read in a single line of a solutions file and return the line in zotino form.
@@ -74,9 +73,9 @@ class TrapDcModule(DaxModule):
         :param index: Line in path to get. A 0 indicates the first line
         :param multiplier: Optionally scale the voltages by a constant
 
-        :return: Zotino module interprettable solution line with voltages in MU
+        :return: Zotino module interpretable solution line with voltages in MU
         """
-        path = self._read_line(path_key, index, multiplier)
+        path = self._read_line(file_name, index, multiplier)
         path_mu = (self._reader.convert_to_mu(path[0]), path[1])
         return path_mu
 
@@ -94,7 +93,7 @@ class TrapDcModule(DaxModule):
         :param index: Line in path to get. A 0 indicates the first line
         :param multiplier: Optionally scale the voltages by a constant
 
-        :return: Zotino module interprettable solution line with voltages in V
+        :return: Zotino module interpretable solution line with voltages in V
         """
         unprepared_line = self._reader.parse_solution(self._reader.read_solution(file_name))[index]
 
@@ -107,7 +106,7 @@ class TrapDcModule(DaxModule):
 
     @host_only
     def read_solution_mu(self,
-                         path_key: str,
+                         file_name: str,
                          start: int = 0,
                          end: int = -1,
                          reverse: bool = False,
@@ -123,9 +122,9 @@ class TrapDcModule(DaxModule):
         :param reverse: Optionally return a reversed path. I.E. From end to start
         :param multiplier: Optionally scale the voltages by a constant
 
-        :return: Zotino module interprettable solution path with voltages in MU
+        :return: Zotino module interpretable solution path with voltages in MU
         """
-        path = self._read_solution(path_key, start, end,
+        path = self._read_solution(file_name, start, end,
                                    reverse, multiplier)
         return self._reader.convert_solution_to_mu(path)
 
@@ -147,7 +146,7 @@ class TrapDcModule(DaxModule):
         :param reverse: Optionally return a reversed path. I.E. From end to start
         :param multiplier: Optionally scale the voltages by a constant
 
-        :return: Zotino module interprettable solution path with voltages in V
+        :return: Zotino module interpretable solution path with voltages in V
         """
 
         solution = self._reader.parse_solution(self._reader.read_solution(file_name))
