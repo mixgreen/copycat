@@ -8,7 +8,7 @@ import pathlib
 
 from dax.experiment import *
 from dax.modules.trap_dc import ZotinoReader, TrapDcModule
-from trap_dac_utils.reader import SpecialCharacter, BaseReader, _MAP_T, PATH_T, _PATH_VALUE_T
+from trap_dac_utils.reader import SpecialCharacter, BaseReader, _MAP_T, SOLUTION_T, _SOLUTION_VALUE_T
 
 import dax.sim.coredevice.ad53xx
 import dax.sim.test_case
@@ -304,12 +304,12 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
     def generate_headers(self) -> typing.Sequence[str]:
         return [self.rand_str() for _ in range(self._NUM_CHANNELS)]
 
-    def generate_path_data(self, headers: typing.List[str]) -> PATH_T:
+    def generate_path_data(self, headers: typing.List[str]) -> SOLUTION_T:
         headers = [self.rand_str() for _ in range(self._NUM_CHANNELS)]
         path_data = []
         special = [e for e in SpecialCharacter]
         for _ in range(self._RNG.randint(1, 50)):
-            pool: typing.List[_PATH_VALUE_T] = [
+            pool: typing.List[_SOLUTION_VALUE_T] = [
                 *special, self._RNG.uniform(-1.95 * self._VREF * V,
                                             1.95 * self._VREF * V)]
             line_map = {header: self._RNG.choice(pool)

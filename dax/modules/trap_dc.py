@@ -6,7 +6,7 @@ import pathlib
 import numpy as np
 
 from dax.experiment import *
-from trap_dac_utils.reader import BaseReader, SpecialCharacter, PATH_T
+from trap_dac_utils.reader import BaseReader, SpecialCharacter, SOLUTION_T
 
 import artiq.coredevice.zotino  # type: ignore[import]
 import artiq.coredevice.ad53xx  # type: ignore[import]
@@ -16,9 +16,9 @@ _ZOTINO_KEY_T = typing.List[float]
 _ZOTINO_KEY_T_MU = typing.List[int]
 _ZOTINO_VALUE_T = typing.List[int]
 _ZOTINO_LINE_T = typing.Tuple[_ZOTINO_KEY_T, _ZOTINO_VALUE_T]
-_ZOTINO_PATH_T = typing.List[_ZOTINO_LINE_T]
+_ZOTINO_SOLUTION_T = typing.List[_ZOTINO_LINE_T]
 _ZOTINO_LINE_T_MU = typing.Tuple[_ZOTINO_KEY_T_MU, _ZOTINO_VALUE_T]
-_ZOTINO_PATH_T_MU = typing.List[_ZOTINO_LINE_T_MU]
+_ZOTINO_SOLUTION_T_MU = typing.List[_ZOTINO_LINE_T_MU]
 
 __all__ = ['TrapDcModule', 'ZotinoReader']
 
@@ -111,7 +111,7 @@ class TrapDcModule(DaxModule):
                          start: int = 0,
                          end: int = -1,
                          reverse: bool = False,
-                         multiplier: float = 1.0) -> _ZOTINO_PATH_T_MU:
+                         multiplier: float = 1.0) -> _ZOTINO_SOLUTION_T_MU:
         """Read in a segment of a solutions file and return the path in zotino form.
         Optionally reverse path and/or apply multiplier to all voltages in path
 
@@ -135,7 +135,7 @@ class TrapDcModule(DaxModule):
                        start: int = 0,
                        end: int = -1,
                        reverse: bool = False,
-                       multiplier: float = 1.0) -> _ZOTINO_PATH_T:
+                       multiplier: float = 1.0) -> _ZOTINO_SOLUTION_T:
         """Read in a segment of a solutions file and return the path in zotino form.
         Optionally reverse path and/or apply multiplier to all voltages in path
 
@@ -163,7 +163,7 @@ class TrapDcModule(DaxModule):
         if reverse:
             trimmed_solution.reverse()
 
-        path: _ZOTINO_PATH_T = [trimmed_solution[0]]
+        path: _ZOTINO_SOLUTION_T = [trimmed_solution[0]]
         path.extend([self._reader.get_line_diff(t, trimmed_solution[i])
                      for i, t in enumerate(trimmed_solution[1:])])
 
@@ -301,7 +301,7 @@ class TrapDcModule(DaxModule):
         self._zotino.set_dac_mu(line[0], line[1])
 
 
-class ZotinoReader(BaseReader[_ZOTINO_PATH_T]):
+class ZotinoReader(BaseReader[_ZOTINO_SOLUTION_T]):
     _CHANNEL: typing.ClassVar[str] = 'channel'
     """Column key for zotino channels."""
     _vref: float
@@ -358,7 +358,7 @@ class ZotinoReader(BaseReader[_ZOTINO_PATH_T]):
 
     @host_only
     def parse_solution(self,
-                       path: PATH_T) -> _ZOTINO_PATH_T:
+                       path: SOLUTION_T) -> _ZOTINO_SOLUTION_T:
         """Implementation to take full solution file and convert it to zotino specific representation
 
         :param path: Solutions file representation from :func:`read_solution`
@@ -421,7 +421,7 @@ class ZotinoReader(BaseReader[_ZOTINO_PATH_T]):
 
     @host_only
     def convert_solution_to_mu(self,
-                               path: _ZOTINO_PATH_T) -> _ZOTINO_PATH_T_MU:
+                               path: _ZOTINO_SOLUTION_T) -> _ZOTINO_SOLUTION_T_MU:
         """Convert all voltages in zotino path from volts to machine units
 
         :param path: The full zotino path object with voltages in V
