@@ -298,7 +298,8 @@ class TrapDcModule(DaxModule):
 
         :param line: Up to 32 (# of Zotino channels) voltages and corresponding channel numbers
         """
-        self._zotino.set_dac_mu(line[0], line[1])
+        voltages, channels = line
+        self._zotino.set_dac_mu(voltages, channels)
 
 
 class ZotinoReader(BaseReader[_ZOTINO_PATH_T]):
