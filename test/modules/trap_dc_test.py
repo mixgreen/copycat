@@ -8,8 +8,7 @@ import pathlib
 
 from dax.experiment import *
 from dax.modules.trap_dc import ZotinoReader, TrapDcModule
-from trap_dac_utils.reader import SpecialCharacter, BaseReader, _MAP_T, SOLUTION_T, _SOLUTION_VALUE_T
-
+from trap_dac_utils.reader import SpecialCharacter, BaseReader
 import dax.sim.coredevice.ad53xx
 import dax.sim.test_case
 from test.environment import CI_ENABLED
@@ -40,8 +39,6 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
     SEED = None
 
     _RNG = random.Random(SEED)
-    _SOLUTION_CSV_TYPE = typing.List[typing.List[typing.Union[float, str]]]
-    _MAP_CSV_TYPE = typing.List[typing.List[str]]
     _VREF = 5
 
     PATH_DATA = [{'A': -10., 'B': 0., 'C': 0., 'D': 0.,
@@ -300,15 +297,15 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
                             self.assertAlmostEqual(
                                 expected_solution[i + 1][label], t[0][j], places=3)
 
-    def generate_headers(self) -> typing.Sequence[str]:
+    def generate_headers(self):
         return [self.rand_str() for _ in range(self._NUM_CHANNELS)]
 
-    def generate_path_data(self, headers: typing.Sequence[str]) -> SOLUTION_T:
+    def generate_path_data(self, headers):
         headers = [self.rand_str() for _ in range(self._NUM_CHANNELS)]
         path_data = []
         special = [e for e in SpecialCharacter]
         for _ in range(self._RNG.randint(1, 50)):
-            pool: typing.List[_SOLUTION_VALUE_T] = [
+            pool = [
                 *special, self._RNG.uniform(-1.95 * self._VREF * V,
                                             1.95 * self._VREF * V)]
             line_map = {header: self._RNG.choice(pool)
@@ -317,21 +314,21 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
 
         return path_data
 
-    def generate_map_data(self, labels: typing.List[str]) -> _MAP_T:
+    def generate_map_data(self, labels):
         channels = self._RNG.sample(
             range(self._NUM_CHANNELS), self._NUM_CHANNELS)
         return [{ZotinoReader._LABEL: label,
                  ZotinoReader._CHANNEL: str(channels[i])}
                 for i, label in enumerate(labels)]
 
-    def rand_str(self) -> str:
+    def rand_str(self):
         return ''.join(self._RNG.choice(string.ascii_letters + string.digits)
                        for _ in range(self._RNG.randint(8, 15)))
 
     def channel_to_label(self,
-                         channel: str,
-                         map_data: _MAP_T,
-                         reader: ZotinoReader) -> str:
+                         channel,
+                         map_data,
+                         reader):
         for d in map_data:
             if d[reader._CHANNEL] == str(channel):
                 return d[reader._LABEL]
