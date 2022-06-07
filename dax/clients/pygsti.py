@@ -34,7 +34,7 @@ __all__ = ['RandomizedBenchmarkingSQ', 'GateSetTomographySQ']
 
 __G_T = typing.TypeVar('__G_T')  # Type variable for gates
 
-PYGSTI_TARGET_VERSION: str = '0.9.10'
+PYGSTI_TARGET_VERSION: str = '0.9.10.1'
 """Target version for pyGSTi."""
 
 
