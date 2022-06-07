@@ -101,7 +101,7 @@ class TrapDcModule(DaxModule):
 
         :return: Zotino module interpretable solution line with voltages in V
         """
-        unprepared_line = self._reader.parse_solution(self._reader.read_solution(file_name))[index]
+        unprepared_line = self._reader.process_solution(self._reader.read_solution(file_name))[index]
 
         # multiply each solution list with multiplier
         line = (
@@ -155,7 +155,7 @@ class TrapDcModule(DaxModule):
         :return: Zotino module interpretable solution path with voltages in V
         """
 
-        solution = self._reader.parse_solution(self._reader.read_solution(file_name))
+        solution = self._reader.process_solution(self._reader.read_solution(file_name))
         if end == -1:
             end = len(solution) - 1
 
@@ -362,8 +362,8 @@ class ZotinoReader(BaseReader[_ZOTINO_SOLUTION_T]):
         return voltages, channels
 
     @host_only
-    def parse_solution(self,
-                       solution: SOLUTION_T) -> _ZOTINO_SOLUTION_T:
+    def process_solution(self,
+                         solution: SOLUTION_T) -> _ZOTINO_SOLUTION_T:
         """Implementation to take full solution file and convert it to zotino specific representation
 
         :param solution: Solutions file representation from :func:`read_solution_mu`
