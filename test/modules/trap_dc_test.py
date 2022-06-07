@@ -8,8 +8,7 @@ import pathlib
 
 from dax.experiment import *
 from dax.modules.trap_dc import ZotinoReader, TrapDcModule
-from trap_dac_utils.reader import SpecialCharacter, BaseReader, _MAP_T, PATH_T, _PATH_VALUE_T
-
+from trap_dac_utils.reader import SpecialCharacter, BaseReader
 import dax.sim.coredevice.ad53xx
 import dax.sim.test_case
 from test.environment import CI_ENABLED
@@ -40,18 +39,16 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
     SEED = None
 
     _RNG = random.Random(SEED)
-    _SOLUTION_CSV_TYPE = typing.List[typing.List[typing.Union[float, str]]]
-    _MAP_CSV_TYPE = typing.List[typing.List[str]]
     _VREF = 5
 
     PATH_DATA = [{'A': -10., 'B': 0., 'C': 0., 'D': 0.,
                   'E': SpecialCharacter('x')},
                  {'A': 1., 'B': 0., 'C': 0, 'D': 0,
-                 'E': SpecialCharacter('x')},
+                  'E': SpecialCharacter('x')},
                  {'A': 1., 'B': 2., 'C': 0., 'D': 0.,
-                 'E': SpecialCharacter('x')},
+                  'E': SpecialCharacter('x')},
                  {'A': 1., 'B': 2., 'C': 3., 'D': 4.,
-                 'E': SpecialCharacter('x')}]
+                  'E': SpecialCharacter('x')}]
     MAP_DATA = [{'label': 'A', 'channel': '2'},
                 {'label': 'B', 'channel': '3'},
                 {'label': 'C', 'channel': '4'},
@@ -119,8 +116,8 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
             self.expect(self.env.trap_dc._zotino, f'v_out_{i}', 'x')
             self.expect(self.env.trap_dc._zotino, f'v_offset_{i}', 'x')
 
-    @ patch.object(BaseReader, 'load_channel_map')
-    @ patch.object(TrapDcModule, 'get_system_key')
+    @patch.object(BaseReader, 'read_channel_map')
+    @patch.object(TrapDcModule, 'get_system_key')
     def test_dma(self, mock_get_system_key, _):
         num_path_rows = 10
         mock_get_system_key.return_value = "ZotinoTest"
@@ -146,7 +143,7 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
                     self.assertEqual(
                         self.env.core_dma._dma_play_name.pull(), "ZotinoTest")
 
-    @ patch.object(BaseReader, 'load_channel_map')
+    @patch.object(BaseReader, 'read_channel_map')
     def test_set_line(self, _):
         with temp_dir():
             self._test_uninitialized()
@@ -168,14 +165,13 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
         num_data = self.rng.randrange(1, self._NUM_CHANNELS)
         c = self.rng.sample(range(self._NUM_CHANNELS), num_data)
         # o = self.rng.sample(range(2 ** 14), num_data)
-        voltages = [self.rng.uniform(
-            0 * V, self.env.trap_dc._zotino.vref * 3.9) - 2 * self.env.trap_dc._zotino.vref
-            for _ in range(num_data)]
+        voltages = [self.rng.uniform(0 * V, self.env.trap_dc._zotino.vref * 3.9) - 2 * self.env.trap_dc._zotino.vref
+                    for _ in range(num_data)]
         # Adjust voltage to make sure it is in range
         v_mu = [self.env.trap_dc._zotino.voltage_to_mu(voltage=v) for v in voltages]
         return num_data, voltages, v_mu, c
 
-    @ patch.object(BaseReader, 'load_channel_map')
+    @patch.object(BaseReader, 'read_channel_map')
     def test_shuttle(self, _):
         with temp_dir():
             shuttle_solution_mu = [([32768, 32768, 0, 32768, 32768,
@@ -240,7 +236,7 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
                                       'v_out_5', 4, places=3)
                     delay_mu(line_delay_mu)
 
-    @ patch.object(BaseReader, 'load_channel_map')
+    @patch.object(BaseReader, 'read_channel_map')
     def test_mu_conversion(self, _):
         with temp_dir():
             vref = 5.
@@ -262,11 +258,11 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
                         self.assertAlmostEqual(
                             v[i], o, places=3, msg='Input voltage does not match converted output voltage')
 
-    @ patch.object(BaseReader, 'read_solution')
-    @ patch.object(BaseReader, 'load_channel_map')
-    def test_parse_solution_random(self,
-                                   mock_load_channel_map,
-                                   mock_read_solution):
+    @patch.object(BaseReader, 'read_solution')
+    @patch.object(BaseReader, 'read_channel_map')
+    def test_process_solution_random(self,
+                                     mock_read_channel_map,
+                                     mock_read_solution):
         with temp_dir():
             self.env.trap_dc.init()
             for _ in range(_NUM_SAMPLES):
@@ -274,7 +270,7 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
                 mock_read_solution.return_value = self.generate_path_data(
                     headers)
                 headers = mock_read_solution.return_value[0]
-                mock_load_channel_map.return_value = self.generate_map_data(
+                mock_read_channel_map.return_value = self.generate_map_data(
                     headers)
                 open('test.csv', 'w')
                 reader = ZotinoReader(pathlib.Path('.'),
@@ -282,8 +278,8 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
                                       self.env.trap_dc._zotino)
 
                 read_solution = reader.read_solution("sequential.csv")
-                result_zotino_path = reader.parse_solution(read_solution)
-                map_data = mock_load_channel_map.return_value
+                result_zotino_path = reader.process_solution(read_solution)
+                map_data = mock_read_channel_map.return_value
                 expected_solution = mock_read_solution.return_value
                 for i, t in enumerate(result_zotino_path[1:]):
                     print(expected_solution[i + 1])
@@ -301,15 +297,15 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
                             self.assertAlmostEqual(
                                 expected_solution[i + 1][label], t[0][j], places=3)
 
-    def generate_headers(self) -> typing.Sequence[str]:
+    def generate_headers(self):
         return [self.rand_str() for _ in range(self._NUM_CHANNELS)]
 
-    def generate_path_data(self, headers: typing.List[str]) -> PATH_T:
+    def generate_path_data(self, headers):
         headers = [self.rand_str() for _ in range(self._NUM_CHANNELS)]
         path_data = []
         special = [e for e in SpecialCharacter]
         for _ in range(self._RNG.randint(1, 50)):
-            pool: typing.List[_PATH_VALUE_T] = [
+            pool = [
                 *special, self._RNG.uniform(-1.95 * self._VREF * V,
                                             1.95 * self._VREF * V)]
             line_map = {header: self._RNG.choice(pool)
@@ -318,34 +314,34 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
 
         return path_data
 
-    def generate_map_data(self, labels: typing.List[str]) -> _MAP_T:
+    def generate_map_data(self, labels):
         channels = self._RNG.sample(
             range(self._NUM_CHANNELS), self._NUM_CHANNELS)
         return [{ZotinoReader._LABEL: label,
                  ZotinoReader._CHANNEL: str(channels[i])}
                 for i, label in enumerate(labels)]
 
-    def rand_str(self) -> str:
+    def rand_str(self):
         return ''.join(self._RNG.choice(string.ascii_letters + string.digits)
                        for _ in range(self._RNG.randint(8, 15)))
 
     def channel_to_label(self,
-                         channel: str,
-                         map_data: _MAP_T,
-                         reader: ZotinoReader) -> str:
+                         channel,
+                         map_data,
+                         reader):
         for d in map_data:
             if d[reader._CHANNEL] == str(channel):
                 return d[reader._LABEL]
         raise ValueError("Mapped to channel that isn't in channel map")
 
-    @ patch.object(BaseReader, 'read_solution')
-    @ patch.object(BaseReader, 'load_channel_map')
-    def test_parse_solution(self,
-                            mock_load_channel_map,
-                            mock_read_solution):
+    @patch.object(BaseReader, 'read_solution')
+    @patch.object(BaseReader, 'read_channel_map')
+    def test_process_solution(self,
+                              mock_read_channel_map,
+                              mock_read_solution):
         with temp_dir():
             self.env.trap_dc.init()
-            mock_load_channel_map.return_value = self.MAP_DATA
+            mock_read_channel_map.return_value = self.MAP_DATA
             mock_read_solution.return_value = self.PATH_DATA
             open('test.csv', 'w')
             reader = ZotinoReader(pathlib.Path('.'),
@@ -359,7 +355,7 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
                                     ([1., 2., 3., 4.], [2, 3, 4, 5])]
 
             read_solution = reader.read_solution("sequential.csv")
-            result_zotino_path = reader.parse_solution(read_solution)
+            result_zotino_path = reader.process_solution(read_solution)
 
             self.assertIsInstance(result_zotino_path, list)
             self.assertEqual(len(result_zotino_path),
@@ -371,16 +367,16 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
                 self.assertListEqual(t[0], expected_zotino_path[i][0])
                 self.assertListEqual(t[1], expected_zotino_path[i][1])
 
-    @ patch.object(ZotinoReader, 'parse_solution')
-    @ patch.object(BaseReader, 'read_solution')
-    @ patch.object(BaseReader, 'load_channel_map')
-    def test_get_path(self, _, mock_read_solution, mock_parse_solution):
+    @patch.object(ZotinoReader, 'process_solution')
+    @patch.object(BaseReader, 'read_solution')
+    @patch.object(BaseReader, 'read_channel_map')
+    def test_get_path(self, _, _mock_read_solution, mock_process_solution):
         with temp_dir():
             self.env.trap_dc.init()
-            mock_parse_solution.return_value = [([-5., 0., 0., 0.], [2, 3, 4, 5]),
-                                                ([1., 0., 0., 0.], [2, 3, 4, 5]),
-                                                ([1., 2., 0., 0.], [2, 3, 4, 5]),
-                                                ([1., 2., 3., 4.], [2, 3, 4, 5])]
+            mock_process_solution.return_value = [([-5., 0., 0., 0.], [2, 3, 4, 5]),
+                                                  ([1., 0., 0., 0.], [2, 3, 4, 5]),
+                                                  ([1., 2., 0., 0.], [2, 3, 4, 5]),
+                                                  ([1., 2., 3., 4.], [2, 3, 4, 5])]
             expected_prepared_path = [([-10., 0., 0., 0.], [2, 3, 4, 5]),
                                       ([2.], [2]),
                                       ([4.], [3]),
@@ -389,16 +385,16 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
                 "name_of_file.csv", multiplier=2)
             self.assertListEqual(prepared_path_result, expected_prepared_path)
 
-    @ patch.object(ZotinoReader, 'parse_solution')
-    @ patch.object(BaseReader, 'read_solution')
-    @ patch.object(BaseReader, 'load_channel_map')
-    def test_get_path_reverse(self, _, mock_read_solution, mock_parse_solution):
+    @patch.object(ZotinoReader, 'process_solution')
+    @patch.object(BaseReader, 'read_solution')
+    @patch.object(BaseReader, 'read_channel_map')
+    def test_get_path_reverse(self, _, _mock_read_solution, mock_process_solution):
         with temp_dir():
             self.env.trap_dc.init()
-            mock_parse_solution.return_value = [([-10., 0., 0., 0.], [2, 3, 4, 5]),
-                                                ([1., 0., 0., 0.], [2, 3, 4, 5]),
-                                                ([1., 2., 0., 0.], [2, 3, 4, 5]),
-                                                ([1., 2., 3., 4.], [2, 3, 4, 5])]
+            mock_process_solution.return_value = [([-10., 0., 0., 0.], [2, 3, 4, 5]),
+                                                  ([1., 0., 0., 0.], [2, 3, 4, 5]),
+                                                  ([1., 2., 0., 0.], [2, 3, 4, 5]),
+                                                  ([1., 2., 3., 4.], [2, 3, 4, 5])]
             expected_prepared_path = [([1., 2., 3., 4.], [2, 3, 4, 5]),
                                       ([0., 0.], [4, 5]),
                                       ([0.], [3]),
@@ -407,32 +403,32 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
                 "name_of_file.csv", reverse=True)
             self.assertListEqual(prepared_path_result, expected_prepared_path)
 
-    @ patch.object(ZotinoReader, 'parse_solution')
-    @ patch.object(BaseReader, 'read_solution')
-    @ patch.object(BaseReader, 'load_channel_map')
-    def test_get_path_segment(self, _, mock_read_solution, mock_parse_solution):
+    @patch.object(ZotinoReader, 'process_solution')
+    @patch.object(BaseReader, 'read_solution')
+    @patch.object(BaseReader, 'read_channel_map')
+    def test_get_path_segment(self, _, _mock_read_solution, mock_process_solution):
         with temp_dir():
             self.env.trap_dc.init()
-            mock_parse_solution.return_value = [([-10., 0., 0., 0.], [2, 3, 4, 5]),
-                                                ([1., 0., 0., 0.], [2, 3, 4, 5]),
-                                                ([1., 2., 0., 0.], [2, 3, 4, 5]),
-                                                ([1., 2., 3., 4.], [2, 3, 4, 5])]
+            mock_process_solution.return_value = [([-10., 0., 0., 0.], [2, 3, 4, 5]),
+                                                  ([1., 0., 0., 0.], [2, 3, 4, 5]),
+                                                  ([1., 2., 0., 0.], [2, 3, 4, 5]),
+                                                  ([1., 2., 3., 4.], [2, 3, 4, 5])]
             expected_prepared_path = [([1., 0., 0., 0.], [2, 3, 4, 5]),
                                       ([2.], [3])]
             prepared_path_result = self.env.trap_dc._read_solution(
                 'name_of_file.csv', 1, 2)
             self.assertListEqual(prepared_path_result, expected_prepared_path)
 
-    @ patch.object(ZotinoReader, 'parse_solution')
-    @ patch.object(BaseReader, 'read_solution')
-    @ patch.object(BaseReader, 'load_channel_map')
-    def test_get_line(self, _, mock_read_solution, mock_parse_solution):
+    @patch.object(ZotinoReader, 'process_solution')
+    @patch.object(BaseReader, 'read_solution')
+    @patch.object(BaseReader, 'read_channel_map')
+    def test_get_line(self, _, _mock_read_solution, mock_process_solution):
         with temp_dir():
             self.env.trap_dc.init()
-            mock_parse_solution.return_value = [([-10., 0., 0., 0.], [2, 3, 4, 5]),
-                                                ([1., 0., 0., 0.], [2, 3, 4, 5]),
-                                                ([1., 2., 0., 0.], [2, 3, 4, 5]),
-                                                ([1., 2., 3., 4.], [2, 3, 4, 5])]
+            mock_process_solution.return_value = [([-10., 0., 0., 0.], [2, 3, 4, 5]),
+                                                  ([1., 0., 0., 0.], [2, 3, 4, 5]),
+                                                  ([1., 2., 0., 0.], [2, 3, 4, 5]),
+                                                  ([1., 2., 3., 4.], [2, 3, 4, 5])]
             expected_prepared_line = ([3.5, 7., 0., 0.], [2, 3, 4, 5])
             prepared_line_result = self.env.trap_dc._read_line(
                 'name_of_file.csv', 2, 3.5)
