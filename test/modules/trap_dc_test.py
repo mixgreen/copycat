@@ -370,7 +370,7 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
     @patch.object(ZotinoReader, 'process_solution')
     @patch.object(BaseReader, 'read_solution')
     @patch.object(BaseReader, 'read_channel_map')
-    def test_get_path(self, _, mock_read_solution, mock_process_solution):
+    def test_get_path(self, _, _mock_read_solution, mock_process_solution):
         with temp_dir():
             self.env.trap_dc.init()
             mock_process_solution.return_value = [([-5., 0., 0., 0.], [2, 3, 4, 5]),
@@ -388,7 +388,7 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
     @patch.object(ZotinoReader, 'process_solution')
     @patch.object(BaseReader, 'read_solution')
     @patch.object(BaseReader, 'read_channel_map')
-    def test_get_path_reverse(self, _, mock_read_solution, mock_process_solution):
+    def test_get_path_reverse(self, _, _mock_read_solution, mock_process_solution):
         with temp_dir():
             self.env.trap_dc.init()
             mock_process_solution.return_value = [([-10., 0., 0., 0.], [2, 3, 4, 5]),
@@ -406,7 +406,7 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
     @patch.object(ZotinoReader, 'process_solution')
     @patch.object(BaseReader, 'read_solution')
     @patch.object(BaseReader, 'read_channel_map')
-    def test_get_path_segment(self, _, mock_read_solution, mock_process_solution):
+    def test_get_path_segment(self, _, _mock_read_solution, mock_process_solution):
         with temp_dir():
             self.env.trap_dc.init()
             mock_process_solution.return_value = [([-10., 0., 0., 0.], [2, 3, 4, 5]),
@@ -422,7 +422,7 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
     @patch.object(ZotinoReader, 'process_solution')
     @patch.object(BaseReader, 'read_solution')
     @patch.object(BaseReader, 'read_channel_map')
-    def test_get_line(self, _, mock_read_solution, mock_process_solution):
+    def test_get_line(self, _, _mock_read_solution, mock_process_solution):
         with temp_dir():
             self.env.trap_dc.init()
             mock_process_solution.return_value = [([-10., 0., 0., 0.], [2, 3, 4, 5]),
