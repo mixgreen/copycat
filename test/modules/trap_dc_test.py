@@ -116,7 +116,7 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
             self.expect(self.env.trap_dc._zotino, f'v_out_{i}', 'x')
             self.expect(self.env.trap_dc._zotino, f'v_offset_{i}', 'x')
 
-    @patch.object(BaseReader, 'read_channel_map')
+    @patch.object(BaseReader, '_BaseReader__read_channel_map')
     @patch.object(TrapDcModule, 'get_system_key')
     def test_dma(self, mock_get_system_key, _):
         num_path_rows = 10
@@ -143,7 +143,7 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
                     self.assertEqual(
                         self.env.core_dma._dma_play_name.pull(), "ZotinoTest")
 
-    @patch.object(BaseReader, 'read_channel_map')
+    @patch.object(BaseReader, '_BaseReader__read_channel_map')
     def test_set_line(self, _):
         with temp_dir():
             self._test_uninitialized()
@@ -171,7 +171,7 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
         v_mu = [self.env.trap_dc._zotino.voltage_to_mu(voltage=v) for v in voltages]
         return num_data, voltages, v_mu, c
 
-    @patch.object(BaseReader, 'read_channel_map')
+    @patch.object(BaseReader, '_BaseReader__read_channel_map')
     def test_shuttle(self, _):
         with temp_dir():
             shuttle_solution_mu = [([32768, 32768, 0, 32768, 32768,
@@ -236,7 +236,7 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
                                       'v_out_5', 4, places=3)
                     delay_mu(line_delay_mu)
 
-    @patch.object(BaseReader, 'read_channel_map')
+    @patch.object(BaseReader, '_BaseReader__read_channel_map')
     def test_mu_conversion(self, _):
         with temp_dir():
             vref = 5.
@@ -259,7 +259,7 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
                             v[i], o, places=3, msg='Input voltage does not match converted output voltage')
 
     @patch.object(BaseReader, 'read_solution')
-    @patch.object(BaseReader, 'read_channel_map')
+    @patch.object(BaseReader, '_BaseReader__read_channel_map')
     def test_process_solution_random(self,
                                      mock_read_channel_map,
                                      mock_read_solution):
@@ -335,7 +335,7 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
         raise ValueError("Mapped to channel that isn't in channel map")
 
     @patch.object(BaseReader, 'read_solution')
-    @patch.object(BaseReader, 'read_channel_map')
+    @patch.object(BaseReader, '_BaseReader__read_channel_map')
     def test_process_solution(self,
                               mock_read_channel_map,
                               mock_read_solution):
@@ -369,7 +369,7 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
 
     @patch.object(ZotinoReader, 'process_solution')
     @patch.object(BaseReader, 'read_solution')
-    @patch.object(BaseReader, 'read_channel_map')
+    @patch.object(BaseReader, '_BaseReader__read_channel_map')
     def test_get_path(self, _, _mock_read_solution, mock_process_solution):
         with temp_dir():
             self.env.trap_dc.init()
@@ -387,7 +387,7 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
 
     @patch.object(ZotinoReader, 'process_solution')
     @patch.object(BaseReader, 'read_solution')
-    @patch.object(BaseReader, 'read_channel_map')
+    @patch.object(BaseReader, '_BaseReader__read_channel_map')
     def test_get_path_reverse(self, _, _mock_read_solution, mock_process_solution):
         with temp_dir():
             self.env.trap_dc.init()
@@ -405,7 +405,7 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
 
     @patch.object(ZotinoReader, 'process_solution')
     @patch.object(BaseReader, 'read_solution')
-    @patch.object(BaseReader, 'read_channel_map')
+    @patch.object(BaseReader, '_BaseReader__read_channel_map')
     def test_get_path_segment(self, _, _mock_read_solution, mock_process_solution):
         with temp_dir():
             self.env.trap_dc.init()
@@ -421,7 +421,7 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
 
     @patch.object(ZotinoReader, 'process_solution')
     @patch.object(BaseReader, 'read_solution')
-    @patch.object(BaseReader, 'read_channel_map')
+    @patch.object(BaseReader, '_BaseReader__read_channel_map')
     def test_get_line(self, _, _mock_read_solution, mock_process_solution):
         with temp_dir():
             self.env.trap_dc.init()
