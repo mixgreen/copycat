@@ -25,7 +25,7 @@ __all__ = ['TrapDcModule', 'ZotinoReader']
 
 class TrapDcModule(DaxModule):
     _MIN_LINE_DELAY_MU: typing.ClassVar[int] = 27372
-    """Column key for zotino channels."""
+    """Minimum line delay for shuttling in MU"""
 
     _zotino: artiq.coredevice.zotino.Zotino
     _solution_path: pathlib.Path
