@@ -1,4 +1,5 @@
-from __future__ import annotations  # Postponed evaluation of annotations
+from __future__ import annotations
+from functools import lru_cache  # Postponed evaluation of annotations
 
 import math
 import typing
@@ -31,6 +32,7 @@ class TrapDcModule(DaxModule):
     _solution_path: pathlib.Path
     _map_file: pathlib.Path
     _reader: ZotinoReader
+    _calculator: ZotinoCalculator
 
     def build(self,  # type: ignore[override]
               *,
@@ -63,6 +65,7 @@ class TrapDcModule(DaxModule):
         # Get profile loader
         self._reader = ZotinoReader(
             self._solution_path, self._map_file, self._zotino)
+        self._calculator = ZotinoCalculator()
 
     @host_only
     def post_init(self) -> None:
@@ -318,6 +321,58 @@ class TrapDcModule(DaxModule):
         """
         voltages, channels = line
         self._zotino.set_dac_mu(voltages, channels)
+
+    @host_only
+    def calculate_required_slack(self,
+                                 solution: _ZOTINO_SOLUTION_T_MU,
+                                 line_delay: float) -> float:
+        return self.calculate_required_slack_mu(solution, self.core.seconds_to_mu(line_delay))
+
+    @host_only
+    def calculate_required_slack_mu(self,
+                                    solution: _ZOTINO_SOLUTION_T_MU,
+                                    line_delay: int) -> int:
+        if line_delay < self._MIN_LINE_DELAY_MU:
+            raise ValueError(f"Line Delay must be greater than {self._MIN_LINE_DELAY_MU}")
+        return self._calculator.calculate_slack_mu(solution, line_delay, self._MIN_LINE_DELAY_MU)
+
+
+class ZotinoCalculator:
+
+    @classmethod
+    @host_only
+    @lru_cache(maxsize=32)
+    def _calculate_line_comm_delay_mu(cls, num_channels: int, dma: bool = False) -> int:
+        # equations found from measurements on Zotino
+        if dma:
+            return 33800 + 821 * num_channels
+        return 291 + 131 * num_channels
+
+    @host_only
+    def calculate_slack_mu(self,
+                           row_lens: _ZOTINO_SOLUTION_T_MU,
+                           line_delay: int,
+                           offset: int,
+                           dma: bool = False) -> int:
+        """This function calculates the required slack for a given solution and desired line delay 
+        """
+        # start with initial slack for the first line
+        current_slack = self._calculate_line_comm_delay_mu(row_lens[0])
+        added_slack = current_slack
+
+        # Each line must delay long enough to account for the communication delay
+        # If they do not, slack must be added at the beginning of experiment to account for this
+        for row_len in row_lens[1:]:
+            diff = line_delay - self._calculate_line_comm_delay_mu(row_len, dma)
+            current_slack += diff
+
+            if current_slack < 0:
+                added_slack -= current_slack
+                current_slack = 0
+
+        # reason for adding in offset at the end is to ensure that at no point
+        # the current time is equal to the cursor time, but always ahead by at least the offset
+        return added_slack + offset
 
 
 class ZotinoReader(BaseReader[_ZOTINO_SOLUTION_T]):
