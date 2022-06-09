@@ -24,6 +24,9 @@ __all__ = ['TrapDcModule', 'ZotinoReader']
 
 
 class TrapDcModule(DaxModule):
+    _MIN_LINE_DELAY_MU: typing.ClassVar[int] = 27372
+    """Column key for zotino channels."""
+
     _zotino: artiq.coredevice.zotino.Zotino
     _solution_path: pathlib.Path
     _map_file: pathlib.Path
@@ -184,7 +187,8 @@ class TrapDcModule(DaxModule):
 
         :param name: Name of DMA trace
         :param solution: A list of voltage lines to set and corresponding channels for each line
-        :param line_delay: A delay (s) inserted after the line is set
+        :param line_delay: A delay (s) inserted after the line is set with a minimum value of
+        .000027373 s
 
         :return: Unique key for DMA Trace
         """
@@ -202,10 +206,13 @@ class TrapDcModule(DaxModule):
 
         :param name: Name of DMA trace
         :param solution: A list of voltage lines to set and corresponding channels for each line
-        :param line_delay: A delay (MU) inserted after the line is set
+        :param line_delay: A delay (MU) inserted after the line is set with a minimum value of
+        27373 MU
 
         :return: Unique key for DMA Trace
         """
+        if line_delay <= self._MIN_LINE_DELAY_MU:
+            raise ValueError(f"Line Delay must be greater than {self._MIN_LINE_DELAY_MU}")
         dma_name = self.get_system_key(name)
         with self.core_dma.record(dma_name):
             for t in solution:
@@ -223,7 +230,8 @@ class TrapDcModule(DaxModule):
 
         :param name: Name of DMA trace
         :param solution: A list of voltage lines to set and corresponding channels for each line
-        :param line_rate: A rate (Hz) to define speed to set each line
+        :param line_rate: A rate (Hz) to define speed to set each line with a maximum value of
+        36532 Hz
 
         :return: Unique key for DMA Trace
         """
@@ -265,7 +273,8 @@ class TrapDcModule(DaxModule):
         corresponding channels
 
         :param solution: A list of voltage lines to set and corresponding channels for each line
-        :param line_delay: A delay (s) inserted after the line is set
+        :param line_delay: A delay (s) inserted after the line is set with a minimum value of
+        .000027373 s
         """
         self.shuttle_mu(solution, self.core.seconds_to_mu(line_delay))
 
@@ -277,8 +286,11 @@ class TrapDcModule(DaxModule):
         corresponding channels
 
         :param solution: A list of voltage lines to set and corresponding channels for each line
-        :param line_delay: A delay (MU) inserted after the line is set
+        :param line_delay: A delay (MU) inserted after the line is set with a minimum value of
+        27373 MU
         """
+        if line_delay <= self._MIN_LINE_DELAY_MU:
+            raise ValueError(f"Line Delay must be greater than {self._MIN_LINE_DELAY_MU}")
         for t in solution:
             self.set_line(t)
             delay_mu(line_delay)
@@ -291,7 +303,8 @@ class TrapDcModule(DaxModule):
         corresponding channels
 
         :param solution: A list of voltage lines to set and corresponding channels for each line
-        :param line_rate: A rate (Hz) to define speed to set each line
+        :param line_rate: A rate (Hz) to define speed to set each line with a maximum value of
+        36532 Hz
         """
         self.shuttle_mu(solution, self.core.seconds_to_mu(1 / line_rate))
         return

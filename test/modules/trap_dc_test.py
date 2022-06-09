@@ -171,6 +171,22 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
         v_mu = [self.env.trap_dc._zotino.voltage_to_mu(voltage=v) for v in voltages]
         return num_data, voltages, v_mu, c
 
+    def test_shuttle_min_line_delay(self):
+        s = self._construct_env()
+        try:
+            s.trap_dc.shuttle_mu([], 2000)
+            assert False
+        except ValueError as e:
+            assert str(e) == f"Line Delay must be greater than {s.trap_dc._MIN_LINE_DELAY_MU}"
+
+    def test_record_dma_min_line_delay(self):
+        s = self._construct_env()
+        try:
+            s.trap_dc.record_dma_mu("", [], 2000)
+            assert False
+        except ValueError as e:
+            assert str(e) == f"Line Delay must be greater than {s.trap_dc._MIN_LINE_DELAY_MU}"
+
     @patch.object(BaseReader, '_read_channel_map')
     def test_shuttle(self, _):
         with temp_dir():
