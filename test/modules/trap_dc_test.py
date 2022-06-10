@@ -449,3 +449,82 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
             prepared_line_result = self.env.trap_dc._read_line(
                 'name_of_file.csv', 2, 3.5)
             self.assertTupleEqual(prepared_line_result, expected_prepared_line)
+
+    @patch.object(BaseReader, '_read_channel_map')
+    def test_calculate_low_slack(self, _):
+        self.env.trap_dc.init()
+        test_solution = [([1., 2., 3., 4.], [2, 3, 4, 5]),
+                         ([0., 0.], [4, 5]),
+                         ([0.], [3]),
+                         ([-10.], [2])]
+        slack = self.env.trap_dc.calculate_required_slack(test_solution, .0002)
+        l0 = self.env.core.mu_to_seconds(
+            self.env.trap_dc._calculator._calculate_line_comm_delay_mu(len(test_solution[0][0])))
+        l1 = self.env.core.mu_to_seconds(
+            self.env.trap_dc._calculator._calculate_line_comm_delay_mu(len(test_solution[1][0])))
+        assert slack > l0
+        assert slack < l0 + self.env.trap_dc._MIN_LINE_DELAY_MU
+
+    @patch.object(BaseReader, '_read_channel_map')
+    def test_calculate_high_slack(self, _):
+        line_delay = .00003
+        self.env.trap_dc.init()
+        test_solution = [([1., 2., 3., 4.], [2, 3, 4, 5]),
+                         ([0., 0.], [4, 5]),
+                         ([0.], [3]),
+                         ([-10.], [2])]
+        slack = self.env.trap_dc.calculate_required_slack(test_solution, line_delay)
+        l0 = self.env.core.mu_to_seconds(
+            self.env.trap_dc._calculator._calculate_line_comm_delay_mu(len(test_solution[0][0])))
+        l1 = self.env.core.mu_to_seconds(
+            self.env.trap_dc._calculator._calculate_line_comm_delay_mu(len(test_solution[1][0])))
+        l2 = self.env.core.mu_to_seconds(
+            self.env.trap_dc._calculator._calculate_line_comm_delay_mu(len(test_solution[2][0])))
+        l3 = self.env.core.mu_to_seconds(
+            self.env.trap_dc._calculator._calculate_line_comm_delay_mu(len(test_solution[3][0])))
+        assert slack > l0 + l1 + l2 + l3 - 3 * line_delay
+        assert slack < l0 + l1 + l2 + l3 - 3 * line_delay + self.env.trap_dc._MIN_LINE_DELAY_MU
+
+    @patch.object(BaseReader, '_read_channel_map')
+    def test_calculate_dma_low_slack(self, _):
+        line_delay = .00003
+        self.env.trap_dc.init()
+        test_solution = [([1., 2., 3., 4.], [2, 3, 4, 5]),
+                         ([0., 0.], [4, 5]),
+                         ([0.], [3]),
+                         ([-10.], [2])]
+        slack = self.env.trap_dc.calculate_dma_required_slack(test_solution, line_delay)
+        l0 = self.env.core.mu_to_seconds(
+            self.env.trap_dc._calculator._calculate_line_comm_delay_mu(len(test_solution[0][0]), True))
+        l1 = self.env.core.mu_to_seconds(
+            self.env.trap_dc._calculator._calculate_line_comm_delay_mu(len(test_solution[1][0]), True))
+        assert slack > l0
+        assert slack < l0 + self.env.trap_dc._MIN_LINE_DELAY_MU + .000002
+
+    @patch.object(BaseReader, '_read_channel_map')
+    def test_calculate_slack_too_low(self, _):
+        line_delay = .000025
+        self.env.trap_dc.init()
+        test_solution = [([1., 2., 3., 4.], [2, 3, 4, 5]),
+                         ([0., 0.], [4, 5]),
+                         ([0.], [3]),
+                         ([-10.], [2])]
+        try:
+            self.env.trap_dc.calculate_required_slack(test_solution, line_delay)
+            assert False
+        except ValueError as e:
+            assert str(e) == f"Line Delay must be greater than {self.env.trap_dc._MIN_LINE_DELAY_MU}"
+
+    @patch.object(BaseReader, '_read_channel_map')
+    def test_calculate_dma_slack_too_low(self, _):
+        line_delay = .000025
+        self.env.trap_dc.init()
+        test_solution = [([1., 2., 3., 4.], [2, 3, 4, 5]),
+                         ([0., 0.], [4, 5]),
+                         ([0.], [3]),
+                         ([-10.], [2])]
+        try:
+            self.env.trap_dc.calculate_dma_required_slack(test_solution, line_delay)
+            assert False
+        except ValueError as e:
+            assert str(e) == f"Line Delay must be greater than {self.env.trap_dc._MIN_LINE_DELAY_MU}"

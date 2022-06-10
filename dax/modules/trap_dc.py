@@ -326,15 +326,83 @@ class TrapDcModule(DaxModule):
     def calculate_required_slack(self,
                                  solution: _ZOTINO_SOLUTION_T_MU,
                                  line_delay: float) -> float:
-        return self.calculate_required_slack_mu(solution, self.core.seconds_to_mu(line_delay))
+        """Calculate the slack required to shuttle solution with desired delay
+        This method is used to prevent underflow when shuttling solutions
+        If the desired line delay is >> than the communication delay, then the default amount
+        of slack may be sufficient
+
+        :param solution: The desired solution to shuttle
+        :param line_delay: The desired line delay (s) to shuttle solution with
+
+        :return: The necessary slack (s) to shuttle solution"""
+        return self.core.mu_to_seconds(
+            self.calculate_required_slack_mu(solution,
+                                             self.core.seconds_to_mu(line_delay)))
 
     @host_only
     def calculate_required_slack_mu(self,
                                     solution: _ZOTINO_SOLUTION_T_MU,
                                     line_delay: int) -> int:
+        """Calculate the slack required to shuttle solution with desired delay
+        This method is used to prevent underflow when shuttling solutions
+        If the desired line delay is >> than the communication delay, then the default amount
+        of slack may be sufficient
+
+        :param solution: The desired solution to shuttle
+        :param line_delay: The desired line delay (MU) to shuttle solution with
+
+        :return: The necessary slack (MU) to shuttle solution"""
         if line_delay < self._MIN_LINE_DELAY_MU:
             raise ValueError(f"Line Delay must be greater than {self._MIN_LINE_DELAY_MU}")
-        return self._calculator.calculate_slack_mu(solution, line_delay, self._MIN_LINE_DELAY_MU)
+        return self._calculator.calculate_slack_mu(self._list_num_channels(solution),
+                                                   line_delay,
+                                                   self._MIN_LINE_DELAY_MU)
+
+    @host_only
+    def calculate_dma_required_slack(self,
+                                     solution: _ZOTINO_SOLUTION_T_MU,
+                                     line_delay: float) -> float:
+        """Calculate the slack required to shuttle solution with dma and with desired delay
+        This method is used to prevent underflow when shuttling solutions
+        If the desired line delay is >> than the communication delay, then the default amount
+        of slack may be sufficient
+
+        :param solution: The desired solution to shuttle
+        :param line_delay: The desired line delay (s) to shuttle solution with
+
+        :return: The necessary slack (s) to shuttle solution"""
+        return self.core.mu_to_seconds(
+            self.calculate_dma_required_slack_mu(solution,
+                                                 self.core.seconds_to_mu(line_delay)))
+
+    @host_only
+    def calculate_dma_required_slack_mu(self,
+                                        solution: _ZOTINO_SOLUTION_T_MU,
+                                        line_delay: int) -> int:
+        """Calculate the slack required to shuttle solution with dma and with desired delay
+        This method is used to prevent underflow when shuttling solutions
+        If the desired line delay is >> than the communication delay, then the default amount
+        of slack may be sufficient
+
+        :param solution: The desired solution to shuttle
+        :param line_delay: The desired line delay (MU) to shuttle solution with
+
+        :return: The necessary slack (MU) to shuttle solution"""
+        if line_delay < self._MIN_LINE_DELAY_MU:
+            raise ValueError(f"Line Delay must be greater than {self._MIN_LINE_DELAY_MU}")
+        return self._calculator.calculate_slack_mu(self._list_num_channels(solution),
+                                                   line_delay,
+                                                   self._MIN_LINE_DELAY_MU,
+                                                   True)
+
+    @host_only
+    def _list_num_channels(self, solution: _ZOTINO_SOLUTION_T_MU) -> typing.Sequence[int]:
+        """Given a zotino solution, list the length of each row in terms of number of channels
+
+        :param solution: Any zotino solution
+
+        :return: A list of number of channels that need to be set for each row"""
+        return [len(t[0]) for t in solution]
 
 
 class ZotinoCalculator:
@@ -343,27 +411,46 @@ class ZotinoCalculator:
     @host_only
     @lru_cache(maxsize=32)
     def _calculate_line_comm_delay_mu(cls, num_channels: int, dma: bool = False) -> int:
-        # equations found from measurements on Zotino
+        """Calculates the expected average communications delay when callng zotino.set_dac_mu
+        Delay is a linear function of the number of channels being updated
+        Linear line delay fit found from repeated Zotino benchmarking
+
+        :param num_channels: Number of channels used to calculate expected avg delay
+        :param dma: Should be true if calculating delay for DMA, otherwise false. Default is false
+
+        :return: The expected average line delay for updating num_channels"""
+        # linear line delay fit found from measurements on Zotino
         if dma:
-            return 33800 + 821 * num_channels
-        return 291 + 131 * num_channels
+            return 291 + 131 * num_channels
+        return 33800 + 821 * num_channels
 
     @host_only
     def calculate_slack_mu(self,
-                           row_lens: _ZOTINO_SOLUTION_T_MU,
-                           line_delay: int,
-                           offset: int,
+                           row_lens: typing.Sequence[int],
+                           line_delay_mu: int,
+                           offset_mu: int,
                            dma: bool = False) -> int:
-        """This function calculates the required slack for a given solution and desired line delay 
+        """This function calculates the required slack for a given solution and desired line delay
+        All calculations are done in MU
+
+        :param row_lens: The number of voltages to be sent for each row in the solution
+        :param line_delay_mu: The desired line delay for shuttling in MU
+        :param offset_mu: The slack offset which is a baseline for the wall clock time and cursor difference
+        :param dma: Should be true if running experiments with DMA, otherwise false. Default is false
+
+        :return: The amount of slack needed in MU to shuttle a solution of this form
         """
         # start with initial slack for the first line
-        current_slack = self._calculate_line_comm_delay_mu(row_lens[0])
+        current_slack = self._calculate_line_comm_delay_mu(row_lens[0], dma)
         added_slack = current_slack
+        # DMA startup time calculated from benchmark measurement
+        if dma:
+            added_slack += 1728
 
         # Each line must delay long enough to account for the communication delay
         # If they do not, slack must be added at the beginning of experiment to account for this
         for row_len in row_lens[1:]:
-            diff = line_delay - self._calculate_line_comm_delay_mu(row_len, dma)
+            diff = line_delay_mu - self._calculate_line_comm_delay_mu(row_len, dma)
             current_slack += diff
 
             if current_slack < 0:
@@ -372,7 +459,7 @@ class ZotinoCalculator:
 
         # reason for adding in offset at the end is to ensure that at no point
         # the current time is equal to the cursor time, but always ahead by at least the offset
-        return added_slack + offset
+        return added_slack + offset_mu
 
 
 class ZotinoReader(BaseReader[_ZOTINO_SOLUTION_T]):
