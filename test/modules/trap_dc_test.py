@@ -460,8 +460,6 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
         slack = self.env.trap_dc.calculate_required_slack(test_solution, .0002)
         l0 = self.env.core.mu_to_seconds(
             self.env.trap_dc._calculator._calculate_line_comm_delay_mu(len(test_solution[0][0])))
-        l1 = self.env.core.mu_to_seconds(
-            self.env.trap_dc._calculator._calculate_line_comm_delay_mu(len(test_solution[1][0])))
         assert slack > l0
         assert slack < l0 + self.env.trap_dc._MIN_LINE_DELAY_MU
 
@@ -496,10 +494,8 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
         slack = self.env.trap_dc.calculate_dma_required_slack(test_solution, line_delay)
         l0 = self.env.core.mu_to_seconds(
             self.env.trap_dc._calculator._calculate_line_comm_delay_mu(len(test_solution[0][0]), True))
-        l1 = self.env.core.mu_to_seconds(
-            self.env.trap_dc._calculator._calculate_line_comm_delay_mu(len(test_solution[1][0]), True))
         assert slack > l0
-        assert slack < l0 + self.env.trap_dc._MIN_LINE_DELAY_MU + .000002
+        assert slack < l0 + self.env.trap_dc._MIN_LINE_DELAY_MU + self.env.trap_dc._calculator._DMA_STARTUP_TIME_MU
 
     @patch.object(BaseReader, '_read_channel_map')
     def test_calculate_slack_too_low(self, _):

@@ -407,6 +407,8 @@ class TrapDcModule(DaxModule):
 
 class ZotinoCalculator:
 
+    _DMA_STARTUP_TIME_MU: typing.ClassVar[int] = 1728
+
     @classmethod
     @host_only
     @lru_cache(maxsize=32)
@@ -445,7 +447,7 @@ class ZotinoCalculator:
         added_slack = current_slack
         # DMA startup time calculated from benchmark measurement
         if dma:
-            added_slack += 1728
+            added_slack += self._DMA_STARTUP_TIME_MU
 
         # Each line must delay long enough to account for the communication delay
         # If they do not, slack must be added at the beginning of experiment to account for this
