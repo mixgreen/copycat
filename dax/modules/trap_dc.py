@@ -191,7 +191,7 @@ class TrapDcModule(DaxModule):
         :param name: Name of DMA trace
         :param solution: A list of voltage lines to set and corresponding channels for each line
         :param line_delay: A delay (s) inserted after the line is set with a minimum value of
-        .000027373 s
+        27373 MU
 
         :return: Unique key for DMA Trace
         """
@@ -233,8 +233,8 @@ class TrapDcModule(DaxModule):
 
         :param name: Name of DMA trace
         :param solution: A list of voltage lines to set and corresponding channels for each line
-        :param line_rate: A rate (Hz) to define speed to set each line with a maximum value of
-        36532 Hz
+        :param line_rate: A rate (Hz) to define speed to set each line with a minimum value of
+        27373 MU
 
         :return: Unique key for DMA Trace
         """
@@ -277,7 +277,7 @@ class TrapDcModule(DaxModule):
 
         :param solution: A list of voltage lines to set and corresponding channels for each line
         :param line_delay: A delay (s) inserted after the line is set with a minimum value of
-        .000027373 s
+        27373 MU
         """
         self.shuttle_mu(solution, self.core.seconds_to_mu(line_delay))
 
@@ -306,8 +306,8 @@ class TrapDcModule(DaxModule):
         corresponding channels
 
         :param solution: A list of voltage lines to set and corresponding channels for each line
-        :param line_rate: A rate (Hz) to define speed to set each line with a maximum value of
-        36532 Hz
+        :param line_rate: A rate (Hz) to define speed to set each line with a minimum value of
+        27373 MU
         """
         self.shuttle_mu(solution, self.core.seconds_to_mu(1 / line_rate))
         return
