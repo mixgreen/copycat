@@ -408,6 +408,7 @@ class TrapDcModule(DaxModule):
 class ZotinoCalculator:
 
     _DMA_STARTUP_TIME_MU: typing.ClassVar[int] = 1728
+    """The benchmarked startup time for DMA"""
 
     @classmethod
     @host_only
