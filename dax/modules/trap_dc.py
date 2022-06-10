@@ -1,5 +1,5 @@
-from __future__ import annotations
-from functools import lru_cache  # Postponed evaluation of annotations
+from __future__ import annotations  # Postponed evaluation of annotations
+from functools import lru_cache
 
 import math
 import typing
