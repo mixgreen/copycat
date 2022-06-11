@@ -287,23 +287,58 @@ device_db["urukul0_ch3"] = {
     }
 }
 
-device_db["spi_zotino0"] = {
+device_db["tester_spi0"] = {
     "type": "local",
     "module": "artiq.coredevice.spi2",
     "class": "SPIMaster",
     "arguments": {"channel": 0x00001a}
 }
+
+device_db["ttl16"] = {
+    "type": "local",
+    "module": "artiq.coredevice.ttl",
+    "class": "TTLOut",
+    "arguments": {"channel": 0x00001b},
+}
+
+device_db["ttl17"] = {
+    "type": "local",
+    "module": "artiq.coredevice.ttl",
+    "class": "TTLOut",
+    "arguments": {"channel": 0x00001c},
+}
+
+device_db["ttl18"] = {
+    "type": "local",
+    "module": "artiq.coredevice.ttl",
+    "class": "TTLOut",
+    "arguments": {"channel": 0x00001d},
+}
+
+device_db["ttl19"] = {
+    "type": "local",
+    "module": "artiq.coredevice.ttl",
+    "class": "TTLOut",
+    "arguments": {"channel": 0x00001e},
+}
+
+device_db["spi_zotino0"] = {
+    "type": "local",
+    "module": "artiq.coredevice.spi2",
+    "class": "SPIMaster",
+    "arguments": {"channel": 0x00001f}
+}
 device_db["ttl_zotino0_ldac"] = {
     "type": "local",
     "module": "artiq.coredevice.ttl",
     "class": "TTLOut",
-    "arguments": {"channel": 0x00001b}
+    "arguments": {"channel": 0x000020}
 }
 device_db["ttl_zotino0_clr"] = {
     "type": "local",
     "module": "artiq.coredevice.ttl",
     "class": "TTLOut",
-    "arguments": {"channel": 0x00001c}
+    "arguments": {"channel": 0x000021}
 }
 device_db["zotino0"] = {
     "type": "local",
@@ -320,19 +355,19 @@ device_db["spi_sampler0_adc"] = {
     "type": "local",
     "module": "artiq.coredevice.spi2",
     "class": "SPIMaster",
-    "arguments": {"channel": 0x00001d}
+    "arguments": {"channel": 0x000022}
 }
 device_db["spi_sampler0_pgia"] = {
     "type": "local",
     "module": "artiq.coredevice.spi2",
     "class": "SPIMaster",
-    "arguments": {"channel": 0x00001e}
+    "arguments": {"channel": 0x000023}
 }
 device_db["ttl_sampler0_cnv"] = {
     "type": "local",
     "module": "artiq.coredevice.ttl",
     "class": "TTLOut",
-    "arguments": {"channel": 0x00001f},
+    "arguments": {"channel": 0x000024},
 }
 device_db["sampler0"] = {
     "type": "local",
@@ -350,7 +385,7 @@ device_db["phaser0"] = {
     "module": "artiq.coredevice.phaser",
     "class": "Phaser",
     "arguments": {
-        "channel_base": 0x000020,
+        "channel_base": 0x000025,
         "miso_delay": 1,
     }
 }
@@ -359,14 +394,14 @@ device_db["led0"] = {
     "type": "local",
     "module": "artiq.coredevice.ttl",
     "class": "TTLOut",
-    "arguments": {"channel": 0x000025}
+    "arguments": {"channel": 0x00002a}
 }
 
 device_db["led1"] = {
     "type": "local",
     "module": "artiq.coredevice.ttl",
     "class": "TTLOut",
-    "arguments": {"channel": 0x000026}
+    "arguments": {"channel": 0x00002b}
 }
 
 # Aliases
