@@ -404,16 +404,45 @@ class TrapDcModule(DaxModule):
         :return: A list of number of channels that need to be set for each row"""
         return [len(t[0]) for t in solution]
 
+    @host_only
+    def configure_calculator(self,
+                             dma_startup_time: typing.Optional[int] = None,
+                             comm_delay_intercept_mu: typing.Optional[int] = None,
+                             comm_delay_slope_mu: typing.Optional[int] = None,
+                             dma_comm_delay_intercept_mu: typing.Optional[int] = None,
+                             dma_comm_delay_slope_mu: typing.Optional[int] = None) -> None:
+        """Configure measured parameters that will affect slack calculations
+        Each configuration is set if and only if the argument is passed in and is not None
+        All original values were calculated from benchmarking
+
+        :param dma_startup_time: The time it takes for DMA to start up in (s)
+        :param comm_delay_intercept_mu: The intercept of the linear communication time between
+        artiq and the kernel as a function of total channels
+        :param comm_delay_slope_mu: The slope of the linear communication time between
+        artiq and the kernel as a function of total channels
+        :param dma_comm_delay_intercept_mu: The intercept of the linear communication time between
+        artiq and the kernel for dma playback as a function of total channels
+        :param dma_comm_delay_slope_mu: The slope of the linear communication time between
+        artiq and the kernel for dma playback as a function of total channels
+        """
+        self._calculator.configure(dma_startup_time=dma_startup_time,
+                                   comm_delay_intercept_mu=comm_delay_intercept_mu,
+                                   comm_delay_slope_mu=comm_delay_slope_mu,
+                                   dma_comm_delay_intercept_mu=dma_comm_delay_intercept_mu,
+                                   dma_comm_delay_slope_mu=dma_comm_delay_slope_mu)
+
 
 class ZotinoCalculator:
 
-    _DMA_STARTUP_TIME_MU: typing.ClassVar[int] = 1728
-    """The benchmarked startup time for DMA"""
+    _dma_startup_time: int = 1728
+    _comm_delay_intercept_mu: int = 33800
+    _comm_delay_slope_mu: int = 821
+    _dma_comm_delay_intercept_mu: int = 291
+    _dma_comm_delay_slope_mu: int = 131
 
-    @classmethod
     @host_only
     @lru_cache(maxsize=32)
-    def _calculate_line_comm_delay_mu(cls, num_channels: int, dma: bool = False) -> int:
+    def _calculate_line_comm_delay_mu(self, num_channels: int, dma: bool = False) -> int:
         """Calculates the expected average communications delay when callng zotino.set_dac_mu
         Delay is a linear function of the number of channels being updated
         Linear line delay fit found from repeated Zotino benchmarking
@@ -424,9 +453,9 @@ class ZotinoCalculator:
         :return: The expected average line delay for updating num_channels"""
         # linear line delay fit found from measurements on Zotino
         if dma:
-            return 291 + 131 * num_channels
+            return self._dma_comm_delay_intercept_mu + self._dma_comm_delay_slope_mu * num_channels
         else:
-            return 33800 + 821 * num_channels
+            return self._comm_delay_intercept_mu + self._comm_delay_slope_mu * num_channels
 
     @host_only
     def slack_mu(self,
@@ -449,7 +478,7 @@ class ZotinoCalculator:
         added_slack = current_slack
         # DMA startup time calculated from benchmark measurement
         if dma:
-            added_slack += self._DMA_STARTUP_TIME_MU
+            added_slack += self._dma_startup_time
 
         # Each line must delay long enough to account for the communication delay
         # If they do not, slack must be added at the beginning of experiment to account for this
@@ -464,6 +493,38 @@ class ZotinoCalculator:
         # reason for adding in offset at the end is to ensure that at no point
         # the current time is equal to the cursor time, but always ahead by at least the offset
         return added_slack + offset_mu
+
+    @host_only
+    def configure(self,
+                  dma_startup_time: typing.Optional[int] = None,
+                  comm_delay_intercept_mu: typing.Optional[int] = None,
+                  comm_delay_slope_mu: typing.Optional[int] = None,
+                  dma_comm_delay_intercept_mu: typing.Optional[int] = None,
+                  dma_comm_delay_slope_mu: typing.Optional[int] = None) -> None:
+        """Configure measured parameters that will affect slack calculations
+        Each configuration is set if and only if the argument is passed in and is not None
+        All original values were calculated from benchmarking
+
+        :param dma_startup_time: The time it takes for DMA to start up in (s)
+        :param comm_delay_intercept_mu: The intercept of the linear communication time between
+        artiq and the kernel as a function of total channels
+        :param comm_delay_slope_mu: The slope of the linear communication time between
+        artiq and the kernel as a function of total channels
+        :param dma_comm_delay_intercept_mu: The intercept of the linear communication time between
+        artiq and the kernel for dma playback as a function of total channels
+        :param dma_comm_delay_slope_mu: The slope of the linear communication time between
+        artiq and the kernel for dma playback as a function of total channels
+        """
+        if dma_startup_time is not None:
+            self._dma_startup_time = dma_startup_time
+        if comm_delay_intercept_mu is not None:
+            self._comm_delay_intercept_mu = comm_delay_intercept_mu
+        if comm_delay_slope_mu is not None:
+            self._comm_delay_slope_mu = comm_delay_slope_mu
+        if dma_comm_delay_intercept_mu is not None:
+            self._dma_comm_delay_intercept_mu = dma_comm_delay_intercept_mu
+        if dma_comm_delay_slope_mu is not None:
+            self._dma_comm_delay_slope_mu = dma_comm_delay_slope_mu
 
 
 class ZotinoReader(BaseReader[_ZOTINO_SOLUTION_T]):
