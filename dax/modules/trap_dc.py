@@ -27,6 +27,8 @@ __all__ = ['TrapDcModule', 'ZotinoReader']
 class TrapDcModule(DaxModule):
     _MIN_LINE_DELAY_MU: typing.ClassVar[int] = 27372
     """Minimum line delay for shuttling in MU"""
+    _DMA_STARTUP_TIME: typing.ClassVar[float] = 1.728 * 10**-6
+    """Startup time for DMA (s)"""
 
     _zotino: artiq.coredevice.zotino.Zotino
     _solution_path: pathlib.Path
@@ -65,7 +67,7 @@ class TrapDcModule(DaxModule):
         # Get profile loader
         self._reader = ZotinoReader(
             self._solution_path, self._map_file, self._zotino)
-        self._calculator = ZotinoCalculator()
+        self._calculator = ZotinoCalculator(self.core.seconds_to_mu(self._DMA_STARTUP_TIME))
 
     @host_only
     def post_init(self) -> None:
@@ -406,7 +408,7 @@ class TrapDcModule(DaxModule):
 
     @host_only
     def configure_calculator(self,
-                             dma_startup_time: typing.Optional[int] = None,
+                             dma_startup_time: typing.Optional[float] = None,
                              comm_delay_intercept_mu: typing.Optional[int] = None,
                              comm_delay_slope_mu: typing.Optional[int] = None,
                              dma_comm_delay_intercept_mu: typing.Optional[int] = None,
@@ -425,6 +427,8 @@ class TrapDcModule(DaxModule):
         :param dma_comm_delay_slope_mu: The slope of the linear communication time between
         artiq and the kernel for dma playback as a function of total channels
         """
+        if dma_startup_time is not None:
+            dma_startup_time = self.core.seconds_to_mu(dma_startup_time)
         self._calculator.configure(dma_startup_time=dma_startup_time,
                                    comm_delay_intercept_mu=comm_delay_intercept_mu,
                                    comm_delay_slope_mu=comm_delay_slope_mu,
@@ -434,11 +438,14 @@ class TrapDcModule(DaxModule):
 
 class ZotinoCalculator:
 
-    _dma_startup_time: int = 1728
+    _dma_startup_time_mu: int
     _comm_delay_intercept_mu: int = 33800
     _comm_delay_slope_mu: int = 821
     _dma_comm_delay_intercept_mu: int = 291
     _dma_comm_delay_slope_mu: int = 131
+
+    def __init__(self, dma_startup_time_mu: int):
+        self._dma_startup_time_mu = dma_startup_time_mu
 
     @host_only
     @lru_cache(maxsize=32)
@@ -478,7 +485,7 @@ class ZotinoCalculator:
         added_slack = current_slack
         # DMA startup time calculated from benchmark measurement
         if dma:
-            added_slack += self._dma_startup_time
+            added_slack += self._dma_startup_time_mu
 
         # Each line must delay long enough to account for the communication delay
         # If they do not, slack must be added at the beginning of experiment to account for this
@@ -516,7 +523,7 @@ class ZotinoCalculator:
         artiq and the kernel for dma playback as a function of total channels
         """
         if dma_startup_time is not None:
-            self._dma_startup_time = dma_startup_time
+            self._dma_startup_time_mu = dma_startup_time
         if comm_delay_intercept_mu is not None:
             self._comm_delay_intercept_mu = comm_delay_intercept_mu
         if comm_delay_slope_mu is not None:

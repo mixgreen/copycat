@@ -495,7 +495,7 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
         l0 = self.env.core.mu_to_seconds(
             self.env.trap_dc._calculator._calculate_line_comm_delay_mu(len(test_solution[0][0]), True))
         assert slack > l0
-        assert slack < l0 + self.env.trap_dc._MIN_LINE_DELAY_MU + self.env.trap_dc._calculator._dma_startup_time
+        assert slack < l0 + self.env.trap_dc._MIN_LINE_DELAY_MU + self.env.trap_dc._calculator._dma_startup_time_mu
 
     @patch.object(BaseReader, '_read_channel_map')
     def test_calculate_slack_too_low(self, _):
@@ -527,14 +527,16 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
 
     @patch.object(BaseReader, '_read_channel_map')
     def test_configure_calculator(self, _):
+        dma_startup_mu = 1210
+        dma_startup_time = self.env.core.mu_to_seconds(dma_startup_mu)
         self.env.trap_dc.init()
-        self.env.trap_dc.configure_calculator(dma_startup_time=1,
+        self.env.trap_dc.configure_calculator(dma_startup_time=dma_startup_time,
                                               comm_delay_intercept_mu=2,
                                               comm_delay_slope_mu=3,
                                               dma_comm_delay_intercept_mu=4,
                                               dma_comm_delay_slope_mu=5)
 
-        assert self.env.trap_dc._calculator._dma_startup_time == 1
+        self.assertAlmostEqual(self.env.trap_dc._calculator._dma_startup_time_mu, dma_startup_mu, delta=2.0)
         assert self.env.trap_dc._calculator._comm_delay_intercept_mu == 2
         assert self.env.trap_dc._calculator._comm_delay_slope_mu == 3
         assert self.env.trap_dc._calculator._dma_comm_delay_intercept_mu == 4
@@ -542,7 +544,7 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
 
         self.env.trap_dc.configure_calculator()
 
-        assert self.env.trap_dc._calculator._dma_startup_time == 1
+        self.assertAlmostEqual(self.env.trap_dc._calculator._dma_startup_time_mu, dma_startup_mu, delta=2.0)
         assert self.env.trap_dc._calculator._comm_delay_intercept_mu == 2
         assert self.env.trap_dc._calculator._comm_delay_slope_mu == 3
         assert self.env.trap_dc._calculator._dma_comm_delay_intercept_mu == 4
