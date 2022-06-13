@@ -24,13 +24,11 @@ __all__ = ['TrapDcModule', 'ZotinoReader']
 
 
 class TrapDcModule(DaxModule):
-    _MIN_LINE_DELAY_MU: typing.ClassVar[int] = 27372
-    """Minimum line delay for shuttling in MU"""
-
     _zotino: artiq.coredevice.zotino.Zotino
     _solution_path: pathlib.Path
     _map_file: pathlib.Path
     _reader: ZotinoReader
+    _min_line_delay_mu: int
 
     def build(self,  # type: ignore[override]
               *,
@@ -63,6 +61,7 @@ class TrapDcModule(DaxModule):
         # Get profile loader
         self._reader = ZotinoReader(
             self._solution_path, self._map_file, self._zotino)
+        self._min_line_delay_mu = 1516 + len(self._reader._list_map_labels()) * 808
 
     @host_only
     def post_init(self) -> None:
@@ -188,7 +187,7 @@ class TrapDcModule(DaxModule):
         :param name: Name of DMA trace
         :param solution: A list of voltage lines to set and corresponding channels for each line
         :param line_delay: A delay (s) inserted after the line is set with a minimum value of
-        27373 MU
+        1517 + len(self._reader._list_map_labels()) * 808 MU
 
         :return: Unique key for DMA Trace
         """
@@ -207,12 +206,12 @@ class TrapDcModule(DaxModule):
         :param name: Name of DMA trace
         :param solution: A list of voltage lines to set and corresponding channels for each line
         :param line_delay: A delay (MU) inserted after the line is set with a minimum value of
-        27373 MU
+        1517 + len(self._reader._list_map_labels()) * 808 MU
 
         :return: Unique key for DMA Trace
         """
-        if line_delay <= self._MIN_LINE_DELAY_MU:
-            raise ValueError(f"Line Delay must be greater than {self._MIN_LINE_DELAY_MU}")
+        if line_delay <= self._min_line_delay_mu:
+            raise ValueError("Line Delay must be greater than " + str(self._min_line_delay_mu))
         dma_name = self.get_system_key(name)
         with self.core_dma.record(dma_name):
             for t in solution:
@@ -231,7 +230,7 @@ class TrapDcModule(DaxModule):
         :param name: Name of DMA trace
         :param solution: A list of voltage lines to set and corresponding channels for each line
         :param line_rate: A rate (Hz) to define speed to set each line with a minimum value of
-        27373 MU
+        1517 + len(self._reader._list_map_labels()) * 808 MU
 
         :return: Unique key for DMA Trace
         """
@@ -274,7 +273,7 @@ class TrapDcModule(DaxModule):
 
         :param solution: A list of voltage lines to set and corresponding channels for each line
         :param line_delay: A delay (s) inserted after the line is set with a minimum value of
-        27373 MU
+        1517 + len(self._reader._list_map_labels()) * 808 MU
         """
         self.shuttle_mu(solution, self.core.seconds_to_mu(line_delay))
 
@@ -287,10 +286,10 @@ class TrapDcModule(DaxModule):
 
         :param solution: A list of voltage lines to set and corresponding channels for each line
         :param line_delay: A delay (MU) inserted after the line is set with a minimum value of
-        27373 MU
+        1517 + len(self._reader._list_map_labels()) * 808 MU
         """
-        if line_delay <= self._MIN_LINE_DELAY_MU:
-            raise ValueError(f"Line Delay must be greater than {self._MIN_LINE_DELAY_MU}")
+        if line_delay <= self._min_line_delay_mu:
+            raise ValueError("Line Delay must be greater than " + str(self._min_line_delay_mu))
         for t in solution:
             self.set_line(t)
             delay_mu(line_delay)
@@ -304,7 +303,7 @@ class TrapDcModule(DaxModule):
 
         :param solution: A list of voltage lines to set and corresponding channels for each line
         :param line_rate: A rate (Hz) to define speed to set each line with a minimum value of
-        27373 MU
+        1517 + len(self._reader._list_map_labels()) * 808 MU
         """
         self.shuttle_mu(solution, self.core.seconds_to_mu(1 / line_rate))
         return

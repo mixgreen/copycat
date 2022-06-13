@@ -171,21 +171,33 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
         v_mu = [self.env.trap_dc._zotino.voltage_to_mu(voltage=v) for v in voltages]
         return num_data, voltages, v_mu, c
 
-    def test_shuttle_min_line_delay(self):
+    @patch.object(BaseReader, '_read_channel_map')
+    def test_shuttle_min_line_delay(self, mock_read_channel_map):
+        mock_read_channel_map.return_value = [{'label': 'A', 'channel': '0'},
+                                              {'label': 'B', 'channel': '1'},
+                                              {'label': 'C', 'channel': '2'},
+                                              {'label': 'D', 'channel': '3'}]
         s = self._construct_env()
+        s.trap_dc.init()
         try:
-            s.trap_dc.shuttle_mu([], 2000)
+            s.trap_dc.shuttle_mu([], 1)
             assert False
         except ValueError as e:
-            assert str(e) == f"Line Delay must be greater than {s.trap_dc._MIN_LINE_DELAY_MU}"
+            assert str(e) == f"Line Delay must be greater than {s.trap_dc._min_line_delay_mu}"
 
-    def test_record_dma_min_line_delay(self):
+    @patch.object(BaseReader, '_read_channel_map')
+    def test_record_dma_min_line_delay(self, mock_read_channel_map):
+        mock_read_channel_map.return_value = [{'label': 'A', 'channel': '0'},
+                                              {'label': 'B', 'channel': '1'},
+                                              {'label': 'C', 'channel': '2'},
+                                              {'label': 'D', 'channel': '3'}]
         s = self._construct_env()
+        s.trap_dc.init()
         try:
-            s.trap_dc.record_dma_mu("", [], 2000)
+            s.trap_dc.record_dma_mu("", [], 1)
             assert False
         except ValueError as e:
-            assert str(e) == f"Line Delay must be greater than {s.trap_dc._MIN_LINE_DELAY_MU}"
+            assert str(e) == f"Line Delay must be greater than {s.trap_dc._min_line_delay_mu}"
 
     @patch.object(BaseReader, '_read_channel_map')
     def test_shuttle(self, _):
