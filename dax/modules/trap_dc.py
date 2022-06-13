@@ -354,9 +354,9 @@ class TrapDcModule(DaxModule):
         :return: The necessary slack (MU) to shuttle solution"""
         if line_delay < self._MIN_LINE_DELAY_MU:
             raise ValueError(f"Line Delay must be greater than {self._MIN_LINE_DELAY_MU}")
-        return self._calculator.calculate_slack_mu(self._list_num_channels(solution),
-                                                   line_delay,
-                                                   self._MIN_LINE_DELAY_MU)
+        return self._calculator.slack_mu(self._list_num_channels(solution),
+                                         line_delay,
+                                         self._MIN_LINE_DELAY_MU)
 
     @host_only
     def calculate_dma_required_slack(self,
@@ -390,10 +390,10 @@ class TrapDcModule(DaxModule):
         :return: The necessary slack (MU) to shuttle solution"""
         if line_delay < self._MIN_LINE_DELAY_MU:
             raise ValueError(f"Line Delay must be greater than {self._MIN_LINE_DELAY_MU}")
-        return self._calculator.calculate_slack_mu(self._list_num_channels(solution),
-                                                   line_delay,
-                                                   self._MIN_LINE_DELAY_MU,
-                                                   True)
+        return self._calculator.slack_mu(self._list_num_channels(solution),
+                                         line_delay,
+                                         self._MIN_LINE_DELAY_MU,
+                                         True)
 
     @host_only
     def _list_num_channels(self, solution: _ZOTINO_SOLUTION_T_MU) -> typing.Sequence[int]:
@@ -425,14 +425,15 @@ class ZotinoCalculator:
         # linear line delay fit found from measurements on Zotino
         if dma:
             return 291 + 131 * num_channels
-        return 33800 + 821 * num_channels
+        else:
+            return 33800 + 821 * num_channels
 
     @host_only
-    def calculate_slack_mu(self,
-                           row_lens: typing.Sequence[int],
-                           line_delay_mu: int,
-                           offset_mu: int,
-                           dma: bool = False) -> int:
+    def slack_mu(self,
+                 row_lens: typing.Sequence[int],
+                 line_delay_mu: int,
+                 offset_mu: int,
+                 dma: bool = False) -> int:
         """This function calculates the required slack for a given solution and desired line delay
         All calculations are done in MU
 
