@@ -524,3 +524,26 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
             assert False
         except ValueError as e:
             assert str(e) == f"Line Delay must be greater than {self.env.trap_dc._MIN_LINE_DELAY_MU}"
+
+    @patch.object(BaseReader, '_read_channel_map')
+    def test_configure_calculator(self, _):
+        self.env.trap_dc.init()
+        self.env.trap_dc.configure_calculator(dma_startup_time=1,
+                                              comm_delay_intercept_mu=2,
+                                              comm_delay_slope_mu=3,
+                                              dma_comm_delay_intercept_mu=4,
+                                              dma_comm_delay_slope_mu=5)
+
+        assert self.env.trap_dc._calculator._dma_startup_time == 1
+        assert self.env.trap_dc._calculator._comm_delay_intercept_mu == 2
+        assert self.env.trap_dc._calculator._comm_delay_slope_mu == 3
+        assert self.env.trap_dc._calculator._dma_comm_delay_intercept_mu == 4
+        assert self.env.trap_dc._calculator._dma_comm_delay_slope_mu == 5
+
+        self.env.trap_dc.configure_calculator()
+
+        assert self.env.trap_dc._calculator._dma_startup_time == 1
+        assert self.env.trap_dc._calculator._comm_delay_intercept_mu == 2
+        assert self.env.trap_dc._calculator._comm_delay_slope_mu == 3
+        assert self.env.trap_dc._calculator._dma_comm_delay_intercept_mu == 4
+        assert self.env.trap_dc._calculator._dma_comm_delay_slope_mu == 5
