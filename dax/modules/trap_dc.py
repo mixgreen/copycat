@@ -344,7 +344,7 @@ class TrapDcModule(DaxModule):
     @host_only
     def calculate_slack_mu(self,
                            solution: _ZOTINO_SOLUTION_T_MU,
-                           line_delay: int) -> int:
+                           line_delay: int) -> np.int64:
         """Calculate the slack required to shuttle solution with desired delay
         This method is used to prevent underflow when shuttling solutions
         If the desired line delay is >> than the communication delay, then the default amount
@@ -380,7 +380,7 @@ class TrapDcModule(DaxModule):
     @host_only
     def calculate_dma_slack_mu(self,
                                solution: _ZOTINO_SOLUTION_T_MU,
-                               line_delay: int) -> int:
+                               line_delay: int) -> np.int64:
         """Calculate the slack required to shuttle solution with dma and with desired delay
         This method is used to prevent underflow when shuttling solutions
         If the desired line delay is >> than the communication delay, then the default amount
@@ -408,6 +408,7 @@ class TrapDcModule(DaxModule):
 
     @host_only
     def configure_calculator(self,
+                             *,
                              dma_startup_time: typing.Optional[float] = None,
                              comm_delay_intercept_mu: typing.Optional[int] = None,
                              comm_delay_slope_mu: typing.Optional[int] = None,
@@ -469,7 +470,7 @@ class ZotinoCalculator:
                  row_lens: typing.Sequence[int],
                  line_delay_mu: int,
                  offset_mu: int,
-                 dma: bool = False) -> int:
+                 dma: bool = False) -> np.int64:
         """This function calculates the required slack for a given solution and desired line delay
         All calculations are done in MU
 
@@ -503,6 +504,7 @@ class ZotinoCalculator:
 
     @host_only
     def configure(self,
+                  *,
                   dma_startup_time: typing.Optional[int] = None,
                   comm_delay_intercept_mu: typing.Optional[int] = None,
                   comm_delay_slope_mu: typing.Optional[int] = None,
