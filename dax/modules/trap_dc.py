@@ -439,10 +439,10 @@ class TrapDcModule(DaxModule):
 class ZotinoCalculator:
 
     _dma_startup_time_mu: int
-    _comm_delay_intercept_mu: int = 33800
-    _comm_delay_slope_mu: int = 821
-    _dma_comm_delay_intercept_mu: int = 291
-    _dma_comm_delay_slope_mu: int = 131
+    _comm_delay_intercept_mu: int
+    _comm_delay_slope_mu: int
+    _dma_comm_delay_intercept_mu: int
+    _dma_comm_delay_slope_mu: int
 
     def __init__(self, dma_startup_time_mu: int):
 
@@ -450,6 +450,10 @@ class ZotinoCalculator:
         assert dma_startup_time_mu > 0
 
         self._dma_startup_time_mu = dma_startup_time_mu
+        self._comm_delay_intercept_mu = 33800
+        self._comm_delay_slope_mu = 821
+        self._dma_comm_delay_intercept_mu = 291
+        self._dma_comm_delay_slope_mu = 131
 
     @host_only
     @lru_cache(maxsize=32)
