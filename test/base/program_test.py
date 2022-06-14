@@ -34,7 +34,7 @@ _DEVICE_DB: typing.Dict[str, typing.Any] = {
 
 
 class _TestSystem(dax.base.system.DaxSystem,
-                  test.interfaces.operation_test.OperationInstance,
+                  test.interfaces.operation_test.OperationImplementation,
                   test.interfaces.data_context_test.DataContextInstance):
     SYS_ID = 'unittest_system'
     SYS_VER = 0
