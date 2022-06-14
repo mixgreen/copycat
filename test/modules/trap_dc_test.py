@@ -457,7 +457,7 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
                          ([0., 0.], [4, 5]),
                          ([0.], [3]),
                          ([-10.], [2])]
-        slack = self.env.trap_dc.calculate_required_slack(test_solution, .0002)
+        slack = self.env.trap_dc.calculate_slack(test_solution, .0002)
         l0 = self.env.core.mu_to_seconds(
             self.env.trap_dc._calculator._calculate_line_comm_delay_mu(len(test_solution[0][0])))
         assert slack > l0
@@ -471,7 +471,7 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
                          ([0., 0.], [4, 5]),
                          ([0.], [3]),
                          ([-10.], [2])]
-        slack = self.env.trap_dc.calculate_required_slack(test_solution, line_delay)
+        slack = self.env.trap_dc.calculate_slack(test_solution, line_delay)
         l0 = self.env.core.mu_to_seconds(
             self.env.trap_dc._calculator._calculate_line_comm_delay_mu(len(test_solution[0][0])))
         l1 = self.env.core.mu_to_seconds(
@@ -491,7 +491,7 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
                          ([0., 0.], [4, 5]),
                          ([0.], [3]),
                          ([-10.], [2])]
-        slack = self.env.trap_dc.calculate_dma_required_slack(test_solution, line_delay)
+        slack = self.env.trap_dc.calculate_dma_slack(test_solution, line_delay)
         l0 = self.env.core.mu_to_seconds(
             self.env.trap_dc._calculator._calculate_line_comm_delay_mu(len(test_solution[0][0]), True))
         assert slack > l0
@@ -506,7 +506,7 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
                          ([0.], [3]),
                          ([-10.], [2])]
         try:
-            self.env.trap_dc.calculate_required_slack(test_solution, line_delay)
+            self.env.trap_dc.calculate_slack(test_solution, line_delay)
             assert False
         except ValueError as e:
             assert str(e) == f"Line Delay must be greater than {self.env.trap_dc._MIN_LINE_DELAY_MU}"
@@ -520,7 +520,7 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
                          ([0.], [3]),
                          ([-10.], [2])]
         try:
-            self.env.trap_dc.calculate_dma_required_slack(test_solution, line_delay)
+            self.env.trap_dc.calculate_dma_slack(test_solution, line_delay)
             assert False
         except ValueError as e:
             assert str(e) == f"Line Delay must be greater than {self.env.trap_dc._MIN_LINE_DELAY_MU}"

@@ -27,8 +27,8 @@ __all__ = ['TrapDcModule', 'ZotinoReader']
 class TrapDcModule(DaxModule):
     _MIN_LINE_DELAY_MU: typing.ClassVar[int] = 27372
     """Minimum line delay for shuttling in MU"""
-    _DMA_STARTUP_TIME: typing.ClassVar[float] = 1.728 * 10**-6
-    """Startup time for DMA (s)"""
+    _DMA_STARTUP_TIME: typing.ClassVar[float] = 1.728 * us
+    """Startup time for DMA (s). Measured in the RTIO benchmarking tests during CI"""
 
     _zotino: artiq.coredevice.zotino.Zotino
     _solution_path: pathlib.Path
@@ -325,9 +325,9 @@ class TrapDcModule(DaxModule):
         self._zotino.set_dac_mu(voltages, channels)
 
     @host_only
-    def calculate_required_slack(self,
-                                 solution: _ZOTINO_SOLUTION_T_MU,
-                                 line_delay: float) -> float:
+    def calculate_slack(self,
+                        solution: _ZOTINO_SOLUTION_T_MU,
+                        line_delay: float) -> float:
         """Calculate the slack required to shuttle solution with desired delay
         This method is used to prevent underflow when shuttling solutions
         If the desired line delay is >> than the communication delay, then the default amount
@@ -338,13 +338,13 @@ class TrapDcModule(DaxModule):
 
         :return: The necessary slack (s) to shuttle solution"""
         return self.core.mu_to_seconds(
-            self.calculate_required_slack_mu(solution,
-                                             self.core.seconds_to_mu(line_delay)))
+            self.calculate_slack_mu(solution,
+                                    self.core.seconds_to_mu(line_delay)))
 
     @host_only
-    def calculate_required_slack_mu(self,
-                                    solution: _ZOTINO_SOLUTION_T_MU,
-                                    line_delay: int) -> int:
+    def calculate_slack_mu(self,
+                           solution: _ZOTINO_SOLUTION_T_MU,
+                           line_delay: int) -> int:
         """Calculate the slack required to shuttle solution with desired delay
         This method is used to prevent underflow when shuttling solutions
         If the desired line delay is >> than the communication delay, then the default amount
@@ -361,9 +361,9 @@ class TrapDcModule(DaxModule):
                                          self._MIN_LINE_DELAY_MU)
 
     @host_only
-    def calculate_dma_required_slack(self,
-                                     solution: _ZOTINO_SOLUTION_T_MU,
-                                     line_delay: float) -> float:
+    def calculate_dma_slack(self,
+                            solution: _ZOTINO_SOLUTION_T_MU,
+                            line_delay: float) -> float:
         """Calculate the slack required to shuttle solution with dma and with desired delay
         This method is used to prevent underflow when shuttling solutions
         If the desired line delay is >> than the communication delay, then the default amount
@@ -374,13 +374,13 @@ class TrapDcModule(DaxModule):
 
         :return: The necessary slack (s) to shuttle solution"""
         return self.core.mu_to_seconds(
-            self.calculate_dma_required_slack_mu(solution,
-                                                 self.core.seconds_to_mu(line_delay)))
+            self.calculate_dma_slack_mu(solution,
+                                        self.core.seconds_to_mu(line_delay)))
 
     @host_only
-    def calculate_dma_required_slack_mu(self,
-                                        solution: _ZOTINO_SOLUTION_T_MU,
-                                        line_delay: int) -> int:
+    def calculate_dma_slack_mu(self,
+                               solution: _ZOTINO_SOLUTION_T_MU,
+                               line_delay: int) -> int:
         """Calculate the slack required to shuttle solution with dma and with desired delay
         This method is used to prevent underflow when shuttling solutions
         If the desired line delay is >> than the communication delay, then the default amount
