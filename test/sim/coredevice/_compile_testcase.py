@@ -24,20 +24,21 @@ class _SkipCompilerTest(RuntimeError):
 
 @unittest.skipUnless(CI_ENABLED, 'Not in a CI environment, skipping compilation test')
 class CoredeviceCompileTestCase(unittest.TestCase):
-    DEVICE_CLASS: type
+    DEVICE_CLASS: typing.ClassVar[typing.Type]
     """The device class to test."""
-    DEVICE_KWARGS: typing.Dict[str, typing.Any] = {}
+    DEVICE_KWARGS: typing.ClassVar[typing.Dict[str, typing.Any]] = {}
     """Keyword arguments to instantiate the device class."""
-    FN_ARGS: typing.Dict[str, typing.Union[typing.Tuple[typing.Any, ...], typing.List[typing.Any]]] = {}
+    FN_ARGS: typing.ClassVar[typing.Dict[str, typing.Union[typing.Tuple[typing.Any, ...], typing.List[typing.Any]]]]
+    FN_ARGS = {}
     """Function positional arguments (presence forces function testing)."""
-    FN_KWARGS: typing.Dict[str, typing.Dict[str, typing.Any]] = {}
+    FN_KWARGS: typing.ClassVar[typing.Dict[str, typing.Dict[str, typing.Any]]] = {}
     """Function keyword arguments (presence forces function testing)."""
-    FN_EXCLUDE: typing.Set[str] = set()
+    FN_EXCLUDE: typing.ClassVar[typing.Set[str]] = set()
     """Excluded functions."""
-    FN_EXCEPTIONS: typing.Dict[str, type] = {}
+    FN_EXCEPTIONS: typing.ClassVar[typing.Dict[str, type]] = {}
     """Expected exceptions when executing specific functions (defaults to ``NotImplementedError``)."""
 
-    DEVICE_DB = {
+    DEVICE_DB: typing.ClassVar[typing.Dict[str, typing.Any]] = {
         'core': {
             'type': 'local',
             'module': 'artiq.coredevice.core',
@@ -48,9 +49,12 @@ class CoredeviceCompileTestCase(unittest.TestCase):
     }
 
     def setUp(self) -> None:
+        ddb = copy.deepcopy(self.DEVICE_DB)
+        ddb.update(CoredeviceCompileTestCase.DEVICE_DB)  # Always override the core device
+
         set_signal_manager(NullSignalManager())
-        self.managers = get_managers(enable_dax_sim(copy.deepcopy(self.DEVICE_DB), enable=True,
-                                                    logging_level=logging.WARNING, moninj_service=False, output='null'))
+        self.managers = get_managers(enable_dax_sim(ddb, enable=True, logging_level=logging.WARNING,
+                                                    moninj_service=False, output='null'))
 
     def tearDown(self) -> None:
         self.managers.close()

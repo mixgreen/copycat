@@ -63,9 +63,13 @@ class _RegIOUpdate:
 
 class CPLD(DaxSimDevice):
 
-    def __init__(self, dmgr, io_update_device=None, clk_div=0, rf_sw=0, refclk=125e6, att=0x00000000, **kwargs):
+    def __init__(self, dmgr, spi_device,
+                 io_update_device=None, clk_div=0, rf_sw=0, refclk=125e6, att=0x00000000, **kwargs):
         # Call super
         super(CPLD, self).__init__(dmgr, **kwargs)
+
+        # SPI device
+        self.bus = dmgr.get(spi_device)
 
         # Store attributes (from ARTIQ code)
         self.refclk = refclk

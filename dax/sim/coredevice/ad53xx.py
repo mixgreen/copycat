@@ -19,9 +19,14 @@ class AD53xx(DaxSimDevice):
     _NUM_CHANNELS = 32
     """Number of output channels."""
 
-    def __init__(self, dmgr, vref=5., offset_dacs=8192, **kwargs):
+    def __init__(self, dmgr, spi_device,
+                 div_write=4, vref=5., offset_dacs=8192, **kwargs):
         # Call super
         super(AD53xx, self).__init__(dmgr, **kwargs)
+
+        # SPI device
+        self.bus = dmgr.get(spi_device)
+        self.bus.update_xfer_duration_mu(div_write, 24)
 
         # Register signals
         signal_manager = get_signal_manager()

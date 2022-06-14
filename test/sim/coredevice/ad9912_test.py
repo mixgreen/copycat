@@ -17,6 +17,11 @@ _DEVICE_DB = {
         'class': 'Core',
         'arguments': {'host': None, 'ref_period': 1e-9}
     },
+    'spi_urukul1': {
+        'type': 'local',
+        'module': 'artiq.coredevice.spi2',
+        'class': 'SPIMaster',
+    },
     'io_update': {
         'type': 'local',
         'module': 'artiq.coredevice.ttl',
@@ -135,7 +140,4 @@ class CompileTestCase(compile_testcase.CoredeviceCompileTestCase):
         'cfg_sw': {'state': False},
     }
     FN_EXCLUDE = {'write', 'read'}
-
-    DEVICE_DB = {}
-    DEVICE_DB.update(_DEVICE_DB)
-    DEVICE_DB.update(compile_testcase.CoredeviceCompileTestCase.DEVICE_DB)
+    DEVICE_DB = _DEVICE_DB

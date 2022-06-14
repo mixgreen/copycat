@@ -34,9 +34,15 @@ _DEVICE_DB = {
         "module": "artiq.coredevice.urukul",
         "class": "CPLD",
         "arguments": {
+            "spi_device": "spi_urukul0",
             "refclk": 1e9,
             "clk_div": 1
         }
+    },
+    'spi_urukul0': {
+        'type': 'local',
+        'module': 'artiq.coredevice.spi2',
+        'class': 'SPIMaster',
     },
 }
 
@@ -184,7 +190,4 @@ class CompileTestCase(compile_testcase.CoredeviceCompileTestCase):
                   'frequency_to_ram', 'turns_to_ram', 'amplitude_to_ram', 'turns_amplitude_to_ram',
                   'set_ftw', 'set_pow', 'set_asf', 'set_frequency', 'set_phase', 'set_amplitude',
                   'set_sync', 'measure_io_update_alignment'}
-
-    DEVICE_DB = {}
-    DEVICE_DB.update(_DEVICE_DB)
-    DEVICE_DB.update(compile_testcase.CoredeviceCompileTestCase.DEVICE_DB)
+    DEVICE_DB = _DEVICE_DB
