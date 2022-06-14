@@ -61,7 +61,13 @@ class TrapDcModule(DaxModule):
         # Get profile loader
         self._reader = ZotinoReader(
             self._solution_path, self._map_file, self._zotino)
-        self._min_line_delay_mu = 1516 + len(self._reader._list_map_labels()) * 808
+        # Below calculated from set_dac_mu and load functions
+        # https://m-labs.hk/artiq/manual/_modules/artiq/coredevice/ad53xx.html#AD53xx
+        self._min_line_delay_mu = np.int64(self.core.seconds_to_mu(1500 * ns)
+                                           + 16
+                                           + len(self._reader._list_map_labels())
+                                           * 808)
+        self.update_kernel_invariants('_min_line_delay_mu')
 
     @host_only
     def post_init(self) -> None:
@@ -186,8 +192,8 @@ class TrapDcModule(DaxModule):
 
         :param name: Name of DMA trace
         :param solution: A list of voltage lines to set and corresponding channels for each line
-        :param line_delay: A delay (s) inserted after the line is set with a minimum value of
-        1517 + len(self._reader._list_map_labels()) * 808 MU
+        :param line_delay: A delay (s) inserted after the line is set
+        Must be greater than the SPI write time for the number of used channels
 
         :return: Unique key for DMA Trace
         """
@@ -205,8 +211,8 @@ class TrapDcModule(DaxModule):
 
         :param name: Name of DMA trace
         :param solution: A list of voltage lines to set and corresponding channels for each line
-        :param line_delay: A delay (MU) inserted after the line is set with a minimum value of
-        1517 + len(self._reader._list_map_labels()) * 808 MU
+        :param line_delay: A delay (MU) inserted after the line is set
+        Must be greater than the SPI write time for the number of used channels
 
         :return: Unique key for DMA Trace
         """
@@ -229,8 +235,8 @@ class TrapDcModule(DaxModule):
 
         :param name: Name of DMA trace
         :param solution: A list of voltage lines to set and corresponding channels for each line
-        :param line_rate: A rate (Hz) to define speed to set each line with a minimum value of
-        1517 + len(self._reader._list_map_labels()) * 808 MU
+        :param line_rate: A rate (Hz) to define speed to set each line
+        Must be greater than the SPI write time for the number of used channels
 
         :return: Unique key for DMA Trace
         """
@@ -272,8 +278,8 @@ class TrapDcModule(DaxModule):
         corresponding channels
 
         :param solution: A list of voltage lines to set and corresponding channels for each line
-        :param line_delay: A delay (s) inserted after the line is set with a minimum value of
-        1517 + len(self._reader._list_map_labels()) * 808 MU
+        :param line_delay: A delay (s) inserted after the line is set
+        Must be greater than the SPI write time for the number of used channels
         """
         self.shuttle_mu(solution, self.core.seconds_to_mu(line_delay))
 
@@ -285,8 +291,8 @@ class TrapDcModule(DaxModule):
         corresponding channels
 
         :param solution: A list of voltage lines to set and corresponding channels for each line
-        :param line_delay: A delay (MU) inserted after the line is set with a minimum value of
-        1517 + len(self._reader._list_map_labels()) * 808 MU
+        :param line_delay: A delay (MU) inserted after the line is set
+        Must be greater than the SPI write time for the number of used channels
         """
         if line_delay <= self._min_line_delay_mu:
             raise ValueError(f"Line Delay must be greater than {self._min_line_delay_mu}")
@@ -302,8 +308,8 @@ class TrapDcModule(DaxModule):
         corresponding channels
 
         :param solution: A list of voltage lines to set and corresponding channels for each line
-        :param line_rate: A rate (Hz) to define speed to set each line with a minimum value of
-        1517 + len(self._reader._list_map_labels()) * 808 MU
+        :param line_rate: A rate (Hz) to define speed to set each line
+        Must be greater than the SPI write time for the number of used channels
         """
         self.shuttle_mu(solution, self.core.seconds_to_mu(1 / line_rate))
         return
