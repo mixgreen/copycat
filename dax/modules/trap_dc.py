@@ -428,9 +428,8 @@ class TrapDcModule(DaxModule):
         :param dma_comm_delay_slope_mu: The slope of the linear communication time between
         artiq and the kernel for dma playback as a function of total channels
         """
-        if dma_startup_time is not None:
-            dma_startup_time = self.core.seconds_to_mu(dma_startup_time)
-        self._calculator.configure(dma_startup_time=dma_startup_time,
+        dma_startup_time_mu = None if dma_startup_time is None else self.core.seconds_to_mu(dma_startup_time)
+        self._calculator.configure(dma_startup_time_mu=dma_startup_time_mu,
                                    comm_delay_intercept_mu=comm_delay_intercept_mu,
                                    comm_delay_slope_mu=comm_delay_slope_mu,
                                    dma_comm_delay_intercept_mu=dma_comm_delay_intercept_mu,
@@ -505,7 +504,7 @@ class ZotinoCalculator:
     @host_only
     def configure(self,
                   *,
-                  dma_startup_time: typing.Optional[int] = None,
+                  dma_startup_time_mu: typing.Optional[int] = None,
                   comm_delay_intercept_mu: typing.Optional[int] = None,
                   comm_delay_slope_mu: typing.Optional[int] = None,
                   dma_comm_delay_intercept_mu: typing.Optional[int] = None,
@@ -524,8 +523,8 @@ class ZotinoCalculator:
         :param dma_comm_delay_slope_mu: The slope of the linear communication time between
         artiq and the kernel for dma playback as a function of total channels
         """
-        if dma_startup_time is not None:
-            self._dma_startup_time_mu = dma_startup_time
+        if dma_startup_time_mu is not None:
+            self._dma_startup_time_mu = dma_startup_time_mu
         if comm_delay_intercept_mu is not None:
             self._comm_delay_intercept_mu = comm_delay_intercept_mu
         if comm_delay_slope_mu is not None:
