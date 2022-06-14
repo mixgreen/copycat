@@ -67,7 +67,7 @@ class TrapDcModule(DaxModule):
         # Get profile loader
         self._reader = ZotinoReader(
             self._solution_path, self._map_file, self._zotino)
-        self._calculator = ZotinoCalculator(self.core.seconds_to_mu(self._DMA_STARTUP_TIME))
+        self._calculator = ZotinoCalculator(int(self.core.seconds_to_mu(self._DMA_STARTUP_TIME)))
 
     @host_only
     def post_init(self) -> None:
@@ -445,6 +445,10 @@ class ZotinoCalculator:
     _dma_comm_delay_slope_mu: int = 131
 
     def __init__(self, dma_startup_time_mu: int):
+
+        assert isinstance(dma_startup_time_mu, int)
+        assert dma_startup_time_mu > 0
+
         self._dma_startup_time_mu = dma_startup_time_mu
 
     @host_only
