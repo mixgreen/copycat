@@ -13,6 +13,39 @@ from test.environment import CI_ENABLED
 
 _NUM_SAMPLES = 1000 if CI_ENABLED else 100
 
+_DEVICE_DB = {
+    'core': {
+        'type': 'local',
+        'module': 'artiq.coredevice.core',
+        'class': 'Core',
+        'arguments': {'host': None, 'ref_period': 1e-9}
+    },
+    'spi_urukul1': {
+        'type': 'local',
+        'module': 'artiq.coredevice.spi2',
+        'class': 'SPIMaster',
+    },
+    'io_update': {
+        'type': 'local',
+        'module': 'artiq.coredevice.ttl',
+        'class': 'TTLOut',
+        'arguments': {},
+    },
+    "dut": {
+        "type": "local",
+        "module": "artiq.coredevice.urukul",
+        "class": "CPLD",
+        "arguments": {
+            "spi_device": "spi_urukul1",
+            "sync_device": None,
+            "io_update_device": "io_update",
+            "refclk": 1e9,
+            "clk_sel": 1,
+            "clk_div": 3
+        }
+    },
+}
+
 
 class UrukulTestCase(unittest.TestCase):
     SEED = None
@@ -36,37 +69,10 @@ class _Environment(HasEnvironment):
 
 class UrukulPeekTestCase(dax.sim.test_case.PeekTestCase):
     SEED = None
-    DEVICE_DB = {
-        'core': {
-            'type': 'local',
-            'module': 'artiq.coredevice.core',
-            'class': 'Core',
-            'arguments': {'host': None, 'ref_period': 1e-9}
-        },
-        'io_update': {
-            'type': 'local',
-            'module': 'artiq.coredevice.ttl',
-            'class': 'TTLOut',
-            'arguments': {},
-        },
-        "dut": {
-            "type": "local",
-            "module": "artiq.coredevice.urukul",
-            "class": "CPLD",
-            "arguments": {
-                "spi_device": "spi_urukul1",
-                "sync_device": None,
-                "io_update_device": "io_update",
-                "refclk": 1e9,
-                "clk_sel": 1,
-                "clk_div": 3
-            }
-        },
-    }
 
     def setUp(self) -> None:
         self.rng = random.Random(self.SEED)
-        self.env = self.construct_env(_Environment, device_db=self.DEVICE_DB)
+        self.env = self.construct_env(_Environment, device_db=_DEVICE_DB)
 
     def test_init(self):
         self.expect(self.env.dut, 'init', 'x')
@@ -159,11 +165,17 @@ class UrukulRegIOUpdatePeekTestCase(UrukulPeekTestCase):
             'class': 'Core',
             'arguments': {'host': None, 'ref_period': 1e-9}
         },
+        'spi_urukul0': {
+            'type': 'local',
+            'module': 'artiq.coredevice.spi2',
+            'class': 'SPIMaster',
+        },
         "dut": {
             "type": "local",
             "module": "artiq.coredevice.urukul",
             "class": "CPLD",
             "arguments": {
+                "spi_device": "spi_urukul0",
                 "sync_device": None,
                 "refclk": 1e9,
                 "clk_sel": 1,
@@ -175,6 +187,9 @@ class UrukulRegIOUpdatePeekTestCase(UrukulPeekTestCase):
 
 class CompileTestCase(compile_testcase.CoredeviceCompileTestCase):
     DEVICE_CLASS = dax.sim.coredevice.urukul.CPLD
+    DEVICE_KWARGS = {
+        "spi_device": "spi_urukul1",
+    }
     FN_KWARGS = {
         'cfg_sw': {'channel': 0, 'on': True},
         'cfg_switches': {'state': 0x0},
@@ -189,3 +204,4 @@ class CompileTestCase(compile_testcase.CoredeviceCompileTestCase):
             'get_channel_att_mu': {'channel': 0},
             'get_channel_att': {'channel': 0},
         })
+    DEVICE_DB = _DEVICE_DB

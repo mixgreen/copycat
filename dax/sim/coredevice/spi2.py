@@ -1,11 +1,10 @@
-"""Write-only generic SPI simulation driver for use with Dax.Sim."""
+"""Write-only generic SPI simulation driver for use with DAX.sim."""
 # mypy: disallow_untyped_defs = False
 # mypy: disallow_incomplete_defs = False
 # mypy: check_untyped_defs = False
 # mypy: disallow_subclassing_any = False
-import typing
 
-from artiq.coredevice.spi2 import SPIMaster as _SPIMaster   # type: ignore[import]
+from artiq.coredevice.spi2 import SPIMaster as _SPIMaster  # type: ignore[import]
 from artiq.language.core import kernel, delay_mu
 from artiq.language.types import TNone
 from dax.sim.device import DaxSimDevice
@@ -15,22 +14,25 @@ from dax.sim.signal import get_signal_manager
 class SPIMaster(DaxSimDevice, _SPIMaster):
     """Wraps calls to ARTIQ SPI devices."""
 
-    def __init__(self, dmgr: typing.Any, **kwargs) -> None:
-        kwargs_without_key = kwargs.copy()
-        kwargs_without_key.pop("_key")
+    def __init__(self, dmgr, div=0, length=0, **kwargs) -> None:
+        # Call super
         super().__init__(dmgr, **kwargs)
+
+        # Register signals
         signal_manager = get_signal_manager()
         self._config_length = signal_manager.register(self, "cfg_transfer_length", int)
         self._config_cs = signal_manager.register(self, "cfg_chip_select", int)
         self._config_clk_div = signal_manager.register(self, "cfg_clk_divider", int)
         self._config_flags = signal_manager.register(self, "cfg_flags", int)
         self._out_data = signal_manager.register(self, "mosi", int)
-        self._init_spi_device(**kwargs_without_key)
+
+        # Internal state
         self._config_set = False
 
-    def _init_spi_device(self, channel: int, div: int = 0, length: int = 0) -> None:
-        """Roughly equivalent to SPIMaster's __init__()."""
-        self.ref_period_mu = self.core.seconds_to_mu(self.core.coarse_ref_period)
+        # Store attributes and initialization (from ARTIQ code)
+        self.ref_period_mu = self.core.seconds_to_mu(
+            self.core.coarse_ref_period)
+        assert self.ref_period_mu == self.core.ref_multiplier
         self.update_xfer_duration_mu(div, length)
 
     @kernel

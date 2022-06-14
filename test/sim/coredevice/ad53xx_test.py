@@ -37,10 +37,16 @@ _DEVICE_DB = {
         'class': 'Core',
         'arguments': {'host': None, 'ref_period': 1e-9}
     },
+    'spi': {
+        'type': 'local',
+        'module': 'artiq.coredevice.spi2',
+        'class': 'SPIMaster',
+    },
     "dut": {
         "type": "local",
         "module": "artiq.coredevice.ad53xx",
-        "class": "AD53xx"
+        "class": "AD53xx",
+        "arguments": {"spi_device": "spi"}
     },
 }
 
@@ -142,8 +148,11 @@ class AD53xxPeekTestCase(dax.sim.test_case.PeekTestCase):
 
 
 class CompileTestCase(compile_testcase.CoredeviceCompileTestCase):
-    DEVICE_CLASS: type = dax.sim.coredevice.ad53xx.AD53xx
-    FN_KWARGS: typing.Dict[str, typing.Dict[str, typing.Any]] = {
+    DEVICE_CLASS: typing.ClassVar[typing.Type] = dax.sim.coredevice.ad53xx.AD53xx
+    DEVICE_KWARGS = {
+        'spi_device': 'spi',
+    }
+    FN_KWARGS: typing.ClassVar[typing.Dict[str, typing.Dict[str, typing.Any]]] = {
         'write_offset_dacs_mu': {'value': 0},
         'write_gain_mu': {'channel': 0},
         'write_offset_mu': {'channel': 0},
@@ -157,3 +166,4 @@ class CompileTestCase(compile_testcase.CoredeviceCompileTestCase):
     FN_EXCLUDE = {
         'calibrate',  # Skipped because conditions for inputs can not be easily satisfied
     }
+    DEVICE_DB = _DEVICE_DB
