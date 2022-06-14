@@ -28,7 +28,7 @@ class TrapDcModule(DaxModule):
     _solution_path: pathlib.Path
     _map_file: pathlib.Path
     _reader: ZotinoReader
-    _min_line_delay_mu: int
+    _min_line_delay_mu: np.int64
 
     def build(self,  # type: ignore[override]
               *,
@@ -211,7 +211,7 @@ class TrapDcModule(DaxModule):
         :return: Unique key for DMA Trace
         """
         if line_delay <= self._min_line_delay_mu:
-            raise ValueError("Line Delay must be greater than " + str(self._min_line_delay_mu))
+            raise ValueError(f"Line Delay must be greater than {self._min_line_delay_mu}")
         dma_name = self.get_system_key(name)
         with self.core_dma.record(dma_name):
             for t in solution:
@@ -289,7 +289,7 @@ class TrapDcModule(DaxModule):
         1517 + len(self._reader._list_map_labels()) * 808 MU
         """
         if line_delay <= self._min_line_delay_mu:
-            raise ValueError("Line Delay must be greater than " + str(self._min_line_delay_mu))
+            raise ValueError(f"Line Delay must be greater than {self._min_line_delay_mu}")
         for t in solution:
             self.set_line(t)
             delay_mu(line_delay)
