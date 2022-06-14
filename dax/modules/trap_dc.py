@@ -67,7 +67,7 @@ class TrapDcModule(DaxModule):
         # Get profile loader
         self._reader = ZotinoReader(
             self._solution_path, self._map_file, self._zotino)
-        self._calculator = ZotinoCalculator(int(self.core.seconds_to_mu(self._DMA_STARTUP_TIME)))
+        self._calculator = ZotinoCalculator(np.int64(self.core.seconds_to_mu(self._DMA_STARTUP_TIME)))
 
     @host_only
     def post_init(self) -> None:
@@ -410,10 +410,10 @@ class TrapDcModule(DaxModule):
     def configure_calculator(self,
                              *,
                              dma_startup_time: typing.Optional[float] = None,
-                             comm_delay_intercept_mu: typing.Optional[int] = None,
-                             comm_delay_slope_mu: typing.Optional[int] = None,
-                             dma_comm_delay_intercept_mu: typing.Optional[int] = None,
-                             dma_comm_delay_slope_mu: typing.Optional[int] = None) -> None:
+                             comm_delay_intercept_mu: typing.Optional[np.int64] = None,
+                             comm_delay_slope_mu: typing.Optional[np.int64] = None,
+                             dma_comm_delay_intercept_mu: typing.Optional[np.int64] = None,
+                             dma_comm_delay_slope_mu: typing.Optional[np.int64] = None) -> None:
         """Configure measured parameters that will affect slack calculations
         Each configuration is set if and only if the argument is passed in and is not None
         All original values were calculated from benchmarking
@@ -428,7 +428,7 @@ class TrapDcModule(DaxModule):
         :param dma_comm_delay_slope_mu: The slope of the linear communication time between
         artiq and the kernel for dma playback as a function of total channels
         """
-        dma_startup_time_mu = None if dma_startup_time is None else self.core.seconds_to_mu(dma_startup_time)
+        dma_startup_time_mu = None if dma_startup_time is None else np.int64(self.core.seconds_to_mu(dma_startup_time))
         self._calculator.configure(dma_startup_time_mu=dma_startup_time_mu,
                                    comm_delay_intercept_mu=comm_delay_intercept_mu,
                                    comm_delay_slope_mu=comm_delay_slope_mu,
@@ -437,16 +437,17 @@ class TrapDcModule(DaxModule):
 
 
 class ZotinoCalculator:
+    """"""
 
-    _dma_startup_time_mu: int
-    _comm_delay_intercept_mu: int
-    _comm_delay_slope_mu: int
-    _dma_comm_delay_intercept_mu: int
-    _dma_comm_delay_slope_mu: int
+    _dma_startup_time_mu: np.int64
+    _comm_delay_intercept_mu: np.int64
+    _comm_delay_slope_mu: np.int64
+    _dma_comm_delay_intercept_mu: np.int64
+    _dma_comm_delay_slope_mu: np.int64
 
-    def __init__(self, dma_startup_time_mu: int):
+    def __init__(self, dma_startup_time_mu: np.int64):
 
-        assert isinstance(dma_startup_time_mu, int)
+        assert isinstance(dma_startup_time_mu, np.int64)
         assert dma_startup_time_mu > 0
 
         self._dma_startup_time_mu = dma_startup_time_mu
@@ -457,7 +458,7 @@ class ZotinoCalculator:
 
     @host_only
     @lru_cache(maxsize=32)
-    def _calculate_line_comm_delay_mu(self, num_channels: int, dma: bool = False) -> int:
+    def _calculate_line_comm_delay_mu(self, num_channels: np.int64, dma: bool = False) -> np.int64:
         """Calculates the expected average communications delay when callng zotino.set_dac_mu
         Delay is a linear function of the number of channels being updated
         Linear line delay fit found from repeated Zotino benchmarking
@@ -474,9 +475,9 @@ class ZotinoCalculator:
 
     @host_only
     def slack_mu(self,
-                 row_lens: typing.Sequence[int],
-                 line_delay_mu: int,
-                 offset_mu: int,
+                 row_lens: typing.Sequence[np.int64],
+                 line_delay_mu: np.int64,
+                 offset_mu: np.int64,
                  dma: bool = False) -> np.int64:
         """This function calculates the required slack for a given solution and desired line delay
         All calculations are done in MU
@@ -512,11 +513,11 @@ class ZotinoCalculator:
     @host_only
     def configure(self,
                   *,
-                  dma_startup_time_mu: typing.Optional[int] = None,
-                  comm_delay_intercept_mu: typing.Optional[int] = None,
-                  comm_delay_slope_mu: typing.Optional[int] = None,
-                  dma_comm_delay_intercept_mu: typing.Optional[int] = None,
-                  dma_comm_delay_slope_mu: typing.Optional[int] = None) -> None:
+                  dma_startup_time_mu: typing.Optional[np.int64] = None,
+                  comm_delay_intercept_mu: typing.Optional[np.int64] = None,
+                  comm_delay_slope_mu: typing.Optional[np.int64] = None,
+                  dma_comm_delay_intercept_mu: typing.Optional[np.int64] = None,
+                  dma_comm_delay_slope_mu: typing.Optional[np.int64] = None) -> None:
         """Configure measured parameters that will affect slack calculations
         Each configuration is set if and only if the argument is passed in and is not None
         All original values were calculated from benchmarking
@@ -532,14 +533,24 @@ class ZotinoCalculator:
         artiq and the kernel for dma playback as a function of total channels
         """
         if dma_startup_time_mu is not None:
+            assert isinstance(dma_startup_time_mu, np.int64)
+            assert dma_startup_time_mu > 0
             self._dma_startup_time_mu = dma_startup_time_mu
         if comm_delay_intercept_mu is not None:
+            assert isinstance(comm_delay_intercept_mu, np.int64)
+            assert comm_delay_intercept_mu > 0
             self._comm_delay_intercept_mu = comm_delay_intercept_mu
         if comm_delay_slope_mu is not None:
+            assert isinstance(comm_delay_slope_mu, np.int64)
+            assert comm_delay_slope_mu > 0
             self._comm_delay_slope_mu = comm_delay_slope_mu
         if dma_comm_delay_intercept_mu is not None:
+            assert isinstance(dma_comm_delay_intercept_mu, np.int64)
+            assert dma_comm_delay_intercept_mu > 0
             self._dma_comm_delay_intercept_mu = dma_comm_delay_intercept_mu
         if dma_comm_delay_slope_mu is not None:
+            assert isinstance(dma_comm_delay_slope_mu, np.int64)
+            assert dma_comm_delay_slope_mu > 0
             self._dma_comm_delay_slope_mu = dma_comm_delay_slope_mu
 
 

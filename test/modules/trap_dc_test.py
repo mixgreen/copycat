@@ -2,6 +2,8 @@ import os
 import string
 import typing
 import random
+
+import numpy as np
 from dax.util.output import temp_dir
 from unittest.mock import patch
 import pathlib
@@ -531,21 +533,21 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
         dma_startup_time = self.env.core.mu_to_seconds(dma_startup_mu)
         self.env.trap_dc.init()
         self.env.trap_dc.configure_calculator(dma_startup_time=dma_startup_time,
-                                              comm_delay_intercept_mu=2,
-                                              comm_delay_slope_mu=3,
-                                              dma_comm_delay_intercept_mu=4,
-                                              dma_comm_delay_slope_mu=5)
+                                              comm_delay_intercept_mu=np.int64(2),
+                                              comm_delay_slope_mu=np.int64(3),
+                                              dma_comm_delay_intercept_mu=np.int64(4),
+                                              dma_comm_delay_slope_mu=np.int64(5))
 
         self.assertAlmostEqual(self.env.trap_dc._calculator._dma_startup_time_mu, dma_startup_mu, delta=2.0)
-        assert self.env.trap_dc._calculator._comm_delay_intercept_mu == 2
-        assert self.env.trap_dc._calculator._comm_delay_slope_mu == 3
-        assert self.env.trap_dc._calculator._dma_comm_delay_intercept_mu == 4
-        assert self.env.trap_dc._calculator._dma_comm_delay_slope_mu == 5
+        assert self.env.trap_dc._calculator._comm_delay_intercept_mu == np.int64(2)
+        assert self.env.trap_dc._calculator._comm_delay_slope_mu == np.int64(3)
+        assert self.env.trap_dc._calculator._dma_comm_delay_intercept_mu == np.int64(4)
+        assert self.env.trap_dc._calculator._dma_comm_delay_slope_mu == np.int64(5)
 
         self.env.trap_dc.configure_calculator()
 
         self.assertAlmostEqual(self.env.trap_dc._calculator._dma_startup_time_mu, dma_startup_mu, delta=2.0)
-        assert self.env.trap_dc._calculator._comm_delay_intercept_mu == 2
-        assert self.env.trap_dc._calculator._comm_delay_slope_mu == 3
-        assert self.env.trap_dc._calculator._dma_comm_delay_intercept_mu == 4
-        assert self.env.trap_dc._calculator._dma_comm_delay_slope_mu == 5
+        assert self.env.trap_dc._calculator._comm_delay_intercept_mu == np.int64(2)
+        assert self.env.trap_dc._calculator._comm_delay_slope_mu == np.int64(3)
+        assert self.env.trap_dc._calculator._dma_comm_delay_intercept_mu == np.int64(4)
+        assert self.env.trap_dc._calculator._dma_comm_delay_slope_mu == np.int64(5)
