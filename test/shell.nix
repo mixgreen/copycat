@@ -3,7 +3,7 @@
 let
   artiq-full = import <artiq-full> { inherit pkgs; };
   dax-full = import <dax-full> { inherit pkgs; };
-  daxInputs = import ../inputs.nix { inherit pkgs; artiqpkgs = artiq-full; };
+  daxInputs = import ../inputs.nix { inherit pkgs; artiqpkgs = artiq-full; inherit (dax-full) trap-dac-utils; };
 in
 pkgs.mkShell {
   buildInputs = [
@@ -13,7 +13,6 @@ pkgs.mkShell {
       ps.mypy
       ps.pycodestyle
       ps.coverage
-      dax-full.trap-dac-utils
       dax-full.flake8-artiq
       dax-full.artiq-stubs
     ]))
