@@ -556,25 +556,25 @@ class ZotinoCalculator:
         artiq and the kernel for dma playback as a function of total channels
         """
         if dma_startup_time_mu is not None:
-            assert isinstance(dma_startup_time_mu, np.int64)
+            assert isinstance(dma_startup_time_mu, (int, np.int64))
             assert dma_startup_time_mu > 0
-            self._dma_startup_time_mu = dma_startup_time_mu
+            self._dma_startup_time_mu = np.int64(dma_startup_time_mu)
         if comm_delay_intercept_mu is not None:
-            assert isinstance(comm_delay_intercept_mu, np.int64)
+            assert isinstance(comm_delay_intercept_mu, (int, np.int64))
             assert comm_delay_intercept_mu > 0
-            self._comm_delay_intercept_mu = comm_delay_intercept_mu
+            self._comm_delay_intercept_mu = np.int64(comm_delay_intercept_mu)
         if comm_delay_slope_mu is not None:
-            assert isinstance(comm_delay_slope_mu, np.int64)
+            assert isinstance(comm_delay_slope_mu, (int, np.int64))
             assert comm_delay_slope_mu > 0
-            self._comm_delay_slope_mu = comm_delay_slope_mu
+            self._comm_delay_slope_mu = np.int64(comm_delay_slope_mu)
         if dma_comm_delay_intercept_mu is not None:
-            assert isinstance(dma_comm_delay_intercept_mu, np.int64)
+            assert isinstance(dma_comm_delay_intercept_mu, (int, np.int64))
             assert dma_comm_delay_intercept_mu > 0
-            self._dma_comm_delay_intercept_mu = dma_comm_delay_intercept_mu
+            self._dma_comm_delay_intercept_mu = np.int64(dma_comm_delay_intercept_mu)
         if dma_comm_delay_slope_mu is not None:
-            assert isinstance(dma_comm_delay_slope_mu, np.int64)
+            assert isinstance(dma_comm_delay_slope_mu, (int, np.int64))
             assert dma_comm_delay_slope_mu > 0
-            self._dma_comm_delay_slope_mu = dma_comm_delay_slope_mu
+            self._dma_comm_delay_slope_mu = np.int64(dma_comm_delay_slope_mu)
 
 
 class ZotinoReader(BaseReader[_ZOTINO_SOLUTION_T]):
