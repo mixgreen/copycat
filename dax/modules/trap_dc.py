@@ -57,12 +57,15 @@ class TrapDcModule(DaxModule):
         # map file is the relative map file path
         self._map_file = pathlib.Path(map_file)
 
+        # Initialize Zotino Reader
+        self._reader = ZotinoReader(
+            self._solution_path, self._map_file)
+
     @host_only
     def init(self) -> None:
         """Initialize this module."""
         # Get profile loader
-        self._reader = ZotinoReader(
-            self._solution_path, self._map_file, self._zotino)
+        self._reader.init(self._zotino)
 
     @host_only
     def post_init(self) -> None:
@@ -74,7 +77,7 @@ class TrapDcModule(DaxModule):
 
         :return: The path to the solution file directory
         """
-        return str(self._solution_path)
+        return self._reader.solution_path
 
     @host_only
     def read_line_mu(self,
@@ -346,7 +349,6 @@ class ZotinoReader(BaseReader[_ZOTINO_SOLUTION_T]):
     def __init__(self,
                  solution_path: pathlib.Path,
                  map_path: pathlib.Path,
-                 zotino: artiq.coredevice.zotino.Zotino,
                  allowed_specials: typing.FrozenSet[str]
                  = frozenset(SpecialCharacter)):
         """Constructor of a zotino reader class extending the base reader
@@ -357,10 +359,12 @@ class ZotinoReader(BaseReader[_ZOTINO_SOLUTION_T]):
         :param allowed_specials: A set of string characters that are allowed in the solution files
         (not including numbers)
         """
-        self._vref = zotino.vref
-        self._voltage_to_mu = zotino.voltage_to_mu
         super(ZotinoReader, self).__init__(
             solution_path, map_path, allowed_specials)
+
+    def init(self, zotino: artiq.coredevice.zotino.Zotino) -> None:
+        self._vref = zotino.vref
+        self._voltage_to_mu = zotino.voltage_to_mu
 
     @property
     def voltage_low(self) -> float:
