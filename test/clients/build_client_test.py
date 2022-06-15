@@ -53,7 +53,7 @@ class _TestDetectionModule(DaxModule, dax.interfaces.detection.DetectionInterfac
         return 100 * us
 
 
-class _TestSystem(DaxSystem, test.interfaces.operation_test.OperationInstance):
+class _TestSystem(DaxSystem, test.interfaces.operation_test.OperationImplementation):
     SYS_ID = 'unittest_system'
     SYS_VER = 0
     CORE_LOG_KEY = None
