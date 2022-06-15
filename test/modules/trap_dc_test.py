@@ -452,3 +452,12 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
             prepared_line_result = self.env.trap_dc._read_line(
                 'name_of_file.csv', 2, 3.5)
             self.assertTupleEqual(prepared_line_result, expected_prepared_line)
+
+    @patch.object(BaseReader, '_read_channel_map')
+    def test_reader_zotino_uninitialized(self, _):
+        reader = ZotinoReader(pathlib.Path('.'),
+                              pathlib.Path('test.csv'))
+        try:
+            reader.convert_to_mu([1.0, 2.0, 3.0])
+        except RuntimeError as e:
+            assert str(e) == "Must initialize reader using init method to use function convert_to_mu"
