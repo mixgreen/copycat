@@ -41,7 +41,6 @@ class TrapDcModule(DaxModule):
 
     - Functions are provided to return the expected amount of slack needed to shuttle a solution at a given speed
     without underflow. However, this is meant to be an approximate calculation and can be configured as needed.
-
     - Everything in this module is Zotino specific. As other DC traps are needed they should be created separately.
     """
 
