@@ -341,16 +341,6 @@ class TrapDcModule(DaxModule):
         self._zotino.set_dac_mu(voltages, channels)
 
 
-def init_error_handler(func: typing.Callable):
-    def check_init(*args, **kwargs):
-        try:
-            return func(*args, **kwargs)
-        except AttributeError:
-            raise RuntimeError("Must initialize reader using init "
-                               f"method to use function {func.__name__}")
-    return check_init
-
-
 class ZotinoReader(BaseReader[_ZOTINO_SOLUTION_T]):
     _CHANNEL: typing.ClassVar[str] = 'channel'
     """Column key for zotino channels."""
@@ -376,12 +366,19 @@ class ZotinoReader(BaseReader[_ZOTINO_SOLUTION_T]):
         self._vref = zotino.vref
         self._voltage_to_mu = zotino.voltage_to_mu
 
+    def _check_init(self, func_name: str) -> None:
+        if not hasattr(self, "_vref") or not hasattr(self, "_voltage_to_mu"):
+            raise RuntimeError("Must initialize reader using init "
+                               f"method to use function {func_name}")
+
     @property
     def voltage_low(self) -> float:
+        self._check_init("voltage_low")
         return -self._vref * 2
 
     @property
     def voltage_high(self) -> float:
+        self._check_init("voltage_high")
         return self._vref * 2
 
     @host_only
@@ -437,7 +434,6 @@ class ZotinoReader(BaseReader[_ZOTINO_SOLUTION_T]):
         return parsed_solution
 
     @host_only
-    @init_error_handler
     def process_specials(self, val: SpecialCharacter) -> float:
         """Implementation to handle a SpecialCharacter for the zotino
 
@@ -445,6 +441,7 @@ class ZotinoReader(BaseReader[_ZOTINO_SOLUTION_T]):
 
         :return: Handled value based on solution and zotino characteristics
         """
+        self._check_init("process_specials")
         if val == SpecialCharacter.X:
             return math.nan
         elif val == SpecialCharacter.INF:
@@ -481,7 +478,6 @@ class ZotinoReader(BaseReader[_ZOTINO_SOLUTION_T]):
         """
         return [(self.convert_to_mu(t[0]), t[1]) for t in solution]
 
-    @init_error_handler
     @host_only
     def convert_to_mu(self, voltages: _ZOTINO_KEY_T) -> _ZOTINO_KEY_T_MU:
         """Convert a list of voltages from volts to machine units
@@ -490,4 +486,5 @@ class ZotinoReader(BaseReader[_ZOTINO_SOLUTION_T]):
 
         :return: A list of voltages in MU
         """
+        self._check_init("convert_to_mu")
         return [self._voltage_to_mu(v) for v in voltages]
