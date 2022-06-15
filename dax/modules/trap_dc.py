@@ -68,6 +68,14 @@ class TrapDcModule(DaxModule):
     def post_init(self) -> None:
         pass
 
+    @property
+    def solution_path(self) -> str:
+        """Get the solution path
+
+        :return: The path to the solution file directory
+        """
+        return str(self._solution_path)
+
     @host_only
     def read_line_mu(self,
                      file_name: str,
@@ -176,6 +184,16 @@ class TrapDcModule(DaxModule):
                      for i, t in enumerate(trimmed_solution[1:])])
 
         return path
+
+    @host_only
+    def list_solutions(self) -> typing.Sequence[str]:
+        """Get a list of each solution file available in the solutions
+        directory
+
+        :return: The list of names of solution files available
+        """
+
+        return self._reader.list_solutions()
 
     @kernel
     def record_dma(self,
