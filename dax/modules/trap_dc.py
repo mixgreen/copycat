@@ -358,7 +358,7 @@ class TrapDcModule(DaxModule):
     @host_only
     def calculate_slack_mu(self,
                            solution: _ZOTINO_SOLUTION_T_MU,
-                           line_delay: int) -> np.int64:
+                           line_delay: np.int64) -> np.int64:
         """Calculate the slack required to shuttle solution with desired delay
         This method is used to prevent underflow when shuttling solutions
         If the desired line delay is >> than the communication delay, then the default amount
@@ -394,7 +394,7 @@ class TrapDcModule(DaxModule):
     @host_only
     def calculate_dma_slack_mu(self,
                                solution: _ZOTINO_SOLUTION_T_MU,
-                               line_delay: int) -> np.int64:
+                               line_delay: np.int64) -> np.int64:
         """Calculate the slack required to shuttle solution with dma and with desired delay
         This method is used to prevent underflow when shuttling solutions
         If the desired line delay is >> than the communication delay, then the default amount
