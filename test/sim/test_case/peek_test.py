@@ -436,6 +436,11 @@ _DEVICE_DB = {
     },
 
     # CPLD and DDS devices
+    'spi_urukul1': {
+        'type': 'local',
+        'module': 'artiq.coredevice.spi2',
+        'class': 'SPIMaster',
+    },
     'io_update': {
         'type': 'local',
         'module': 'artiq.coredevice.ttl',
@@ -465,11 +470,17 @@ _DEVICE_DB = {
             "cpld_device": "cpld",
         }
     },
+    'spi_urukul10': {
+        'type': 'local',
+        'module': 'artiq.coredevice.spi2',
+        'class': 'SPIMaster',
+    },
     "cpld10": {
         "type": "local",
         "module": "artiq.coredevice.urukul",
         "class": "CPLD",
         "arguments": {
+            "spi_device": "spi_urukul10",
             "refclk": 1e9,
             "clk_div": 1
         }

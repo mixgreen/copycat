@@ -183,24 +183,28 @@ class TTLInOut(TTLOut):
         self._state.push('z')
 
     @kernel
+    def _set_sensitivity(self, value):
+        self._sensitivity.push(value)
+
+    @kernel
     def gate_rising_mu(self, duration):
-        self._sensitivity.push(1)
+        self._set_sensitivity(1)
         self._simulate_input_signal(duration, self._EdgeType.RISING)
-        self._sensitivity.push(0)
+        self._set_sensitivity(0)
         return now_mu()
 
     @kernel
     def gate_falling_mu(self, duration):
-        self._sensitivity.push(1)
+        self._set_sensitivity(1)
         self._simulate_input_signal(duration, self._EdgeType.FALLING)
-        self._sensitivity.push(0)
+        self._set_sensitivity(0)
         return now_mu()
 
     @kernel
     def gate_both_mu(self, duration):
-        self._sensitivity.push(1)
+        self._set_sensitivity(1)
         self._simulate_input_signal(duration, self._EdgeType.BOTH)
-        self._sensitivity.push(0)
+        self._set_sensitivity(0)
         return now_mu()
 
     @kernel

@@ -65,3 +65,19 @@ dax.modules.time\_resolved\_context module
     :members:
     :undoc-members:
     :show-inheritance:
+
+dax.modules.trap\_dc module
+---------------------------
+
+.. automodule:: dax.modules.trap_dc
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+dax.modules.trap\_rf module
+---------------------------
+
+.. automodule:: dax.modules.trap_rf
+    :members:
+    :undoc-members:
+    :show-inheritance:

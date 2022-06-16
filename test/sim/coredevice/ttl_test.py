@@ -267,6 +267,7 @@ class TTLInOutCompileTestCase(TTLOutCompileTestCase):
     DEVICE_CLASS = dax.sim.coredevice.ttl.TTLInOut
     FN_KWARGS = {
         'set_oe': {'oe': True},
+        '_set_sensitivity': {'value': 1},
         'gate_rising_mu': {'duration': 100},
         'gate_falling_mu': {'duration': 100},
         'gate_both_mu': {'duration': 100},

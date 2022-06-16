@@ -34,10 +34,18 @@ class CpldInitModuleTestCase(dax.sim.test_case.PeekTestCase):
             'module': 'artiq.coredevice.dma',
             'class': 'CoreDMA'
         },
+        'spi_urukul0': {
+            'type': 'local',
+            'module': 'artiq.coredevice.spi2',
+            'class': 'SPIMaster',
+        },
         'cpld_0': {
             'type': 'local',
             'module': 'artiq.coredevice.urukul',
-            'class': 'CPLD'
+            'class': 'CPLD',
+            'arguments': {
+                'spi_device': 'spi_urukul0'
+            }
         },
     }
 

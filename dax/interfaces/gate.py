@@ -188,6 +188,24 @@ class GateInterface(DaxInterface, abc.ABC):  # pragma: no cover
         raise NotImplementedError
 
     @optional
+    def xx_pi_2(self, control: TInt32, target: TInt32):
+        """Pi/2 XX rotation on two qubits.
+
+        :param control: Control qubit
+        :param target: Target qubit
+        """
+        raise NotImplementedError
+
+    @optional
+    def xx_pi_2_dag(self, control: TInt32, target: TInt32):
+        """-Pi/2 XX rotation on two qubits.
+
+        :param control: Control qubit
+        :param target: Target qubit
+        """
+        raise NotImplementedError
+
+    @optional
     def rxx(self, theta: TFloat, control: TInt32, target: TInt32):
         """Arbitrary XX rotation on two qubits.
 

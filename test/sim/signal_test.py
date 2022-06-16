@@ -580,6 +580,11 @@ _DEVICE_DB = {
     },
 
     # Urukul CPLD and DDS devices
+    'spi_urukul1': {
+        'type': 'local',
+        'module': 'artiq.coredevice.spi2',
+        'class': 'SPIMaster',
+    },
     'io_update': {
         'type': 'local',
         'module': 'artiq.coredevice.ttl',
@@ -621,16 +626,26 @@ _DEVICE_DB = {
     },
 
     # Multi-channel DAC
+    'spi_ad53xx': {
+        'type': 'local',
+        'module': 'artiq.coredevice.spi2',
+        'class': 'SPIMaster',
+    },
     "ad53xx": {
         "type": "local",
         "module": "artiq.coredevice.ad53xx",
         "class": "AD53xx",
-        "arguments": {}
+        "arguments": {'spi_device': 'spi_ad53xx'}
+    },
+    'spi_zotino': {
+        'type': 'local',
+        'module': 'artiq.coredevice.spi2',
+        'class': 'SPIMaster',
     },
     "zotino": {
         "type": "local",
         "module": "artiq.coredevice.zotino",
         "class": "Zotino",
-        "arguments": {}
+        "arguments": {'spi_device': 'spi_zotino'}
     },
 }
