@@ -2,6 +2,8 @@ import os
 import string
 import typing
 import random
+
+import numpy as np
 from dax.util.output import temp_dir
 from unittest.mock import patch
 import pathlib
@@ -461,3 +463,103 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
             reader.convert_to_mu([1.0, 2.0, 3.0])
         except RuntimeError as e:
             assert str(e) == "Must initialize reader using init method to use function convert_to_mu"
+
+    @patch.object(BaseReader, '_read_channel_map')
+    def test_calculate_low_slack(self, _):
+        self.env.trap_dc.init()
+        test_solution = [([1., 2., 3., 4.], [2, 3, 4, 5]),
+                         ([0., 0.], [4, 5]),
+                         ([0.], [3]),
+                         ([-10.], [2])]
+        slack = self.env.trap_dc.calculate_slack(test_solution, .0002)
+        l0 = self.env.core.mu_to_seconds(
+            self.env.trap_dc._calculator._calculate_line_comm_delay_mu(len(test_solution[0][0])))
+        assert slack > l0
+        assert slack < l0 + self.env.trap_dc._MIN_LINE_DELAY_MU
+
+    @patch.object(BaseReader, '_read_channel_map')
+    def test_calculate_high_slack(self, _):
+        line_delay = .00003
+        self.env.trap_dc.init()
+        test_solution = [([1., 2., 3., 4.], [2, 3, 4, 5]),
+                         ([0., 0.], [4, 5]),
+                         ([0.], [3]),
+                         ([-10.], [2])]
+        slack = self.env.trap_dc.calculate_slack(test_solution, line_delay)
+        l0 = self.env.core.mu_to_seconds(
+            self.env.trap_dc._calculator._calculate_line_comm_delay_mu(len(test_solution[0][0])))
+        l1 = self.env.core.mu_to_seconds(
+            self.env.trap_dc._calculator._calculate_line_comm_delay_mu(len(test_solution[1][0])))
+        l2 = self.env.core.mu_to_seconds(
+            self.env.trap_dc._calculator._calculate_line_comm_delay_mu(len(test_solution[2][0])))
+        l3 = self.env.core.mu_to_seconds(
+            self.env.trap_dc._calculator._calculate_line_comm_delay_mu(len(test_solution[3][0])))
+        assert slack > l0 + l1 + l2 + l3 - 3 * line_delay
+        assert slack < l0 + l1 + l2 + l3 - 3 * line_delay + self.env.trap_dc._MIN_LINE_DELAY_MU
+
+    @patch.object(BaseReader, '_read_channel_map')
+    def test_calculate_dma_low_slack(self, _):
+        line_delay = .00003
+        self.env.trap_dc.init()
+        test_solution = [([1., 2., 3., 4.], [2, 3, 4, 5]),
+                         ([0., 0.], [4, 5]),
+                         ([0.], [3]),
+                         ([-10.], [2])]
+        slack = self.env.trap_dc.calculate_dma_slack(test_solution, line_delay)
+        l0 = self.env.core.mu_to_seconds(
+            self.env.trap_dc._calculator._calculate_line_comm_delay_mu(len(test_solution[0][0]), True))
+        assert slack > l0
+        assert slack < l0 + self.env.trap_dc._MIN_LINE_DELAY_MU + self.env.trap_dc._calculator._dma_startup_time_mu
+
+    @patch.object(BaseReader, '_read_channel_map')
+    def test_calculate_slack_too_low(self, _):
+        line_delay = .000025
+        self.env.trap_dc.init()
+        test_solution = [([1., 2., 3., 4.], [2, 3, 4, 5]),
+                         ([0., 0.], [4, 5]),
+                         ([0.], [3]),
+                         ([-10.], [2])]
+        try:
+            self.env.trap_dc.calculate_slack(test_solution, line_delay)
+            assert False
+        except ValueError as e:
+            assert str(e) == f"Line Delay must be greater than {self.env.trap_dc._MIN_LINE_DELAY_MU}"
+
+    @patch.object(BaseReader, '_read_channel_map')
+    def test_calculate_dma_slack_too_low(self, _):
+        line_delay = .000025
+        self.env.trap_dc.init()
+        test_solution = [([1., 2., 3., 4.], [2, 3, 4, 5]),
+                         ([0., 0.], [4, 5]),
+                         ([0.], [3]),
+                         ([-10.], [2])]
+        try:
+            self.env.trap_dc.calculate_dma_slack(test_solution, line_delay)
+            assert False
+        except ValueError as e:
+            assert str(e) == f"Line Delay must be greater than {self.env.trap_dc._MIN_LINE_DELAY_MU}"
+
+    @patch.object(BaseReader, '_read_channel_map')
+    def test_configure_calculator(self, _):
+        dma_startup_mu = 1210
+        dma_startup_time = self.env.core.mu_to_seconds(dma_startup_mu)
+        self.env.trap_dc.init()
+        self.env.trap_dc.configure_calculator(dma_startup_time=dma_startup_time,
+                                              comm_delay_intercept_mu=np.int64(2),
+                                              comm_delay_slope_mu=np.int64(3),
+                                              dma_comm_delay_intercept_mu=np.int64(4),
+                                              dma_comm_delay_slope_mu=np.int64(5))
+
+        self.assertAlmostEqual(self.env.trap_dc._calculator._dma_startup_time_mu, dma_startup_mu, delta=2.0)
+        assert self.env.trap_dc._calculator._comm_delay_intercept_mu == np.int64(2)
+        assert self.env.trap_dc._calculator._comm_delay_slope_mu == np.int64(3)
+        assert self.env.trap_dc._calculator._dma_comm_delay_intercept_mu == np.int64(4)
+        assert self.env.trap_dc._calculator._dma_comm_delay_slope_mu == np.int64(5)
+
+        self.env.trap_dc.configure_calculator()
+
+        self.assertAlmostEqual(self.env.trap_dc._calculator._dma_startup_time_mu, dma_startup_mu, delta=2.0)
+        assert self.env.trap_dc._calculator._comm_delay_intercept_mu == np.int64(2)
+        assert self.env.trap_dc._calculator._comm_delay_slope_mu == np.int64(3)
+        assert self.env.trap_dc._calculator._dma_comm_delay_intercept_mu == np.int64(4)
+        assert self.env.trap_dc._calculator._dma_comm_delay_slope_mu == np.int64(5)
