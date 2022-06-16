@@ -40,7 +40,7 @@ class TrapDcModule(DaxModule):
     Notes when considering using this module:
 
     - Functions are provided to return the expected amount of slack needed to shuttle a solution at a given speed
-    without underflow. However, this is meant to be an approximate calculation and can be configured as needed.
+      without underflow. However, this is meant to be an approximate calculation and can be configured as needed.
     - Everything in this module is Zotino specific. As other DC traps are needed they should be created separately.
     """
 
@@ -239,7 +239,7 @@ class TrapDcModule(DaxModule):
         :param name: Name of DMA trace
         :param solution: A list of voltage lines to set and corresponding channels for each line
         :param line_delay: A delay (s) inserted after the line is set
-        Must be greater than the SPI write time for the number of used channels
+            Must be greater than the SPI write time for the number of used channels
 
         :return: Unique key for DMA Trace
         """
@@ -258,7 +258,7 @@ class TrapDcModule(DaxModule):
         :param name: Name of DMA trace
         :param solution: A list of voltage lines to set and corresponding channels for each line
         :param line_delay: A delay (MU) inserted after the line is set
-        Must be greater than the SPI write time for the number of used channels
+            Must be greater than the SPI write time for the number of used channels
 
         :return: Unique key for DMA Trace
         """
@@ -282,7 +282,7 @@ class TrapDcModule(DaxModule):
         :param name: Name of DMA trace
         :param solution: A list of voltage lines to set and corresponding channels for each line
         :param line_rate: A rate (Hz) to define speed to set each line
-        Must be greater than the SPI write time for the number of used channels
+            Must be greater than the SPI write time for the number of used channels
 
         :return: Unique key for DMA Trace
         """
@@ -325,7 +325,7 @@ class TrapDcModule(DaxModule):
 
         :param solution: A list of voltage lines to set and corresponding channels for each line
         :param line_delay: A delay (s) inserted after the line is set
-        Must be greater than the SPI write time for the number of used channels
+            Must be greater than the SPI write time for the number of used channels
         """
         self.shuttle_mu(solution, self.core.seconds_to_mu(line_delay))
 
@@ -338,7 +338,7 @@ class TrapDcModule(DaxModule):
 
         :param solution: A list of voltage lines to set and corresponding channels for each line
         :param line_delay: A delay (MU) inserted after the line is set
-        Must be greater than the SPI write time for the number of used channels
+            Must be greater than the SPI write time for the number of used channels
         """
         if line_delay <= self._min_line_delay_mu:
             raise ValueError(f"Line Delay must be greater than {self._min_line_delay_mu}")
@@ -355,7 +355,7 @@ class TrapDcModule(DaxModule):
 
         :param solution: A list of voltage lines to set and corresponding channels for each line
         :param line_rate: A rate (Hz) to define speed to set each line
-        Must be greater than the SPI write time for the number of used channels
+            Must be greater than the SPI write time for the number of used channels
         """
         self.shuttle_mu(solution, self.core.seconds_to_mu(1 / line_rate))
         return
@@ -466,13 +466,13 @@ class TrapDcModule(DaxModule):
 
         :param dma_startup_time: The time it takes for DMA to start up in (s)
         :param comm_delay_intercept_mu: The intercept of the linear communication time between
-        artiq and the kernel as a function of total channels
+            artiq and the kernel as a function of total channels
         :param comm_delay_slope_mu: The slope of the linear communication time between
-        artiq and the kernel as a function of total channels
+            artiq and the kernel as a function of total channels
         :param dma_comm_delay_intercept_mu: The intercept of the linear communication time between
-        artiq and the kernel for dma playback as a function of total channels
+            artiq and the kernel for dma playback as a function of total channels
         :param dma_comm_delay_slope_mu: The slope of the linear communication time between
-        artiq and the kernel for dma playback as a function of total channels
+            artiq and the kernel for dma playback as a function of total channels
         """
         dma_startup_time_mu = None if dma_startup_time is None else np.int64(self.core.seconds_to_mu(dma_startup_time))
         self._calculator.configure(dma_startup_time_mu=dma_startup_time_mu,
