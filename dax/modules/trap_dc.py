@@ -40,7 +40,7 @@ class TrapDcModule(DaxModule):
     Notes when considering using this module:
 
     - Functions are provided to return the expected amount of slack needed to shuttle a solution at a given speed
-    without underflow. However, this is meant to be an approximate calculation and can be configured as needed.
+      without underflow. However, this is meant to be an approximate calculation and can be configured as needed.
     - Everything in this module is Zotino specific. As other DC traps are needed they should be created separately.
     """
 
@@ -466,13 +466,13 @@ class TrapDcModule(DaxModule):
 
         :param dma_startup_time: The time it takes for DMA to start up in (s)
         :param comm_delay_intercept_mu: The intercept of the linear communication time between
-        artiq and the kernel as a function of total channels
+            artiq and the kernel as a function of total channels
         :param comm_delay_slope_mu: The slope of the linear communication time between
-        artiq and the kernel as a function of total channels
+            artiq and the kernel as a function of total channels
         :param dma_comm_delay_intercept_mu: The intercept of the linear communication time between
-        artiq and the kernel for dma playback as a function of total channels
+            artiq and the kernel for dma playback as a function of total channels
         :param dma_comm_delay_slope_mu: The slope of the linear communication time between
-        artiq and the kernel for dma playback as a function of total channels
+            artiq and the kernel for dma playback as a function of total channels
         """
         dma_startup_time_mu = None if dma_startup_time is None else np.int64(self.core.seconds_to_mu(dma_startup_time))
         self._calculator.configure(dma_startup_time_mu=dma_startup_time_mu,
