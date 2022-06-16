@@ -44,8 +44,6 @@ class TrapDcModule(DaxModule):
     - Everything in this module is Zotino specific. As other DC traps are needed they should be created separately.
     """
 
-    _MIN_LINE_DELAY_MU: typing.ClassVar[int] = 27372
-    """Minimum line delay for shuttling in MU"""
     _DMA_STARTUP_TIME: typing.ClassVar[float] = 1.728 * us
     """Startup time for DMA (s). Measured in the RTIO benchmarking tests during CI"""
 
@@ -53,6 +51,7 @@ class TrapDcModule(DaxModule):
     _solution_path: pathlib.Path
     _map_file: pathlib.Path
     _reader: ZotinoReader
+    _min_line_delay_mu: np.int64
     _calculator: ZotinoCalculator
 
     def build(self,  # type: ignore[override]
@@ -88,6 +87,13 @@ class TrapDcModule(DaxModule):
     def init(self) -> None:
         """Initialize this module."""
         # Get profile loader
+        # Below calculated from set_dac_mu and load functions
+        # https://m-labs.hk/artiq/manual/_modules/artiq/coredevice/ad53xx.html#AD53xx
+        self._min_line_delay_mu = np.int64(self.core.seconds_to_mu(1500 * ns)
+                                           + 2 * self._zotino.bus.ref_period_mu
+                                           + len(self._reader._list_map_labels())
+                                           * self._zotino.bus.xfer_duration_mu)
+        self.update_kernel_invariants('_min_line_delay_mu')
         self._reader.init(self._zotino)
         self._calculator = ZotinoCalculator(np.int64(self.core.seconds_to_mu(self._DMA_STARTUP_TIME)))
 
@@ -232,7 +238,8 @@ class TrapDcModule(DaxModule):
 
         :param name: Name of DMA trace
         :param solution: A list of voltage lines to set and corresponding channels for each line
-        :param line_delay: A delay (s) inserted after the line is set with a minimum value of 27373 MU
+        :param line_delay: A delay (s) inserted after the line is set
+        Must be greater than the SPI write time for the number of used channels
 
         :return: Unique key for DMA Trace
         """
@@ -250,12 +257,13 @@ class TrapDcModule(DaxModule):
 
         :param name: Name of DMA trace
         :param solution: A list of voltage lines to set and corresponding channels for each line
-        :param line_delay: A delay (MU) inserted after the line is set with a minimum value of 27373 MU
+        :param line_delay: A delay (MU) inserted after the line is set
+        Must be greater than the SPI write time for the number of used channels
 
         :return: Unique key for DMA Trace
         """
-        if line_delay <= self._MIN_LINE_DELAY_MU:
-            raise ValueError(f"Line Delay must be greater than {self._MIN_LINE_DELAY_MU}")
+        if line_delay <= self._min_line_delay_mu:
+            raise ValueError(f"Line Delay must be greater than {self._min_line_delay_mu}")
         dma_name = self.get_system_key(name)
         with self.core_dma.record(dma_name):
             for t in solution:
@@ -273,7 +281,8 @@ class TrapDcModule(DaxModule):
 
         :param name: Name of DMA trace
         :param solution: A list of voltage lines to set and corresponding channels for each line
-        :param line_rate: A rate (Hz) to define speed to set each line with a minimum value of 27373 MU
+        :param line_rate: A rate (Hz) to define speed to set each line
+        Must be greater than the SPI write time for the number of used channels
 
         :return: Unique key for DMA Trace
         """
@@ -315,7 +324,8 @@ class TrapDcModule(DaxModule):
         corresponding channels
 
         :param solution: A list of voltage lines to set and corresponding channels for each line
-        :param line_delay: A delay (s) inserted after the line is set with a minimum value of 27373 MU
+        :param line_delay: A delay (s) inserted after the line is set
+        Must be greater than the SPI write time for the number of used channels
         """
         self.shuttle_mu(solution, self.core.seconds_to_mu(line_delay))
 
@@ -327,10 +337,11 @@ class TrapDcModule(DaxModule):
         corresponding channels
 
         :param solution: A list of voltage lines to set and corresponding channels for each line
-        :param line_delay: A delay (MU) inserted after the line is set with a minimum value of 27373 MU
+        :param line_delay: A delay (MU) inserted after the line is set
+        Must be greater than the SPI write time for the number of used channels
         """
-        if line_delay <= self._MIN_LINE_DELAY_MU:
-            raise ValueError(f"Line Delay must be greater than {self._MIN_LINE_DELAY_MU}")
+        if line_delay <= self._min_line_delay_mu:
+            raise ValueError(f"Line Delay must be greater than {self._min_line_delay_mu}")
         for t in solution:
             self.set_line(t)
             delay_mu(line_delay)
@@ -343,7 +354,8 @@ class TrapDcModule(DaxModule):
         corresponding channels
 
         :param solution: A list of voltage lines to set and corresponding channels for each line
-        :param line_rate: A rate (Hz) to define speed to set each line with a minimum value of 27373 MU
+        :param line_rate: A rate (Hz) to define speed to set each line
+        Must be greater than the SPI write time for the number of used channels
         """
         self.shuttle_mu(solution, self.core.seconds_to_mu(1 / line_rate))
         return
@@ -388,11 +400,11 @@ class TrapDcModule(DaxModule):
         :param line_delay: The desired line delay (MU) to shuttle solution with
 
         :return: The necessary slack (MU) to shuttle solution"""
-        if line_delay < self._MIN_LINE_DELAY_MU:
-            raise ValueError(f"Line Delay must be greater than {self._MIN_LINE_DELAY_MU}")
+        if line_delay < self._min_line_delay_mu:
+            raise ValueError(f"Line Delay must be greater than {self._min_line_delay_mu}")
         return self._calculator.slack_mu(self._list_num_channels(solution),
                                          line_delay,
-                                         self._MIN_LINE_DELAY_MU)
+                                         self._min_line_delay_mu)
 
     @host_only
     def calculate_dma_slack(self,
@@ -424,11 +436,11 @@ class TrapDcModule(DaxModule):
         :param line_delay: The desired line delay (MU) to shuttle solution with
 
         :return: The necessary slack (MU) to shuttle solution"""
-        if line_delay < self._MIN_LINE_DELAY_MU:
-            raise ValueError(f"Line Delay must be greater than {self._MIN_LINE_DELAY_MU}")
+        if line_delay < self._min_line_delay_mu:
+            raise ValueError(f"Line Delay must be greater than {self._min_line_delay_mu}")
         return self._calculator.slack_mu(self._list_num_channels(solution),
                                          line_delay,
-                                         self._MIN_LINE_DELAY_MU,
+                                         self._min_line_delay_mu,
                                          True)
 
     @host_only
@@ -534,8 +546,8 @@ class ZotinoCalculator:
         :return: The amount of slack needed in MU to shuttle a solution of this form
         """
         # start with initial slack for the first line
-        current_slack = self._calculate_line_comm_delay_mu(row_lens[0], dma)
-        added_slack = current_slack
+        current_slack = 0
+        added_slack = self._calculate_line_comm_delay_mu(row_lens[0], dma)
         # DMA startup time calculated from benchmark measurement
         if dma:
             added_slack += self._dma_startup_time_mu

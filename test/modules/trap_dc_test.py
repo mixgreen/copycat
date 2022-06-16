@@ -175,22 +175,32 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
         return num_data, voltages, v_mu, c
 
     @patch.object(BaseReader, '_read_channel_map')
-    def test_shuttle_min_line_delay(self, _):
+    def test_shuttle_min_line_delay(self, mock_read_channel_map):
+        mock_read_channel_map.return_value = [{'label': 'A', 'channel': '0'},
+                                              {'label': 'B', 'channel': '1'},
+                                              {'label': 'C', 'channel': '2'},
+                                              {'label': 'D', 'channel': '3'}]
         s = self._construct_env()
+        s.trap_dc.init()
         try:
-            s.trap_dc.shuttle_mu([], 2000)
+            s.trap_dc.shuttle_mu([], 1)
             assert False
         except ValueError as e:
-            assert str(e) == f"Line Delay must be greater than {s.trap_dc._MIN_LINE_DELAY_MU}"
+            assert str(e) == f"Line Delay must be greater than {s.trap_dc._min_line_delay_mu}"
 
     @patch.object(BaseReader, '_read_channel_map')
-    def test_record_dma_min_line_delay(self, _):
+    def test_record_dma_min_line_delay(self, mock_read_channel_map):
+        mock_read_channel_map.return_value = [{'label': 'A', 'channel': '0'},
+                                              {'label': 'B', 'channel': '1'},
+                                              {'label': 'C', 'channel': '2'},
+                                              {'label': 'D', 'channel': '3'}]
         s = self._construct_env()
+        s.trap_dc.init()
         try:
-            s.trap_dc.record_dma_mu("", [], 2000)
+            s.trap_dc.record_dma_mu("", [], 1)
             assert False
         except ValueError as e:
-            assert str(e) == f"Line Delay must be greater than {s.trap_dc._MIN_LINE_DELAY_MU}"
+            assert str(e) == f"Line Delay must be greater than {s.trap_dc._min_line_delay_mu}"
 
     @patch.object(BaseReader, '_read_channel_map')
     def test_shuttle(self, _):
@@ -475,11 +485,11 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
         l0 = self.env.core.mu_to_seconds(
             self.env.trap_dc._calculator._calculate_line_comm_delay_mu(len(test_solution[0][0])))
         assert slack > l0
-        assert slack < l0 + self.env.trap_dc._MIN_LINE_DELAY_MU
+        assert slack < l0 + self.env.trap_dc._min_line_delay_mu
 
     @patch.object(BaseReader, '_read_channel_map')
     def test_calculate_high_slack(self, _):
-        line_delay = .00003
+        line_delay = .0000016
         self.env.trap_dc.init()
         test_solution = [([1., 2., 3., 4.], [2, 3, 4, 5]),
                          ([0., 0.], [4, 5]),
@@ -495,7 +505,7 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
         l3 = self.env.core.mu_to_seconds(
             self.env.trap_dc._calculator._calculate_line_comm_delay_mu(len(test_solution[3][0])))
         assert slack > l0 + l1 + l2 + l3 - 3 * line_delay
-        assert slack < l0 + l1 + l2 + l3 - 3 * line_delay + self.env.trap_dc._MIN_LINE_DELAY_MU
+        assert slack < l0 + l1 + l2 + l3 - 3 * line_delay + self.env.trap_dc._min_line_delay_mu
 
     @patch.object(BaseReader, '_read_channel_map')
     def test_calculate_dma_low_slack(self, _):
@@ -509,11 +519,11 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
         l0 = self.env.core.mu_to_seconds(
             self.env.trap_dc._calculator._calculate_line_comm_delay_mu(len(test_solution[0][0]), True))
         assert slack > l0
-        assert slack < l0 + self.env.trap_dc._MIN_LINE_DELAY_MU + self.env.trap_dc._calculator._dma_startup_time_mu
+        assert slack < l0 + self.env.trap_dc._min_line_delay_mu + self.env.trap_dc._calculator._dma_startup_time_mu
 
     @patch.object(BaseReader, '_read_channel_map')
     def test_calculate_slack_too_low(self, _):
-        line_delay = .000025
+        line_delay = .000000001
         self.env.trap_dc.init()
         test_solution = [([1., 2., 3., 4.], [2, 3, 4, 5]),
                          ([0., 0.], [4, 5]),
@@ -523,11 +533,11 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
             self.env.trap_dc.calculate_slack(test_solution, line_delay)
             assert False
         except ValueError as e:
-            assert str(e) == f"Line Delay must be greater than {self.env.trap_dc._MIN_LINE_DELAY_MU}"
+            assert str(e) == f"Line Delay must be greater than {self.env.trap_dc._min_line_delay_mu}"
 
     @patch.object(BaseReader, '_read_channel_map')
     def test_calculate_dma_slack_too_low(self, _):
-        line_delay = .000025
+        line_delay = .0000001
         self.env.trap_dc.init()
         test_solution = [([1., 2., 3., 4.], [2, 3, 4, 5]),
                          ([0., 0.], [4, 5]),
@@ -537,7 +547,7 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
             self.env.trap_dc.calculate_dma_slack(test_solution, line_delay)
             assert False
         except ValueError as e:
-            assert str(e) == f"Line Delay must be greater than {self.env.trap_dc._MIN_LINE_DELAY_MU}"
+            assert str(e) == f"Line Delay must be greater than {self.env.trap_dc._min_line_delay_mu}"
 
     @patch.object(BaseReader, '_read_channel_map')
     def test_configure_calculator(self, _):
