@@ -534,9 +534,7 @@ class ZotinoCalculator:
         # Each line must delay long enough to account for the communication delay
         # If they do not, slack must be added at the beginning of experiment to account for this
         for row_len in row_lens[1:]:
-            print(added_slack)
             diff = line_delay_mu - self._calculate_line_comm_delay_mu(row_len, dma)
-            print(diff)
             current_slack += diff
 
             if current_slack < 0:
