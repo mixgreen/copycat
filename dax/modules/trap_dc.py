@@ -79,12 +79,14 @@ class TrapDcModule(DaxModule):
         # map file is the relative map file path
         self._map_file = pathlib.Path(map_file)
 
+        # Initialize Zotino Reader
+        self._reader = ZotinoReader(
+            self._solution_path, self._map_file)
+
     @host_only
     def init(self) -> None:
         """Initialize this module."""
         # Get profile loader
-        self._reader = ZotinoReader(
-            self._solution_path, self._map_file, self._zotino)
         # Below calculated from set_dac_mu and load functions
         # https://m-labs.hk/artiq/manual/_modules/artiq/coredevice/ad53xx.html#AD53xx
         self._min_line_delay_mu = np.int64(self.core.seconds_to_mu(1500 * ns)
@@ -92,11 +94,20 @@ class TrapDcModule(DaxModule):
                                            + len(self._reader._list_map_labels())
                                            * self._zotino.bus.xfer_duration_mu)
         self.update_kernel_invariants('_min_line_delay_mu')
+        self._reader.init(self._zotino)
         self._calculator = ZotinoCalculator(np.int64(self.core.seconds_to_mu(self._DMA_STARTUP_TIME)))
 
     @host_only
     def post_init(self) -> None:
         pass
+
+    @property
+    def solution_path(self) -> str:
+        """Get the solution path
+
+        :return: The path to the solution file directory
+        """
+        return self._reader.solution_path
 
     @host_only
     def read_line_mu(self,
@@ -206,6 +217,16 @@ class TrapDcModule(DaxModule):
                      for i, t in enumerate(trimmed_solution[1:])])
 
         return path
+
+    @host_only
+    def list_solutions(self) -> typing.Sequence[str]:
+        """Get a list of each solution file available in the solutions
+        directory
+
+        :return: The list of names of solution files available
+        """
+
+        return self._reader.list_solutions()
 
     @kernel
     def record_dma(self,
@@ -606,7 +627,6 @@ class ZotinoReader(BaseReader[_ZOTINO_SOLUTION_T]):
     def __init__(self,
                  solution_path: pathlib.Path,
                  map_path: pathlib.Path,
-                 zotino: artiq.coredevice.zotino.Zotino,
                  allowed_specials: typing.FrozenSet[str]
                  = frozenset(SpecialCharacter)):
         """Constructor of a zotino reader class extending the base reader
@@ -617,17 +637,26 @@ class ZotinoReader(BaseReader[_ZOTINO_SOLUTION_T]):
         :param allowed_specials: A set of string characters that are allowed in the solution files
         (not including numbers)
         """
-        self._vref = zotino.vref
-        self._voltage_to_mu = zotino.voltage_to_mu
         super(ZotinoReader, self).__init__(
             solution_path, map_path, allowed_specials)
 
+    def init(self, zotino: artiq.coredevice.zotino.Zotino) -> None:
+        self._vref = zotino.vref
+        self._voltage_to_mu = zotino.voltage_to_mu
+
+    def _check_init(self, func_name: str) -> None:
+        if not hasattr(self, "_vref") or not hasattr(self, "_voltage_to_mu"):
+            raise RuntimeError("Must initialize reader using init "
+                               f"method to use function {func_name}")
+
     @property
     def voltage_low(self) -> float:
+        self._check_init("voltage_low")
         return -self._vref * 2
 
     @property
     def voltage_high(self) -> float:
+        self._check_init("voltage_high")
         return self._vref * 2
 
     @host_only
@@ -690,6 +719,7 @@ class ZotinoReader(BaseReader[_ZOTINO_SOLUTION_T]):
 
         :return: Handled value based on solution and zotino characteristics
         """
+        self._check_init("process_specials")
         if val == SpecialCharacter.X:
             return math.nan
         elif val == SpecialCharacter.INF:
@@ -726,8 +756,7 @@ class ZotinoReader(BaseReader[_ZOTINO_SOLUTION_T]):
         """
         return [(self.convert_to_mu(t[0]), t[1]) for t in solution]
 
-    # TODO: add a method to convert payload to mu
-    # also figure out if it needs to be done before creating payload
+    @host_only
     def convert_to_mu(self, voltages: _ZOTINO_KEY_T) -> _ZOTINO_KEY_T_MU:
         """Convert a list of voltages from volts to machine units
 
@@ -735,4 +764,5 @@ class ZotinoReader(BaseReader[_ZOTINO_SOLUTION_T]):
 
         :return: A list of voltages in MU
         """
+        self._check_init("convert_to_mu")
         return [self._voltage_to_mu(v) for v in voltages]
