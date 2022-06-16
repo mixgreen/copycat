@@ -57,7 +57,8 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
                 {'label': 'D', 'channel': '5'},
                 {'label': 'E', 'channel': '6'}]
 
-    def setUp(self) -> None:
+    @patch.object(BaseReader, '_read_channel_map')
+    def setUp(self, _) -> None:
         self.rng = random.Random(self.SEED)
         self.env = self._construct_env()
 
@@ -173,7 +174,8 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
         v_mu = [self.env.trap_dc._zotino.voltage_to_mu(voltage=v) for v in voltages]
         return num_data, voltages, v_mu, c
 
-    def test_shuttle_min_line_delay(self):
+    @patch.object(BaseReader, '_read_channel_map')
+    def test_shuttle_min_line_delay(self, _):
         s = self._construct_env()
         try:
             s.trap_dc.shuttle_mu([], 2000)
@@ -181,7 +183,8 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
         except ValueError as e:
             assert str(e) == f"Line Delay must be greater than {s.trap_dc._MIN_LINE_DELAY_MU}"
 
-    def test_record_dma_min_line_delay(self):
+    @patch.object(BaseReader, '_read_channel_map')
+    def test_record_dma_min_line_delay(self, _):
         s = self._construct_env()
         try:
             s.trap_dc.record_dma_mu("", [], 2000)
@@ -262,8 +265,8 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
             s.trap_dc.init()
             open('test.csv', 'w')
             reader = ZotinoReader(pathlib.Path('.'),
-                                  pathlib.Path('test.csv'),
-                                  self.env.trap_dc._zotino)
+                                  pathlib.Path('test.csv'))
+            reader.init(self.env.trap_dc._zotino)
             for _ in range(_NUM_SAMPLES):
                 v = [self._RNG.uniform(-2.0 * vref, 1.99
                                        * vref)  # v < 2*v_ref
@@ -292,8 +295,8 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
                     headers)
                 open('test.csv', 'w')
                 reader = ZotinoReader(pathlib.Path('.'),
-                                      pathlib.Path('test.csv'),
-                                      self.env.trap_dc._zotino)
+                                      pathlib.Path('test.csv'))
+                reader.init(self.env.trap_dc._zotino)
 
                 read_solution = reader.read_solution("sequential.csv")
                 result_zotino_path = reader.process_solution(read_solution)
@@ -363,8 +366,8 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
             mock_read_solution.return_value = self.PATH_DATA
             open('test.csv', 'w')
             reader = ZotinoReader(pathlib.Path('.'),
-                                  pathlib.Path('test.csv'),
-                                  self.env.trap_dc._zotino)
+                                  pathlib.Path('test.csv'))
+            reader.init(self.env.trap_dc._zotino)
             # below is an example of one possible expected payload
             # channels not required to be ordered, only paired with correct voltages
             expected_zotino_path = [([-10., 0., 0., 0.], [2, 3, 4, 5]),
@@ -451,6 +454,15 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
             prepared_line_result = self.env.trap_dc._read_line(
                 'name_of_file.csv', 2, 3.5)
             self.assertTupleEqual(prepared_line_result, expected_prepared_line)
+
+    @patch.object(BaseReader, '_read_channel_map')
+    def test_reader_zotino_uninitialized(self, _):
+        reader = ZotinoReader(pathlib.Path('.'),
+                              pathlib.Path('test.csv'))
+        try:
+            reader.convert_to_mu([1.0, 2.0, 3.0])
+        except RuntimeError as e:
+            assert str(e) == "Must initialize reader using init method to use function convert_to_mu"
 
     @patch.object(BaseReader, '_read_channel_map')
     def test_calculate_low_slack(self, _):
