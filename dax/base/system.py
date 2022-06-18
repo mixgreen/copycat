@@ -221,8 +221,10 @@ class DaxHasKey(DaxBase, abc.ABC):
         # Return the assigned key
         return _KEY_SEPARATOR.join([self.__system_key, *keys])
 
+    # noinspection PyTypeHints
     @artiq.language.core.rpc(flags={'async'})
-    def set_dataset_sys(self, key: str, value: typing.Any, *, data_store: bool = True) -> None:
+    def set_dataset_sys(self, key, value, *,
+                        data_store=True):  # type: (str, typing.Any, bool) -> None
         """Sets the contents of a system dataset.
 
         :param key: The key of the system dataset
@@ -250,8 +252,10 @@ class DaxHasKey(DaxBase, abc.ABC):
             # Archive value using the data store
             self.data_store.set(system_key, value)
 
+    # noinspection PyTypeHints
     @artiq.language.core.rpc(flags={'async'})
-    def mutate_dataset_sys(self, key: str, index: typing.Any, value: typing.Any, *, data_store: bool = True) -> None:
+    def mutate_dataset_sys(self, key, index, value, *,
+                           data_store=True):  # type: (str, typing.Any, typing.Any, bool) -> None
         """Mutate an existing system dataset at the given index.
 
         :param key: The key of the system dataset
@@ -275,8 +279,10 @@ class DaxHasKey(DaxBase, abc.ABC):
             # Archive value using the data store
             self.data_store.mutate(system_key, index, value)
 
+    # noinspection PyTypeHints
     @artiq.language.core.rpc(flags={'async'})
-    def append_to_dataset_sys(self, key: str, value: typing.Any, *, data_store: bool = True) -> None:
+    def append_to_dataset_sys(self, key, value, *,
+                              data_store=True):  # type: (str, typing.Any, bool) -> None
         """Append a value to a system dataset.
 
         :param key: The key of the system dataset
@@ -1507,7 +1513,7 @@ class DaxDataStore:
         self._logger = logging.getLogger(f'{self.__module__}.{self.__class__.__name__}')
 
     @artiq.language.core.rpc(flags={'async'})
-    def set(self, key: str, value: typing.Any) -> None:
+    def set(self, key, value):  # type: (str, typing.Any) -> None
         """Write a key-value into the data store.
 
         :param key: The key of the value
@@ -1516,7 +1522,7 @@ class DaxDataStore:
         self._logger.debug(f'Set key "{key}" to value: "{value}"')
 
     @artiq.language.core.rpc(flags={'async'})
-    def mutate(self, key: str, index: typing.Any, value: typing.Any) -> None:
+    def mutate(self, key, index, value):  # type: (str, typing.Any, typing.Any) -> None
         """Mutate a specific index of a key-value in the data store.
 
         :param key: The key of the value
@@ -1526,7 +1532,7 @@ class DaxDataStore:
         self._logger.debug(f'Mutate key "{key}"[{index}] to value "{value}"')
 
     @artiq.language.core.rpc(flags={'async'})
-    def append(self, key: str, value: typing.Any) -> None:
+    def append(self, key, value):  # type: (str, typing.Any) -> None
         """Append a value to a key-value in the data store.
 
         :param key: The key of the value
@@ -1619,7 +1625,7 @@ class DaxDataStoreInfluxDb(DaxDataStore):
         self._logger.debug(f'Initialized base fields: {self._base_fields}')
 
     @artiq.language.core.rpc(flags={'async'})
-    def set(self, key: str, value: typing.Any) -> None:
+    def set(self, key, value):  # type: (str, typing.Any) -> None
         """Write a key-value into the Influx DB data store.
 
         Lists will be flattened to separate elements with an index since
@@ -1650,7 +1656,7 @@ class DaxDataStoreInfluxDb(DaxDataStore):
             self._logger.warning(f'Could not store value for key "{key}", unsupported value type for value "{value}"')
 
     @artiq.language.core.rpc(flags={'async'})
-    def mutate(self, key: str, index: typing.Any, value: typing.Any) -> None:
+    def mutate(self, key, index, value):  # type: (str, typing.Any, typing.Any) -> None
         """Mutate a specified index of a key-value in the Influx DB data store.
 
         List structures are not supported by Influx DB and are emulated by using indices.
@@ -1675,7 +1681,7 @@ class DaxDataStoreInfluxDb(DaxDataStore):
             self._logger.warning(f'Could not mutate value for key "{key}", unsupported value type for value "{value}"')
 
     @artiq.language.core.rpc(flags={'async'})
-    def append(self, key: str, value: typing.Any) -> None:
+    def append(self, key, value):  # type: (str, typing.Any) -> None
         """Append a value to a key-value in the Influx DB data store.
 
         List structures are not supported by Influx DB and are emulated by using indices.
