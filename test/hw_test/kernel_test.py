@@ -113,6 +113,19 @@ class _DaxSystemExperiment(DaxSystem):
     def get_system_key_kernel(self, bar: TStr = 'bar') -> TStr:
         return self.get_system_key('foo', bar)
 
+    @kernel
+    def set_dataset_sys_kernel(self, key: TStr, value: TInt32) -> TNone:
+        self.set_dataset_sys(key, value)
+        return  # Added to make sure the IDE does not get confused by return type TNone
+
+    @kernel
+    def mutate_dataset_sys_kernel(self, key: TStr, index: TInt32, value: TInt32):
+        self.mutate_dataset_sys(key, index, value)
+
+    @kernel
+    def append_to_dataset_sys_kernel(self, key: TStr, value: TInt32):
+        self.append_to_dataset_sys(key, value)
+
 
 class ArtiqKernelTestCase(test.hw_test.HardwareTestCase):
 
@@ -191,3 +204,27 @@ class ArtiqKernelTestCase(test.hw_test.HardwareTestCase):
         env = self.construct_env(_DaxSystemExperiment)
         r = env.get_system_key_kernel()
         self.assertEqual(r, env.get_system_key('foo', 'bar'))
+
+    def test_set_dataset_sys_kernel(self):
+        env = self.construct_env(_DaxSystemExperiment)
+        key = 'foo'
+        value = 3
+        env.set_dataset_sys_kernel(key, value)
+        self.assertEqual(value, env.get_dataset_sys(key))
+
+    def test_mutate_dataset_sys_kernel(self):
+        env = self.construct_env(_DaxSystemExperiment)
+        key = 'foo'
+        index = 1
+        value = 3
+        env.set_dataset_sys(key, [0, 0])
+        env.mutate_dataset_sys_kernel(key, index, value)
+        self.assertListEqual([0, 3], env.get_dataset_sys(key))
+
+    def test_append_to_dataset_sys_kernel(self):
+        env = self.construct_env(_DaxSystemExperiment)
+        key = 'foo'
+        value = 3
+        env.set_dataset_sys(key, [])
+        env.append_to_dataset_sys_kernel(key, value)
+        self.assertListEqual([3], env.get_dataset_sys(key))
