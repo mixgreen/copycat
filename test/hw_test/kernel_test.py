@@ -80,8 +80,16 @@ class _CompilerSupportExperiment(HasEnvironment):
         self._args_kwargs(1, 2, a=3, b=4)
 
     @rpc
-    def _args_kwargs(self, *args, **kwargs):
+    def _args_kwargs(self, *args: int, **kwargs: int):
         pass
+
+    @kernel
+    def rpc_typing_test(self, value: TInt32) -> TInt32:
+        return self._rpc_typing(value)
+
+    @rpc
+    def _rpc_typing(self, a: int) -> TInt32:
+        return a
 
     @kernel
     def array_test(self, a, adder):
@@ -182,6 +190,11 @@ class ArtiqKernelTestCase(test.hw_test.HardwareTestCase):
     def test_rpc_args_kwargs(self):
         env = self.construct_env(_CompilerSupportExperiment)
         self.assertIsNone(env.rpc_args_kwargs_test())
+
+    def test_rpc_typing(self):
+        env = self.construct_env(_CompilerSupportExperiment)
+        value = 33
+        self.assertEqual(value, env.rpc_typing_test(value))
 
     def test_array(self):
         env = self.construct_env(_CompilerSupportExperiment)
