@@ -3,17 +3,19 @@ from __future__ import annotations
 import abc
 import typing
 import itertools
-import numpy as np
 import collections
 import collections.abc
 import os.path
 import h5py
 
-from artiq.language.core import kernel, portable, host_only, TerminationRequested
+import numpy as np
+
+from artiq.language.core import portable, host_only
 from artiq.language.environment import BooleanValue
+from artiq.language.types import TBool
 from artiq.language.scan import ScanObject, Scannable
 
-import dax.base.system
+import dax.base.control_flow
 import dax.util.artiq
 
 __all__ = ['DaxScan', 'DaxScanReader', 'DaxScanChain']
@@ -108,7 +110,7 @@ class _ScanProductGenerator:
         return zip(self._point_generator(), self._index_generator())
 
 
-class DaxScan(dax.base.system.DaxBase, abc.ABC):
+class DaxScan(dax.base.control_flow.DaxControlFlow, abc.ABC):
     """Scanning class for standardized scanning functionality.
 
     Users can inherit this class to implement their scanning experiments.
@@ -121,27 +123,28 @@ class DaxScan(dax.base.system.DaxBase, abc.ABC):
     all value combinations in the cartesian product of the scans.
     The first scan added represents the dimension which is only scanned once.
     All next scans are repeatedly performed to form the cartesian product.
+    To chain multiple scans into a single dimension, see :class:`DaxScanChain`.
 
-    The scan class implements a :func:`run` function that controls the overall scanning flow.
-    The :func:`prepare` and :func:`analyze` functions are not implemented by the scan class, but users
-    are free to provide their own implementations.
+    The scan class inherits from the :class:`dax.base.control_flow.DaxControlFlow` class for setup and cleanup
+    procedures. The :func:`prepare` and :func:`analyze` functions are not implemented by the scan class,
+    but users are free to provide their own implementations.
 
     The following functions can be overridden to define scanning behavior:
 
-    1. :func:`host_setup`
-    2. :func:`device_setup`
+    1. :func:`dax.base.control_flow.DaxControlFlow.host_setup`
+    2. :func:`dax.base.control_flow.DaxControlFlow.device_setup`
     3. :func:`run_point` (must be implemented)
-    4. :func:`device_cleanup`
-    5. :func:`host_cleanup`
+    4. :func:`dax.base.control_flow.DaxControlFlow.device_cleanup`
+    5. :func:`dax.base.control_flow.DaxControlFlow.host_cleanup`
 
-    Finally, the :func:`host_enter` and :func:`host_exit` functions can be overridden to implement any
+    Finally, the :func:`dax.base.control_flow.DaxControlFlow.host_enter` and
+    :func:`dax.base.control_flow.DaxControlFlow.host_exit` functions can be overridden to implement any
     functionality executed once at the start of or just before leaving the :func:`run` function.
 
     To exit a scan early, call the :func:`stop_scan` function.
 
-    By default, an infinite scan option is added to the arguments which allows infinite looping
-    over the available points.
-    An infinite scan can be stopped by using the :func:`stop_scan` function or by using
+    By default, an infinite scan option is added to the arguments which allows infinite looping over the available
+    points. An infinite scan can be stopped by using the :func:`stop_scan` function or by using
     the "Terminate experiment" button in the dashboard.
     It is possible to disable the infinite scan argument for an experiment by setting the
     :attr:`INFINITE_SCAN_ARGUMENT` class attribute to :const:`False`.
@@ -173,7 +176,7 @@ class DaxScan(dax.base.system.DaxBase, abc.ABC):
 
     SCAN_GROUP: typing.ClassVar[str] = 'scan'
     """The group name for archiving data."""
-    SCAN_KEY_FORMAT: typing.ClassVar[str] = SCAN_GROUP + '/{key}'
+    SCAN_KEY_FORMAT: typing.ClassVar[str] = f'{SCAN_GROUP}/{{key}}'
     """Dataset key format for archiving independent scans."""
     SCAN_PRODUCT_GROUP: typing.ClassVar[str] = 'product'
     """The sub-group name for archiving product data."""
@@ -185,13 +188,8 @@ class DaxScan(dax.base.system.DaxBase, abc.ABC):
     SCAN_KWARGS_KEY: typing.ClassVar[str] = 'scan_kwargs'
     """:func:`build` keyword argument for keyword arguments passed to :func:`build_scan`."""
 
-    SCAN_CORE_ATTR: typing.ClassVar[str] = 'core'
-    """Attribute name of the core device."""
-
     __in_build: bool
-    __terminated: bool
     _dax_scan_scannables: _SD_T
-    _dax_scan_scheduler: typing.Any
     _dax_scan_infinite: bool
     _dax_scan_elements: typing.List[typing.Any]
     _dax_scan_index: np.int32
@@ -209,9 +207,12 @@ class DaxScan(dax.base.system.DaxBase, abc.ABC):
         assert isinstance(self.INFINITE_SCAN_ARGUMENT, bool), 'Infinite scan argument flag must be of type bool'
         assert isinstance(self.INFINITE_SCAN_DEFAULT, bool), 'Infinite scan default flag must be of type bool'
         assert isinstance(self.ENABLE_SCAN_INDEX, bool), 'Enable scan index flag must be of type bool'
+        assert isinstance(self.SCAN_GROUP, str), 'Scan group must be of type str'
+        assert isinstance(self.SCAN_KEY_FORMAT, str), 'Scan key format must be of type str'
+        assert isinstance(self.SCAN_PRODUCT_GROUP, str), 'Scan product group must be of type str'
+        assert isinstance(self.SCAN_PRODUCT_KEY_FORMAT, str), 'Scan product key format must be of type str'
         assert isinstance(self.SCAN_ARGS_KEY, str), 'Scan args keyword must be of type str'
         assert isinstance(self.SCAN_KWARGS_KEY, str), 'Scan kwargs keyword must be of type str'
-        assert isinstance(self.SCAN_CORE_ATTR, str), 'Scan core attribute name must be of type str'
 
         # Obtain the scan args and kwargs
         scan_args: typing.Sequence[typing.Any] = kwargs.pop(self.SCAN_ARGS_KEY, ())
@@ -220,16 +221,8 @@ class DaxScan(dax.base.system.DaxBase, abc.ABC):
         assert isinstance(scan_kwargs, dict), 'Scan kwargs must be a dict'
         assert all(isinstance(k, str) for k in scan_kwargs), 'All scan kwarg keys must be of type str'
 
-        # Check if host_*() functions are all non-kernel functions
-        if any(dax.util.artiq.is_kernel(f) for f in [self.host_enter, self.host_setup,
-                                                     self.host_cleanup, self.host_exit]):
-            raise TypeError('host_*() functions can not be kernels')
-        # Check that _run_dax_scan_setup/cleanup aren't kernels
-        if any(dax.util.artiq.is_kernel(f) for f in [self._run_dax_scan_setup, self._run_dax_scan_cleanup]):
-            raise TypeError('_run_dax_scan_*() functions cannot be kernels')
-
-        # Initialize variables
-        self.__terminated = False
+        # Make properties kernel invariant
+        self.update_kernel_invariants('is_infinite_scan', 'is_terminated_scan')
 
         # Call super and forward arguments, for compatibility with other libraries
         # noinspection PyArgumentList
@@ -238,9 +231,6 @@ class DaxScan(dax.base.system.DaxBase, abc.ABC):
         # Collection of scannables
         self._dax_scan_scannables = collections.OrderedDict()
 
-        # The scheduler object
-        self._dax_scan_scheduler = self.get_device('scheduler')
-
         # Build this scan (no args or kwargs available)
         self.logger.debug('Building scan')
         self.__in_build = True
@@ -248,21 +238,20 @@ class DaxScan(dax.base.system.DaxBase, abc.ABC):
         self.build_scan(*scan_args, **scan_kwargs)  # type: ignore[call-arg]
         self.__in_build = False
 
-        # Confirm we have a core attribute
-        if not hasattr(self, self.SCAN_CORE_ATTR):
-            raise AttributeError(f'DAX.scan could not find the core attribute "{self.SCAN_CORE_ATTR}"')
-
         if self.INFINITE_SCAN_ARGUMENT:
             # Add an argument for infinite scan
-            self._dax_scan_infinite = self.get_argument('Infinite scan', BooleanValue(self.INFINITE_SCAN_DEFAULT),
-                                                        group='DAX.scan',
-                                                        tooltip='Loop infinitely over the scan points')
+            self._dax_scan_infinite = self.get_argument(
+                'Infinite scan',
+                BooleanValue(self.INFINITE_SCAN_DEFAULT),
+                group='DAX.scan',
+                tooltip='Loop infinitely over the scan points'
+            )
         else:
             # If infinite scan argument is disabled, the value is always the default one
             self._dax_scan_infinite = self.INFINITE_SCAN_DEFAULT
 
         # Update kernel invariants
-        self.update_kernel_invariants('_dax_scan_scheduler', '_dax_scan_infinite')
+        self.update_kernel_invariants('_dax_scan_infinite')
 
     @abc.abstractmethod
     def build_scan(self) -> None:  # pragma: no cover
@@ -284,11 +273,7 @@ class DaxScan(dax.base.system.DaxBase, abc.ABC):
         else:
             raise AttributeError('is_scan_infinite can only be obtained after build() was called')
 
-    @property
-    def is_terminated_scan(self) -> bool:
-        """:const:`True` if the scan was terminated."""
-        return self.__terminated
-
+    @host_only
     def add_scan(self, key: str, name: str, scannable: Scannable, *,
                  group: typing.Optional[str] = None, tooltip: typing.Optional[str] = None) -> None:
         """Register a scannable.
@@ -329,9 +314,10 @@ class DaxScan(dax.base.system.DaxBase, abc.ABC):
         if key in self._dax_scan_scannables:
             raise LookupError(f'Provided key "{key}" is already in use')
 
-        # Add argument to the list of scannables
+        # Add argument to scannables
         self._dax_scan_scannables[key] = self.get_argument(name, scannable, group=group, tooltip=tooltip)
 
+    @host_only
     def add_static_scan(self, key: str, points: typing.Sequence[typing.Any]) -> None:
         """Register a static scan.
 
@@ -406,6 +392,7 @@ class DaxScan(dax.base.system.DaxBase, abc.ABC):
 
         This function can only be used after the :func:`run` function was called
         which normally means it is not available during the build and prepare phase.
+        See also :func:`init_scan_elements`.
 
         :return: A dict containing all the scan points on a per-key basis
         """
@@ -413,7 +400,7 @@ class DaxScan(dax.base.system.DaxBase, abc.ABC):
             return {key: [getattr(point, key) for point, _ in self._dax_scan_elements]
                     for key in self._dax_scan_scannables}
         else:
-            raise AttributeError('Scan points can only be obtained after run() was called')
+            raise AttributeError('Scan points can only be obtained after scan elements are initialized')
 
     @host_only
     def get_scannables(self) -> typing.Dict[str, typing.List[typing.Any]]:
@@ -448,16 +435,32 @@ class DaxScan(dax.base.system.DaxBase, abc.ABC):
         self.logger.debug(f'Prepared {len(self._dax_scan_elements)} scan point(s) '
                           f'with {len(self._dax_scan_scannables)} scan parameter(s)')
 
-    """Run functions"""
+    """Internal control flow functions"""
+
+    @portable
+    def _dax_control_flow_while(self) -> TBool:
+        return self._dax_scan_index < len(self._dax_scan_elements)
+
+    def _dax_control_flow_is_kernel(self) -> bool:
+        return dax.util.artiq.is_kernel(self.run_point)
+
+    @portable
+    def _dax_control_flow_run(self) -> None:
+        # Run for one point
+        point, index = self._dax_scan_elements[self._dax_scan_index]
+        self.run_point(point, index)
+
+        # Increment index
+        self._dax_scan_index += np.int32(1)
+
+        # Handle infinite scan
+        if self._dax_scan_infinite and self._dax_scan_index == len(self._dax_scan_elements):
+            self._dax_scan_index = np.int32(0)
+
+    """Scan-specific functionality"""
 
     @host_only
     def run(self) -> None:
-        """Entry point of the experiment implemented by the scan class.
-
-        Normally users do not have to override this method.
-        Once-executed entry code can use the :func:`host_enter` function instead.
-        """
-
         # Initialize scan elements if not already done
         if not hasattr(self, '_dax_scan_elements'):
             self.init_scan_elements()
@@ -480,151 +483,33 @@ class DaxScan(dax.base.system.DaxBase, abc.ABC):
         # Index of current scan element
         self._dax_scan_index = np.int32(0)
 
-        try:
-            # Call the host enter code
-            self.logger.debug('Performing host enter procedure')
-            self.host_enter()
-
-            while self._dax_scan_index < len(self._dax_scan_elements):
-                while self._dax_scan_scheduler.check_pause():
-                    # Pause the scan
-                    self.logger.debug('Pausing scan')
-                    getattr(self, self.SCAN_CORE_ATTR).comm.close()  # Close communications before pausing
-                    self._dax_scan_scheduler.pause()  # Can raise a TerminationRequested exception
-                    self.logger.debug('Resuming scan')
-
-                try:
-                    # Coming from a host context, perform host setup
-                    self.logger.debug('Performing host setup')
-                    self.host_setup()
-                    self.logger.debug('Performing run_dax_scan setup')
-                    self._run_dax_scan_setup()
-
-                    # Run the scan
-                    if dax.util.artiq.is_kernel(self.run_point):
-                        self.logger.debug('Running scan on core device')
-                        self._run_dax_scan_in_kernel()
-                    else:
-                        self.logger.debug('Running scan on host')
-                        self._run_dax_scan()
-
-                finally:
-                    # One time host cleanup
-                    self.logger.debug('Performing run_dax_scan cleanup')
-                    self._run_dax_scan_cleanup()
-                    self.logger.debug('Performing host cleanup')
-                    self.host_cleanup()
-
-        except TerminationRequested:
-            # Scan was terminated
-            self.__terminated = True
-            if self.is_infinite_scan:
-                self.logger.info('Infinite scan was terminated by user request')
-            else:
-                self.logger.warning('Scan was terminated by user request')
-
-        else:
-            # Call the host exit code
-            self.logger.debug('Performing host exit procedure')
-            self.host_exit()
-
-    @kernel
-    def _run_dax_scan_in_kernel(self):  # type: () -> None
-        """Run scan on the core device."""
-        self._run_dax_scan()
+        # Call super
+        super(DaxScan, self).run()
 
     @portable
-    def _run_dax_scan(self):  # type: () -> None
-        """Portable run scan function."""
-        try:
-            # Perform device setup
-            self.device_setup()
-
-            while self._dax_scan_index < len(self._dax_scan_elements):
-                # Check for pause condition
-                if self._dax_scan_scheduler.check_pause():
-                    break  # Break to exit the run scan function
-
-                # Run for one point
-                point, index = self._dax_scan_elements[self._dax_scan_index]
-                self.run_point(point, index)
-
-                # Increment index
-                self._dax_scan_index += np.int32(1)
-
-                # Handle infinite scan
-                if self._dax_scan_infinite and self._dax_scan_index == len(self._dax_scan_elements):
-                    self._dax_scan_index = np.int32(0)
-
-        finally:
-            # Perform device cleanup
-            self.device_cleanup()
-
-    @portable
-    def stop_scan(self):  # type: () -> None
+    def stop_scan(self) -> None:
         """Stop the scan after the current point.
 
-        This function can only be called from the :func:`run_point` function.
+        This function should only be called from the :func:`run_point` function.
         """
 
         # Stop the scan by moving the index to the end (+1 to differentiate with infinite scan)
         self._dax_scan_index = np.int32(len(self._dax_scan_elements) + 1)
 
-    """Functions to be implemented by the user"""
+    @property
+    def is_terminated_scan(self) -> bool:
+        """:const:`True` if the scan was terminated by the user."""
+        return self._dax_control_flow_is_terminated
 
-    def host_enter(self) -> None:  # pragma: no cover
-        """0. Entry code on the host, called once."""
-        pass
-
-    def host_setup(self) -> None:  # pragma: no cover
-        """1. Setup on the host, called once at entry and after a pause."""
-        pass
-
-    def _run_dax_scan_setup(self) -> None:  # pragma: no cover
-        """1.5. Called on the host after :func:`host_setup` and just before :func:`_run_dax_scan`.
-
-        Useful for e.g. confirming that necessary attributes created in :func:`host_enter` or :func:`host_setup`
-        haven't been overwritten by a subclass.
-        """
-        pass
-
-    @portable
-    def device_setup(self):  # type: () -> None  # pragma: no cover
-        """2. Setup on the core device, called once at entry and after a pause.
-
-        Can for example be used to reset the core.
-        """
-        pass
+    """End-user functions"""
 
     @abc.abstractmethod
     def run_point(self, point, index):  # type: (typing.Any, typing.Any) -> None  # pragma: no cover
-        """3. Code to run for a single point, called as many times as there are points.
+        """Code to run for a single point, called as many times as there are points.
 
         :param point: Point object containing the current scan parameter values
-        :param index: Index object containing the current scan parameter indices
+        :param index: Index object containing the current scan parameter indices (if enabled)
         """
-        pass
-
-    @portable
-    def device_cleanup(self):  # type: () -> None  # pragma: no cover
-        """4. Cleanup on the core device, called once after scanning and before a pause.
-
-        In case the device cleanup function is a kernel, it is good to add a ``self.core.break_realtime()``
-        at the start of this function to make sure operations can execute in case of an
-        underflow exception.
-        """
-        pass
-
-    def _run_dax_scan_cleanup(self) -> None:  # pragma: no cover
-        """4.5. Called on the host after :func:`_run_dax_scan`."""
-        pass
-
-    def host_cleanup(self) -> None:  # pragma: no cover
-        """5. Cleanup on the host, called once after scanning and before a pause."""
-        pass
-
-    def host_exit(self) -> None:  # pragma: no cover
-        """6. Exit code on the host, called if the scan finished without exceptions."""
         pass
 
 
