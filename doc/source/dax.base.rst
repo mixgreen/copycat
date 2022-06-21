@@ -1,6 +1,14 @@
 dax.base package
 ================
 
+dax.base.control\_flow module
+-----------------------------
+
+.. automodule:: dax.base.control_flow
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 dax.base.exceptions module
 --------------------------
 
@@ -29,6 +37,14 @@ dax.base.scan module
 --------------------
 
 .. automodule:: dax.base.scan
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+dax.base.servo module
+---------------------
+
+.. automodule:: dax.base.servo
     :members:
     :undoc-members:
     :show-inheritance:

@@ -13,6 +13,7 @@ User entry points
 * :ref:`dax.experiment`
 * :ref:`dax.program`
 * :ref:`dax.scan`
+* :ref:`dax.servo`
 * :ref:`dax.scheduler`
 * :ref:`dax.sim`
 * :ref:`dax.sim.test_case`

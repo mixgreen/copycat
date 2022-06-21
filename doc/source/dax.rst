@@ -31,6 +31,16 @@ dax.scan
     :undoc-members:
     :show-inheritance:
 
+.. _dax.servo:
+
+dax.servo
+--------
+
+.. automodule:: dax.servo
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 .. _dax.scheduler:
 
 dax.scheduler

@@ -1,5 +1,7 @@
-__all__ = ['BuildError', 'NonUniqueRegistrationError',
-           'CalibrationError', 'OutOfSpecError', 'BadDataError', 'FailedCalibrationError']
+__all__ = [
+    'BuildError', 'NonUniqueRegistrationError',
+    'CalibrationError', 'OutOfSpecError', 'BadDataError', 'FailedCalibrationError',
+]
 
 
 class BuildError(RuntimeError):

@@ -7,7 +7,7 @@ import h5py
 
 from artiq.experiment import *
 
-from dax.base.scan import *
+from dax.base.scan import DaxScan, DaxScanReader, DaxScanChain
 from dax.base.system import DaxSystem
 from dax.util.artiq import get_managers
 from dax.util.output import temp_dir
@@ -42,8 +42,8 @@ class _MockScan1(DaxScan, _MockSystem):
     def host_setup(self) -> None:
         self.counter['host_setup'] += 1
 
-    def _run_dax_scan_setup(self) -> None:
-        self.counter['_run_dax_scan_setup'] += 1
+    def _dax_control_flow_setup(self) -> None:
+        self.counter['_dax_control_flow_setup'] += 1
 
     def device_setup(self):  # type: () -> None
         self.counter['device_setup'] += 1
@@ -54,8 +54,8 @@ class _MockScan1(DaxScan, _MockSystem):
     def device_cleanup(self):  # type: () -> None
         self.counter['device_cleanup'] += 1
 
-    def _run_dax_scan_cleanup(self) -> None:
-        self.counter['_run_dax_scan_cleanup'] += 1
+    def _dax_control_flow_cleanup(self) -> None:
+        self.counter['_dax_control_flow_cleanup'] += 1
 
     def host_cleanup(self) -> None:
         self.counter['host_cleanup'] += 1
@@ -273,11 +273,11 @@ class Scan1TestCase(unittest.TestCase):
             'init_scan_elements': 1,
             'host_enter': 1,
             'host_setup': 1,
-            '_run_dax_scan_setup': 1,
+            '_dax_control_flow_setup': 1,
             'device_setup': 1,
             'run_point': self.scan.FOO,
             'device_cleanup': 1,
-            '_run_dax_scan_cleanup': 1,
+            '_dax_control_flow_cleanup': 1,
             'host_cleanup': 1,
             'host_exit': 1,
         }
@@ -368,11 +368,11 @@ class ChainScanTestCase(Scan1TestCase):
             'init_scan_elements': 1,
             'host_enter': 1,
             'host_setup': 1,
-            '_run_dax_scan_setup': 1,
+            '_dax_control_flow_setup': 1,
             'device_setup': 1,
             'run_point': self.scan.FOO * 2,
             'device_cleanup': 1,
-            '_run_dax_scan_cleanup': 1,
+            '_dax_control_flow_cleanup': 1,
             'host_cleanup': 1,
             'host_exit': 1,
         }
@@ -581,11 +581,11 @@ class Scan2TestCase(Scan1TestCase):
             'init_scan_elements': 1,
             'host_enter': 1,
             'host_setup': 1,
-            '_run_dax_scan_setup': 1,
+            '_dax_control_flow_setup': 1,
             'device_setup': 1,
             'run_point': self.scan.FOO * self.scan.BAR,
             'device_cleanup': 1,
-            '_run_dax_scan_cleanup': 1,
+            '_dax_control_flow_cleanup': 1,
             'host_cleanup': 1,
             'host_exit': 1,
         }
@@ -634,11 +634,11 @@ class ScanTerminateTestCase(unittest.TestCase):
             'init_scan_elements': 1,
             'host_enter': 1,
             'host_setup': 1,
-            '_run_dax_scan_setup': 1,
+            '_dax_control_flow_setup': 1,
             'device_setup': 1,
             'run_point': self.scan.TERMINATE,
             'device_cleanup': 1,
-            '_run_dax_scan_cleanup': 1,
+            '_dax_control_flow_cleanup': 1,
             'host_cleanup': 1,
             # host_exit() was not called, hence the entry is not existing in the counter
         }
@@ -664,11 +664,11 @@ class ScanStopTestCase(unittest.TestCase):
             'init_scan_elements': 1,
             'host_enter': 1,
             'host_setup': 1,
-            '_run_dax_scan_setup': 1,
+            '_dax_control_flow_setup': 1,
             'device_setup': 1,
             'run_point': self.scan.STOP + 1,  # The last point is finished, so plus 1
             'device_cleanup': 1,
-            '_run_dax_scan_cleanup': 1,
+            '_dax_control_flow_cleanup': 1,
             'host_cleanup': 1,
             'host_exit': 1,  # host_exit() is called when using stop_scan()
         }
@@ -698,11 +698,11 @@ class InfiniteScanTestCase(unittest.TestCase):
             'init_scan_elements': 1,
             'host_enter': 1,
             'host_setup': 1,
-            '_run_dax_scan_setup': 1,
+            '_dax_control_flow_setup': 1,
             'device_setup': 1,
             'run_point': self.scan.STOP + 1,  # The last point is finished, so plus 1
             'device_cleanup': 1,
-            '_run_dax_scan_cleanup': 1,
+            '_dax_control_flow_cleanup': 1,
             'host_cleanup': 1,
             'host_exit': 1,  # host_exit() is called when using stop_scan()
         }
@@ -740,11 +740,11 @@ class DisableIndexScanTestCase(unittest.TestCase):
             'init_scan_elements': 1,
             'host_enter': 1,
             'host_setup': 1,
-            '_run_dax_scan_setup': 1,
+            '_dax_control_flow_setup': 1,
             'device_setup': 1,
             'run_point': scan_w_index.FOO,
             'device_cleanup': 1,
-            '_run_dax_scan_cleanup': 1,
+            '_dax_control_flow_cleanup': 1,
             'host_cleanup': 1,
             'host_exit': 1,
         }
