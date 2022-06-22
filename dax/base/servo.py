@@ -180,6 +180,7 @@ class DaxServo(dax.base.control_flow.DaxControlFlow, abc.ABC):
         else:
             raise AttributeError('is_infinite_servo can only be obtained after build() was called')
 
+    @host_only
     def add_servo(self, key: str, value: typing.Union[int, float, np.int32, np.int64]) -> None:
         """Register a servo with a fixed initial value.
 
@@ -206,6 +207,7 @@ class DaxServo(dax.base.control_flow.DaxControlFlow, abc.ABC):
         # Add argument to servo values
         self.__servo_values[key] = value
 
+    @host_only
     def add_servo_argument(self, key: str, name: str, value: NumberValue, *,
                            group: typing.Optional[str] = None, tooltip: typing.Optional[str] = None) -> None:
         """Register a servo with an argument for the initial value.
@@ -285,7 +287,7 @@ class DaxServo(dax.base.control_flow.DaxControlFlow, abc.ABC):
         return dax.util.artiq.is_kernel(self.run_point)
 
     @portable
-    def _dax_control_flow_run(self) -> None:
+    def _dax_control_flow_run(self):  # type: () -> None
         # Run point
         self.run_point(self._dax_servo_point, self._dax_servo_index)
         # Store point
@@ -340,7 +342,7 @@ class DaxServo(dax.base.control_flow.DaxControlFlow, abc.ABC):
         super(DaxServo, self).run()
 
     @portable
-    def stop_servo(self) -> None:
+    def stop_servo(self):  # type: () -> None
         """Stop the servo after the current point.
 
         This function should only be called from the :func:`run_point` function.

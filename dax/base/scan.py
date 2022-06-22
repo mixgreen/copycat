@@ -445,7 +445,7 @@ class DaxScan(dax.base.control_flow.DaxControlFlow, abc.ABC):
         return dax.util.artiq.is_kernel(self.run_point)
 
     @portable
-    def _dax_control_flow_run(self) -> None:
+    def _dax_control_flow_run(self):  # type: () -> None
         # Run for one point
         point, index = self._dax_scan_elements[self._dax_scan_index]
         self.run_point(point, index)
@@ -487,7 +487,7 @@ class DaxScan(dax.base.control_flow.DaxControlFlow, abc.ABC):
         super(DaxScan, self).run()
 
     @portable
-    def stop_scan(self) -> None:
+    def stop_scan(self):  # type: () -> None
         """Stop the scan after the current point.
 
         This function should only be called from the :func:`run_point` function.
@@ -622,6 +622,7 @@ class DaxScanChain:
         self._scannables = collections.OrderedDict()
         self._added_scan = False
 
+    @host_only
     def add_scan(self, name: str, scannable: Scannable, *, tooltip: typing.Optional[str] = None) -> None:
         """Register a scannable.
 

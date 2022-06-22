@@ -143,12 +143,12 @@ class DaxControlFlow(dax.base.system.DaxBase, abc.ABC):
             self.host_exit()
 
     @kernel
-    def _dax_control_flow_run_kernel(self) -> None:
+    def _dax_control_flow_run_kernel(self):  # type: () -> None
         """Run the control flow in a kernel."""
         self._dax_control_flow_run_portable()
 
     @portable
-    def _dax_control_flow_run_portable(self) -> None:
+    def _dax_control_flow_run_portable(self):  # type: () -> None
         """Run the control flow (portable)."""
         try:
             # Perform device setup
@@ -183,7 +183,7 @@ class DaxControlFlow(dax.base.system.DaxBase, abc.ABC):
         pass
 
     @abc.abstractmethod
-    def _dax_control_flow_run(self) -> None:  # pragma: no cover
+    def _dax_control_flow_run(self):  # type: () -> None  # pragma: no cover
         """Internal function that defines the main run function inside the control flow.
 
         This function must be portable.
@@ -211,7 +211,7 @@ class DaxControlFlow(dax.base.system.DaxBase, abc.ABC):
         pass
 
     @portable
-    def device_setup(self) -> None:  # pragma: no cover
+    def device_setup(self):  # type: () -> None  # pragma: no cover
         """3. Setup on the core device, called once at entry and after a pause.
 
         Can for example be used to reset the core.
@@ -219,7 +219,7 @@ class DaxControlFlow(dax.base.system.DaxBase, abc.ABC):
         pass
 
     @portable
-    def device_cleanup(self) -> None:  # pragma: no cover
+    def device_cleanup(self):  # type: () -> None  # pragma: no cover
         """5. Cleanup on the core device, called once after scanning and before a pause.
 
         In case the device cleanup function is a kernel, it is good to add a ``self.core.break_realtime()``
