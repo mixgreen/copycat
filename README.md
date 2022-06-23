@@ -2,9 +2,9 @@
 
 DAX is a library that extends the capabilities of [ARTIQ](https://github.com/m-labs/artiq)
 while maintaining a vanilla ARTIQ experience. This project was initially created as a framework to develop modular
-control software for ARTIQ-based quantum control systems. As the project evolved, other components were added to the
-repository. Users can implement modular control software for their ARTIQ projects using the DAX framework or use
-components and utilities provided by DAX in existing projects.
+control software for ARTIQ-based quantum control systems. As the project evolved, additional components and utilities
+were added to the repository. Users can implement modular control software for their ARTIQ projects using the DAX
+framework or use other components and utilities provided by DAX in existing projects.
 
 Currently, DAX consists of the following main components:
 
@@ -13,6 +13,7 @@ Currently, DAX consists of the following main components:
 | `DAX.experiment` (system) | Stable      |
 | `DAX.sim`                 | Stable      |
 | `DAX.scan`                | Stable      |
+| `DAX.servo`               | Beta        |
 | `DAX.scheduler`           | Alpha       |
 | `DAX.program`             | Alpha       |
 
@@ -43,6 +44,13 @@ The scanning tool provides an experiment template for yielding a single point of
 scanning over one or multiple parameters. DAX.scan is not dependent on other components of DAX and can be used by any
 ARTIQ project.
 
+**DAX.servo**
+
+The DAX.servo module contains tools for *servo control flow* that can be used for closed-loop experiments with feedback.
+The servo class serves as a template for experiments in which a single iteration of the experiment has to be
+described. The servo class automates the process of looping, data handling, and exit routines. DAX.servo is not
+dependent on other components of DAX and can be used by any ARTIQ project.
+
 **DAX.scheduler**
 
 The DAX.scheduler module contains a toolkit for *automatic scheduling of experiments*. The scheduling toolkit includes
@@ -60,7 +68,7 @@ execution principles. The execution model of DAX.program follows the accelerator
 
 **DAX.util**
 
-A collection of small utilities that might be handy for any ARTIQ project.
+A collection of utilities that might be handy for any ARTIQ project.
 
 ## Resources
 
@@ -97,6 +105,12 @@ The scanning tools in DAX.scan can be imported using the following import statem
 
 ```python
 from dax.scan import *
+```
+
+The servo tools in DAX.servo can be imported using the following import statement:
+
+```python
+from dax.servo import *
 ```
 
 The scheduling tools in DAX.scheduler can be imported using the following import statement:
