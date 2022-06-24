@@ -142,29 +142,56 @@ class Phaser(DaxSimDevice):
         raise NotImplementedError
 
     @kernel
+    def _dac_write_delay(self):
+        # mimic the delay of a dac_write
+        div = 34  # 100 ns min period
+        t_xfer = self.core.seconds_to_mu((8 + 1) * div * 4 * ns)
+        delay_mu(3 * t_xfer)
+
+    @kernel
     def dac_read(self, addr, div=34) -> TInt32:
         raise NotImplementedError
 
     @kernel
+    def _dac_read_delay(self):
+        # mimic the delay of a dac_read
+        div = 34  # 100 ns min period
+        t_xfer = self.core.seconds_to_mu((8 + 1) * div * 4 * ns)
+        delay_mu(2 * t_xfer)
+        delay(20 * us)
+        delay_mu(t_xfer)
+
+    @kernel
     def get_dac_temperature(self) -> TInt32:
-        raise NotImplementedError
+        self._dac_read_delay()  # type: ignore
+        return int32(30)  # 30 degrees C seems reasonable?
 
     if ARTIQ_MAJOR_VERSION >= 7:
         @kernel
         def dac_sync(self):
-            raise NotImplementedError
+            # just mimic the delay
+            self._dac_read_delay()
+            delay(1 * ms)
+            self._dac_write_delay()
+            self._dac_write_delay()
 
         @kernel
         def set_dac_cmix(self, fs_8_step):
-            raise NotImplementedError
+            vals = [0, 125, 250, 375, 500, -375, -250, -125]
+            cmix = vals[fs_8_step % 8] * MHz
+            self._dac_read_delay()
+            delay(0.1 * ms)
+            self._dac_write_delay()
+            self._dac_cmix.push(cmix)
 
     @kernel
     def get_dac_alarms(self):
-        raise NotImplementedError
+        self._dac_read_delay()
+        return 0
 
     @kernel
     def clear_dac_alarms(self):
-        raise NotImplementedError
+        self._dac_write_delay()
 
     @kernel
     def dac_iotest(self, pattern) -> TInt32:
