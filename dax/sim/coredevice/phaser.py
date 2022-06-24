@@ -49,8 +49,200 @@ class Phaser(DaxSimDevice):
         self._dac_cmix = signal_manager.register(self, 'dac_cmix', float)
 
     @kernel
-    def init(self, debug=False):
-        pass  # todo
+    def init(self, debug=False):  # noqa: C901
+        # copied from ARTIQ with unsupported methods commented out
+        # board_id = self.read8(PHASER_ADDR_BOARD_ID)
+        # if board_id != PHASER_BOARD_ID:
+        #     raise ValueError("invalid board id")
+        delay(.1 * ms)  # slack
+
+        # hw_rev = self.read8(PHASER_ADDR_HW_REV)
+        delay(.1 * ms)  # slack
+        # todo: if this is the only way to distinguish between baseband/upconverter variants then I'm not sure
+        #  how to decide how long this method takes (there's a `continue` based on variant in the loop below)
+        # is_baseband = hw_rev & PHASER_HW_REV_VARIANT
+
+        # gw_rev = self.read8(PHASER_ADDR_GW_REV)
+        if debug:
+            # print("gw_rev:", gw_rev)
+            self.core.break_realtime()
+        delay(.1 * ms)  # slack
+
+        # allow a few errors during startup and alignment since boot
+        # if self.get_crc_err() > 20:
+        #     raise ValueError("large number of frame CRC errors")
+        delay(.1 * ms)  # slack
+
+        # determine the origin for frame-aligned timestamps
+        self.measure_frame_timestamp()
+        if self.frame_tstamp < 0:
+            raise ValueError("frame timestamp measurement timed out")
+        delay(.1 * ms)
+
+        # reset
+        self.set_cfg(dac_resetb=0, dac_sleep=1, dac_txena=0,
+                     trf0_ps=1, trf1_ps=1,
+                     att0_rstn=0, att1_rstn=0)
+        self.set_leds(0x00)
+        self.set_fan_mu(0)
+        # bring dac out of reset, keep tx off
+        self.set_cfg(clk_sel=self.clk_sel, dac_txena=0,
+                     trf0_ps=1, trf1_ps=1,
+                     att0_rstn=0, att1_rstn=0)
+        delay(.1 * ms)  # slack
+
+        # crossing dac_clk (reference) edges with sync_dly
+        # changes the optimal fifo_offset by 4
+        # self.set_sync_dly(self.sync_dly)
+
+        # 4 wire SPI, sif4_enable
+        # self.dac_write(0x02, 0x0080)
+        self._dac_write_delay()
+        # if self.dac_read(0x7f) != 0x5409:
+        #     raise ValueError("DAC version readback invalid")
+        self._dac_read_delay()
+        delay(.1 * ms)
+        # if self.dac_read(0x00) != 0x049c:
+        #     raise ValueError("DAC config0 reset readback invalid")
+        self._dac_read_delay()
+        delay(.1 * ms)
+
+        t = self.get_dac_temperature()
+        delay(.1 * ms)
+        if t < 10 or t > 90:
+            raise ValueError("DAC temperature out of bounds")
+
+        for data in self.dac_mmap:
+            # self.dac_write(data >> 16, data)
+            self._dac_write_delay()
+            delay(40 * us)
+        self.dac_sync()
+        delay(40 * us)
+
+        # pll_ndivsync_ena disable
+        # config18 = self.dac_read(0x18)
+        self._dac_read_delay()
+        delay(.1 * ms)
+        # self.dac_write(0x18, config18 & ~0x0800)
+        self._dac_write_delay()
+
+        patterns = [
+            [0xf05a, 0x05af, 0x5af0, 0xaf05],  # test channel/iq/byte/nibble
+            [0x7a7a, 0xb6b6, 0xeaea, 0x4545],  # datasheet pattern a
+            [0x1a1a, 0x1616, 0xaaaa, 0xc6c6],  # datasheet pattern b
+        ]
+        # A data delay of 2*50 ps heuristically and reproducibly matches
+        # FPGA+board+DAC skews. There is plenty of margin (>= 250 ps
+        # either side) and no need to tune at runtime.
+        # Parity provides another level of safety.
+        for i in range(len(patterns)):
+            delay(.5 * ms)
+            # errors = self.dac_iotest(patterns[i])
+            # if errors:
+            #     raise ValueError("DAC iotest failure")
+
+        delay(2 * ms)  # let it settle
+        # lvolt = self.dac_read(0x18) & 7
+        self._dac_read_delay()
+        delay(.1 * ms)
+        # if lvolt < 2 or lvolt > 5:
+        #     raise ValueError("DAC PLL lock failed, check clocking")
+
+        if self.tune_fifo_offset:
+            # fifo_offset = self.dac_tune_fifo_offset()
+            if debug:
+                # print("fifo_offset:", fifo_offset)
+                self.core.break_realtime()
+
+        # self.dac_write(0x20, 0x0000)  # stop fifo sync
+        # alarm = self.get_sta() & 1
+        # delay(.1*ms)
+        self.clear_dac_alarms()
+        delay(2 * ms)  # let it run a bit
+        alarms = self.get_dac_alarms()
+        delay(.1 * ms)  # slack
+        if alarms & ~0x0040:  # ignore PLL alarms (see DS)
+            if debug:
+                print("alarms:", alarms)
+                self.core.break_realtime()
+                # ignore alarms
+            else:
+                raise ValueError("DAC alarm")
+
+        # avoid malformed output for: mixer_ena=1, nco_ena=0 after power up
+        # self.dac_write(self.dac_mmap[2] >> 16, self.dac_mmap[2] | (1 << 4))
+        self._dac_write_delay()
+        delay(40 * us)
+        self.dac_sync()
+        delay(100 * us)
+        # self.dac_write(self.dac_mmap[2] >> 16, self.dac_mmap[2])
+        self._dac_write_delay()
+        delay(40 * us)
+        self.dac_sync()
+        delay(100 * us)
+
+        # power up trfs, release att reset
+        self.set_cfg(clk_sel=self.clk_sel, dac_txena=0)
+
+        for ch in range(2):
+            channel = self.channel[ch]
+            # test attenuator write and readback
+            channel.set_att_mu(0x5a)
+            if channel.get_att_mu() != 0x5a:
+                raise ValueError("attenuator test failed")
+            delay(.1 * ms)
+            channel.set_att_mu(0x00)  # minimum attenuation
+
+            # test oscillators and DUC
+            for i in range(len(channel.oscillator)):
+                oscillator = channel.oscillator[i]
+                asf = 0
+                if i == 0:
+                    asf = 0x7fff
+                # 6pi/4 phase
+                oscillator.set_amplitude_phase_mu(asf=asf, pow=0xc000, clr=1)
+                delay(1 * us)
+            # 3pi/4
+            channel.set_duc_phase_mu(0x6000)
+            channel.set_duc_cfg(select=0, clr=1)
+            self.duc_stb()
+            delay(.1 * ms)  # settle link, pipeline and impulse response
+            # data = channel.get_dac_data()
+            delay(1 * us)
+            channel.oscillator[0].set_amplitude_phase_mu(asf=0, pow=0xc000,
+                                                         clr=1)
+            delay(.1 * ms)
+            # sqrt2 = 0x5a81  # 0x7fff/sqrt(2)
+            # data_i = data & 0xffff
+            # data_q = (data >> 16) & 0xffff
+            # allow ripple
+            # if data_i < sqrt2 - 30 or data_i > sqrt2 or abs(data_i - data_q) > 2:
+            #     raise ValueError("DUC+oscillator phase/amplitude test failed")
+
+            # todo: re: todo from above
+            # if is_baseband:
+            #     continue
+
+            # if channel.trf_read(0) & 0x7f != 0x68:
+            #     raise ValueError("TRF identification failed")
+            delay(.1 * ms)
+
+            delay(.2 * ms)
+            # for data in channel.trf_mmap:
+            #     channel.trf_write(data)
+            # channel.cal_trf_vco()
+
+            delay(2 * ms)  # lock
+            # if not (self.get_sta() & (PHASER_STA_TRF0_LD << ch)):
+            #     raise ValueError("TRF lock failure")
+            delay(.1 * ms)
+            # if channel.trf_read(0) & 0x1000:
+            #     raise ValueError("TRF R_SAT_ERR")
+            delay(.1 * ms)
+            # channel.en_trf_out()
+
+        # enable dac tx
+        self.set_cfg(clk_sel=self.clk_sel)
 
     @kernel
     def write8(self, addr, data):
@@ -119,6 +311,7 @@ class Phaser(DaxSimDevice):
 
     @kernel
     def set_sync_dly(self, dly):
+        # todo: this doesn't really affect any of the signals, could just `pass`
         raise NotImplementedError
 
     @kernel
