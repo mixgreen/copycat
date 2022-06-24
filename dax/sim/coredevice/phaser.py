@@ -105,11 +105,15 @@ class Phaser(DaxSimDevice):
     if ARTIQ_MAJOR_VERSION >= 7:
         @kernel
         def measure_frame_timestamp(self):
-            raise NotImplementedError
+            # todo: basically assumes zero latency, not sure if that's okay.
+            #  but the only alternative is picking an arbitrary latency to add
+            self.frame_tstamp = now_mu() + 4 * self.t_frame
+            delay(100 * us)
 
         @kernel
         def get_next_frame_mu(self):
-            raise NotImplementedError
+            n = int64((now_mu() - self.frame_tstamp) / self.t_frame)
+            return self.frame_tstamp + (n + 1) * self.t_frame
 
     @kernel
     def set_sync_dly(self, dly):
