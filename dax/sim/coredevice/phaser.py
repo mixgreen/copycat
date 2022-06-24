@@ -8,6 +8,8 @@ from numpy import int32, int64
 from artiq.language.core import kernel, delay_mu, delay, now_mu
 from artiq.language.units import ns, us, ms, MHz, dB
 from artiq.language.types import TInt32
+from artiq.coredevice.dac34h84 import DAC34H84  # type: ignore
+from artiq.coredevice.trf372017 import TRF372017  # type: ignore
 
 from dax.sim.device import DaxSimDevice, ARTIQ_MAJOR_VERSION
 from dax.sim.signal import get_signal_manager
@@ -28,7 +30,7 @@ class Phaser(DaxSimDevice):
         self.clk_sel = clk_sel
         self.tune_fifo_offset = tune_fifo_offset
         self.sync_dly = sync_dly
-        self.dac_mmap = None  # todo...?
+        self.dac_mmap = DAC34H84(dac).get_mmap()
         self.channel: List[PhaserChannel] = [
             PhaserChannel(self, ch, trf)
             for ch, trf in enumerate([trf0, trf1])
@@ -206,7 +208,7 @@ class PhaserChannel:
     def __init__(self, phaser, index, trf):
         self.phaser = phaser
         self.index = index
-        self.trf_mmap = None  # todo?
+        self.trf_mmap = TRF372017(trf).get_mmap()
         self.oscillator = [PhaserOscillator(self, osc) for osc in range(5)]
 
         # register signals
