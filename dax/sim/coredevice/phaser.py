@@ -287,9 +287,13 @@ class PhaserChannel:
 
     @kernel
     def get_att_mu(self) -> TInt32:
-        # todo: could implement this, but the only use case in which it would be useful
-        #  (crossover between experiments) wouldn't work
-        raise NotImplementedError
+        div = 34
+        t_xfer = self.phaser.core.seconds_to_mu((8 + 1) * div * 4 * ns)
+        delay_mu(t_xfer)
+        delay(20 * us)
+        delay_mu(t_xfer)
+        # allow SignalNotSetError to be raised if not set
+        return int32(0xff - self._att.pull() * 8)
 
     @kernel
     def trf_write(self, data, readback=False):
