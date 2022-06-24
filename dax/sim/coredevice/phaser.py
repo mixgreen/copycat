@@ -3,10 +3,10 @@
 # mypy: check_untyped_defs = False
 
 from typing import List
-from numpy import int64
+from numpy import int32, int64
 
-from artiq.language.core import kernel, delay_mu
-from artiq.language.units import ns, MHz, dB
+from artiq.language.core import kernel, delay_mu, delay, now_mu
+from artiq.language.units import ns, us, ms, MHz, dB
 from artiq.language.types import TInt32
 
 from dax.sim.device import DaxSimDevice, ARTIQ_MAJOR_VERSION
@@ -38,6 +38,13 @@ class Phaser(DaxSimDevice):
         signal_manager = get_signal_manager()
         self._leds = signal_manager.register(self, 'leds', str)  # bit/bool vector
         self._fan = signal_manager.register(self, 'fan', float)  # fan duty cycle
+        # configuration pins
+        self._dac_sleep = signal_manager.register(self, 'dac_sleep', bool, init=0)
+        self._trf0_ps = signal_manager.register(self, 'trf0_ps', bool, init=0)
+        self._trf1_ps = signal_manager.register(self, 'trf1_ps', bool, init=0)
+        self._att_rstn = [signal_manager.register(self, f'att{i}_rstn', bool, init=1) for i in range(2)]  # active low
+        # DAC coarse mixer frequency
+        self._dac_cmix = signal_manager.register(self, 'dac_cmix', float)
 
     @kernel
     def init(self, debug=False):
@@ -76,7 +83,16 @@ class Phaser(DaxSimDevice):
     @kernel
     def set_cfg(self, clk_sel=0, dac_resetb=1, dac_sleep=0, dac_txena=1,
                 trf0_ps=0, trf1_ps=0, att0_rstn=1, att1_rstn=1):
-        raise NotImplementedError
+        self._dac_sleep.push(dac_sleep)
+        self._trf0_ps.push(trf0_ps)
+        self._trf1_ps.push(trf1_ps)
+        for ch, att_rstn in enumerate([att0_rstn, att1_rstn]):
+            # set channel attenuation to zero on release
+            # todo: it's unclear if the reset should be on falling or rising (release) edge
+            released = self._att_rstn[ch].pull() == 0 and att_rstn == 1
+            self._att_rstn[ch].push(att_rstn)
+            if released:
+                self.channel[ch].set_att(0)
 
     @kernel
     def get_sta(self):
@@ -221,6 +237,8 @@ class PhaserChannel:
 
     @kernel
     def set_att(self, att):
+        # noinspection PyProtectedMember
+        assert self.phaser._att_rstn[self.index] == 1, 'Tried to set channel attenuation with reset pin active'
         if att < 0 or att > 31.5 * dB:
             # technically the ARTIQ set_att will allow you to provide an att up to
             # 31.875 dB, but the docstring says it's only a 31.5 dB attenuator
