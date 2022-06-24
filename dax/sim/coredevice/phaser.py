@@ -121,8 +121,8 @@ class Phaser(DaxSimDevice):
 
     @kernel
     def duc_stb(self):
-        # todo: don't actually update DUC settings until this gets called
-        raise NotImplementedError
+        # supporting PhaserChannel.set_duc_cfg means allowing this to be called as well
+        pass
 
     @kernel
     def spi_cfg(self, select, div, end, clk_phase=0, clk_polarity=0,
@@ -226,9 +226,12 @@ class PhaserChannel:
     def set_dac_test(self, data: TInt32):
         raise NotImplementedError
 
+    # noinspection PyUnusedLocal
     @kernel
     def set_duc_cfg(self, clr=0, clr_once=0, select=0):
-        raise NotImplementedError
+        # extremely trivial implementation, but want to allow this to be called
+        assert select == 0, 'DUC test data not supported'
+        # ignore phase accumulator
 
     @kernel
     def set_duc_frequency_mu(self, ftw):
