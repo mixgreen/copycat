@@ -140,9 +140,9 @@ class ProgramClient(DaxClient, Experiment):
 
         # Build the program
         self.logger.info(f'Building program "{self._class}"')
-        self._isolated_managers = self._get_managers(arguments=arguments)
+        self._managers = self._get_managers(arguments=arguments)
         self._program = program_cls(
-            self._isolated_managers,
+            self._managers,
             core=self.core,
             operation=self._operation,
             data_context=self._data_context
@@ -224,8 +224,8 @@ class ProgramClient(DaxClient, Experiment):
 
         # Write a separate HDF5 file for the isolated datasets
         self.logger.debug('Writing HDF5 file for isolated dataset manager')
-        self._isolated_managers.write_hdf5(dax.util.output.get_file_name(self._scheduler, 'program', 'h5'),
-                                           metadata=metadata)
+        self._managers.write_hdf5(dax.util.output.get_file_name(self._scheduler, 'program', 'h5'),
+                                  metadata=metadata)
 
     """Customization functions"""
 
