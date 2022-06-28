@@ -198,7 +198,7 @@ class ProgramClient(DaxClient, Experiment):
             self.logger.debug(f'Unpacking and loading program archive "{file_name}"')
             with dax.util.output.temp_dir() as temp_dir:
                 # Unpack archive
-                shutil.unpack_archive(file_name, extract_dir=temp_dir)  # Raises exception of format is not recognized
+                shutil.unpack_archive(file_name, extract_dir=temp_dir)  # Raises exception if format is not recognized
                 unpacked_file_name = os.path.join(temp_dir, 'main.py')
                 if not os.path.isfile(unpacked_file_name):
                     raise FileNotFoundError(f'Archive "{file_name}" does not contain a main.py file')
@@ -209,7 +209,9 @@ class ProgramClient(DaxClient, Experiment):
         # Give a copy of managers, isolated
         return dax.util.artiq.isolate_managers(self._managers, name=name, arguments=arguments)
 
-    def _write_hdf5_file(self) -> None:
+    def _write_hdf5_file(self, *, file_name: str = '') -> None:
+        assert isinstance(file_name, str)
+
         # Collect metadata
         metadata = {
             'rid': self._scheduler.rid,
@@ -220,10 +222,12 @@ class ProgramClient(DaxClient, Experiment):
             'data_context_key': self._data_context_key,
         }
 
-        # Write a separate HDF5 file for the isolated datasets
-        self.logger.debug('Writing HDF5 file for isolated dataset manager')
-        self._managers.write_hdf5(dax.util.output.get_file_name(self._scheduler, 'program', 'h5'),
-                                  metadata=metadata)
+        # Write a separate HDF5 file
+        self.logger.debug('Writing HDF5 file')
+        self._managers.write_hdf5(
+            file_name if file_name else dax.util.output.get_file_name(self._scheduler, 'program', 'h5'),
+            metadata=metadata
+        )
 
     """Customization functions"""
 
