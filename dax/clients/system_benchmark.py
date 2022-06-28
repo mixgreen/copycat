@@ -1,5 +1,3 @@
-# mypy: no_warn_unused_ignores
-
 import logging
 import typing
 import time
@@ -81,7 +79,7 @@ class SystemBenchmarkDaxInitProfile(DaxClient, Experiment):
     DAX_INIT = False
     """Disable DAX init."""
 
-    SORT_KEYS = [k.value for k in pstats.SortKey]  # type: ignore[attr-defined]
+    SORT_KEYS = [k.value for k in pstats.SortKey]
     """Profile stats sort keys."""
 
     def build(self) -> None:  # type: ignore[override]
@@ -126,7 +124,7 @@ class SystemBenchmarkDaxInitProfile(DaxClient, Experiment):
 class _SystemBenchmarkBuildProfile(EnvExperiment):
     """Build profile experiment class template."""
 
-    SORT_KEYS = [k.value for k in pstats.SortKey]  # type: ignore[attr-defined]
+    SORT_KEYS = [k.value for k in pstats.SortKey]
     """Profile stats sort keys."""
 
     SYSTEM_TYPE: typing.ClassVar[typing.Type[DaxSystem]]

@@ -1,5 +1,3 @@
-# mypy: no_warn_unused_ignores
-
 import typing
 import types
 import os.path
