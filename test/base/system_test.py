@@ -1305,6 +1305,12 @@ class DaxModuleBaseTestCase(unittest.TestCase):
         self.assertListEqual(s.data_store.method_calls, [call.set(s.get_system_key(key), value)],
                              'Data store calls did not match expected pattern')
 
+        key4 = 'foo'
+        s.get_dataset_sys(key4, 0, data_store=False, archive=False)
+        for k in [key, key2, key3]:
+            self.assertIn(s.get_system_key(k), self.managers.dataset_mgr.archive)
+        self.assertNotIn(s.get_system_key(key4), self.managers.dataset_mgr.archive)
+
     def test_set_dataset(self):
         s = _TestSystem(self.managers)
 
@@ -1322,6 +1328,12 @@ class DaxModuleBaseTestCase(unittest.TestCase):
         # Check data store calls
         self.assertListEqual(s.data_store.method_calls, [call.set(s.get_system_key(key), value)],
                              'Data store calls did not match expected pattern')
+
+        key3 = 'foo'
+        s.set_dataset_sys(key3, 0, data_store=False, archive=False)
+        self.assertIn(s.get_system_key(key), self.managers.dataset_mgr.local)
+        self.assertIn(s.get_system_key(key2), self.managers.dataset_mgr.local)
+        self.assertNotIn(s.get_system_key(key3), self.managers.dataset_mgr.local)
 
     def test_setattr_dataset(self):
         s = _TestSystem(self.managers)

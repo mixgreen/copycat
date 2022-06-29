@@ -224,15 +224,17 @@ class DaxHasKey(DaxBase, abc.ABC):
     # noinspection PyTypeHints
     @artiq.language.core.rpc(flags={'async'})
     def set_dataset_sys(self, key, value, *,
-                        data_store=True):  # type: (str, typing.Any, bool) -> None
+                        archive=True, data_store=True):  # type: (str, typing.Any, bool, bool) -> None
         """Sets the contents of a system dataset.
 
         :param key: The key of the system dataset
         :param value: The value to store
+        :param archive Flag to archive the value
         :param data_store: Flag to archive the value in the data store
         :raises ValueError: Raised if the key has an invalid format
         """
 
+        assert isinstance(archive, bool), 'Archive flag must be of type bool'
         assert isinstance(data_store, bool), 'Data store flag must be of type bool'
 
         # Get the full system key
@@ -243,7 +245,7 @@ class DaxHasKey(DaxBase, abc.ABC):
 
         # Set value in system dataset with extra flags
         self.logger.debug(f'System dataset key "{key}" set to value "{value}"')
-        self.set_dataset(system_key, value, broadcast=True, persist=True, archive=True)
+        self.set_dataset(system_key, value, broadcast=True, persist=True, archive=archive)
 
         # Restore original logging level of worker_db logger
         artiq.master.worker_db.logger.setLevel(logging.NOTSET)
@@ -308,7 +310,7 @@ class DaxHasKey(DaxBase, abc.ABC):
     @artiq.language.core.host_only
     def get_dataset_sys(self, key: str, default: typing.Any = artiq.language.environment.NoDefault, *,
                         fallback: typing.Any = artiq.language.environment.NoDefault,
-                        data_store: bool = True) -> typing.Any:
+                        archive: bool = True, data_store: bool = True) -> typing.Any:
         """Returns the contents of a system dataset.
 
         If the key is present, its value will be returned.
@@ -326,12 +328,14 @@ class DaxHasKey(DaxBase, abc.ABC):
         :param key: The key of the system dataset
         :param default: The default value to set the system dataset to if not present
         :param fallback: The fallback value to return if the system dataset is not present and no default provided
+        :param archive Flag to archive the value
         :param data_store: Flag to archive the value in the data store if the default value is used
         :return: The value of the system dataset or the default value
         :raises KeyError: Raised if the key was not present and no default or fallback was provided
         :raises ValueError: Raised if the key has an invalid format
         """
 
+        assert isinstance(archive, bool), 'Archive flag must be of type bool'
         assert isinstance(data_store, bool), 'Data store flag must be of type bool'
 
         # Get the full system key
@@ -342,7 +346,7 @@ class DaxHasKey(DaxBase, abc.ABC):
 
         try:
             # Get value from system dataset with extra flags
-            value: typing.Any = self.get_dataset(system_key, archive=True)
+            value: typing.Any = self.get_dataset(system_key, archive=archive)
         except KeyError:
             if default is artiq.language.environment.NoDefault:
                 if fallback is artiq.language.environment.NoDefault:
@@ -356,8 +360,8 @@ class DaxHasKey(DaxBase, abc.ABC):
                 # If the value does not exist, write the default value to the system dataset, but do not archive yet
                 self.logger.debug(f'System dataset key "{key}" set to default value "{default}"')
                 self.set_dataset(system_key, default, broadcast=True, persist=True, archive=False)
-                # Get the value again and make sure it is archived
-                value = self.get_dataset(system_key, archive=True)  # Should never raise a KeyError
+                # Get the value again
+                value = self.get_dataset(system_key, archive=archive)  # Should never raise a KeyError
 
                 if data_store:
                     # Archive value using the data store
