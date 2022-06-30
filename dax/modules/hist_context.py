@@ -605,6 +605,9 @@ class HistogramAnalyzer:
     Simple automated plotting functions are provided, but users can also access data directly
     for manual processing and analysis.
 
+    :attr:`state_detection_threshold` is the stored state detection threshold, or :const:`-1` if none is
+    set and none could be found.
+
     :attr:`keys` is a list of keys for which data is available.
 
     :attr:`histograms` is a dict which for each key contains a list of histograms per channel.
@@ -652,6 +655,14 @@ class HistogramAnalyzer:
     STATE_PROBABILITY_PLOT_FILE_FORMAT: typing.ClassVar[str] = '{key}_state_probability'
     """File name format for full state probability plot files."""
 
+    state_detection_threshold: int
+    keys: typing.List[str]
+    histograms: typing.Dict[str, typing.List[typing.Sequence[typing.Counter[_DATA_T]]]]
+    probabilities: typing.Dict[str, np.ndarray]
+    mean_counts: typing.Dict[str, np.ndarray]
+    stdev_counts: typing.Dict[str, np.ndarray]
+    raw: typing.Dict[str, typing.Sequence[np.ndarray]]
+
     def __init__(self, source: typing.Union[DaxSystem, HistogramContext, str, h5py.File],
                  state_detection_threshold: typing.Optional[int] = None, *,
                  hdf5_group: typing.Optional[str] = None):
@@ -674,25 +685,25 @@ class HistogramAnalyzer:
 
         if isinstance(source, HistogramContext):
             if state_detection_threshold is None:
-                # Obtain the state detection threshold
-                detection = source.registry.find_interface(DetectionInterface)  # type: ignore[misc]
-                self.state_detection_threshold: int = detection.get_state_detection_threshold()
+                try:
+                    # Obtain the state detection threshold
+                    detection = source.registry.find_interface(DetectionInterface)  # type: ignore[misc]
+                    self.state_detection_threshold = detection.get_state_detection_threshold()
+                except LookupError:
+                    # Fallback on no state detection threshold
+                    self.state_detection_threshold = -1
             else:
                 # Store provided state detection threshold
                 self.state_detection_threshold = state_detection_threshold
 
             # Get data from histogram context module
-            self.keys: typing.List[str] = source.get_keys()
-            self.histograms: typing.Dict[str, typing.List[typing.Sequence[typing.Counter[_DATA_T]]]] = \
-                {k: source.get_histograms(k) for k in self.keys}
-            self.probabilities: typing.Dict[str, np.ndarray] = \
-                {k: np.asarray(source.get_probabilities(k, state_detection_threshold)) for k in self.keys}
-            self.mean_counts: typing.Dict[str, np.ndarray] = \
-                {k: np.asarray(source.get_mean_counts(k)) for k in self.keys}
-            self.stdev_counts: typing.Dict[str, np.ndarray] = \
-                {k: np.asarray(source.get_stdev_counts(k)) for k in self.keys}
-            self.raw: typing.Dict[str, typing.Sequence[np.ndarray]] = \
-                {k: [np.asarray(r) for r in source.get_raw(k)] for k in self.keys}
+            self.keys = source.get_keys()
+            self.histograms = {k: source.get_histograms(k) for k in self.keys}
+            self.probabilities = {k: np.asarray(source.get_probabilities(k, state_detection_threshold))
+                                  for k in self.keys}
+            self.mean_counts = {k: np.asarray(source.get_mean_counts(k)) for k in self.keys}
+            self.stdev_counts = {k: np.asarray(source.get_stdev_counts(k)) for k in self.keys}
+            self.raw = {k: [np.asarray(r) for r in source.get_raw(k)] for k in self.keys}
 
             # Obtain the file name generator
             self._file_name_generator: BaseFileNameGenerator = FileNameGenerator(source.get_device('scheduler'))
@@ -923,14 +934,25 @@ class HistogramAnalyzer:
     def _vector_to_int(cls, vector: typing.Sequence[_DATA_T], state_detection_threshold: int) -> int:
         """Convert a vector of raw counts to an integer state."""
 
+        if state_detection_threshold < 0:
+            if not all(isinstance(c, (bool, np.bool_)) for c in vector):
+                raise TypeError('All measurements must be binary when no state detection threshold is given')
+
+            # Make vector binary
+            bitvector: typing.Sequence[bool] = typing.cast(typing.Sequence[bool], vector)
+
+        else:
+            # Make vector binary
+            bitvector = [count is True or count > state_detection_threshold for count in vector]
+
         # Accumulated result
         acc: int = 0
 
-        for count in reversed(vector):
+        for bit in reversed(bitvector):
             # Shift accumulator
             acc <<= 1
             # Add bit
-            acc |= count is True or count > state_detection_threshold
+            acc |= bit
 
         # Return the accumulated result
         return acc
