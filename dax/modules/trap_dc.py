@@ -91,7 +91,7 @@ class TrapDcModule(DaxModule):
         # https://m-labs.hk/artiq/manual/_modules/artiq/coredevice/ad53xx.html#AD53xx
         self._min_line_delay_mu = np.int64(self.core.seconds_to_mu(1500 * ns)
                                            + 2 * self._zotino.bus.ref_period_mu
-                                           + len(self._reader.list_map_labels())
+                                           + self._reader.num_labels()
                                            * self._zotino.bus.xfer_duration_mu)
         self.update_kernel_invariants('_min_line_delay_mu')
         self._reader.init(self._zotino)
