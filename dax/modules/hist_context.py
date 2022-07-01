@@ -8,7 +8,7 @@ import os.path
 import math
 
 from dax.experiment import *
-from dax.interfaces.data_context import DataContextInterface, DataContextError
+from dax.interfaces.data_context import DataContextInterface, DataContextError, RAW_T
 from dax.interfaces.detection import DetectionInterface
 from dax.util.ccb import get_ccb_tool
 from dax.util.output import FileNameGenerator, BaseFileNameGenerator
@@ -20,9 +20,6 @@ __all__ = ['HistogramContext', 'HistogramAnalyzer', 'HistogramContextError']
 class HistogramContextError(DataContextError):
     """Class for histogram context errors."""
     pass
-
-
-_DATA_T = typing.Union[bool, int]  # Type of raw data
 
 
 class HistogramContext(DaxModule, DataContextInterface):
@@ -76,11 +73,11 @@ class HistogramContext(DaxModule, DataContextInterface):
     _default_dataset_key: str
     _units_fmt: UnitsFormatter
     _in_context: np.int32
-    _buffer: typing.List[typing.Sequence[_DATA_T]]
+    _buffer: typing.List[typing.Sequence[RAW_T]]
     _first_close: bool
     _plot_state_probability: bool
-    _raw_cache: typing.Dict[str, typing.List[typing.Sequence[typing.Sequence[_DATA_T]]]]
-    _histogram_cache: typing.Dict[str, typing.List[typing.Sequence[typing.Counter[_DATA_T]]]]
+    _raw_cache: typing.Dict[str, typing.List[typing.Sequence[typing.Sequence[RAW_T]]]]
+    _histogram_cache: typing.Dict[str, typing.List[typing.Sequence[typing.Counter[RAW_T]]]]
     _dataset_key: str
     _plot_base_key: str
     _plot_group_base_key: str
@@ -179,7 +176,7 @@ class HistogramContext(DaxModule, DataContextInterface):
         return bool(self._in_context)
 
     @rpc(flags={'async'})
-    def append(self, data):  # type: (typing.Sequence[_DATA_T]) -> None
+    def append(self, data):  # type: (typing.Sequence[RAW_T]) -> None
         """Append PMT data to the histogram (async RPC).
 
         This function is intended to be fast to allow high input data throughput.
@@ -291,7 +288,7 @@ class HistogramContext(DaxModule, DataContextInterface):
             self.set_dataset(archive_dataset_key, self._buffer, archive=True)
 
             # Transform buffer data to pack counts per ion and convert into histograms
-            histograms: typing.List[typing.Counter[_DATA_T]] = HistogramAnalyzer.raw_to_histograms(self._buffer)
+            histograms: typing.Sequence[typing.Counter[RAW_T]] = HistogramAnalyzer.raw_to_histograms(self._buffer)
             # Store histograms in the cache
             self._histogram_cache.setdefault(self._dataset_key, []).append(histograms)
 
@@ -331,7 +328,7 @@ class HistogramContext(DaxModule, DataContextInterface):
         # Update context counter
         self._in_context -= 1
 
-    def _histogram_to_probability(self, histogram: typing.Counter[_DATA_T],
+    def _histogram_to_probability(self, histogram: typing.Counter[RAW_T],
                                   state_detection_threshold: typing.Optional[int] = None) -> float:
         """Convert a histogram to an individual state probability.
 
@@ -505,7 +502,7 @@ class HistogramContext(DaxModule, DataContextInterface):
     """Data access functions"""
 
     @host_only
-    def get_keys(self) -> typing.List[str]:
+    def get_keys(self) -> typing.Sequence[str]:
         """Get the keys for which histogram data was recorded.
 
         The returned keys can be used for the :func:`get_raw`, :func:`get_histograms`,
@@ -517,7 +514,7 @@ class HistogramContext(DaxModule, DataContextInterface):
 
     @host_only
     def get_raw(self, dataset_key: typing.Optional[str] = None) \
-            -> typing.List[typing.Sequence[typing.Sequence[_DATA_T]]]:
+            -> typing.Sequence[typing.Sequence[typing.Sequence[RAW_T]]]:
         """Obtain the raw data captured by the histogram context for a specific key.
 
         Data is formatted as a 3-dimensional list.
@@ -533,7 +530,7 @@ class HistogramContext(DaxModule, DataContextInterface):
 
     @host_only
     def get_histograms(self, dataset_key: typing.Optional[str] = None) \
-            -> typing.List[typing.Sequence[collections.Counter]]:
+            -> typing.Sequence[typing.Sequence[typing.Counter[RAW_T]]]:
         """Obtain all histogram objects recorded by this histogram context for a specific key.
 
         The data is formatted as a list of histograms per channel.
@@ -549,7 +546,8 @@ class HistogramContext(DaxModule, DataContextInterface):
 
     @host_only
     def get_probabilities(self, dataset_key: typing.Optional[str] = None,
-                          state_detection_threshold: typing.Optional[int] = None) -> typing.List[typing.List[float]]:
+                          state_detection_threshold: typing.Optional[int] = None) \
+            -> typing.Sequence[typing.Sequence[float]]:
         """Obtain all individual state probabilities recorded by this histogram context for a specific key.
 
         The data is formatted as a list of probabilities per channel.
@@ -568,7 +566,7 @@ class HistogramContext(DaxModule, DataContextInterface):
                 for histograms in self.get_histograms(dataset_key)]
 
     @host_only
-    def get_mean_counts(self, dataset_key: typing.Optional[str] = None) -> typing.List[typing.List[float]]:
+    def get_mean_counts(self, dataset_key: typing.Optional[str] = None) -> typing.Sequence[typing.Sequence[float]]:
         """Obtain all mean counts recorded by this histogram context for a specific key.
 
         The data is formatted as a list of counts per channel.
@@ -584,7 +582,7 @@ class HistogramContext(DaxModule, DataContextInterface):
                 for histograms in self.get_histograms(dataset_key)]
 
     @host_only
-    def get_stdev_counts(self, dataset_key: typing.Optional[str] = None) -> typing.List[typing.List[float]]:
+    def get_stdev_counts(self, dataset_key: typing.Optional[str] = None) -> typing.Sequence[typing.Sequence[float]]:
         """Obtain all standard deviations of counts recorded by this histogram context for a specific key.
 
         The data is formatted as a list of standard deviations per channel.
@@ -656,8 +654,8 @@ class HistogramAnalyzer:
     """File name format for full state probability plot files."""
 
     state_detection_threshold: int
-    keys: typing.List[str]
-    histograms: typing.Dict[str, typing.List[typing.Sequence[typing.Counter[_DATA_T]]]]
+    keys: typing.Sequence[str]
+    histograms: typing.Dict[str, typing.Sequence[typing.Sequence[typing.Counter[RAW_T]]]]
     probabilities: typing.Dict[str, np.ndarray]
     mean_counts: typing.Dict[str, np.ndarray]
     stdev_counts: typing.Dict[str, np.ndarray]
@@ -757,7 +755,7 @@ class HistogramAnalyzer:
     """Helper functions"""
 
     @classmethod
-    def histogram_to_one_count(cls, counter: typing.Counter[_DATA_T], state_detection_threshold: int = -1) -> int:
+    def histogram_to_one_count(cls, counter: typing.Counter[RAW_T], state_detection_threshold: int = -1) -> int:
         """Helper function to count the number of one measurements in a histogram.
 
         This function works correct for both binary measurements and detection counts.
@@ -780,7 +778,7 @@ class HistogramAnalyzer:
             return sum(f for c, f in counter.items() if c is True or c > state_detection_threshold)
 
     @classmethod
-    def histogram_to_probability(cls, counter: typing.Counter[_DATA_T], state_detection_threshold: int = -1) -> float:
+    def histogram_to_probability(cls, counter: typing.Counter[RAW_T], state_detection_threshold: int = -1) -> float:
         """Helper function to convert a histogram to an individual state probability.
 
         Counts *greater than* the state detection threshold are considered to be in state one.
@@ -797,7 +795,7 @@ class HistogramAnalyzer:
         return one / total
 
     @classmethod
-    def histograms_to_probabilities(cls, histograms: typing.Sequence[typing.Sequence[collections.Counter]],
+    def histograms_to_probabilities(cls, histograms: typing.Sequence[typing.Sequence[typing.Counter[RAW_T]]],
                                     state_detection_threshold: int = -1) -> np.ndarray:
         """Convert histograms to individual state probabilities based on a state detection threshold.
 
@@ -817,7 +815,7 @@ class HistogramAnalyzer:
         return np.asarray(probabilities)
 
     @classmethod
-    def _histogram_to_mean_count(cls, counter: typing.Counter[_DATA_T]) -> typing.Tuple[float, int]:
+    def _histogram_to_mean_count(cls, counter: typing.Counter[RAW_T]) -> typing.Tuple[float, int]:
         """Helper function to calculate the mean count of a histogram.
 
         :param counter: The ``Counter`` object representing the histogram
@@ -828,7 +826,7 @@ class HistogramAnalyzer:
         return mean, num_samples
 
     @classmethod
-    def histogram_to_mean_count(cls, counter: typing.Counter[_DATA_T]) -> float:
+    def histogram_to_mean_count(cls, counter: typing.Counter[RAW_T]) -> float:
         """Helper function to calculate the mean count of a histogram.
 
         :param counter: The ``Counter`` object representing the histogram
@@ -838,7 +836,8 @@ class HistogramAnalyzer:
         return mean
 
     @classmethod
-    def histograms_to_mean_counts(cls, histograms: typing.Sequence[typing.Sequence[collections.Counter]]) -> np.ndarray:
+    def histograms_to_mean_counts(cls, histograms: typing.Sequence[typing.Sequence[typing.Counter[RAW_T]]]) \
+            -> np.ndarray:
         """Convert histograms to mean counts.
 
         Histograms are provided as a 2D array of ``Counter`` objects.
@@ -851,7 +850,7 @@ class HistogramAnalyzer:
         return np.asarray(counts)
 
     @classmethod
-    def histogram_to_mean_stdev_count(cls, counter: typing.Counter[_DATA_T]) -> typing.Tuple[float, float]:
+    def histogram_to_mean_stdev_count(cls, counter: typing.Counter[RAW_T]) -> typing.Tuple[float, float]:
         """Helper function to calculate the count mean and standard deviation of a histogram.
 
         This helper function is more efficient than calculating mean and standard deviation separately.
@@ -865,7 +864,7 @@ class HistogramAnalyzer:
         return mean, math.sqrt(squared_mean - mean ** 2)
 
     @classmethod
-    def histogram_to_stdev_count(cls, counter: typing.Counter[_DATA_T]) -> float:
+    def histogram_to_stdev_count(cls, counter: typing.Counter[RAW_T]) -> float:
         """Helper function to calculate the count standard deviation of a histogram.
 
         :param counter: The ``Counter`` object representing the histogram
@@ -875,7 +874,7 @@ class HistogramAnalyzer:
         return stdev
 
     @classmethod
-    def histograms_to_stdev_counts(cls, histograms: typing.Sequence[typing.Sequence[collections.Counter]]) \
+    def histograms_to_stdev_counts(cls, histograms: typing.Sequence[typing.Sequence[typing.Counter[RAW_T]]]) \
             -> np.ndarray:
         """Convert histograms to count standard deviations.
 
@@ -889,7 +888,7 @@ class HistogramAnalyzer:
         return np.asarray(counts)
 
     @classmethod
-    def counter_to_ndarray(cls, histogram: typing.Counter[_DATA_T], *,
+    def counter_to_ndarray(cls, histogram: typing.Counter[RAW_T], *,
                            max_count: typing.Optional[int] = None) -> np.ndarray:
         """Convert a histogram stored as a ``Counter`` object to an ndarray.
 
@@ -909,7 +908,7 @@ class HistogramAnalyzer:
         return np.asarray([histogram[i] for i in range(max_count + 1)])
 
     @classmethod
-    def ndarray_to_counter(cls, histogram: typing.Sequence[int]) -> collections.Counter:
+    def ndarray_to_counter(cls, histogram: typing.Sequence[int]) -> typing.Counter[RAW_T]:
         """Convert a histogram stored as an ndarray to a ``Counter`` object.
 
         Note that it is not possible to determine if arrays only contain binary measurement results,
@@ -922,7 +921,7 @@ class HistogramAnalyzer:
         return collections.Counter({i: v for i, v in enumerate(histogram) if v > 0})
 
     @classmethod
-    def raw_to_histograms(cls, raw: typing.Sequence[typing.Sequence[_DATA_T]]) -> typing.List[typing.Counter[_DATA_T]]:
+    def raw_to_histograms(cls, raw: typing.Sequence[typing.Sequence[RAW_T]]) -> typing.Sequence[typing.Counter[RAW_T]]:
         """Convert raw data to a histogram per channel.
 
         :param raw: The raw data to process, one buffer of data
@@ -931,7 +930,7 @@ class HistogramAnalyzer:
         return [collections.Counter(c) for c in zip(*raw)]
 
     @classmethod
-    def _vector_to_int(cls, vector: typing.Sequence[_DATA_T], state_detection_threshold: int) -> int:
+    def _vector_to_int(cls, vector: typing.Sequence[RAW_T], state_detection_threshold: int) -> int:
         """Convert a vector of raw counts to an integer state."""
 
         if state_detection_threshold < 0:
@@ -958,8 +957,8 @@ class HistogramAnalyzer:
         return acc
 
     @classmethod
-    def raw_to_states(cls, raw: typing.Sequence[typing.Sequence[typing.Sequence[_DATA_T]]],
-                      state_detection_threshold: int) -> typing.List[typing.List[int]]:
+    def raw_to_states(cls, raw: typing.Sequence[typing.Sequence[typing.Sequence[RAW_T]]],
+                      state_detection_threshold: int) -> typing.Sequence[typing.Sequence[int]]:
         """Convert raw data to integer states.
 
         :param raw: The raw data to process
@@ -983,8 +982,8 @@ class HistogramAnalyzer:
         return {k: v / total for k, v in counter.items()}
 
     @classmethod
-    def raw_to_state_probabilities(cls, raw: typing.Sequence[typing.Sequence[typing.Sequence[_DATA_T]]],
-                                   state_detection_threshold: int) -> typing.List[typing.Dict[int, float]]:
+    def raw_to_state_probabilities(cls, raw: typing.Sequence[typing.Sequence[typing.Sequence[RAW_T]]],
+                                   state_detection_threshold: int) -> typing.Sequence[typing.Dict[int, float]]:
         """Convert raw data into full state probabilities.
 
         :param raw: The raw data to process
@@ -996,8 +995,8 @@ class HistogramAnalyzer:
         return [cls._states_to_probabilities(states) for states in cls.raw_to_states(raw, state_detection_threshold)]
 
     @classmethod
-    def raw_to_flat_state_probability(cls, raw: typing.Sequence[typing.Sequence[_DATA_T]],
-                                      state_detection_threshold: int) -> typing.List[float]:
+    def raw_to_flat_state_probability(cls, raw: typing.Sequence[typing.Sequence[RAW_T]],
+                                      state_detection_threshold: int) -> typing.Sequence[float]:
         """Convert raw data into a flattened full state probability.
 
         :param raw: The raw data to process
@@ -1023,8 +1022,8 @@ class HistogramAnalyzer:
             return [state_probability.get(i, 0.0) for i in range(num_states)]
 
     @classmethod
-    def raw_to_flat_state_probabilities(cls, raw: typing.Sequence[typing.Sequence[typing.Sequence[_DATA_T]]],
-                                        state_detection_threshold: int) -> typing.List[typing.List[float]]:
+    def raw_to_flat_state_probabilities(cls, raw: typing.Sequence[typing.Sequence[typing.Sequence[RAW_T]]],
+                                        state_detection_threshold: int) -> typing.Sequence[typing.Sequence[float]]:
         """Convert raw data into flattened full state probabilities.
 
         :param raw: The raw data to process

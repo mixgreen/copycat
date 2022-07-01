@@ -6,7 +6,10 @@ from artiq.language import portable
 from dax.base.interface import DaxInterface
 import dax.util.artiq
 
-__all__ = ['DataContextError', 'DataContextInterface', 'validate_interface']
+__all__ = ['RAW_T', 'DataContextError', 'DataContextInterface', 'validate_interface']
+
+RAW_T = typing.Union[bool, int]
+"""Type of raw data"""
 
 
 class DataContextError(RuntimeError):
@@ -50,15 +53,28 @@ class DataContextInterface(DaxInterface, abc.ABC):
         self.close()
 
     @abc.abstractmethod
-    def get_raw(self) -> typing.Sequence[typing.Sequence[typing.Sequence[int]]]:  # pragma: no cover
+    def get_raw(self) -> typing.Sequence[typing.Sequence[typing.Sequence[RAW_T]]]:  # pragma: no cover
         """Obtain the raw data captured by the data context.
 
         **This function can only be called from the host.**
 
-        Data is formatted as a 3-dimensional list.
+        Data is formatted as a 3-dimensional sequence.
         To access the measurement of data context N of data point P of qubit C: ``get_raw()[N][P][C]``.
 
         :return: Raw measurement data
+        """
+        pass
+
+    @abc.abstractmethod
+    def get_histograms(self) -> typing.Sequence[typing.Sequence[typing.Counter[RAW_T]]]:  # pragma: no cover
+        """Obtain all histogram objects recorded by this data context.
+
+        **This function can only be called from the host.**
+
+        The data is formatted as a sequence of histograms per channel.
+        So to access histogram N of channel C: ``get_histograms()[C][N]``.
+
+        :return: All histogram data
         """
         pass
 
@@ -79,7 +95,7 @@ def validate_interface(data_context: DataContextInterface) -> bool:
         raise TypeError(f'The following functions can not be host only: {", ".join(not_host_only_fn)}')
 
     # Validate host only functions
-    host_only_fn: typing.Set[str] = {'get_raw'}
+    host_only_fn: typing.Set[str] = {'get_raw', 'get_histograms'}
     if not all(dax.util.artiq.is_host_only(getattr(data_context, fn, None)) for fn in host_only_fn):
         raise TypeError(f'The following functions must be host only: {", ".join(host_only_fn)}')
 

@@ -27,6 +27,7 @@ from dax.experiment import *
 from dax.modules.hist_context import HistogramContext, HistogramAnalyzer
 from dax.interfaces.operation import OperationInterface
 from dax.interfaces.gate import GateInterface
+from dax.interfaces.data_context import DataContextInterface
 from dax.util.artiq import is_kernel, default_enumeration_value
 from dax.util.output import get_base_path
 
@@ -97,9 +98,9 @@ class _PygstiSingleQubitClientBase(DaxClient, Experiment):
         self._operation_interfaces = self.registry.search_interfaces(OperationInterface)  # type: ignore[misc]
         if not self._operation_interfaces:
             raise LookupError('No operation interfaces were found')
-        self._histogram_contexts = self.registry.search_modules(HistogramContext)
-        if not self._histogram_contexts:
-            raise LookupError('No histogram contexts were found')
+        self._data_contexts = self.registry.search_interfaces(DataContextInterface)  # type: ignore[misc]
+        if not self._data_contexts:
+            raise LookupError('No histogram/data contexts were found')
 
         # Calculate available circuit depths
         # Note: PyGSTi Clifford RB has an inverse circuit, which can double the number of gates per circuit,
@@ -117,10 +118,10 @@ class _PygstiSingleQubitClientBase(DaxClient, Experiment):
             default_enumeration_value(sorted(self._operation_interfaces), default=self.DEFAULT_OPERATION_KEY),
             tooltip='The operation interface to use'
         )
-        self._histogram_context_key: str = self.get_argument(
+        self._data_context_key: str = self.get_argument(
             'Histogram context',
-            default_enumeration_value(sorted(self._histogram_contexts)),
-            tooltip='The histogram context to use'
+            default_enumeration_value(sorted(self._data_contexts)),
+            tooltip='The histogram/data context to use'
         )
         self._max_depth: str = self.get_argument(
             'Max depth',
@@ -221,7 +222,7 @@ class _PygstiSingleQubitClientBase(DaxClient, Experiment):
         self.set_dataset('pygsti_version', pygsti_version)
         self.set_dataset('protocol_type', self._protocol_type)
         self.set_dataset('operation_interface_key', self._operation_interface_key)
-        self.set_dataset('histogram_context_key', self._histogram_context_key)
+        self.set_dataset('data_context_key', self._data_context_key)
         self.set_dataset('max_depth', self._max_depth)
         self.set_dataset('num_samples', self._num_samples)
         self.set_dataset('target_qubit', self._target_qubit)
@@ -230,8 +231,8 @@ class _PygstiSingleQubitClientBase(DaxClient, Experiment):
 
         # Obtain system components
         self._operation = self._operation_interfaces[self._operation_interface_key]
-        self._histogram_context = self._histogram_contexts[self._histogram_context_key]
-        self.update_kernel_invariants('_operation', '_histogram_context')
+        self._data_context = self._data_contexts[self._data_context_key]
+        self.update_kernel_invariants('_operation', '_data_context')
 
         # Get the scheduler
         self._scheduler = self.get_device('scheduler')
@@ -292,12 +293,15 @@ class _PygstiSingleQubitClientBase(DaxClient, Experiment):
         # Set realtime
         self._operation.set_realtime(self._real_time)
 
-        # Enable plots
-        if self._plot_histograms:
-            self._histogram_context.plot_histogram(x_label='State')
-        if self._plot_probability:
-            # Mean counts will show the same as the probability plot (plus error bars) due to binary measurements
-            self._histogram_context.plot_mean_count(x_label='Circuit', y_label='State')
+        if isinstance(self._data_context, HistogramContext):
+            # Enable plots
+            if self._plot_histograms:
+                self._data_context.plot_histogram(x_label='State')
+            if self._plot_probability:
+                # Mean counts will show the same as the probability plot (plus error bars) due to binary measurements
+                self._data_context.plot_mean_count(x_label='Circuit', y_label='State')
+        elif self._plot_histograms or self._plot_probability:
+            self.logger.warning('Cannot enable real-time plots, requires a histogram context')
 
         try:
             # Perform host setup
@@ -337,7 +341,7 @@ class _PygstiSingleQubitClientBase(DaxClient, Experiment):
                 # Message user
                 self._circuit_msg()
 
-                with self._histogram_context:
+                with self._data_context:
                     # Schedule two circuits to improve performance (pipelining)
                     self._run_circuit(circuit)
 
@@ -387,13 +391,13 @@ class _PygstiSingleQubitClientBase(DaxClient, Experiment):
         self._circuit_count += 1
 
     def analyze(self) -> None:
-        # Create Histogram Analyzer
-        h = HistogramAnalyzer(self._histogram_context)
+        # Get histograms
+        histograms = self._data_context.get_histograms()
 
         # Create pyGSTi dataset
         dataset = pygsti.data.DataSet(outcome_labels=['0', '1'])
         for i, circuit in enumerate(self._exp_design.all_circuits_needing_data):
-            one = HistogramAnalyzer.histogram_to_one_count(h.histograms['histogram'][self._target_qubit][i])
+            one = HistogramAnalyzer.histogram_to_one_count(histograms[self._target_qubit][i])
             dataset.add_count_dict(circuit, {'0': self._num_samples - one, '1': one})
         dataset.done_adding_data()
         protocol_data = pygsti.protocols.ProtocolData(self._exp_design, dataset)
@@ -406,8 +410,12 @@ class _PygstiSingleQubitClientBase(DaxClient, Experiment):
 
         # Save plots
         if self._save_probability:
-            # Mean counts will show the same as the probability plot (plus error bars) due to binary measurements
-            h.plot_all_mean_counts(x_label='Circuit', y_label='State')
+            if isinstance(self._data_context, HistogramContext):
+                # Mean counts will show the same as the probability plot (plus error bars) due to binary measurements
+                h = HistogramAnalyzer(self._data_context)
+                h.plot_all_mean_counts(x_label='Circuit', y_label='State')
+            else:
+                self.logger.warning('Cannot save probability graphs, requires a histogram context')
 
         # noinspection PyBroadException
         try:
@@ -477,8 +485,7 @@ class RandomizedBenchmarkingSQ(_PygstiSingleQubitClientBase):
     To use this client, a system needs to have the following components available:
 
     - At least one :class:`OperationInterface`
-    - A :class:`DetectionInterface`
-    - A :class:`HistogramContext` that functions as a data context for the :class:`OperationInterface`
+    - A :class:`HistogramContext` or :class:`DataContextInterface`
 
     This class can be customized by overriding the :func:`add_arguments`,
     :func:`device_setup`, :func:`device_cleanup`, :func:`host_setup`, and :func:`host_cleanup` functions.
@@ -602,8 +609,7 @@ class GateSetTomographySQ(_PygstiSingleQubitClientBase):
     To use this client, a system needs to have the following components available:
 
     - At least one :class:`OperationInterface`
-    - A :class:`DetectionInterface`
-    - A :class:`HistogramContext` that functions as a data context for the :class:`OperationInterface`
+    - A :class:`HistogramContext` or :class:`DataContextInterface`
 
     This class can be customized by overriding the :func:`add_arguments`,
     :func:`device_setup`, :func:`device_cleanup`, :func:`host_setup`, and :func:`host_cleanup` functions.
