@@ -7,7 +7,7 @@ import pathlib
 import numpy as np
 
 from dax.experiment import *
-from trap_dac_utils.reader import BaseReader, SpecialCharacter, SOLUTION_T
+from trap_dac_utils.reader import BaseReader, SpecialCharacter, SOLUTION_T, MAP_T
 
 import artiq.coredevice.zotino  # type: ignore[import]
 import artiq.coredevice.ad53xx  # type: ignore[import]
@@ -91,7 +91,7 @@ class TrapDcModule(DaxModule):
         # https://m-labs.hk/artiq/manual/_modules/artiq/coredevice/ad53xx.html#AD53xx
         self._min_line_delay_mu = np.int64(self.core.seconds_to_mu(1500 * ns)
                                            + 2 * self._zotino.bus.ref_period_mu
-                                           + len(self._reader._list_map_labels())
+                                           + len(self._reader.list_map_labels())
                                            * self._zotino.bus.xfer_duration_mu)
         self.update_kernel_invariants('_min_line_delay_mu')
         self._reader.init(self._zotino)
@@ -464,7 +464,7 @@ class TrapDcModule(DaxModule):
         Each configuration is set if and only if the argument is passed in and is not None
         All original values were calculated from benchmarking
 
-        :param dma_startup_time: The time it takes for DMA to start up in (s)
+        :param dma_startup_time_mu: The time it takes for DMA to start up in (s)
         :param comm_delay_intercept_mu: The intercept of the linear communication time between
             artiq and the kernel as a function of total channels
         :param comm_delay_slope_mu: The slope of the linear communication time between
@@ -732,8 +732,7 @@ class ZotinoReader(BaseReader[_ZOTINO_SOLUTION_T]):
 
     @host_only
     def _simplify_map(self,
-                      channel_map: typing.Sequence[typing.Dict[str,
-                                                               str]]) -> typing.Dict[str, str]:
+                      channel_map: MAP_T) -> typing.Mapping[str, str]:
         """Convert the map from a list of dictionaries to just a single dictionary where the key is the label
 
         This representation is more useful to parse the solution file with for a Zotino
