@@ -936,25 +936,12 @@ class HistogramAnalyzer:
         if state_detection_threshold < 0:
             if not all(isinstance(c, (bool, np.bool_)) for c in vector):
                 raise TypeError('All measurements must be binary when no state detection threshold is given')
-
-            # Make vector binary
-            bitvector: typing.Sequence[bool] = typing.cast(typing.Sequence[bool], vector)
-
         else:
             # Make vector binary
-            bitvector = [count is True or count > state_detection_threshold for count in vector]
+            vector = [count is True or count > state_detection_threshold for count in vector]
 
-        # Accumulated result
-        acc: int = 0
-
-        for bit in reversed(bitvector):
-            # Shift accumulator
-            acc <<= 1
-            # Add bit
-            acc |= bit
-
-        # Return the accumulated result
-        return acc
+        # Return bool vector as an int
+        return sum(bit << i for i, bit in enumerate(vector))
 
     @classmethod
     def raw_to_states(cls, raw: typing.Sequence[typing.Sequence[typing.Sequence[RAW_T]]],
