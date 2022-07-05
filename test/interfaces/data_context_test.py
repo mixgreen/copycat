@@ -1,6 +1,7 @@
 import unittest
 import unittest.mock
 import inspect
+import collections
 
 from artiq.language.core import rpc, portable, host_only
 
@@ -30,9 +31,13 @@ class DataContextInstance(dax.interfaces.data_context.DataContextInterface):
     def get_raw(self):
         return [[[]]]
 
+    @host_only
+    def get_histograms(self):
+        return [[collections.Counter()]]
+
 
 class DataContextInterfaceTestCase(unittest.TestCase):
-    HOST_ONLY_FN = {'get_raw'}
+    HOST_ONLY_FN = {'get_raw', 'get_histograms'}
     NOT_HOST_ONLY_FN = {n for n, _ in inspect.getmembers(DataContextInstance, inspect.isfunction)
                         if not n.startswith('_') or n in {'__enter__', '__exit__'}} - HOST_ONLY_FN
 

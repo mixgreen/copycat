@@ -32,21 +32,21 @@ class TimeResolvedContextError(RuntimeError):
 @typing.overload
 def _partition_bins(num_bins: int, max_partition_size: int,
                     bin_width: np.int64, bin_spacing: np.int64,
-                    *, ceil: bool) -> typing.List[typing.Tuple[np.int32, np.int64]]:
+                    *, ceil: bool) -> typing.Sequence[typing.Tuple[np.int32, np.int64]]:
     ...
 
 
 @typing.overload
 def _partition_bins(num_bins: int, max_partition_size: int,
                     bin_width: float, bin_spacing: float,
-                    *, ceil: bool) -> typing.List[typing.Tuple[np.int32, float]]:
+                    *, ceil: bool) -> typing.Sequence[typing.Tuple[np.int32, float]]:
     ...
 
 
 def _partition_bins(num_bins: typing.Union[int, np.int32], max_partition_size: typing.Union[int, np.int32],
                     bin_width: typing.Union[float, np.int64], bin_spacing: typing.Union[float, np.int64], *,
-                    ceil: bool) -> typing.List[typing.Tuple[np.int32, typing.Any]]:
-    """Generic helper function function for partitioning bins."""
+                    ceil: bool) -> typing.Sequence[typing.Tuple[np.int32, typing.Any]]:
+    """Generic helper function for partitioning bins."""
     assert isinstance(num_bins, (int, np.int32)), 'Number of bins must be an integer'
     assert isinstance(max_partition_size, (int, np.int32)), 'Max partition size must be an integer'
     assert isinstance(bin_width, (float, np.int64)), 'Bin width must be of type float or np.int64'
@@ -206,7 +206,7 @@ class TimeResolvedContext(DaxModule):
     @host_only
     def partition_bins(cls, num_bins: typing.Union[int, np.int32], max_partition_size: typing.Union[int, np.int32],
                        bin_width: float, bin_spacing: float,
-                       *, ceil: bool = False) -> typing.List[typing.Tuple[np.int32, float]]:
+                       *, ceil: bool = False) -> typing.Sequence[typing.Tuple[np.int32, float]]:
         """Partition a number of bins.
 
         This function returns a list of tuples that can be used at runtime for partitioning in a loop.
@@ -219,7 +219,7 @@ class TimeResolvedContext(DaxModule):
         :param bin_width: The width of each bin
         :param bin_spacing: The spacing between bins
         :param ceil: Round last window size up to a full window
-        :return: A list with tuples that can be used for automatic partitioning at runtime
+        :return: A sequence with tuples that can be used for automatic partitioning at runtime
         """
         assert isinstance(bin_width, float), 'Bin width must be of type float'
         assert isinstance(bin_spacing, float), 'Bin spacing must be of type float'
@@ -231,7 +231,7 @@ class TimeResolvedContext(DaxModule):
     @host_only
     def partition_bins_mu(cls, num_bins: typing.Union[int, np.int32], max_partition_size: typing.Union[int, np.int32],
                           bin_width: _TIME_MU_T, bin_spacing: _TIME_MU_T, *,
-                          ceil: bool = False) -> typing.List[typing.Tuple[np.int32, np.int64]]:
+                          ceil: bool = False) -> typing.Sequence[typing.Tuple[np.int32, np.int64]]:
         """Partition a number of bins.
 
         This function returns a list of tuples that can be used at runtime for partitioning in a loop.
@@ -244,7 +244,7 @@ class TimeResolvedContext(DaxModule):
         :param bin_width: The width of each bin in machine units
         :param bin_spacing: The spacing between bins in machine units
         :param ceil: Round last window size up to a full window
-        :return: A list with tuples that can be used for automatic partitioning at runtime
+        :return: A sequence with tuples that can be used for automatic partitioning at runtime
         """
         assert isinstance(bin_width, (int, np.int32, np.int64)), 'Bin width must be an integer'
         assert isinstance(bin_spacing, (int, np.int32, np.int64)), 'Bin spacing must be an integer'
@@ -256,7 +256,7 @@ class TimeResolvedContext(DaxModule):
     @host_only
     def partition_window(cls, window_size: float, max_partition_size: typing.Union[int, np.int32],
                          bin_width: float, bin_spacing: float, *,
-                         ceil: bool = False) -> typing.List[typing.Tuple[np.int32, float]]:
+                         ceil: bool = False) -> typing.Sequence[typing.Tuple[np.int32, float]]:
         """Partition a time window.
 
         This function returns a list of tuples that can be used at runtime for partitioning in a loop.
@@ -269,7 +269,7 @@ class TimeResolvedContext(DaxModule):
         :param bin_width: The width of each bin
         :param bin_spacing: The spacing between bins
         :param ceil: Round last window size up to a full window
-        :return: A list with tuples that can be used for automatic partitioning at runtime
+        :return: A sequence with tuples that can be used for automatic partitioning at runtime
         """
         assert isinstance(bin_width, float), 'Bin width must be of type float'
         assert isinstance(bin_spacing, float), 'Bin spacing must be of type float'
@@ -283,7 +283,7 @@ class TimeResolvedContext(DaxModule):
     @host_only
     def partition_window_mu(cls, window_size: np.int64, max_partition_size: typing.Union[int, np.int32],
                             bin_width: np.int64, bin_spacing: np.int64,
-                            *, ceil: bool = False) -> typing.List[typing.Tuple[np.int32, np.int64]]:
+                            *, ceil: bool = False) -> typing.Sequence[typing.Tuple[np.int32, np.int64]]:
         """Partition a time window.
 
         This function returns a list of tuples that can be used at runtime for partitioning in a loop.
@@ -296,7 +296,7 @@ class TimeResolvedContext(DaxModule):
         :param bin_width: The width of each bin in machine units
         :param bin_spacing: The spacing between bins in machine units
         :param ceil: Round last window size up to a full window
-        :return: A list with tuples that can be used for automatic partitioning at runtime
+        :return: A sequence with tuples that can be used for automatic partitioning at runtime
         """
         assert isinstance(bin_width, (int, np.int32, np.int64)), 'Bin width must be an integer'
         assert isinstance(bin_spacing, (int, np.int32, np.int64)), 'Bin spacing must be an integer'
@@ -624,7 +624,7 @@ class TimeResolvedContext(DaxModule):
     """Data access functions"""
 
     @host_only
-    def get_keys(self) -> typing.List[str]:
+    def get_keys(self) -> typing.Sequence[str]:
         """Get the keys for which results were recorded.
 
         The returned keys can be used for the :func:`get_traces` function.
@@ -634,7 +634,7 @@ class TimeResolvedContext(DaxModule):
         return natsort.natsorted(self._cache)
 
     @host_only
-    def get_traces(self, dataset_key: typing.Optional[str] = None) -> typing.List[_TD_T]:
+    def get_traces(self, dataset_key: typing.Optional[str] = None) -> typing.Sequence[_TD_T]:
         """Obtain all trace objects recorded by this time-resolved context for a specific key.
 
         The data is formatted as a list of dictionaries with the self-explaining keys
@@ -670,6 +670,9 @@ class TimeResolvedAnalyzer:
     PLOT_FILE_FORMAT: typing.ClassVar[str] = '{key}_{index}'
     """File name format for plot files."""
 
+    keys: typing.Sequence[str]
+    traces: typing.Dict[str, typing.Sequence[_TD_T]]
+
     def __init__(self, source: typing.Union[DaxSystem, TimeResolvedContext, str, h5py.File], *,
                  hdf5_group: typing.Optional[str] = None):
         """Create a new time resolved analyzer object.
@@ -689,8 +692,8 @@ class TimeResolvedAnalyzer:
 
         if isinstance(source, TimeResolvedContext):
             # Get data from module
-            self.keys: typing.List[str] = source.get_keys()
-            self.traces: typing.Dict[str, typing.List[_TD_T]] = {k: source.get_traces(k) for k in self.keys}
+            self.keys = source.get_keys()
+            self.traces = {k: source.get_traces(k) for k in self.keys}
 
             # Obtain the file name generator
             self._file_name_generator: BaseFileNameGenerator = FileNameGenerator(source.get_device('scheduler'))
