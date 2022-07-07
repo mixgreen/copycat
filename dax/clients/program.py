@@ -1,7 +1,5 @@
 import typing
 import types
-import os.path
-import shutil
 import shlex
 import argparse
 
@@ -13,14 +11,11 @@ from dax.experiment import DaxClient, dax_client_factory, Experiment, StringValu
 import dax.base.program
 import dax.util.artiq
 import dax.util.output
+import dax.util.loader
 import dax.interfaces.operation
 import dax.interfaces.data_context
 
 __all__ = ['ProgramClient']
-
-
-def _import_file(file_name: str) -> types.ModuleType:
-    return artiq.tools.file_import(file_name, prefix='dax_program_client_')
 
 
 @dax_client_factory
@@ -101,7 +96,8 @@ class ProgramClient(DaxClient, Experiment):
 
     def prepare(self) -> None:
         # Load the module
-        module: types.ModuleType = self._load_module()
+        self.logger.debug(f'Loading program "{self._file}"')
+        module: types.ModuleType = dax.util.loader.load_module(self._file, prefix='dax_program_client_')
 
         # Obtain class
         self.logger.debug('Loading program class%s', f' "{self._class}"' if self._class else '')
@@ -139,6 +135,7 @@ class ProgramClient(DaxClient, Experiment):
         # Build the program
         self.logger.info(f'Building program "{self._class}"')
         self._managers = self._get_managers(arguments=arguments)
+        # noinspection PyArgumentList
         self._program = program_cls(
             self._managers,
             core=self.core,
@@ -182,27 +179,6 @@ class ProgramClient(DaxClient, Experiment):
         finally:
             # Write HDF5 file
             self._write_hdf5_file()
-
-    def _load_module(self) -> types.ModuleType:
-        # Expand and check path
-        file_name = os.path.expanduser(self._file)
-        if not os.path.isfile(file_name):
-            raise FileNotFoundError(f'No such file or path is a directory: "{file_name}"')
-
-        if self._file.endswith('.py'):
-            # Load file/module
-            self.logger.debug(f'Loading program file "{file_name}"')
-            return _import_file(file_name)
-        else:
-            # We assume that we are dealing with an archive
-            self.logger.debug(f'Unpacking and loading program archive "{file_name}"')
-            with dax.util.output.temp_dir() as temp_dir:
-                # Unpack archive
-                shutil.unpack_archive(file_name, extract_dir=temp_dir)  # Raises exception if format is not recognized
-                unpacked_file_name = os.path.join(temp_dir, 'main.py')
-                if not os.path.isfile(unpacked_file_name):
-                    raise FileNotFoundError(f'Archive "{file_name}" does not contain a main.py file')
-                return _import_file(unpacked_file_name)
 
     def _get_managers(self, *, name: str = 'program',
                       arguments: typing.Dict[str, typing.Any]) -> dax.util.artiq.ManagersTuple:
