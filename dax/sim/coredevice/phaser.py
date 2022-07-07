@@ -19,7 +19,14 @@ class Phaser(DaxSimDevice):
 
     # noinspection PyUnusedLocal
     def __init__(self, dmgr, channel_base, miso_delay=1, tune_fifo_offset=True,
-                 clk_sel=0, sync_dly=0, dac=None, trf0=None, trf1=None, **kwargs):
+                 clk_sel=0, sync_dly=0, dac=None, trf0=None, trf1=None, *, is_baseband=True, **kwargs):
+        """Simulated driver for :class:`artiq.coredevice.phaser.Phaser`.
+
+        :param is_baseband: Flag to distinguish between the baseband (``True``) and upconverter (``False``) hardware
+            variants. If set to ``False``, signals will be added for the two
+            :class:`artiq.coredevice.trf372017.TRF372017` oscillator frequencies as well as the TRF power-save pins.
+            Defaults to ``True``.
+        """
         super(Phaser, self).__init__(dmgr, **kwargs)
         self.channel_base = channel_base
         self.miso_delay = miso_delay
@@ -31,6 +38,7 @@ class Phaser(DaxSimDevice):
         self.tune_fifo_offset = tune_fifo_offset
         self.sync_dly = sync_dly
         self.dac_mmap = DAC34H84(dac).get_mmap()
+        self.is_baseband = is_baseband
         self.channel: List[PhaserChannel] = [
             PhaserChannel(self, ch, trf)
             for ch, trf in enumerate([trf0, trf1])
@@ -70,8 +78,6 @@ class Phaser(DaxSimDevice):
 
         # hw_rev = self.read8(PHASER_ADDR_HW_REV)
         delay(.1 * ms)  # slack
-        # todo: if this is the only way to distinguish between baseband/upconverter variants then I'm not sure
-        #  how to decide how long this method takes (there's a `continue` based on variant in the loop below)
         # is_baseband = hw_rev & PHASER_HW_REV_VARIANT
 
         # gw_rev = self.read8(PHASER_ADDR_GW_REV)
@@ -236,9 +242,8 @@ class Phaser(DaxSimDevice):
             # if data_i < sqrt2 - 30 or data_i > sqrt2 or abs(data_i - data_q) > 2:
             #     raise ValueError("DUC+oscillator phase/amplitude test failed")
 
-            # todo: re: todo from above
-            # if is_baseband:
-            #     continue
+            if self.is_baseband:
+                continue
 
             # if channel.trf_read(0) & 0x7f != 0x68:
             #     raise ValueError("TRF identification failed")
@@ -256,7 +261,11 @@ class Phaser(DaxSimDevice):
             # if channel.trf_read(0) & 0x1000:
             #     raise ValueError("TRF R_SAT_ERR")
             delay(.1 * ms)
-            # channel.en_trf_out()
+            if ARTIQ_MAJOR_VERSION >= 7:
+                channel.en_trf_out()
+            else:
+                # noinspection PyProtectedMember
+                channel._push_trf_freq()
 
         # enable dac tx
         self.set_cfg(clk_sel=self.clk_sel)
@@ -428,7 +437,8 @@ class PhaserChannel:
     def __init__(self, phaser, index, trf):
         self.phaser = phaser
         self.index = index
-        self.trf_mmap = TRF372017(trf).get_mmap()
+        self._trf = TRF372017(trf)
+        self.trf_mmap = self._trf.get_mmap()
         self.oscillator = [PhaserOscillator(self, osc) for osc in range(5)]
         # not present in the ARTIQ driver (although it probably should be), but kernel decorators fail without it
         self.core = self.phaser.core
@@ -441,6 +451,30 @@ class PhaserChannel:
         self._nco_freq = signal_manager.register(phaser, f'{key_base}_nco_freq', float)
         self._nco_phase = signal_manager.register(phaser, f'{key_base}_nco_phase', float)
         self._att = signal_manager.register(phaser, f'{key_base}_att', float)
+        if not phaser.is_baseband:
+            self._trf_freq = signal_manager.register(phaser, f'{key_base}_trf_freq', float)
+
+    @rpc
+    def _get_trf_freq(self):
+        # see https://www.ti.com/lit/gpn/trf372017
+        # assumptions:
+        #  - VCOSEL_MODE, CAL_BYPASS == 0 (or the correct VCO was chosen if done manually)
+        #  - no external VCO or clock
+        #  - that the below register settings are actually valid and satisfy the constraints of the PLL
+        #    (see e.g. eq. 5)
+        #  - ignoring LO output
+        #  - not accounting for the mixing with BBI/Q from the DAC
+        f_ref = 125 * MHz  # from Kasli
+        rdiv = self._trf.rdiv
+        f_pfd = f_ref / rdiv
+        # table 17
+        pll_div = {0b00: 1, 0b01: 2, 0b10: 4}[self._trf.pll_div_sel]
+        nint = self._trf.nint if ARTIQ_MAJOR_VERSION >= 7 else self._trf.ndiv
+        # eq. 1
+        f_vco = f_pfd * pll_div * (nint + (self._trf.nfrac / 2 ** 25 if self._trf.en_frac else 0))
+        # table 25
+        tx_div = [1, 2, 4, 8][self._trf.tx_div_sel]
+        return f_vco / tx_div
 
     @kernel
     def get_dac_data(self) -> TInt32:
@@ -531,14 +565,20 @@ class PhaserChannel:
     def trf_read(self, addr, cnt_mux_sel=0) -> TInt32:
         raise NotImplementedError
 
-    if ARTIQ_MAJOR_VERSION >= 7:
+    if ARTIQ_MAJOR_VERSION >= 7:  # pragma: nocover
         @kernel
         def cal_trf_vco(self):
             raise NotImplementedError
 
         @kernel
         def en_trf_out(self, rf=1, lo=0):
-            raise NotImplementedError
+            assert lo == 0, 'LO output not supported'
+            self._trf_freq.push(self._get_trf_freq() if rf else 'x')
+    else:
+        # not pretty, but need some way to set the TRF freq in Phaser.init
+        @kernel
+        def _push_trf_freq(self):
+            self._trf_freq.push(self._get_trf_freq())
 
 
 class PhaserOscillator:
