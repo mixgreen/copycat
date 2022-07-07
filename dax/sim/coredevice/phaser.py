@@ -5,7 +5,7 @@
 from typing import List
 from numpy import int32, int64
 
-from artiq.language.core import kernel, delay_mu, delay, now_mu
+from artiq.language.core import kernel, delay_mu, delay, now_mu, rpc
 from artiq.language.units import ns, us, ms, MHz, dB
 from artiq.language.types import TInt32
 from artiq.coredevice.dac34h84 import DAC34H84  # type: ignore
@@ -25,7 +25,7 @@ class Phaser(DaxSimDevice):
         self.miso_delay = miso_delay
         assert self.core.ref_period == 1 * ns
         self.t_frame = 10 * 8 * 4
-        if ARTIQ_MAJOR_VERSION >= 7:
+        if ARTIQ_MAJOR_VERSION >= 7:  # pragma: nocover
             self.frame_tstamp = int64(0)
         self.clk_sel = clk_sel
         self.tune_fifo_offset = tune_fifo_offset
@@ -38,19 +38,31 @@ class Phaser(DaxSimDevice):
 
         # register signals
         signal_manager = get_signal_manager()
-        self._leds = signal_manager.register(self, 'leds', str)  # bit/bool vector
+        self._leds = signal_manager.register(self, 'leds', bool, size=6)
         self._fan = signal_manager.register(self, 'fan', float)  # fan duty cycle
         # configuration pins
-        self._dac_sleep = signal_manager.register(self, 'dac_sleep', bool, init=0)
-        self._trf0_ps = signal_manager.register(self, 'trf0_ps', bool, init=0)
-        self._trf1_ps = signal_manager.register(self, 'trf1_ps', bool, init=0)
-        self._att_rstn = [signal_manager.register(self, f'att{i}_rstn', bool, init=1) for i in range(2)]  # active low
+        self._dac_sleep = signal_manager.register(self, 'dac_sleep', bool, size=1, init=0)
+        if not is_baseband:
+            self._trf_ps = [
+                signal_manager.register(self, f'trf{i}_ps', bool, size=1, init=0)
+                for i in range(len(self.channel))
+            ]
+        self._att_rstn = [
+            signal_manager.register(self, f'att{i}_rstn', bool, size=1, init=1)
+            for i in range(len(self.channel))
+        ]  # active low
         # DAC coarse mixer frequency
         self._dac_cmix = signal_manager.register(self, 'dac_cmix', float)
 
     @kernel
-    def init(self, debug=False):  # noqa: C901
+    def init(self, debug=False):
+        # workaround to avoid compiler errors for the `if ARTIQ_MAJOR_VERSION >= 7:` function calls
+        self._init(debug=debug)
+
+    @rpc
+    def _init(self, debug=False):  # noqa: C901
         # copied from ARTIQ with unsupported methods commented out
+
         # board_id = self.read8(PHASER_ADDR_BOARD_ID)
         # if board_id != PHASER_BOARD_ID:
         #     raise ValueError("invalid board id")
@@ -73,11 +85,12 @@ class Phaser(DaxSimDevice):
         #     raise ValueError("large number of frame CRC errors")
         delay(.1 * ms)  # slack
 
-        # determine the origin for frame-aligned timestamps
-        self.measure_frame_timestamp()
-        if self.frame_tstamp < 0:
-            raise ValueError("frame timestamp measurement timed out")
-        delay(.1 * ms)
+        if ARTIQ_MAJOR_VERSION >= 7:  # pragma: nocover
+            # determine the origin for frame-aligned timestamps
+            self.measure_frame_timestamp()
+            if self.frame_tstamp < 0:
+                raise ValueError("frame timestamp measurement timed out")
+            delay(.1 * ms)
 
         # reset
         self.set_cfg(dac_resetb=0, dac_sleep=1, dac_txena=0,
@@ -112,12 +125,14 @@ class Phaser(DaxSimDevice):
         if t < 10 or t > 90:
             raise ValueError("DAC temperature out of bounds")
 
-        for data in self.dac_mmap:
+        for _ in self.dac_mmap:
             # self.dac_write(data >> 16, data)
             self._dac_write_delay()
             delay(40 * us)
-        self.dac_sync()
-        delay(40 * us)
+
+        if ARTIQ_MAJOR_VERSION >= 7:  # pragma: nocover
+            self.dac_sync()
+            delay(40 * us)
 
         # pll_ndivsync_ena disable
         # config18 = self.dac_read(0x18)
@@ -173,13 +188,15 @@ class Phaser(DaxSimDevice):
         # self.dac_write(self.dac_mmap[2] >> 16, self.dac_mmap[2] | (1 << 4))
         self._dac_write_delay()
         delay(40 * us)
-        self.dac_sync()
-        delay(100 * us)
+        if ARTIQ_MAJOR_VERSION >= 7:  # pragma: nocover
+            self.dac_sync()
+            delay(100 * us)
         # self.dac_write(self.dac_mmap[2] >> 16, self.dac_mmap[2])
         self._dac_write_delay()
         delay(40 * us)
-        self.dac_sync()
-        delay(100 * us)
+        if ARTIQ_MAJOR_VERSION >= 7:  # pragma: nocover
+            self.dac_sync()
+            delay(100 * us)
 
         # power up trfs, release att reset
         self.set_cfg(clk_sel=self.clk_sel, dac_txena=0)
@@ -262,6 +279,10 @@ class Phaser(DaxSimDevice):
 
     @kernel
     def set_leds(self, leds):
+        self._set_leds(leds)
+
+    @rpc
+    def _set_leds(self, leds):
         self._leds.push(f'{leds & 0x3f:06b}')  # 6 bits
 
     @kernel
@@ -277,16 +298,22 @@ class Phaser(DaxSimDevice):
     @kernel
     def set_cfg(self, clk_sel=0, dac_resetb=1, dac_sleep=0, dac_txena=1,
                 trf0_ps=0, trf1_ps=0, att0_rstn=1, att1_rstn=1):
+        self._set_cfg(clk_sel, dac_resetb, dac_sleep, dac_txena, trf0_ps, trf1_ps, att0_rstn, att1_rstn)
+
+    # noinspection PyUnusedLocal
+    @rpc
+    def _set_cfg(self, clk_sel=0, dac_resetb=1, dac_sleep=0, dac_txena=1,
+                 trf0_ps=0, trf1_ps=0, att0_rstn=1, att1_rstn=1):
         self._dac_sleep.push(dac_sleep)
-        self._trf0_ps.push(trf0_ps)
-        self._trf1_ps.push(trf1_ps)
-        for ch, att_rstn in enumerate([att0_rstn, att1_rstn]):
+        for ch, (att_rstn, trf_ps) in enumerate([(att0_rstn, trf0_ps), (att1_rstn, trf1_ps)]):
+            if not self.is_baseband:
+                self._trf_ps[ch].push(trf_ps)
             # set channel attenuation to zero on release
             # todo: it's unclear if the reset should be on falling or rising (release) edge
             released = self._att_rstn[ch].pull() == 0 and att_rstn == 1
             self._att_rstn[ch].push(att_rstn)
             if released:
-                self.channel[ch].set_att(0)
+                self.channel[ch].set_att(0.)
 
     @kernel
     def get_sta(self):
@@ -296,7 +323,7 @@ class Phaser(DaxSimDevice):
     def get_crc_err(self):
         raise NotImplementedError
 
-    if ARTIQ_MAJOR_VERSION >= 7:
+    if ARTIQ_MAJOR_VERSION >= 7:  # pragma: nocover
         @kernel
         def measure_frame_timestamp(self):
             # todo: basically assumes zero latency, not sure if that's okay.
@@ -361,7 +388,7 @@ class Phaser(DaxSimDevice):
         self._dac_read_delay()  # type: ignore
         return int32(30)  # 30 degrees C seems reasonable?
 
-    if ARTIQ_MAJOR_VERSION >= 7:
+    if ARTIQ_MAJOR_VERSION >= 7:  # pragma: nocover
         @kernel
         def dac_sync(self):
             # just mimic the delay
@@ -403,6 +430,8 @@ class PhaserChannel:
         self.index = index
         self.trf_mmap = TRF372017(trf).get_mmap()
         self.oscillator = [PhaserOscillator(self, osc) for osc in range(5)]
+        # not present in the ARTIQ driver (although it probably should be), but kernel decorators fail without it
+        self.core = self.phaser.core
 
         # register signals
         signal_manager = get_signal_manager()
@@ -466,11 +495,13 @@ class PhaserChannel:
 
     @kernel
     def set_att(self, att):
+        self._set_att(att)
+
+    @rpc
+    def _set_att(self, att):
         # noinspection PyProtectedMember
-        assert self.phaser._att_rstn[self.index] == 1, 'Tried to set channel attenuation with reset pin active'
-        if att < 0 or att > 31.5 * dB:
-            # technically the ARTIQ set_att will allow you to provide an att up to
-            # 31.875 dB, but the docstring says it's only a 31.5 dB attenuator
+        assert self.phaser._att_rstn[self.index].pull() == 1, 'Tried to set channel attenuation with reset pin active'
+        if att < 0 or att > 31.875 * dB:
             raise ValueError("attenuation out of bounds")
         # delay from ARTIQ for SPI transfer
         div = 34  # 30 ns min period
@@ -485,6 +516,10 @@ class PhaserChannel:
         delay_mu(t_xfer)
         delay(20 * us)
         delay_mu(t_xfer)
+        return self._get_att_mu()
+
+    @rpc
+    def _get_att_mu(self) -> TInt32:
         # allow SignalNotSetError to be raised if not set
         return int32(0xff - self._att.pull() * 8)
 
@@ -512,13 +547,14 @@ class PhaserOscillator:
         self.channel = channel
         self.base_addr = ((self.channel.phaser.channel_base + 1
                            + 2 * self.channel.index) << 8) | index
+        self.core = self.channel.phaser.core
         # register signals
         signal_manager = get_signal_manager()
         key_base = f'ch_{channel.index}_osc_{index}'
         self._freq = signal_manager.register(channel.phaser, f'{key_base}_freq', float)
         self._amp = signal_manager.register(channel.phaser, f'{key_base}_amp', float)
         self._phase = signal_manager.register(channel.phaser, f'{key_base}_phase', float)
-        self._clr = signal_manager.register(channel.phaser, f'{key_base}_clr', bool)
+        self._clr = signal_manager.register(channel.phaser, f'{key_base}_clr', bool, size=1)
 
     @kernel
     def set_frequency_mu(self, ftw):
