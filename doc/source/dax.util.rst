@@ -68,6 +68,14 @@ dax.util.introspect module
     :undoc-members:
     :show-inheritance:
 
+dax.util.loader module
+----------------------
+
+.. automodule:: dax.util.loader
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 dax.util.logging module
 -----------------------
 
