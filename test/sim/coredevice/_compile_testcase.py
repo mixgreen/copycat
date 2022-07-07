@@ -54,7 +54,7 @@ class CoredeviceCompileTestCase(unittest.TestCase):
 
         set_signal_manager(NullSignalManager())
         self.managers = get_managers(enable_dax_sim(ddb, enable=True, logging_level=logging.WARNING,
-                                                    moninj_service=False, output='null'))
+                                                    moninj_service=False, output='peek'))
 
     def tearDown(self) -> None:
         self.managers.close()
