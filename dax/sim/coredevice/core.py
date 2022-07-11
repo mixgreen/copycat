@@ -7,7 +7,7 @@ import numpy as np
 from artiq.language.core import *
 import artiq.coredevice.core
 
-from dax.sim.device import DaxSimDevice
+from dax.sim.device import DaxSimDevice, ARTIQ_MAJOR_VERSION
 from dax.sim.signal import get_signal_manager, DaxSignalManager, Signal
 from dax.sim.ddb import DAX_SIM_CONFIG_KEY
 from dax.sim.time import DaxTimeManager
@@ -156,6 +156,15 @@ class BaseCore(DaxSimDevice):
     def _break_realtime(self):  # type: () -> None
         # Move cursor
         delay_mu(self._break_realtime_mu)
+
+    if ARTIQ_MAJOR_VERSION >= 7:
+        def precompile(
+                self, function, *args, **kwargs
+        ):  # type: (typing.Callable[..., typing.Any], typing.Any, typing.Any) -> typing.Callable[[], typing.Any]
+            def precompiled_fn() -> typing.Any:
+                return function(*args, **kwargs)
+
+            return precompiled_fn
 
 
 class Core(BaseCore):

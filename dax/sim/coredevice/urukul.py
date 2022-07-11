@@ -186,7 +186,7 @@ class CPLD(DaxSimDevice):
         self._profile_reg = profile
         self._profile.push(self._profile_reg)
 
-    if ARTIQ_MAJOR_VERSION >= 7:  # pragma: no cover
+    if ARTIQ_MAJOR_VERSION >= 7:
         @portable(flags={"fast-math"})
         def mu_to_att(self, att_mu: TInt32) -> TFloat:
             return _mu_to_att(att_mu)
