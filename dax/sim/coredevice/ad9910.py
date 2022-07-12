@@ -120,7 +120,7 @@ class AD9910(DaxSimDevice):
     def read_ram(self, data: TList(TInt32)):  # type: ignore[valid-type]
         raise NotImplementedError
 
-    if ARTIQ_MAJOR_VERSION >= 7:  # pragma: no cover
+    if ARTIQ_MAJOR_VERSION >= 7:
         @kernel
         def set_cfr1(self, power_down: TInt32 = 0b0000,
                      phase_autoclear: TInt32 = 0,
@@ -143,7 +143,7 @@ class AD9910(DaxSimDevice):
             self._ram_enable_reg = ram_enable & 0x1
             self._ram_dest_reg = ram_destination & 0x3
 
-    elif ARTIQ_MAJOR_VERSION == 6:
+    elif ARTIQ_MAJOR_VERSION == 6:  # pragma: no cover
         @kernel
         def set_cfr1(self, power_down: TInt32 = 0b0000,
                      phase_autoclear: TInt32 = 0,
@@ -178,7 +178,7 @@ class AD9910(DaxSimDevice):
                      ):
             raise NotImplementedError
 
-    if ARTIQ_MAJOR_VERSION >= 7:  # pragma: no cover
+    if ARTIQ_MAJOR_VERSION >= 7:
         @kernel
         def set_cfr2(self,
                      asf_profile_enable: TInt32 = 1,
@@ -215,7 +215,7 @@ class AD9910(DaxSimDevice):
     def power_down(self, bits: TInt32 = 0b1111):
         raise NotImplementedError
 
-    if ARTIQ_MAJOR_VERSION >= 7:  # pragma: no cover
+    if ARTIQ_MAJOR_VERSION >= 7:
         @kernel
         def set_mu(self, ftw: TInt32, pow_: TInt32 = 0, asf: TInt32 = 0x3fff,
                    phase_mode: TInt32 = _PHASE_MODE_DEFAULT,
@@ -226,7 +226,7 @@ class AD9910(DaxSimDevice):
             # Returns pow
             return self._get_pow(ftw, pow_, phase_mode, ref_time_mu)
 
-    else:
+    else:  # pragma: no cover
         @kernel
         def set_mu(self, ftw: TInt32, pow_: TInt32 = 0, asf: TInt32 = 0x3fff,  # type: ignore[misc]
                    phase_mode: TInt32 = _PHASE_MODE_DEFAULT,
@@ -372,7 +372,7 @@ class AD9910(DaxSimDevice):
         return self.pow_to_turns(self._get_pow(
             self.frequency_to_ftw(frequency), self.turns_to_pow(phase), phase_mode, ref_time_mu))
 
-    if ARTIQ_MAJOR_VERSION >= 7:  # pragma: no cover
+    if ARTIQ_MAJOR_VERSION >= 7:
         @kernel
         def set(self, frequency: TFloat, phase: TFloat = 0.0,
                 amplitude: TFloat = 1.0, phase_mode: TInt32 = _PHASE_MODE_DEFAULT,
@@ -381,7 +381,7 @@ class AD9910(DaxSimDevice):
             return self._set(frequency=frequency, phase=phase, amplitude=amplitude, phase_mode=phase_mode,
                              ref_time_mu=ref_time_mu, profile=profile, ram_destination=ram_destination)
 
-    else:
+    else:  # pragma: no cover
         @kernel
         def set(self, frequency: TFloat, phase: TFloat = 0.0,
                 amplitude: TFloat = 1.0, phase_mode: TInt32 = _PHASE_MODE_DEFAULT,
@@ -401,7 +401,7 @@ class AD9910(DaxSimDevice):
     def cfg_sw(self, state: TBool):
         self.cpld.cfg_sw(self.chip_select - 4, state)
 
-    if ARTIQ_MAJOR_VERSION >= 7:  # pragma: no cover
+    if ARTIQ_MAJOR_VERSION >= 7:
         @kernel
         def set_sync(self,
                      in_delay: TInt32,
@@ -409,7 +409,7 @@ class AD9910(DaxSimDevice):
                      en_sync_gen: TInt32 = 0):
             raise NotImplementedError
 
-    else:
+    else:  # pragma: no cover
         @kernel
         def set_sync(self, in_delay: TInt32, window: TInt32):
             raise NotImplementedError
@@ -431,7 +431,7 @@ class AD9910(DaxSimDevice):
     def tune_io_update_delay(self) -> TInt32:
         raise NotImplementedError
 
-    if ARTIQ_MAJOR_VERSION >= 7:  # pragma: no cover
+    if ARTIQ_MAJOR_VERSION >= 7:
         @kernel
         def get_ftw(self) -> TInt32:
             return self.frequency_to_ftw(self.get_frequency())
