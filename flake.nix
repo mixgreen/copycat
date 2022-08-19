@@ -72,8 +72,8 @@
         inherit dax;
         flake8-artiq = flake8-artiq.packages.x86_64-linux.flake8-artiq;
         artiq-stubs = artiq-stubs.packages.x86_64-linux.artiq-stubs;
+        default = pkgs.python3.withPackages (ps: [ dax ]);
       };
-      defaultPackage.x86_64-linux = pkgs.python3.withPackages (ps: [ packages.x86_64-linux.dax ]);
       # default shell for `nix develop`
       devShells.x86_64-linux.default = pkgs.mkShell {
         name = "dax-dev-shell";
