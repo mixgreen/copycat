@@ -1,6 +1,6 @@
 {
   inputs = {
-    artiqpkgs.url = github:m-labs/artiq/release-7;
+    artiqpkgs.url = git+https://github.com/m-labs/artiq?ref=release-7;
     nixpkgs.follows = "artiqpkgs/nixpkgs";
     sipyco.follows = "artiqpkgs/sipyco";
     flake8-artiq = {

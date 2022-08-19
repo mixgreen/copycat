@@ -35,11 +35,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1660921431,
-        "narHash": "sha256-tu0TZH134kfwcBibkyanByLWnkmPgSR68kK6TelOawo=",
+        "lastModified": 1660936307,
+        "narHash": "sha256-aU8rEbb/sUGcDSNDLCaGOplS+GS8HxXnsmrDd5koP2k=",
         "ref": "refs/heads/master",
-        "rev": "78dc1c29c75302218c0a5c7c689e0159caf1013b",
-        "revCount": 15,
+        "rev": "c51083016de89b97540bfcefac516dbaf56475ad",
+        "revCount": 16,
         "type": "git",
         "url": "https://gitlab.com/duke-artiq/artiq-stubs.git"
       },
@@ -61,16 +61,16 @@
       "locked": {
         "lastModified": 1660804543,
         "narHash": "sha256-pqmg9Krkt9xgitEbEMWOa7aWefj/wRtNkmMr22T4wPM=",
-        "owner": "m-labs",
-        "repo": "artiq",
+        "ref": "release-7",
         "rev": "9aa81e1234cfccca88970b8fa946f1001e271ce1",
-        "type": "github"
+        "revCount": 8121,
+        "type": "git",
+        "url": "https://github.com/m-labs/artiq"
       },
       "original": {
-        "owner": "m-labs",
         "ref": "release-7",
-        "repo": "artiq",
-        "type": "github"
+        "type": "git",
+        "url": "https://github.com/m-labs/artiq"
       }
     },
     "flake8-artiq": {
@@ -83,11 +83,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1660922364,
-        "narHash": "sha256-kZCGZzPaG89pOjEi/DzSPCgkN1aj2W88fSkRw88aaF8=",
+        "lastModified": 1660938453,
+        "narHash": "sha256-VIEgFNpVXj6SARWKqUtuS5MhaK9qA+/G/nenUp6gWQc=",
         "ref": "refs/heads/master",
-        "rev": "939128bd158a0409ad13ec047db2f4a82399f8a0",
-        "revCount": 82,
+        "rev": "4d71973d580580ab8f268344cf4837fa34e17295",
+        "revCount": 83,
         "type": "git",
         "url": "https://gitlab.com/duke-artiq/flake8-artiq.git"
       },
@@ -225,11 +225,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1660922776,
-        "narHash": "sha256-PlkLeOMA1Bu9DVczKsiEbgDlTPti6zEXeLxxp4M21qI=",
+        "lastModified": 1660938525,
+        "narHash": "sha256-pDmLJYSErKbudDpDOAesmIe0jHujyC/PYOzvXbWpB2A=",
         "ref": "refs/heads/master",
-        "rev": "491d7b1a469538245bba5c2f8d223e51aec31987",
-        "revCount": 141,
+        "rev": "e94c98e182df2628ecfb928c7a4ebf4e1f75fee7",
+        "revCount": 142,
         "type": "git",
         "url": "https://gitlab.com/duke-artiq/trap-dac-utils.git"
       },
