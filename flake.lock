@@ -59,11 +59,11 @@
         "src-pythonparser": "src-pythonparser"
       },
       "locked": {
-        "lastModified": 1657340822,
-        "narHash": "sha256-xKNtt9c4UGNtfL2Ag9M854w7OxUM/oWmJn0WFBGNrEA=",
+        "lastModified": 1660804543,
+        "narHash": "sha256-pqmg9Krkt9xgitEbEMWOa7aWefj/wRtNkmMr22T4wPM=",
         "owner": "m-labs",
         "repo": "artiq",
-        "rev": "de6f44467ff0e34bdcd4df61694405241db684c5",
+        "rev": "9aa81e1234cfccca88970b8fa946f1001e271ce1",
         "type": "github"
       },
       "original": {
@@ -225,11 +225,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1657566651,
-        "narHash": "sha256-VEHLEdX4FAdKL/3Lnx6BLKXVPedYwapmU9b2DBxa0Dc=",
+        "lastModified": 1658521713,
+        "narHash": "sha256-xDMMUyHLVYgQrRZXFjnE/JcvlliW4xZ0wZfxXjHQvzk=",
         "ref": "refs/heads/master",
-        "rev": "261f09e8a0a8622a10b483317fbcae09b576611d",
-        "revCount": 119,
+        "rev": "24656a246aec887ce50bdc992d812e6c0802a06b",
+        "revCount": 138,
         "type": "git",
         "url": "https://gitlab.com/duke-artiq/trap-dac-utils.git"
       },

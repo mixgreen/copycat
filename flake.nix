@@ -92,10 +92,10 @@
     };
 
   nixConfig = {
-    binaryCachePublicKeys = [
+    extra-trusted-public-keys = [
       "build-mblab.duckdns.org:PKlwT12HTBdsh4MyiDoMj/zTUA6f0vi2hzLa6tYoEpM="
       "nixbld.m-labs.hk-1:5aSRVA5b320xbNvu30tqxVPXpld73bhtOeH6uAjRyHc="
     ];
-    binaryCaches = [ "http://build-mblab.duckdns.org" "https://nixbld.m-labs.hk" "https://cache.nixos.org" ];
+    extra-substituters = [ "http://build-mblab.duckdns.org" "https://nixbld.m-labs.hk" ];
   };
 }
