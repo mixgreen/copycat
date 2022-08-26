@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import typing
 
 from dax.sim.device import DaxSimDevice
@@ -6,6 +8,7 @@ from dax.sim.signal import get_signal_manager, Signal
 
 class _GenericBase:
     _attr_name: typing.Optional[str]
+    _items: typing.Dict[typing.Any, _GenericBase]
     _signal_call: Signal
     _signal_function: Signal
 
@@ -14,6 +17,7 @@ class _GenericBase:
 
         # Store attributes
         self._attr_name = attr_name
+        self._items = {}
         self._signal_call = signal_call
         self._signal_function = signal_function
 
@@ -23,6 +27,17 @@ class _GenericBase:
         obj = _GenericBase(attr_name, self._signal_call, self._signal_function)
         setattr(self, item, obj)
         return obj
+
+    def __getitem__(self, item: typing.Any) -> typing.Any:
+        if item in self._items:
+            # Return item
+            return self._items[item]
+        else:
+            # Non-existing items are added
+            attr_name = repr(item) if self._attr_name is None else f'{self._attr_name}[{item!r}]'
+            obj = _GenericBase(attr_name, self._signal_call, self._signal_function)
+            self._items[item] = obj
+            return obj
 
     def __call__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
         # Make a string for the parameters

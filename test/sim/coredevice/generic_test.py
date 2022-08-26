@@ -42,6 +42,14 @@ class GenericTestCase(unittest.TestCase):
         self.assertIsInstance(self.generic.bar.baz.foo, dax.sim.coredevice.generic._GenericBase)
         self.assertIsInstance(self.generic.baz.foo.bar, dax.sim.coredevice.generic._GenericBase)
 
+    def test_items(self):
+        foo = self.generic[0]
+        self.assertIsInstance(foo, dax.sim.coredevice.generic._GenericBase)
+        self.assertEqual(foo, self.generic[0])  # Test if same attribute is returned
+
+        self.assertIsInstance(self.generic[1].bar.baz, dax.sim.coredevice.generic._GenericBase)
+        self.assertIsInstance(self.generic[2][3].bar['a'], dax.sim.coredevice.generic._GenericBase)
+
     def test_method_call(self):
         foo = self.generic.foo
         self.assertIsInstance(foo, dax.sim.coredevice.generic._GenericBase)
