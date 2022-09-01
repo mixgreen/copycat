@@ -109,8 +109,9 @@ class BaseCore(DaxSimDevice):
     def close(self) -> None:
         pass
 
-    def compile(self, *args: typing.Any, **kwargs: typing.Any) -> typing.Any:
-        raise NotImplementedError('Simulated core does not implement the compile function')
+    def compile(self, function: typing.Any, args: typing.Sequence[typing.Any], kwargs: typing.Dict[str, typing.Any],
+                *args_: typing.Any, **kwargs_: typing.Any) -> typing.Any:
+        raise RuntimeError('Compile function not available')
 
     @portable
     def seconds_to_mu(self, seconds):  # type: (float) -> np.int64
@@ -252,9 +253,7 @@ class Core(BaseCore):
             args: typing.Tuple[typing.Any, ...], kwargs: typing.Dict[str, typing.Any]) -> typing.Any:
         if self._level == 0 and self._compiler is not None:
             # Compile the kernel
-            _logger.debug('Compiling kernel...')
-            _, kernel_library, _, _ = self._compiler.compile(function, args, kwargs)
-            _logger.debug(f'Kernel size: {len(kernel_library)} bytes')
+            self.compile(function, args, kwargs)
 
         # Unpack function
         kernel_fn = function.artiq_embedded.function
@@ -304,8 +303,16 @@ class Core(BaseCore):
                 csv_writer.writerows((self._fn_counter[fn], time, self.mu_to_seconds(time), fn.__qualname__)
                                      for fn, time in self._fn_time.items())
 
-    def compile(self, *args: typing.Any, **kwargs: typing.Any) -> typing.Any:
-        super(Core, self).compile(*args, **kwargs)
+    def compile(self, function: typing.Any, args: typing.Sequence[typing.Any], kwargs: typing.Dict[str, typing.Any],
+                *args_: typing.Any, **kwargs_: typing.Any) -> typing.Any:
+        if self._compiler is not None:
+            _logger.debug('Compiling kernel...')
+            result = self._compiler.compile(function, args, kwargs, *args_, **kwargs_)
+            _, kernel_library, _, _ = result
+            _logger.debug(f'Kernel size: {len(kernel_library)} bytes')
+            return result
+        else:
+            return super(Core, self).compile(function, args, kwargs, *args_, **kwargs_)
 
     # noinspection PyTypeHints
     def _reset(self, *, push_start=True, push_end=True):  # type: (bool, bool) -> None

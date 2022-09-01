@@ -9,6 +9,7 @@ import artiq.coredevice.comm_kernel
 import artiq.coredevice.core
 import artiq.coredevice.dma  # type: ignore[import]
 import artiq.coredevice.edge_counter
+import artiq.coredevice.phaser  # type: ignore[import]
 import artiq.coredevice.spi2  # type: ignore[import]
 import artiq.coredevice.ttl  # type: ignore[import]
 import artiq.coredevice.urukul  # type: ignore[import]
@@ -22,6 +23,7 @@ import dax.sim.coredevice.comm_kernel
 import dax.sim.coredevice.core
 import dax.sim.coredevice.dma
 import dax.sim.coredevice.edge_counter
+import dax.sim.coredevice.phaser
 import dax.sim.coredevice.spi2
 import dax.sim.coredevice.ttl
 import dax.sim.coredevice.urukul
@@ -38,6 +40,7 @@ class CoredeviceSignatureTestCase(unittest.TestCase):
         (dax.sim.coredevice.core.Core, artiq.coredevice.core.Core),
         (dax.sim.coredevice.dma.CoreDMA, artiq.coredevice.dma.CoreDMA),
         (dax.sim.coredevice.edge_counter.EdgeCounter, artiq.coredevice.edge_counter.EdgeCounter),
+        (dax.sim.coredevice.phaser.Phaser, artiq.coredevice.phaser.Phaser),
         (dax.sim.coredevice.spi2.SPIMaster, artiq.coredevice.spi2.SPIMaster),
         (dax.sim.coredevice.ttl.TTLOut, artiq.coredevice.ttl.TTLOut),
         (dax.sim.coredevice.ttl.TTLInOut, artiq.coredevice.ttl.TTLInOut),
@@ -74,21 +77,23 @@ class CoredeviceSignatureTestCase(unittest.TestCase):
             artiq_sig = inspect.signature(artiq_fn)
 
             # Get function parameters
-            dax_p = set(dax_sig.parameters.keys())
+            dax_p = {k for k, v in dax_sig.parameters.items() if v.kind not in
+                     {inspect.Parameter.VAR_KEYWORD, inspect.Parameter.VAR_POSITIONAL}}
             artiq_p = set(artiq_sig.parameters.keys())
-            # Take out kwargs
-            has_kwargs = 'kwargs' in dax_p
-            dax_p.discard('kwargs')
+            # Detect variadic arguments
+            has_variadic_args = len(dax_p) < len(dax_sig.parameters)
 
             # Verify parameter existence
             self.assertLessEqual(dax_p, artiq_p,
                                  f'Simulated driver function signature {dax_fn.__qualname__} requires more '
                                  f'parameters than the ARTIQ driver function {artiq_fn.__qualname__}')
             if dax_p < artiq_p:
-                # Parameters are a strict subset, then kwargs must be included to accept other arguments
-                self.assertTrue(has_kwargs,
-                                f'Simulated driver function signature {dax_fn.__qualname__} requires less parameters '
-                                f'than the ARTIQ driver function {artiq_fn.__qualname__}, but does not support kwargs')
+                # Parameters are a strict subset, then variadic args must be included to accept other arguments
+                self.assertTrue(
+                    has_variadic_args,
+                    f'Simulated driver function signature {dax_fn.__qualname__} requires less parameters than the '
+                    f'ARTIQ driver function {artiq_fn.__qualname__}, but does not support *args or **kwargs'
+                )
 
     def test_verification(self):
         # Classes match
@@ -116,8 +121,12 @@ class _MatchedClass0:
 
 
 class _MatchedClass1:
-    def foo(self, **kwargs):
-        """Missing parameters but with keyword arguments."""
+    def foo(self, *args):
+        """Missing parameters but with variadic arguments."""
+        pass
+
+    def bar(self, **kwargs):
+        """Missing parameters but with variadic arguments."""
         pass
 
 

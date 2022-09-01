@@ -138,6 +138,3 @@ class CompileTestCase(compile_testcase.CoredeviceCompileTestCase):
         'set_config': {'count_rising': True, 'count_falling': False, 'send_count_event': False, 'reset_to_zero': True},
         'fetch_timestamped_count': {'timeout_mu': 0},
     }
-    FN_EXCEPTIONS = {
-        'fetch_count': IndexError,
-    }
