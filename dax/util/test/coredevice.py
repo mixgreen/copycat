@@ -6,8 +6,6 @@ import inspect
 
 import artiq.coredevice.core
 
-import dax.sim.coredevice.core
-
 from dax.sim.device import DaxSimDevice
 from dax.sim.signal import set_signal_manager, NullSignalManager
 from dax.sim.ddb import enable_dax_sim
@@ -23,7 +21,7 @@ class _SkipCompilerTest(RuntimeError):
 class CompileTestCase(unittest.TestCase):
     """Test case for compilation of simulated coredevice drivers."""
 
-    DEVICE_CLASS: typing.ClassVar[typing.Type]
+    DEVICE_CLASS: typing.ClassVar[type]
     """The device class to test."""
     DEVICE_KWARGS: typing.ClassVar[typing.Dict[str, typing.Any]] = {}
     """Keyword arguments to instantiate the device class."""
@@ -34,11 +32,8 @@ class CompileTestCase(unittest.TestCase):
     """Function keyword arguments (presence forces function testing)."""
     FN_EXCLUDE: typing.ClassVar[typing.Set[str]] = set()
     """Excluded functions."""
-    FN_EXCEPTIONS: typing.ClassVar[typing.Dict[str, type]] = {}
-    """Expected exceptions when executing specific functions (defaults to ``NotImplementedError``)."""
-    SIM_BACKEND: typing.ClassVar[str] = 'peek'
-    """Backend to use for simulation, passed as the ``output`` argument to :func:`dax.sim.ddb.enable_dax_sim`.
-    Defaults to ``'peek'``."""
+    SIM_DEVICE: typing.ClassVar[bool] = True
+    """:const:`True` if the device tested is a DAX.sim simulation driver."""
 
     DEVICE_DB: typing.ClassVar[typing.Dict[str, typing.Any]] = {
         'core': {
@@ -50,31 +45,34 @@ class CompileTestCase(unittest.TestCase):
         },
     }
 
+    @classmethod
+    def setUpClass(cls) -> None:
+        assert isinstance(cls.DEVICE_CLASS, type), 'DEVICE_CLASS must be a type'
+        assert isinstance(cls.DEVICE_KWARGS, dict), 'DEVICE_KWARGS must be a dict'
+        assert isinstance(cls.FN_ARGS, dict), 'FN_ARGS must be a dict'
+        assert isinstance(cls.FN_KWARGS, dict), 'FN_KWARGS must be a dict'
+        assert isinstance(cls.FN_EXCLUDE, set), 'FN_EXCLUDE must be a set'
+        assert isinstance(cls.SIM_DEVICE, bool), 'SIM_DEVICE must be a bool'
+
     def setUp(self) -> None:
         ddb = copy.deepcopy(self.DEVICE_DB)
         ddb.update(CompileTestCase.DEVICE_DB)  # Always override the core device
 
         set_signal_manager(NullSignalManager())
         self.managers = get_managers(enable_dax_sim(ddb, enable=True, logging_level=logging.WARNING,
-                                                    moninj_service=False, output=self.SIM_BACKEND))
+                                                    moninj_service=False, output='null'))
 
     def tearDown(self) -> None:
         self.managers.close()
 
-    def test_compile_functions(self):
-        assert isinstance(self.DEVICE_CLASS, type), 'DEVICE_CLASS must be a type'
-        assert isinstance(self.DEVICE_KWARGS, dict), 'DEVICE_KWARGS must be a dict'
-        assert isinstance(self.FN_ARGS, dict), 'FN_ARGS must be a dict'
-        assert isinstance(self.FN_KWARGS, dict), 'FN_KWARGS must be a dict'
-        assert isinstance(self.FN_EXCLUDE, set), 'FN_EXCLUDE must be a set'
-        assert isinstance(self.FN_EXCEPTIONS, dict), 'FN_EXCEPTIONS must be a dict'
-        assert isinstance(self.SIM_BACKEND, str), 'SIM_BACKEND must be a string'
-
+    def test_compile_functions(self) -> None:
         try:
+            # Add extra kwargs for testing
+            test_kwargs = dict(_key=self.DEVICE_CLASS.__name__.lower()) if self.SIM_DEVICE else {}
             # Create device
-            key = 'core' if issubclass(self.DEVICE_CLASS, dax.sim.coredevice.core.Core) else self.DEVICE_CLASS.__name__
-            device = self.DEVICE_CLASS(self.managers.device_mgr, _key=key, **self.DEVICE_KWARGS)
-            self.assertIsInstance(device, DaxSimDevice)
+            device = self.DEVICE_CLASS(self.managers.device_mgr, **self.DEVICE_KWARGS, **test_kwargs)
+            if self.SIM_DEVICE:
+                self.assertIsInstance(device, DaxSimDevice)
 
             # Get function lists
             fn_list = [(n, f) for n, f in inspect.getmembers(device, inspect.ismethod)
@@ -85,14 +83,11 @@ class CompileTestCase(unittest.TestCase):
             for n, f in fn_list:
                 args = self.FN_ARGS.get(n, ())
                 kwargs = self.FN_KWARGS.get(n, {})
-                expected_exception = self.FN_EXCEPTIONS.get(n, NotImplementedError)
 
-                with self.subTest(function=n, args=args, kwargs=kwargs, expected_exception=expected_exception):
+                with self.subTest(function=n, args=args, kwargs=kwargs):
                     try:
-                        f(*args, **kwargs)  # This will cause compilation of the kernel function
-                    except expected_exception:
-                        # Ignore expected exception
-                        pass
+                        # Compile the function, do not run it
+                        device.core.compile(f, args, kwargs)
                     except artiq.coredevice.core.CompileError as e:
                         err_msg = "name 'NotImplementedError' is not bound to anything"
                         if err_msg in str(e) and n not in self.FN_ARGS and n not in self.FN_KWARGS:

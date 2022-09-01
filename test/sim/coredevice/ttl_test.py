@@ -278,10 +278,6 @@ class TTLInOutCompileTestCase(TTLOutCompileTestCase):
         'timestamp_mu': {'up_to_timestamp_mu': 0},
     }
     FN_KWARGS.update(TTLOutCompileTestCase.FN_KWARGS)  # Add function kwargs of TTLOut
-    FN_EXCEPTIONS = {
-        'sample_get': IndexError,
-        'sample_get_nonrt': IndexError,
-    }
 
 
 class TTLClockGenCompileTestCase(compile_testcase.CoredeviceCompileTestCase):

@@ -1,6 +1,6 @@
 import unittest
 
-import dax.util.test.coredevice  # type: ignore[import]
+import dax.util.test.coredevice
 from test.environment import CI_ENABLED
 
 __all__ = ['CoredeviceCompileTestCase']
