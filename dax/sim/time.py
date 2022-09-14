@@ -40,6 +40,8 @@ class _ParallelTimeContext(_TimeContext):
 class DaxTimeManager:
     """DAX time manager class."""
 
+    __slots__ = ('_ref_period', '_stack')
+
     _ref_period: float
     _stack: typing.List[_TimeContext]
 

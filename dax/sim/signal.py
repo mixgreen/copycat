@@ -15,9 +15,11 @@ from dax.sim.device import DaxSimDevice
 from dax import __version__ as _dax_version
 import dax.util.units
 
-__all__ = ['Signal', 'SignalNotSetError', 'SignalNotFoundError', 'DaxSignalManager',
-           'NullSignalManager', 'VcdSignalManager', 'PeekSignalManager',
-           'get_signal_manager', 'set_signal_manager']
+__all__ = [
+    'Signal', 'SignalNotSetError', 'SignalNotFoundError', 'DaxSignalManager',
+    'NullSignalManager', 'VcdSignalManager', 'PeekSignalManager',
+    'get_signal_manager', 'set_signal_manager',
+]
 
 _T_T = np.int64  # Timestamp type
 _O_T = typing.Union[int, np.int32, np.int64]  # Time offset type
@@ -239,6 +241,8 @@ _S_T = typing.TypeVar('_S_T', bound=Signal)  # The abstract signal type variable
 class DaxSignalManager(abc.ABC, typing.Generic[_S_T]):
     """Base class for classes that manage simulated signals."""
 
+    __slots__ = ('__signals',)
+
     __signals: typing.Dict[typing.Tuple[DaxSimDevice, str], _S_T]
     """Registered signals"""
 
@@ -402,6 +406,8 @@ class NullSignal(ConstantSignal):
 class NullSignalManager(DaxSignalManager[NullSignal]):
     """A signal manager with constant signals (i.e. all push events to signals are dropped)."""
 
+    __slots__ = ('_horizon',)
+
     _horizon: _T_T
 
     def __init__(self) -> None:
@@ -480,6 +486,8 @@ class VcdSignal(ConstantSignal):
 
 class VcdSignalManager(DaxSignalManager[VcdSignal]):
     """VCD signal manager."""
+
+    __slots__ = ('_timescale', '_file', '_vcd', '_events', '_flushed_horizon')
 
     _timescale: float
     _file: typing.IO[str]
@@ -649,6 +657,8 @@ class PeekSignal(Signal):
 
 class PeekSignalManager(DaxSignalManager[PeekSignal]):
     """Peek signal manager."""
+
+    __slots__ = ()
 
     def _create_signal(self, scope: DaxSimDevice, name: str, type_: _ST_T, *,
                        size: _SS_T = None, init: typing.Optional[_SV_T] = None) -> PeekSignal:
