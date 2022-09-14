@@ -7,7 +7,7 @@ import artiq.language.core
 
 __all__ = ['DaxInterface', 'optional', 'is_optional', 'get_optionals']
 
-_FnT = typing.TypeVar("_FnT", bound=typing.Callable[..., typing.Any])  # Function type; type variable
+_FN_T = typing.TypeVar('_FN_T', bound=typing.Callable[..., typing.Any])  # Function type; type variable
 
 _OPTIONAL_METHOD_KEY: str = '__dax_interface_optional'
 
@@ -17,7 +17,7 @@ class DaxInterface(abc.ABC):  # pragma: no cover
     pass
 
 
-def optional(fn: _FnT) -> _FnT:
+def optional(fn: _FN_T) -> _FN_T:
     """A decorator indicating optional methods.
 
     Indicate a method is abstract, but optional to implement.
