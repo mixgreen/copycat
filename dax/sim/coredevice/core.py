@@ -4,7 +4,8 @@ import csv
 import logging
 import numpy as np
 
-from artiq.language.core import *
+from artiq.language.core import kernel, portable, rpc, at_mu, now_mu, delay_mu, sequential, set_time_manager
+from artiq.language.types import TInt64
 import artiq.coredevice.core
 
 from dax.sim.device import DaxSimDevice, ARTIQ_MAJOR_VERSION
@@ -131,7 +132,7 @@ class BaseCore(DaxSimDevice):
 
     @kernel
     def get_rtio_counter_mu(self):  # type: () -> np.int64
-        # In simulation there is no difference between the RTIO counter and the cursor
+        # In simulation without signal manager, there is no difference between the RTIO counter and the cursor
         return now_mu()
 
     # noinspection PyUnusedLocal
@@ -142,19 +143,15 @@ class BaseCore(DaxSimDevice):
 
     @kernel
     def reset(self):  # type: () -> None
-        # Call internal function to allow compilation
-        self._reset()
-
-    def _reset(self):  # type: () -> None
+        # Set timeline cursor to the time horizon
+        at_mu(self.get_rtio_counter_mu())
         # Move cursor
         delay_mu(self._reset_mu)
 
     @kernel
     def break_realtime(self):  # type: () -> None
-        # Call internal function to allow compilation
-        self._break_realtime()
-
-    def _break_realtime(self):  # type: () -> None
+        # Set timeline cursor to the time horizon
+        at_mu(self.get_rtio_counter_mu())
         # Move cursor
         delay_mu(self._break_realtime_mu)
 
@@ -314,7 +311,21 @@ class Core(BaseCore):
         else:
             return super(Core, self).compile(function, args, kwargs, *args_, **kwargs_)
 
+    @kernel
+    def get_rtio_counter_mu(self):  # type: () -> np.int64
+        # RTIO counter value is estimated by the horizon
+        return self._get_rtio_counter_mu()
+
+    @rpc
+    def _get_rtio_counter_mu(self) -> TInt64:
+        return self._signal_manager.horizon()
+
+    @kernel
+    def reset(self):  # type: () -> None
+        self._reset()
+
     # noinspection PyTypeHints
+    @rpc
     def _reset(self, *, push_start=True, push_end=True):  # type: (bool, bool) -> None
         # Set timeline cursor to the time horizon
         at_mu(self._signal_manager.horizon())
@@ -327,15 +338,10 @@ class Core(BaseCore):
         for _, d in self._device_manager.active_devices:
             if isinstance(d, DaxSimDevice):
                 d.core_reset()
-        # Call super
-        super(Core, self)._reset()
+
+        # Move cursor
+        delay_mu(self._reset_mu)
 
         if push_end:
             # Reset signal back to 0
             self._reset_signal.push(False)
-
-    def _break_realtime(self):  # type: () -> None
-        # Set timeline cursor to the time horizon
-        at_mu(self._signal_manager.horizon())
-        # Call super
-        super(Core, self)._break_realtime()
