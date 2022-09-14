@@ -235,7 +235,7 @@ class DaxScan(dax.base.control_flow.DaxControlFlow, abc.ABC):
         self.logger.debug('Building scan')
         self.__in_build = True
         # noinspection PyArgumentList
-        self.build_scan(*scan_args, **scan_kwargs)  # type: ignore[call-arg]
+        self.build_scan(*scan_args, **scan_kwargs)
         self.__in_build = False
 
         if self.INFINITE_SCAN_ARGUMENT:
