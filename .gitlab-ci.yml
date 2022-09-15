@@ -35,12 +35,13 @@ test_conda:
     - pytest -v -rs
 
 test_hardware:
-  extends: .nix_env
+  extends: .nix_flake_env
   stage: test
   tags:
     - kasli
   variables:
-    NIX_SHELL_FILE: "test/shell.nix"
+    NIX_DEV_ENV: "default"
+    UPDATE_FLAKE: 1
     HW_TEST_ENABLED: "1"
   script:
     # Run test commands
