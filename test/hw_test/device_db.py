@@ -8,7 +8,7 @@ device_db = {
         "type": "local",
         "module": "artiq.coredevice.core",
         "class": "Core",
-        "arguments": {"host": core_addr, "ref_period": 1e-09, "target": "or1k"},
+        "arguments": {"host": core_addr, "ref_period": 1e-09, "target": "rv32g"},
     },
     "core_cache": {
         "type": "local",
