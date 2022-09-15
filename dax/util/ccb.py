@@ -239,6 +239,16 @@ class CcbToolBase(CcbWrapper, abc.ABC):  # pragma: no cover
         """
         pass
 
+    # noinspection PyShadowingBuiltins
+    @abc.abstractmethod
+    def plot_progress_bar(self, name: str, value: str, *,
+                          min: typing.Optional[int] = None,
+                          max: typing.Optional[int] = None,
+                          update_delay: typing.Optional[float] = None,
+                          group: typing.Optional[_G_T] = None,
+                          **kwargs: typing.Any) -> None:
+        pass
+
     @abc.abstractmethod
     def plot_xy_hist(self, name: str, xs: str, histogram_bins: str, histogram_counts: str, *,
                      group: typing.Optional[_G_T] = None,
@@ -455,6 +465,33 @@ class CcbTool(CcbToolBase):
         command = generate_command(f'{self.DAX_APPLET}plot_hist', y,
                                    x=x, index=index, plot_names=plot_names, title=title,
                                    x_label=x_label, y_label=y_label, update_delay=update_delay, **kwargs)
+        # Create applet
+        self.create_applet(name, command, group=group)
+
+    # noinspection PyShadowingBuiltins
+    def plot_progress_bar(self, name: str, value: str, *,
+                          min: typing.Optional[int] = None,
+                          max: typing.Optional[int] = None,
+                          update_delay: typing.Optional[float] = None,
+                          group: typing.Optional[_G_T] = None,
+                          **kwargs: typing.Any) -> None:
+        """Create a 2D histogram applet.
+
+        :param name: Name of the applet
+        :param value: 1D array of point abscissas dataset
+        :param min: Minimum (left) value of the bar
+        :param max: Maximum (right) value of the bar
+        :param update_delay: Time to wait after a modification before updating graph
+        :param group: Optional group of the applet
+        :param kwargs: Other optional arguments for the applet
+        """
+        if update_delay is None:
+            # Set update delay explicit for ARTIQ applets
+            update_delay = self._DEFAULT_UPDATE_DELAY
+        # Assemble command
+        command = generate_command(f'{self.ARTIQ_APPLET}progress_bar', value,
+                                   min=min, max=max,
+                                   update_delay=update_delay, **kwargs)
         # Create applet
         self.create_applet(name, command, group=group)
 
