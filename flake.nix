@@ -75,17 +75,32 @@
         default = pkgs.python3.withPackages (ps: [ dax ]);
       };
       # default shell for `nix develop`
-      devShells.x86_64-linux.default = pkgs.mkShell {
-        name = "dax-dev-shell";
-        buildInputs = [
-          (pkgs.python3.withPackages (ps:
-            # basic environment
-            dax.propagatedBuildInputs ++
-            # test dependencies
-            (with ps; [ pytest mypy pycodestyle coverage ]) ++
-            ([ packages.x86_64-linux.flake8-artiq packages.x86_64-linux.artiq-stubs ])
-          ))
-        ];
+      devShells.x86_64-linux = {
+        default = pkgs.mkShell {
+          name = "dax-dev-shell";
+          buildInputs = [
+            (pkgs.python3.withPackages (ps:
+              # basic environment
+              dax.propagatedBuildInputs ++
+              # test dependencies
+              (with ps; [ pytest mypy pycodestyle coverage ]) ++
+              ([ packages.x86_64-linux.flake8-artiq packages.x86_64-linux.artiq-stubs ])
+            ))
+          ];
+        };
+        hardware = pkgs.mkShell {
+          name = "hw-dev-shell";
+          buildInputs = [
+            (pkgs.python3.withPackages (ps:
+              # basic environment
+              dax.propagatedBuildInputs ++
+              # test dependencies
+              [ ps.pytest ]
+            ))
+            # extra required tools
+            pkgs.unixtools.ping
+          ];
+        };
       };
       # enables use of `nix fmt`
       formatter.x86_64-linux = nixpkgs.legacyPackages.x86_64-linux.nixpkgs-fmt;
