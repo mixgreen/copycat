@@ -99,6 +99,8 @@
             ))
             # extra required tools
             pkgs.unixtools.ping
+            pkgs.lld_11
+            pkgs.llvm_11
           ];
         };
       };
