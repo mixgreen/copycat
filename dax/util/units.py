@@ -65,7 +65,7 @@ def ampere_to_str(ampere: _R_T, *, threshold: _R_T = 1.0, precision: int = 2) ->
 @artiq.language.core.host_only
 def watt_to_str(watt: _R_T, *, threshold: _R_T = 1.0, precision: int = 2) -> str:
     """Convert a wattage to a string for pretty printing."""
-    return _value_to_str(watt, threshold, precision, ['W', 'mW', 'uW'])
+    return _value_to_str(watt, threshold, precision, ['W', 'mW', 'uW', 'nW'])
 
 
 @artiq.language.core.host_only
@@ -115,7 +115,7 @@ def str_to_ampere(string_: str) -> float:
 @artiq.language.core.host_only
 def str_to_watt(string_: str) -> float:
     """Convert a string to a wattage."""
-    return _str_to_value(string_, {'W', 'mW', 'uW'})
+    return _str_to_value(string_, {'W', 'mW', 'uW', 'nW'})
 
 
 class UnitsFormatter(string.Formatter):

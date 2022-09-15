@@ -84,7 +84,7 @@ class SetDataset(artiq.experiment.EnvExperiment):
                                                                      'dB',
                                                                      'uV', 'mV', 'V', 'kV',
                                                                      'uA', 'mA', 'A',
-                                                                     'uW', 'mW', 'W']}
+                                                                     'nW', 'uW', 'mW', 'W']}
     """Dict with all units."""
 
     def build(self) -> None:  # type: ignore[override]
