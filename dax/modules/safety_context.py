@@ -43,7 +43,6 @@ class BaseReentrantSafetyContext(dax.base.system.DaxHasSystem):
     _safety_context_enter_cb: __CB_T
     _safety_context_exit_cb: __CB_T
     _safety_context_exit_error: bool
-    _safety_context_exit_error_msg: str
     _safety_context_rpc: bool
     _safety_context_entries: np.int32
 
@@ -73,8 +72,7 @@ class BaseReentrantSafetyContext(dax.base.system.DaxHasSystem):
 
         # Store exit error flag and custom error message
         self._safety_context_exit_error = exit_error
-        self._safety_context_exit_error_msg = f'Safety context "{self.get_name()}" has been exited too many times'
-        self.update_kernel_invariants('_safety_context_exit_error', '_safety_context_exit_error_msg')
+        self.update_kernel_invariants('_safety_context_exit_error')
 
         # Store RPC flag
         self._safety_context_rpc = rpc_
@@ -151,7 +149,7 @@ class BaseReentrantSafetyContext(dax.base.system.DaxHasSystem):
         """Handle context exit (portable)."""
         if self._safety_context_exit_error and self._safety_context_entries <= 0:
             # Enter and exit calls were out of sync
-            raise self.EXCEPTION_TYPE(self._safety_context_exit_error_msg)
+            raise self.EXCEPTION_TYPE('Safety context has been exited too many times')
 
         if self._safety_context_entries > 0:
             # Decrement context counter before exit callback is executed
@@ -211,17 +209,11 @@ class BaseNonReentrantSafetyContext(BaseReentrantSafetyContext):
     :attr:`BaseReentrantSafetyContext.EXCEPTION_TYPE` can be overridden if desired.
     """
 
-    _safety_context_enter_error_msg: str
-
     def build(self, **kwargs: typing.Any) -> None:  # type: ignore[override]
         """Build the safety context module."""
 
         # Call super
         super(BaseNonReentrantSafetyContext, self).build(**kwargs)
-
-        # Store custom error message
-        self._safety_context_enter_error_msg = f'Safety context "{self.get_name()}" is non-reentrant'
-        self.update_kernel_invariants('_safety_context_enter_error_msg')
 
     @portable
     def _safety_context_enter_portable(self):  # type: () -> None
@@ -233,7 +225,7 @@ class BaseNonReentrantSafetyContext(BaseReentrantSafetyContext):
             self._safety_context_enter_cb()  # type: ignore[misc]
         else:
             # Prevent nested context
-            raise self.EXCEPTION_TYPE(self._safety_context_enter_error_msg)
+            raise self.EXCEPTION_TYPE('Safety context is non-reentrant')
 
         # Increment in context counter after enter callback was successfully executed
         self._safety_context_entries += 1
