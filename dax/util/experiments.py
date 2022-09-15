@@ -74,6 +74,8 @@ class SetDataset(artiq.experiment.EnvExperiment):
 
     This experiment is a utility to set/write arbitrary datasets.
     When importing this class directly into the global namespace, it will be recognized by ARTIQ as an experiment.
+
+    Note that since ARTIQ 7, this experiment has become obsolete. See https://github.com/m-labs/artiq/pull/1716.
     """
 
     _UNITS: typing.ClassVar[typing.Dict[str, float]] = {unit: getattr(artiq.experiment, unit)
