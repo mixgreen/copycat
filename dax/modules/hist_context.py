@@ -182,6 +182,8 @@ class HistogramContext(DaxModule, DataContextInterface):
         This function is intended to be fast to allow high input data throughput.
         No type checking is performed on the data.
 
+        See also :func:`extend`.
+
         :param data: A list of ints representing the PMT counts of different ions
         :raises HistogramContextError: Raised if called outside the histogram context
         """
@@ -191,6 +193,25 @@ class HistogramContext(DaxModule, DataContextInterface):
 
         # Append the given element to the buffer
         self._buffer.append(data)
+
+    @rpc(flags={'async'})
+    def extend(self, data):  # type: (typing.Sequence[typing.Sequence[RAW_T]]) -> None
+        """Extend PMT data to the histogram (async RPC).
+
+        This function is intended to be fast to allow high input data throughput.
+        No type checking is performed on the data.
+
+        See also :func:`append`.
+
+        :param data: A sequence with lists of ints representing the PMT counts of different ions
+        :raises HistogramContextError: Raised if called outside the histogram context
+        """
+        if not self._in_context:
+            # Called out of context
+            raise HistogramContextError('The histogram extend function can only be called inside the histogram context')
+
+        # Extend the buffer with the given sequence of elements
+        self._buffer.extend(data)
 
     @rpc(flags={'async'})
     def config_dataset(self, key=None, *args, **kwargs):  # type: (typing.Optional[str], typing.Any, typing.Any) -> None
