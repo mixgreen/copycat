@@ -86,6 +86,9 @@
               (with ps; [ pytest mypy pycodestyle coverage ]) ++
               ([ packages.x86_64-linux.flake8-artiq packages.x86_64-linux.artiq-stubs ])
             ))
+            # required for compile testcases
+            pkgs.lld_11
+            pkgs.llvm_11
           ];
         };
         hardware = pkgs.mkShell {
