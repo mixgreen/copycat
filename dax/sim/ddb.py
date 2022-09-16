@@ -10,6 +10,7 @@ import re
 import sipyco.pyon
 
 import dax.util.configparser
+import dax.util.moninj
 
 __all__ = ['DAX_SIM_CONFIG_KEY', 'enable_dax_sim']
 
@@ -216,9 +217,11 @@ def enable_dax_sim(ddb: typing.Dict[str, typing.Any], *,
         }
 
         if moninj_service:
+            # Get port
+            moninj_port = ddb.get('core_moninj', {}).get('port_proxy', dax.util.moninj.MonInjDummyService.DEFAULT_PORT)
             # Start MonInj dummy service
-            _logger.debug('Starting MonInj dummy service')
-            _start_moninj_service()
+            _logger.debug(f'Starting MonInj dummy service on port {moninj_port}')
+            _start_moninj_service(port=moninj_port)
 
         # Return the device DB
         return ddb
@@ -371,7 +374,7 @@ def _mutate_controller(key: str, value: typing.Dict[str, typing.Any], *,
         raise TypeError(f'The port key of controller "{key}" must be of type int')
 
 
-def _start_moninj_service() -> None:
+def _start_moninj_service(*, port: int = dax.util.moninj.MonInjDummyService.DEFAULT_PORT) -> None:
     """Start the MonInj dummy service as an external process.
 
     If the MonInj dummy service was already started, it will exit silently.
@@ -379,6 +382,6 @@ def _start_moninj_service() -> None:
     """
     import subprocess
     import sys
-    subprocess.Popen([sys.executable, '-m', 'dax.util.moninj', '--auto-close', '1'],
+    subprocess.Popen([sys.executable, '-m', 'dax.util.moninj', '--port', f'{port}', '--auto-close', '1'],
                      stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                      close_fds=True, start_new_session=True, creationflags=getattr(subprocess, 'DETACHED_PROCESS', 0))
