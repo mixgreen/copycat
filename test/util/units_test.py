@@ -49,7 +49,7 @@ class UnitsTestCase(unittest.TestCase):
         from dax.util.units import watt_to_str
         self.assertEqual(watt_to_str(46 * mW, precision=3), '46.000 mW')
         self.assertEqual(watt_to_str(0.089 * mW, precision=0), '89 uW')
-        self.assertEqual(watt_to_str(0.089 * nW, precision=0), '89 nW')
+        self.assertEqual(watt_to_str(0.089 * uW, precision=0), '89 nW')
         self.assertEqual(watt_to_str(1200567.8 * uW, precision=7), '1.2005678 W')
         self.assertEqual(watt_to_str(8 * W, threshold=1000.0, precision=1), '8000.0 mW')
 
