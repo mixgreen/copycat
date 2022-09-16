@@ -74,7 +74,7 @@
         artiq-stubs = artiq-stubs.packages.x86_64-linux.artiq-stubs;
         default = pkgs.python3.withPackages (ps: [ dax ]);
       };
-      # default shell for `nix develop`
+      # shells for `nix develop`
       devShells.x86_64-linux = {
         default = pkgs.mkShell {
           name = "dax-dev-shell";
@@ -101,6 +101,19 @@
             pkgs.unixtools.ping
             pkgs.lld_11
             pkgs.llvm_11
+          ];
+        };
+        docs = pkgs.mkShell {
+          name = "docs-dev-shell";
+          buildInputs = [
+            (pkgs.python3.withPackages (ps:
+              # basic environment
+              dax.propagatedBuildInputs ++
+              # Packages required for documentation
+              [ ps.sphinx ps.sphinx_rtd_theme ]
+            ))
+            pkgs.git # Required to set the correct copyright year
+            pkgs.gnumake
           ];
         };
       };

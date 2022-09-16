@@ -49,10 +49,11 @@ test_hardware:
     - pytest -v -rs --log-cli-level info test/hw_test/
 
 pages:
-  extends: .nix_env
+  extends: .nix_flake_env
   stage: deploy
   variables:
-    NIX_SHELL_FILE: "doc/shell.nix"
+    NIX_DEV_ENV: "docs"
+    UPDATE_FLAKE: 1
   script:
     # Generate documentation
     - make -C doc/ html
