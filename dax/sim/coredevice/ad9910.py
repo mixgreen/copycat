@@ -217,7 +217,7 @@ class AD9910(DaxSimDevice):
 
     if ARTIQ_MAJOR_VERSION >= 7:
         @kernel
-        def set_mu(self, ftw: TInt32, pow_: TInt32 = 0, asf: TInt32 = 0x3fff,
+        def set_mu(self, ftw: TInt32 = 0, pow_: TInt32 = 0, asf: TInt32 = 0x3fff,
                    phase_mode: TInt32 = _PHASE_MODE_DEFAULT,
                    ref_time_mu: TInt64 = int64(-1), profile: TInt32 = DEFAULT_PROFILE,
                    ram_destination: TInt32 = -1) -> TInt32:
@@ -374,7 +374,7 @@ class AD9910(DaxSimDevice):
 
     if ARTIQ_MAJOR_VERSION >= 7:
         @kernel
-        def set(self, frequency: TFloat, phase: TFloat = 0.0,
+        def set(self, frequency: TFloat = 0.0, phase: TFloat = 0.0,
                 amplitude: TFloat = 1.0, phase_mode: TInt32 = _PHASE_MODE_DEFAULT,
                 ref_time_mu: TInt64 = int64(-1), profile: TInt32 = DEFAULT_PROFILE,
                 ram_destination: TInt32 = -1) -> TFloat:
