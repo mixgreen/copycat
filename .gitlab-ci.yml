@@ -21,6 +21,15 @@ test_nix:
     - coverage --version; coverage run -m pytest -v -rs
     - coverage report
 
+build_nix:
+  extends: .nix_flake_env
+  stage: test
+  variables:
+    NIX_DEV_ENV: ""  # `nix build` doesn't work in dev shell
+    UPDATE_FLAKE: 1
+  script:
+    - nix build .#dax
+
 test_conda:
   extends: .conda_env
   stage: test
