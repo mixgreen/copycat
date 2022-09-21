@@ -202,7 +202,7 @@ class TrapDcModule(DaxModule):
         assert isinstance(key, str)
         assert isinstance(solution_path, str)
         assert isinstance(map_file, str)
-        assert not config_path or isinstance(config_path, str)
+        assert config_path is None or isinstance(config_path, str)
 
         # Get devices
         self._zotino = self.get_device(key, artiq.coredevice.zotino.Zotino)
@@ -238,7 +238,7 @@ class TrapDcModule(DaxModule):
         return adjustments
 
     @host_only
-    def init(self, *, reset: bool = False) -> None:
+    def init(self) -> None:
         """Initialize this module."""
         # Get profile loader
         # Below calculated from set_dac_mu and load functions
@@ -371,10 +371,6 @@ class TrapDcModule(DaxModule):
                      for i, t in enumerate(trimmed_solution[1:])])
 
         return path
-
-    @host_only
-    def get_config_masks(self, dir: pathlib.Path, vars: typing.Union[typing.Sequence[str], str]):
-        return None
 
     @host_only
     def list_solutions(self) -> typing.Sequence[str]:
