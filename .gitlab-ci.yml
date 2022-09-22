@@ -49,7 +49,7 @@ test_hardware:
   tags:
     - kasli
   variables:
-    NIX_DEV_ENV: "hardware"
+    NIX_DEV_ENV: "default"
     UPDATE_FLAKE: 1
     HW_TEST_ENABLED: "1"
   script:

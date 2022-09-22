@@ -86,21 +86,7 @@
               (with ps; [ pytest mypy pycodestyle coverage ]) ++
               ([ packages.x86_64-linux.flake8-artiq packages.x86_64-linux.artiq-stubs ])
             ))
-            # required for compile testcases
-            pkgs.lld_11
-            pkgs.llvm_11
-          ];
-        };
-        hardware = pkgs.mkShell {
-          name = "hw-dev-shell";
-          buildInputs = [
-            (pkgs.python3.withPackages (ps:
-              # basic environment
-              dax.propagatedBuildInputs ++
-              # test dependencies
-              [ ps.pytest ]
-            ))
-            # extra required tools
+            # required for compile/hardware testcases
             pkgs.unixtools.ping
             pkgs.lld_11
             pkgs.llvm_11
