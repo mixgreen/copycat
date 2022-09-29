@@ -14,6 +14,7 @@ class _ScanExperiment(DaxScan, HasEnvironment):
         self.setattr_device('core')
 
         self.add_scan('foo', 'foo', Scannable(ExplicitScan([1, 1])))
+        self.add_iterator('foobar', 'foobar', 4)
         self.add_static_scan('bar', [1, 1])
         self.result = 0
         self.host_setup_done = False
