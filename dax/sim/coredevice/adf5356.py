@@ -10,15 +10,27 @@ from artiq.language.units import us, MHz
 from artiq.language.types import TInt32, TInt64
 from artiq.coredevice.adf5356_reg import (  # type: ignore[import]
     ADF5356_REG4_MUXOUT_UPDATE,
-    ADF5356_REG6_RF_OUTPUT_A_POWER_UPDATE, ADF5356_REG6_RF_OUTPUT_A_ENABLE,
+    ADF5356_REG6_RF_OUTPUT_A_POWER_UPDATE, ADF5356_REG6_RF_OUTPUT_A_POWER_GET, ADF5356_REG6_RF_OUTPUT_A_ENABLE,
     ADF5356_REG4_R_COUNTER_UPDATE,
     ADF5356_REG0_PRESCALER,
+    ADF5356_REG0_INT_VALUE_UPDATE, ADF5356_REG1_MAIN_FRAC_VALUE_UPDATE, ADF5356_REG2_AUX_FRAC_LSB_VALUE_UPDATE,
+    ADF5356_REG2_AUX_MOD_LSB_VALUE, ADF5356_REG4_REF_MODE, ADF5356_REG4_PD_POLARITY,
+    ADF5356_REG2_AUX_MOD_LSB_VALUE_UPDATE, ADF5356_REG13_AUX_FRAC_MSB_VALUE_UPDATE,
+    ADF5356_REG13_AUX_MOD_MSB_VALUE_UPDATE, ADF5356_REG6_RF_DIVIDER_SELECT_UPDATE,
+    ADF5356_REG6_CP_BLEED_CURRENT_UPDATE, ADF5356_REG9_VCO_BAND_DIVISION_UPDATE,
+    ADF5356_REG4_CURRENT_SETTING, ADF5356_REG4_MUX_LOGIC, ADF5356_REG4_MUXOUT, ADF5356_REG4_R_DOUBLER,
+    ADF5356_REG4_R_DIVIDER, ADF5356_REG4_R_COUNTER, ADF5356_REG6_NEGATIVE_BLEED, ADF5356_REG6_CP_BLEED_CURRENT,
+    ADF5356_REG6_FB_SELECT, ADF5356_REG6_MUTE_TILL_LD, ADF5356_REG6_RF_OUTPUT_A_POWER, ADF5356_REG7_LE_SYNC,
+    ADF5356_REG7_FRAC_N_LD_PRECISION, ADF5356_REG9_SYNTH_LOCK_TIMEOUT, ADF5356_REG9_AUTOCAL_TIMEOUT,
+    ADF5356_REG9_TIMEOUT, ADF5356_REG9_VCO_BAND_DIVISION, ADF5356_REG10_ADC_ENABLE, ADF5356_REG10_ADC_CLK_DIV,
+    ADF5356_REG10_ADC_CONV,
     ADF5356_REG4_R_COUNTER_GET, ADF5356_REG4_R_DOUBLER_GET, ADF5356_REG4_R_DIVIDER_GET,
     ADF5356_REG0_INT_VALUE_GET,
     ADF5356_REG1_MAIN_FRAC_VALUE_GET,
     ADF5356_REG13_AUX_FRAC_MSB_VALUE_GET, ADF5356_REG2_AUX_FRAC_LSB_VALUE_GET,
     ADF5356_REG13_AUX_MOD_MSB_VALUE_GET, ADF5356_REG2_AUX_MOD_LSB_VALUE_GET,
-    ADF5356_REG6_RF_DIVIDER_SELECT_GET
+    ADF5356_REG6_RF_DIVIDER_SELECT_GET, ADF5356_REG0_PRESCALER_GET,
+    ADF5356_NUM_REGS
 )
 from artiq.coredevice.adf5356 import (  # type: ignore[import]
     ADF5356_MIN_VCO_FREQ, ADF5356_MAX_VCO_FREQ, ADF5356_MAX_FREQ_PFD, ADF5356_MODULUS1,
@@ -60,6 +72,9 @@ class ADF5356(DaxSimDevice):
         # Register signals
         signal_manager = get_signal_manager()
         self._init = signal_manager.register(self, 'init', bool, size=1)
+        self._enable = signal_manager.register(self, 'enable', bool, size=1)
+        self._frequency = signal_manager.register(self, 'freq', float)
+        self._output_power = signal_manager.register(self, 'power', int)
 
     @kernel
     def init(self, blind=False):
@@ -82,6 +97,9 @@ class ADF5356(DaxSimDevice):
         else:
             self.sync()
 
+        # Update signal
+        self._init.push(True)
+
     if ARTIQ_MAJOR_VERSION >= 7:
         @kernel
         def set_att(self, att):
@@ -101,17 +119,14 @@ class ADF5356(DaxSimDevice):
 
     @kernel
     def set_output_power_mu(self, n):
-        """
-        Set the power level at output A of the PLL chip in machine units.
-
-        This driver defaults to `n = 3` at init.
-
-        :param n: output power setting, 0, 1, 2, or 3 (see ADF5356 datasheet, fig. 44).
-        """
+        # From ARTIQ code
         if n not in [0, 1, 2, 3]:
             raise ValueError("invalid power setting")
         self.regs[6] = ADF5356_REG6_RF_OUTPUT_A_POWER_UPDATE(self.regs[6], n)
         self.sync()
+
+        # Update signal
+        self._output_power.push(n)
 
     @portable
     def output_power_mu(self):
@@ -119,27 +134,25 @@ class ADF5356(DaxSimDevice):
 
     @kernel
     def enable_output(self):
-        """
-        Enable output A of the PLL chip. This is the default after init.
-        """
+        # From ARTIQ code
         self.regs[6] |= ADF5356_REG6_RF_OUTPUT_A_ENABLE(1)
         self.sync()
 
+        # Update signal
+        self._enable.push(True)
+
     @kernel
     def disable_output(self):
-        """
-        Disable output A of the PLL chip.
-        """
+        # From ARTIQ code
         self.regs[6] &= ~ADF5356_REG6_RF_OUTPUT_A_ENABLE(1)
         self.sync()
 
+        # Update signal
+        self._enable.push(False)
+
     @kernel
     def set_frequency(self, f):
-        """
-        Output given frequency on output A.
-
-        :param f: 53.125 MHz <= f <= 6800 MHz
-        """
+        # From ARTIQ code
         freq = int64(round(f))
 
         if freq > ADF5356_MAX_VCO_FREQ:
@@ -203,8 +216,12 @@ class ADF5356(DaxSimDevice):
         # commit
         self.sync()
 
+        # Update signal
+        self._frequency.push(f)
+
     @kernel
     def sync(self):
+        # From ARTIQ code
         f_pfd = self.f_pfd()
         delay(200 * us)  # Slack
 
@@ -213,8 +230,6 @@ class ADF5356(DaxSimDevice):
         else:
             delay(200 * us)  # Slack
             delay(200 * us)
-
-        # TODO
 
     @portable
     def f_pfd(self) -> TInt64:

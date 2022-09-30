@@ -81,7 +81,7 @@ class Mirny(DaxSimDevice):
         def write_ext(self, addr, length, data, ext_div=SPIT_WR):
             raise NotImplementedError
 
-    else:
+    else:  # pragma: no cover
 
         @kernel
         def write_ext(self, addr, length, data):
@@ -106,6 +106,7 @@ if ARTIQ_MAJOR_VERSION >= 7:
             signal_manager = get_signal_manager()
             self._init = signal_manager.register(self, 'init', bool, size=1)
             self._att = [signal_manager.register(self, f'att_{i}', float) for i in range(4)]
+            self._channel_sw = [signal_manager.register(self, f'sw_{i}', bool, size=1) for i in range(4)]
             self._output_enable = signal_manager.register(self, 'oe', bool, size=1)
 
         @kernel
@@ -127,29 +128,24 @@ if ARTIQ_MAJOR_VERSION >= 7:
         def mu_to_att(self, att_mu):
             return att_mu / 2
 
-        @kernel
-        def _set_att_helper(self, channel, rf_switch):
+        def _set_att(self, channel, rf_switch):
             self.channel_sw[channel] = 1 if rf_switch else 0
             self._update_register(channel)
 
         @kernel
         def set_att(self, channel, att, rf_switch=True):
             self.att_mu[channel] = self.att_to_mu(att)
-            self._set_att_helper(channel, rf_switch)
+            self._set_att(channel, rf_switch)
             self._att[channel].push(att)
 
         @kernel
         def set_att_mu(self, channel, att_mu, rf_switch=True):
             self.att_mu[channel] = att_mu
-            self._set_att_helper(channel, rf_switch)
+            self._set_att(channel, rf_switch)
             self._att[channel].push(self.mu_to_att(att_mu))
 
         @kernel
         def output_toggle(self, oe):
-            """
-            Toggles output on all shift registers on or off.
-            :param oe - toggle output enable (bool)
-            """
             # From ARTIQ code
             self.output_enable = oe
             delay(100 * us)
@@ -158,8 +154,8 @@ if ARTIQ_MAJOR_VERSION >= 7:
             # Update signals
             self._output_enable.push(oe)
 
-        # noinspection PyUnusedLocal
         @kernel
         def _update_register(self, ch):
             # From ARTIQ code
             delay(100 * us)
+            self._channel_sw[ch].push(self.channel_sw[ch])
