@@ -294,3 +294,15 @@ def vectorize(pyfunc: typing.Callable[..., typing.Any], otypes: typing.Optional[
               doc: typing.Optional[str] = ..., excluded: typing.Optional[typing.Set[str]] = ..., cache: bool = ...,
               signature: typing.Optional[str] = ...) -> typing.Callable[..., ndarray[typing.Any]]:
     ...
+
+
+def floor(x, out: typing.Optional[ndarray[__E_T]] = ..., *, where: typing.Union[bool, __E_T] = ..., casting: str = ...,
+          order: str = ..., dtype: typing.Optional[type] = ..., subok: typing.Any = ...) -> __E_T:
+    # Left out positional-only parameters `/` for compatibility with Python<3.8
+    ...
+
+
+def ceil(x, out: typing.Optional[ndarray[__E_T]] = ..., *, where: typing.Union[bool, __E_T] = ..., casting: str = ...,
+         order: str = ..., dtype: typing.Optional[type] = ..., subok: typing.Any = ...) -> __E_T:
+    # Left out positional-only parameters `/` for compatibility with Python<3.8
+    ...
