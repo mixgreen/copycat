@@ -18,10 +18,12 @@ NUM_PROFILES = 8
 _NUM_CHANNELS = 4
 
 
+@portable(flags={'fast-math'})
 def _mu_to_att(att_mu: TInt32) -> TFloat:
     return float((255 - (att_mu & 0xFF)) / 8)
 
 
+@portable(flags={'fast-math'})
 def _att_to_mu(att: TFloat) -> TInt32:
     code = 255 - np.int32(round(att * 8))
     if code < 0 or code > 255:
