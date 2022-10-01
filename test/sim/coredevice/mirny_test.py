@@ -124,24 +124,22 @@ if ARTIQ_MAJOR_VERSION >= 7:  # noqa: C901
 
         def test_set_att_mu(self):
             for channel in range(4):
+                att_signal = f'att_{channel}'
+                sw_signal = f'sw_{channel}'
+                self.expect(self.env.dut, att_signal, 'x')
+                self.expect(self.env.dut, sw_signal, 'x')
                 for sw in [True, False]:
-                    att_signal = f'att_{channel}'
-                    sw_signal = f'sw_{channel}'
-                    if sw:
-                        self.expect(self.env.dut, att_signal, 'x')
-                    self.expect(self.env.dut, sw_signal, 'x')
                     self.env.dut.set_att_mu(channel, 0, rf_switch=sw)
                     self.expect(self.env.dut, att_signal, 0.0)
                     self.expect(self.env.dut, sw_signal, sw)
 
         def test_set_att(self):
             for channel in range(4):
+                att_signal = f'att_{channel}'
+                sw_signal = f'sw_{channel}'
+                self.expect(self.env.dut, att_signal, 'x')
+                self.expect(self.env.dut, sw_signal, 'x')
                 for sw in [True, False]:
-                    att_signal = f'att_{channel}'
-                    sw_signal = f'sw_{channel}'
-                    if sw:
-                        self.expect(self.env.dut, att_signal, 'x')
-                    self.expect(self.env.dut, sw_signal, 'x')
                     self.env.dut.set_att(channel, 0.0, rf_switch=sw)
                     self.expect(self.env.dut, att_signal, 0.0)
                     self.expect(self.env.dut, sw_signal, sw)
@@ -164,6 +162,6 @@ if ARTIQ_MAJOR_VERSION >= 7:  # noqa: C901
             'att_to_mu': (0.0,),
             'mu_to_att': (0,),
             'output_toggle': (True,),
-            '_update_registser': (0,),
+            '_update_register': (0,),
         }
         DEVICE_DB = _DEVICE_DB
