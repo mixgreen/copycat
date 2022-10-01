@@ -88,8 +88,7 @@ class NullSignalManagerTestCase(unittest.TestCase):
     def test_registered_devices(self):
         for scope, names in self._get_signal_registrations().items():
             for n in names:
-                s = self.sm.signal(scope, n)
-                self.assertIs(s, self.sm.signal(scope, n), 'Function returned a different signal object')
+                self.assertIs(self.sm.signal(scope, n), self.sm.signal(scope, n))
 
     def test_iter(self):
         self.assertGreater(len(self.sm), 200)  # Test that the iterator is not empty (exact number is not important)
@@ -97,9 +96,9 @@ class NullSignalManagerTestCase(unittest.TestCase):
 
     def test_pull_not_set(self):
         for ttl in self.sys.ttl_list:
-            for s in ['state', 'direction', 'sensitivity']:
+            for signal in ['state', 'direction', 'sensitivity']:
                 with self.assertRaises(SignalNotSetError):
-                    self.sm.signal(ttl, s).pull()
+                    self.sm.signal(ttl, signal).pull()
 
     def test_pull_init(self):
         ttl_initialized = {'input_freq': 0.0, 'input_stdev': 0.0, 'input_prob': 0.0}
@@ -420,9 +419,9 @@ class PeekSignalManagerTestCase(NullSignalManagerTestCase):
             ttl.output()
 
         for ttl in self.sys.ttl_list:
-            for s in ['state', 'direction', 'sensitivity']:
+            for signal in ['state', 'direction', 'sensitivity']:
                 with self.assertRaises(SignalNotSetError):
-                    self.sm.signal(ttl, s).pull(time=now_mu() - 1)
+                    self.sm.signal(ttl, signal).pull(time=now_mu() - 1)
 
         for ttl in self.sys.ttl_list:
             self.assertEqual(self.sm.signal(ttl, 'direction').pull(), 1)
