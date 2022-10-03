@@ -227,17 +227,6 @@ class TrapDcModule(DaxModule):
         self._adjustment_gains: typing.Dict[str, float] = {}
 
     @host_only
-    def _get_config_lines(self, config_path: str) -> typing.Dict[str, _ZOTINO_LINE_T]:
-        adjustments = {}
-        for k in _DAC_CONFIG_ATTRS:
-            file_name = config_path + '/' + k + '.csv'
-            try:
-                adjustments[k] = self._reader.process_solution(self._reader.read_solution(file_name))[0]
-            except FileNotFoundError:
-                self.logger.warning(f"Couldn't find config file for {k} in {config_path} directory")
-        return adjustments
-
-    @host_only
     def init(self) -> None:
         """Initialize this module."""
         # Get profile loader
@@ -371,6 +360,26 @@ class TrapDcModule(DaxModule):
                      for i, t in enumerate(trimmed_solution[1:])])
 
         return path
+
+    @host_only
+    def _get_config_lines(self, config_path: str) -> typing.Dict[str, _ZOTINO_LINE_T]:
+        """Create and return the dictionary of adjustments for each type of adjustment
+
+        :param config_path: THe path of the configuration directory with adjustment files
+
+        :return: The dictionary of adjustments for each file
+        """
+        adjustments = {}
+        for k in _DAC_CONFIG_ATTRS:
+            file_name = config_path + '/' + k + '.csv'
+            try:
+                adjustment = self._reader.process_solution(self._reader.read_solution(file_name))
+            except FileNotFoundError:
+                self.logger.warning(f"Couldn't find config file for {k} in {config_path} directory")
+            else:
+                assert len(adjustment) == 1, 'Adjustment for {k} should be 1 line'
+                adjustments[k] = adjustment[0]
+        return adjustments
 
     @host_only
     def list_solutions(self) -> typing.Sequence[str]:

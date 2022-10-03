@@ -9,13 +9,15 @@ from unittest.mock import patch
 import pathlib
 
 from dax.experiment import *
-from dax.modules.trap_dc import ZotinoReader, TrapDcModule
+from dax.modules.trap_dc import DacConfig, ZotinoReader, TrapDcModule
 from trap_dac_utils.reader import SpecialCharacter, BaseReader
 import dax.sim.coredevice.ad53xx
 import dax.sim.test_case
 from test.environment import CI_ENABLED
 
 _NUM_SAMPLES = 1000 if CI_ENABLED else 100
+_CONFIG_PATH = 'config'
+_CONFIG_LINE_VALUE = [([0, 1, 1, 1, 1], [0, 1, 2, 3, 4])]
 
 
 class _TestSystem(DaxSystem):
@@ -28,12 +30,15 @@ class _TestSystem(DaxSystem):
         with temp_dir():
             super(_TestSystem, self).build()
             f = open("test_map.csv", "w")
+            os.makedirs(_CONFIG_PATH)
+            open(_CONFIG_PATH + "/dx.csv", "w+")
             self.trap_dc = TrapDcModule(self,
                                         'trap_dc',
                                         key='zotino0',
                                         solution_path='.',
                                         map_file=os.getcwd() + '/' + f.name,
-                                        **kwargs)
+                                        config_path=_CONFIG_PATH,
+                                        ** kwargs)
 
 
 class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
@@ -57,8 +62,11 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
                 {'label': 'D', 'channel': '5'},
                 {'label': 'E', 'channel': '6'}]
 
+    @patch.object(ZotinoReader, 'process_solution')
+    @patch.object(BaseReader, 'read_solution')
     @patch.object(BaseReader, '_read_channel_map')
-    def setUp(self, _) -> None:
+    def setUp(self, _, _mock_read_solution, mock_process_solution) -> None:
+        mock_process_solution.return_value = _CONFIG_LINE_VALUE
         self.rng = random.Random(self.SEED)
         self.env = self._construct_env()
 
@@ -109,7 +117,11 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
         }
     }
 
-    def _construct_env(self, **kwargs):
+    @patch.object(ZotinoReader, 'process_solution')
+    @patch.object(BaseReader, 'read_solution')
+    @patch.object(BaseReader, '_read_channel_map')
+    def _construct_env(self, _, _mock_read_solution, mock_process_solution, **kwargs):
+        mock_process_solution.return_value = _CONFIG_LINE_VALUE
         return self.construct_env(_TestSystem, device_db=self._DEVICE_DB, build_kwargs=kwargs)
 
     def _test_uninitialized(self):
@@ -464,6 +476,11 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
             prepared_line_result = self.env.trap_dc._read_line(
                 'name_of_file.csv', 2, 3.5)
             self.assertTupleEqual(prepared_line_result, expected_prepared_line)
+
+    def test_get_configs(self):
+        for field in DacConfig.fields():
+            assert field in self.env.trap_dc._adjustment_lines
+            self.assertTupleEqual(self.env.trap_dc._adjustment_lines[field], _CONFIG_LINE_VALUE[0])
 
     @patch.object(BaseReader, '_read_channel_map')
     def test_reader_zotino_uninitialized(self, _):
