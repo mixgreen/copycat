@@ -366,7 +366,7 @@ class AD9910(DaxSimDevice):
             self._freq.push(frequency)
             self._phase.push(phase)
             self._amp.push(amplitude)
-            self._phase_mode.push(_PHASE_MODE_DICT[self.phase_mode])
+            self._phase_mode.push(_PHASE_MODE_DICT[phase_mode])
 
         # Returns pow
         return self.pow_to_turns(self._get_pow(
