@@ -49,7 +49,7 @@ class ScanKernelTestCase(test.hw_test.HardwareTestCase):
 
     def test_run(self, env_cls=_ScanExperiment, result=16, *, host=True, device=True, exception=False):
         env = self.construct_env(env_cls)
-        with (self.assertRaises(RuntimeError) if exception else contextlib.nullcontext()):
+        with self.assertRaises(RuntimeError) if exception else contextlib.nullcontext():
             env.run()
         self.assertEqual(env.result, result)
         self.assertEqual(env.host_setup_done, host)
