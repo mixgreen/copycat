@@ -134,7 +134,7 @@ class DacConfig:
         assert isinstance(tooltip, str) or tooltip is None
 
         if group is None:
-            group = 'Sandia DAC offset overrides'
+            group = 'Zotino offset overrides'
 
         number_kwargs = dataclasses.asdict(_DAC_CONFIG_ATTRS[field])
         number_kwargs.update(kwargs)
