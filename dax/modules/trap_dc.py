@@ -1,5 +1,4 @@
 from __future__ import annotations  # Postponed evaluation of annotations
-import dataclasses
 from functools import lru_cache
 
 import math
@@ -8,10 +7,13 @@ import pathlib
 import numpy as np
 
 from dax.experiment import *
-from trap_dac_utils.reader import BaseReader, SpecialCharacter, SOLUTION_T, MAP_T
+from trap_dac_utils.reader import BaseReader, SpecialCharacter, SOLUTION_T, MAP_T, CONFIG_T
+from trap_dac_utils.schemas import LINEAR_COMBO
 
 import artiq.coredevice.zotino  # type: ignore[import]
 import artiq.coredevice.ad53xx  # type: ignore[import]
+
+__all__ = ['TrapDcModule', 'ZotinoReader', 'ZotinoConfig']
 
 """Zotino Path and Line types"""
 _ZOTINO_KEY_T = typing.List[float]
@@ -22,108 +24,93 @@ _ZOTINO_SOLUTION_T = typing.List[_ZOTINO_LINE_T]
 _ZOTINO_LINE_T_MU = typing.Tuple[_ZOTINO_KEY_T_MU, _ZOTINO_VALUE_T]
 _ZOTINO_SOLUTION_T_MU = typing.List[_ZOTINO_LINE_T_MU]
 
-__all__ = ['TrapDcModule', 'ZotinoReader', 'DacConfig']
+
+class ConfigAttrs:
+    _attrs: CONFIG_T
+    _reader: ZotinoReader
+
+    def __init__(self, cfg: CONFIG_T, reader: ZotinoReader):
+        self._attrs = cfg
+        self._attrs.setdefault('value', 0.)
+        self._reader = reader
+
+    def __getitem__(self, arg: str) -> typing.Any:
+        return self._attrs[arg]
+
+    def __setitem__(self, arg: str, newvalue: typing.Any) -> None:
+        self._attrs[arg] = newvalue
+
+    def get(self, arg: str, default: typing.Any) -> typing.Any:
+        self._attrs.get(arg, default=default)
+
+    def solution(self) -> SOLUTION_T:
+        file = self._attrs.get('file', default=f'{self._attrs["name"]}.csv')
+        line = self._attrs.get('line', default=0)
+        return self._reader.read_solution(file, line, line)
+
+    def in_range(self) -> bool:
+        val = self._attrs['value']
+        maxi = self._attrs.get('max', default=float('inf'))
+        mini = self._attrs.get('min', default=float('-inf'))
+
+        if val is None:
+            return True
+        assert isinstance(val, float) and isinstance(mini, float) and isinstance(maxi, float)
+        assert mini < maxi
+        return mini <= val <= maxi
 
 
-@dataclasses.dataclass(frozen=True)
-class _DacConfigAttrs:
-    min: float
-    max: float
-    unit: str
-    ndecimals: int = 4
-    scale: typing.Optional[float] = 1.0
-    step: typing.Optional[float] = None
-
-    def in_range(self, value) -> bool:
-        assert isinstance(value, float)
-        assert self.min < self.max
-        return self.min <= value <= self.max
+_ZOTINO_CONFIG_T = typing.Dict[str, ConfigAttrs]
 
 
-_D_UNIT: float = 2.74
-"""Natural distance unit (in um) corresponding to MHz^2 units for the quadrupoles (see OneNote)."""
+class ZotinoConfig:
+    _config: _ZOTINO_CONFIG_T
 
-# TODO: Should change this to a file perhaps?
-_DAC_CONFIG_ATTRS: typing.Dict[str, _DacConfigAttrs] = {
-    'dx': _DacConfigAttrs(-100.0, +100.0, unit='V/m', ndecimals=3),
-    'dy': _DacConfigAttrs(-100.0, +100.0, unit='V/m', ndecimals=3),
-    'dz': _DacConfigAttrs(-2e3, +2e3, unit='V/m', ndecimals=3),
-    'x1': _DacConfigAttrs(-0.2, +0.2, unit=f'{_D_UNIT} um * MHz^2', ndecimals=4),
-    'x2': _DacConfigAttrs(-6.0, +6.0, unit='MHz^2', ndecimals=4),
-    'x3': _DacConfigAttrs(-0.014, +0.014, unit=f'MHz^2 / ({_D_UNIT} um)', ndecimals=4, step=1e-4),
-    'x4': _DacConfigAttrs(-6e-3, +6e-3, unit=f'MHz^2 / ({_D_UNIT} um)^2', ndecimals=5, step=1e-3),
-    'qxz': _DacConfigAttrs(-6.0, +6.0, unit='MHz^2', ndecimals=4),
-    'qzz': _DacConfigAttrs(-6.0, +6.0, unit='MHz^2', ndecimals=4),
-    'qzy': _DacConfigAttrs(-6.0, +6.0, unit='MHz^2', ndecimals=4),
-    'center': _DacConfigAttrs(-50.0, +50.0, unit='MHz^2', ndecimals=2),
-}
-"""Attributes for each DAC config field."""
+    def __init__(self, config: CONFIG_T, reader: ZotinoReader):
+        self._config = {d['name']: ConfigAttrs(d, reader) for d in config['params']}
 
-
-@dataclasses.dataclass
-class DacConfig:
-    dx: float
-    dy: float
-    dz: float
-    x1: float
-    x2: float
-    x3: float
-    x4: float
-    qxz: float
-    qzz: float
-    qzy: float
-    center: float
-
-    def as_dict(self) -> typing.Dict[str, typing.Any]:
-        return dataclasses.asdict(self)
+    def __getitem__(self, arg):
+        return self._config[arg]
 
     def verify(self) -> None:
-        for f, v in self.as_dict().items():
-            attrs = _DAC_CONFIG_ATTRS[f]
-            if not attrs.in_range(v):
-                raise ValueError(f'Field {f}={v} is out of range [{attrs.min}, {attrs.max}]')
+        for f, attrs in self._config.items():
+            if not attrs.in_range():
+                raise ValueError(f'Field {f}={attrs["value"]} is out of range')
 
-    def to_dataset_sys(self, module: TrapDcModule, group: str, **kwargs: typing.Any) -> None:
-        assert isinstance(module, TrapDcModule)
-        assert isinstance(group, str)
-        assert group.isalpha()
+    # def to_dataset_sys(self, module: TrapDcModule, group: str, **kwargs: typing.Any) -> None:
+    #     assert isinstance(module, TrapDcModule)
+    #     assert isinstance(group, str)
+    #     assert group.isalpha()
 
-        for f, v in self.as_dict().items():
-            module.set_dataset_sys(f'{group}.{f}', v, **kwargs)
+    #     for f, attrs in self.config.items():
+    #         module.set_dataset_sys(f'{group}.{f}', attrs['value'], **kwargs)
 
-    def __add__(self, other: DacConfig) -> DacConfig:
-        assert isinstance(other, DacConfig)
+    # def __add__(self, other: ZotinoConfig) -> ZotinoConfig:
+    #     assert isinstance(other, ZotinoConfig)
 
-        fields = self.as_dict()
-        for f, v in dataclasses.asdict(other).items():
-            fields[f] += v
-        return DacConfig(**fields)
+    #     for f, attrs in other.config.items():
+    #         self.config[f]['value'] += attrs['value']
+    #     return ZotinoConfig(self.config, self.reader)
 
-    @classmethod
-    def from_module(cls, module: TrapDcModule, group: str, **kwargs: typing.Any) -> DacConfig:
-        assert isinstance(module, TrapDcModule)
-        assert isinstance(group, str)
-        assert group.isalpha()
-        assert isinstance(kwargs.get('default', 0.0), float)
-        assert isinstance(kwargs.get('fallback', 0.0), float)
+    # def from_module(self, module: TrapDcModule, group: str, **kwargs: typing.Any) -> ZotinoConfig:
+    #     assert isinstance(module, TrapDcModule)
+    #     assert isinstance(group, str)
+    #     assert group.isalpha()
+    #     assert isinstance(kwargs.get('default', 0.0), float)
+    #     assert isinstance(kwargs.get('fallback', 0.0), float)
 
-        fields = {f: module.get_dataset_sys(f'{group}.{f}', **kwargs) for f in cls.fields()}
-        return DacConfig(**fields)
+    #     fields = {f: module.get_dataset_sys(f'{group}.{f}', **kwargs) for f in self.fields()}
+    #     return ZotinoConfig(**fields)
 
-    @classmethod
-    def from_arguments(cls, env: HasEnvironment, defaults: DacConfig, *,
-                       prefix: str = '', group: typing.Optional[str] = None) -> DacConfig:
+    def from_arguments(self, env: HasEnvironment, *,
+                       prefix: str = '', group: typing.Optional[str] = None) -> None:
         assert isinstance(env, HasEnvironment)
-        assert isinstance(defaults, DacConfig)
 
-        fields = {
-            f: cls.get_argument(env, f, default=getattr(defaults, f), prefix=prefix, group=group)
-            for f in cls.fields()
-        }
-        return DacConfig(**fields)
+        for f in self.fields():
+            self._config[f]['value'] = self.get_argument(
+                env, f, default=self._config[f]['value'], prefix=prefix, group=group)
 
-    @classmethod
-    def get_argument(cls, env: HasEnvironment, field: str, default: float, *,
+    def get_argument(self, env: HasEnvironment, field: str, default: float, *,
                      prefix: str = '', group: typing.Optional[str], tooltip: typing.Optional[str] = None,
                      **kwargs: typing.Any):
         assert isinstance(env, HasEnvironment)
@@ -136,7 +123,7 @@ class DacConfig:
         if group is None:
             group = 'Zotino offset overrides'
 
-        number_kwargs = dataclasses.asdict(_DAC_CONFIG_ATTRS[field])
+        number_kwargs = self._config[field].get('args', {})
         number_kwargs.update(kwargs)
 
         return env.get_argument(
@@ -145,9 +132,8 @@ class DacConfig:
             group=group, tooltip=tooltip
         )
 
-    @classmethod
-    def fields(cls) -> typing.Sequence[str]:
-        return [f.name for f in dataclasses.fields(cls)]
+    def fields(self) -> typing.Sequence[str]:
+        return list(self._config.keys())
 
 
 class TrapDcModule(DaxModule):
@@ -184,15 +170,13 @@ class TrapDcModule(DaxModule):
     _reader: ZotinoReader
     _min_line_delay_mu: np.int64
     _calculator: ZotinoCalculator
-    _adjustment_lines: typing.Dict[str, _ZOTINO_LINE_T]
-    _adjustment_gains: typing.Dict[str, float]
+    _lc_config: ZotinoConfig
 
     def build(self,  # type: ignore[override]
               *,
               key: str,
               solution_path: str,
-              map_file: str,
-              config_path: typing.Optional[str] = None) -> None:
+              map_file: str) -> None:
         """Build the trap DC module
 
         :param key: The key of the zotino device
@@ -202,7 +186,6 @@ class TrapDcModule(DaxModule):
         assert isinstance(key, str)
         assert isinstance(solution_path, str)
         assert isinstance(map_file, str)
-        assert config_path is None or isinstance(config_path, str)
 
         # Get devices
         self._zotino = self.get_device(key, artiq.coredevice.zotino.Zotino)
@@ -219,12 +202,6 @@ class TrapDcModule(DaxModule):
             self._solution_path, self._map_file)
 
         self._args_enabled = False
-
-        # names of the possible adjustments
-        if config_path:
-            self._adjustment_lines = self._get_config_lines(config_path)
-
-        self._adjustment_gains: typing.Dict[str, float] = {}
 
     @host_only
     def init(self) -> None:
@@ -252,9 +229,22 @@ class TrapDcModule(DaxModule):
         """
         return self._reader.solution_path
 
+    @property
+    def lc_config(self) -> ZotinoConfig:
+        """Get the linear combination config
+
+        :return: The linear combination config object
+        """
+        try:
+            return self._lc_config
+        except AttributeError:
+            raise AttributeError("LC Configuration is not yet defined. Use function set_lc_config.") from None
+
     @host_only
     def read_line_mu(self,
-                     file_name: str,
+                     *,
+                     file_name: typing.Optional[str] = None,
+                     reader_solution: typing.Optional[SOLUTION_T] = None,
                      index: int = 0,
                      multiplier: float = 1.0) -> _ZOTINO_LINE_T_MU:
         """Read in a single line of a solutions file and return the line in zotino form.
@@ -268,13 +258,16 @@ class TrapDcModule(DaxModule):
 
         :return: Zotino module interpretable solution line with voltages in MU
         """
-        path = self._read_line(file_name, index, multiplier)
+        path = self._read_line(file_name=file_name, index=index, multiplier=multiplier,
+                               reader_solution=reader_solution)
         path_mu = (self._reader.convert_to_mu(path[0]), path[1])
         return path_mu
 
     @host_only
     def _read_line(self,
-                   file_name: str,
+                   *,
+                   file_name: typing.Optional[str] = None,
+                   reader_solution: typing.Optional[SOLUTION_T] = None,
                    index: int = 0,
                    multiplier: float = 1.0) -> _ZOTINO_LINE_T:
         """Read in a single line of a solutions file and return the line in zotino form.
@@ -288,8 +281,12 @@ class TrapDcModule(DaxModule):
 
         :return: Zotino module interpretable solution line with voltages in V
         """
-        unprepared_line = self._reader.process_solution(self._reader.read_solution(file_name))[index]
-
+        if file_name is not None:
+            unprepared_line = self._reader.process_solution(self._reader.read_solution(file_name))[index]
+        elif reader_solution is not None:
+            unprepared_line = self._reader.process_solution(reader_solution)[index]
+        else:
+            raise ValueError("Must pass in either file_name or reader_solution")
         # multiply each solution list with multiplier
         line = (
             (np.asarray(unprepared_line[0]) * multiplier).tolist(),  # type: ignore[attr-defined]
@@ -362,24 +359,13 @@ class TrapDcModule(DaxModule):
         return path
 
     @host_only
-    def _get_config_lines(self, config_path: str) -> typing.Dict[str, _ZOTINO_LINE_T]:
-        """Create and return the dictionary of adjustments for each type of adjustment
+    def set_lc_config(self, config_file: str) -> None:
+        """Read the linear combination configuration file and set the instance variable
 
-        :param config_path: THe path of the configuration directory with adjustment files
-
-        :return: The dictionary of adjustments for each file
+        :param config_file: The linear combination configuration file path
         """
-        adjustments = {}
-        for k in _DAC_CONFIG_ATTRS:
-            file_name = config_path + '/' + k + '.csv'
-            try:
-                adjustment = self._reader.process_solution(self._reader.read_solution(file_name))
-            except FileNotFoundError:
-                self.logger.warning(f"Couldn't find config file for {k} in {config_path} directory")
-            else:
-                assert len(adjustment) == 1, 'Adjustment for {k} should be 1 line'
-                adjustments[k] = adjustment[0]
-        return adjustments
+        self._lc_config = ZotinoConfig(self._reader.read_config(config_file, schema=LINEAR_COMBO),
+                                       self._reader)
 
     @host_only
     def list_solutions(self) -> typing.Sequence[str]:
@@ -644,21 +630,21 @@ class TrapDcModule(DaxModule):
                                    dma_comm_delay_intercept_mu=dma_comm_delay_intercept_mu,
                                    dma_comm_delay_slope_mu=dma_comm_delay_slope_mu)
 
-    @host_only
-    def update_global(self, global_: DacConfig) -> None:
-        """Update global configuration in system datasets.
+    # @host_only
+    # def update_global(self, global_: ZotinoConfig) -> None:
+    #     """Update global configuration in system datasets.
 
-        :param global_: The new global configuration
-        """
-        global_.to_dataset_sys(self, self.GLOBAL_GROUP_KEY)
+    #     :param global_: The new global configuration
+    #     """
+    #     global_.to_dataset_sys(self, self.GLOBAL_GROUP_KEY)
 
-    @host_only
-    def update_offset(self, offset: DacConfig) -> None:
-        """Update offset configuration in system datasets.
+    # @host_only
+    # def update_offset(self, offset: ZotinoConfig) -> None:
+    #     """Update offset configuration in system datasets.
 
-        :param offset: The new offset configuration
-        """
-        offset.to_dataset_sys(self, self.OFFSET_GROUP_KEY)
+    #     :param offset: The new offset configuration
+    #     """
+    #     offset.to_dataset_sys(self, self.OFFSET_GROUP_KEY)
 
     def _add_arguments(self, env: HasEnvironment, *,
                        global_: bool, offset: bool,
@@ -685,16 +671,9 @@ class TrapDcModule(DaxModule):
             )
 
         # Config arguments
-        if global_:
-            self._args_global_cfg = DacConfig.from_arguments(
-                env, DacConfig.from_module(self, self.GLOBAL_GROUP_KEY, fallback=0.0),
-                prefix='Global ', group=group
-            )
-        if offset:
-            self._args_offset_cfg = DacConfig.from_arguments(
-                env, DacConfig.from_module(self, self.OFFSET_GROUP_KEY, fallback=0.0),
-                prefix='Offset ', group=group
-            )
+        self._lc_config.from_arguments(
+            env, prefix='Global ', group=group
+        )
 
     @host_only
     def add_global_arguments(self, env: HasEnvironment, *,
@@ -727,47 +706,6 @@ class TrapDcModule(DaxModule):
         """
         self._add_arguments(env, enable=enable, group=group,
                             global_=False, offset=True)
-
-    @rpc
-    def config(self, global_, offset):  # type: (DacConfig, DacConfig) -> None
-        """Set global and offset configuration and update compensations.
-
-        :param global_: The new global configuration
-        :param offset: The new offset configuration
-        """
-        assert isinstance(global_, DacConfig)
-        assert isinstance(offset, DacConfig)
-
-        # Verify and add configurations
-        self.logger.debug(f'Global: {global_}')
-        self.logger.debug(f'Offset: {offset}')
-        global_.verify()
-        offset.verify()
-        cfg = global_ + offset
-        cfg.verify()
-
-        # Update compensations
-        self._adjustment_gains["dx"] = cfg.dx / 1e3
-        self._adjustment_gains["dy"] = cfg.dy / 1e3
-        self._adjustment_gains["dz"] = cfg.dz / 1e3
-
-        self._adjustment_gains["x1"] = (
-            cfg.x1
-            - cfg.x2 * (cfg.center / _D_UNIT)
-            + cfg.x3 * (cfg.center / _D_UNIT) ** 2 / 2.0
-            - cfg.x4 * (cfg.center / _D_UNIT) ** 3 / 6.0
-        )
-        self._adjustment_gains["x2"] = (
-            cfg.x2
-            - cfg.x3 * (cfg.center / _D_UNIT)
-            + cfg.x4 * (cfg.center / _D_UNIT) ** 2 / 2.0
-        )
-        self._adjustment_gains["x3"] = cfg.x3 - (cfg.x4 * (cfg.center / _D_UNIT))
-        self._adjustment_gains["x4"] = cfg.x4
-
-        self._adjustment_gains["qxz"] = cfg.qxz
-        self._adjustment_gains["qzz"] = cfg.qzz
-        self._adjustment_gains["qzy"] = cfg.qzy
 
 
 class ZotinoCalculator:

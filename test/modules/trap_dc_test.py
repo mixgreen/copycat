@@ -9,7 +9,7 @@ from unittest.mock import patch
 import pathlib
 
 from dax.experiment import *
-from dax.modules.trap_dc import DacConfig, ZotinoReader, TrapDcModule
+from dax.modules.trap_dc import ConfigAttrs, ZotinoConfig, ZotinoReader, TrapDcModule
 from trap_dac_utils.reader import SpecialCharacter, BaseReader
 import dax.sim.coredevice.ad53xx
 import dax.sim.test_case
@@ -37,7 +37,6 @@ class _TestSystem(DaxSystem):
                                         key='zotino0',
                                         solution_path='.',
                                         map_file=os.getcwd() + '/' + f.name,
-                                        config_path=_CONFIG_PATH,
                                         ** kwargs)
 
 
@@ -474,13 +473,19 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
                                                   ([1., 2., 3., 4.], [2, 3, 4, 5])]
             expected_prepared_line = ([3.5, 7., 0., 0.], [2, 3, 4, 5])
             prepared_line_result = self.env.trap_dc._read_line(
-                'name_of_file.csv', 2, 3.5)
+                file_name='name_of_file.csv', index=2, multiplier=3.5)
             self.assertTupleEqual(prepared_line_result, expected_prepared_line)
 
-    def test_get_configs(self):
-        for field in DacConfig.fields():
-            assert field in self.env.trap_dc._adjustment_lines
-            self.assertTupleEqual(self.env.trap_dc._adjustment_lines[field], _CONFIG_LINE_VALUE[0])
+    @patch.object(BaseReader, 'read_config')
+    def test_set_lc_configs(self, mock_read_solution):
+        mock_read_solution.return_value = {"params": [{"name": "dx", "file": "configs.csv", "line": 1, "value": 2.3}]}
+        self.env.trap_dc.set_lc_config("config.json")
+        cfg = self.env.trap_dc.lc_config
+        assert len(cfg._config) == 1 and "dx" in cfg._config
+        assert isinstance(cfg._config["dx"], ConfigAttrs)
+        assert len(cfg._config["dx"]._attrs) == 4 and all(
+            attrs in cfg._config["dx"]._attrs for attrs in ["name", "file", "line"])
+        assert cfg._config["dx"]._attrs["value"] == 2.3
 
     @patch.object(BaseReader, '_read_channel_map')
     def test_reader_zotino_uninitialized(self, _):
