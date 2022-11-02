@@ -12,6 +12,9 @@ from trap_dac_utils.reader import BaseReader, SpecialCharacter, SOLUTION_T, MAP_
 import artiq.coredevice.zotino  # type: ignore[import]
 import artiq.coredevice.ad53xx  # type: ignore[import]
 
+# from trap_dac_utils.types import LABEL_FIELD
+LABEL_FIELD = 'label'
+
 """Zotino Path and Line types"""
 _ZOTINO_KEY_T = typing.List[float]
 _ZOTINO_KEY_T_MU = typing.List[int]
@@ -742,7 +745,7 @@ class ZotinoReader(BaseReader[_ZOTINO_SOLUTION_T]):
         :return: Representation of csv file as a single dictionary with the pin labels as the keys
         """
 
-        return {d[self._LABEL]: d[self._CHANNEL] for d in channel_map}
+        return {d[LABEL_FIELD]: d[self._CHANNEL] for d in channel_map}
 
     @host_only
     def convert_solution_to_mu(self,
