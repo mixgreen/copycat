@@ -12,8 +12,7 @@ from trap_dac_utils.reader import BaseReader, SpecialCharacter, SOLUTION_T, MAP_
 import artiq.coredevice.zotino  # type: ignore[import]
 import artiq.coredevice.ad53xx  # type: ignore[import]
 
-# from trap_dac_utils.types import LABEL_FIELD
-LABEL_FIELD = 'label'
+from trap_dac_utils.types import LABEL_FIELD
 
 """Zotino Path and Line types"""
 _ZOTINO_KEY_T = typing.List[float]
