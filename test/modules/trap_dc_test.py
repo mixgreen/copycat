@@ -11,14 +11,12 @@ import pathlib
 from dax.experiment import *
 from dax.modules.trap_dc import ZotinoReader, TrapDcModule
 from trap_dac_utils.reader import SpecialCharacter, BaseReader
-# from trap_dac_utils.types import LABEL_FIELD
+from trap_dac_utils.types import LABEL_FIELD
 import dax.sim.coredevice.ad53xx
 import dax.sim.test_case
 from test.environment import CI_ENABLED
 
 _NUM_SAMPLES = 1000 if CI_ENABLED else 100
-
-LABEL_FIELD = 'label'
 
 
 class _TestSystem(DaxSystem):
