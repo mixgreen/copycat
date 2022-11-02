@@ -11,11 +11,14 @@ import pathlib
 from dax.experiment import *
 from dax.modules.trap_dc import ZotinoReader, TrapDcModule
 from trap_dac_utils.reader import SpecialCharacter, BaseReader
+# from trap_dac_utils.types import LABEL_FIELD
 import dax.sim.coredevice.ad53xx
 import dax.sim.test_case
 from test.environment import CI_ENABLED
 
 _NUM_SAMPLES = 1000 if CI_ENABLED else 100
+
+LABEL_FIELD = 'label'
 
 
 class _TestSystem(DaxSystem):
@@ -348,7 +351,7 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
     def generate_map_data(self, labels):
         channels = self._RNG.sample(
             range(self._NUM_CHANNELS), self._NUM_CHANNELS)
-        return [{ZotinoReader._LABEL: label,
+        return [{LABEL_FIELD: label,
                  ZotinoReader._CHANNEL: str(channels[i])}
                 for i, label in enumerate(labels)]
 
@@ -362,7 +365,7 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
                          reader):
         for d in map_data:
             if d[reader._CHANNEL] == str(channel):
-                return d[reader._LABEL]
+                return d[LABEL_FIELD]
         raise ValueError("Mapped to channel that isn't in channel map")
 
     @patch.object(BaseReader, 'read_solution')
