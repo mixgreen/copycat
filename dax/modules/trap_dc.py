@@ -706,6 +706,10 @@ class ZotinoReader(BaseReader[_ZOTINO_SOLUTION_T]):
                         voltages.append(voltage)
                         channels.append(int(channel_map_dict[key]))
                 else:
+                    if val == float('inf'):
+                        val = self.voltage_high
+                    elif val == float('-inf'):
+                        val = self.voltage_low
                     voltages.append(val)
                     channels.append(int(channel_map_dict[key]))
 
@@ -724,10 +728,6 @@ class ZotinoReader(BaseReader[_ZOTINO_SOLUTION_T]):
         self._check_init("process_specials")
         if val == SpecialCharacter.X:
             return math.nan
-        elif val == SpecialCharacter.INF:
-            return self.voltage_high
-        elif val == SpecialCharacter.NEG_INF:
-            return self.voltage_low
         else:
             # Special character not handled
             raise ValueError(f'Special character {val} is not yet handled')

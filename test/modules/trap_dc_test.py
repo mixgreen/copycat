@@ -321,10 +321,10 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
                             channel, map_data, reader)
                         if t[0][j] == -2 * self._VREF:
                             self.assertEqual(
-                                expected_solution[i + 1][label], SpecialCharacter.NEG_INF)
+                                expected_solution[i + 1][label], float('-inf'))
                         elif t[0][j] == 2 * self._VREF:
                             self.assertEqual(
-                                expected_solution[i + 1][label], SpecialCharacter.INF)
+                                expected_solution[i + 1][label], float('inf'))
                         else:
                             self.assertAlmostEqual(
                                 expected_solution[i + 1][label], t[0][j], places=3)
@@ -335,7 +335,7 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
     def generate_path_data(self, headers):
         headers = [self.rand_str() for _ in range(self._NUM_CHANNELS)]
         path_data = []
-        special = [e for e in SpecialCharacter]
+        special = [SpecialCharacter.X, float('inf'), float('-inf')]
         for _ in range(self._RNG.randint(1, 50)):
             pool = [
                 *special, self._RNG.uniform(-1.95 * self._VREF * V,
