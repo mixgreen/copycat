@@ -68,9 +68,6 @@ class SPIPeekTestCase(dax.sim.test_case.PeekTestCase):
 
     def test_write(self):
         self.expect(self.env.dut, "mosi", "x")
-        # Should fail if config not set, pass if config called
-        with self.assertRaises(RuntimeError):
-            self.env.dut.write(10)
 
         self.env.dut.set_config(self._SPI_CONFIG, 32, 25e6, 1)
         self.env.dut.write(10)

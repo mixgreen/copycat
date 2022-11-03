@@ -26,9 +26,6 @@ class SPIMaster(DaxSimDevice, _SPIMaster):
         self._config_flags = signal_manager.register(self, "cfg_flags", int)
         self._out_data = signal_manager.register(self, "mosi", int)
 
-        # Internal state
-        self._config_set = False
-
         # Store attributes and initialization (from ARTIQ code)
         self.ref_period_mu = self.core.seconds_to_mu(
             self.core.coarse_ref_period)
@@ -50,12 +47,9 @@ class SPIMaster(DaxSimDevice, _SPIMaster):
         self._config_cs.push(cs)
         self._config_flags.push(flags)
         delay_mu(self.ref_period_mu)
-        self._config_set = True
 
     @kernel
     def write(self, data) -> TNone:
-        if not self._config_set:
-            raise RuntimeError("Data written to SPI device without configuring first")
         self._out_data.push(data)
         delay_mu(self.xfer_duration_mu)
         self._out_data.push("X")
