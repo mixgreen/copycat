@@ -126,7 +126,7 @@ class AD53xxPeekTestCase(dax.sim.test_case.PeekTestCase):
             o = self.rng.randrange(2 ** 14)
             c = self.rng.randrange(self._NUM_CHANNELS)
             # Adjust voltage to make sure it is in range
-            v += dax.sim.coredevice.ad53xx._mu_to_voltage(0 * V, vref=self.env.dut.vref, offset_dacs=o)
+            v += dax.sim.coredevice.ad53xx._mu_to_voltage(0, vref=self.env.dut.vref, offset_dacs=o)
             with self.subTest(v=v, o=o):
                 # Call functions
                 self.env.dut.write_offset_dacs_mu(o)
