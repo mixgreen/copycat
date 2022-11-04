@@ -706,10 +706,6 @@ class ZotinoReader(BaseReader[_ZOTINO_SOLUTION_T]):
                         voltages.append(voltage)
                         channels.append(int(channel_map_dict[key]))
                 else:
-                    if val == float('inf'):
-                        val = self.voltage_high
-                    elif val == float('-inf'):
-                        val = self.voltage_low
                     voltages.append(val)
                     channels.append(int(channel_map_dict[key]))
 
