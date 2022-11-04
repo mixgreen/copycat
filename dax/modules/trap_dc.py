@@ -693,6 +693,9 @@ class ZotinoReader(BaseReader[_ZOTINO_SOLUTION_T]):
 
         :return: Solutions file representation for a zotino
         """
+        if not self.verify_solution(solution):
+            raise ValueError("Solution is not a valid. (e.g. values are not in accepted range)")
+
         channel_map_dict = self._simplify_map(self.map_file)
 
         parsed_solution = []
