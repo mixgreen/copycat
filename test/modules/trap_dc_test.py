@@ -45,13 +45,13 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
     _VREF = 5
 
     PATH_DATA = [{'A': -10., 'B': 0., 'C': 0., 'D': 0.,
-                  'E': SpecialCharacter('x')},
+                  'E': SpecialCharacter.X},
                  {'A': 1., 'B': 0., 'C': 0, 'D': 0,
-                  'E': SpecialCharacter('x')},
+                  'E': SpecialCharacter.X},
                  {'A': 1., 'B': 2., 'C': 0., 'D': 0.,
-                  'E': SpecialCharacter('x')},
+                  'E': SpecialCharacter.X},
                  {'A': 1., 'B': 2., 'C': 3., 'D': 4.,
-                  'E': SpecialCharacter('x')}]
+                  'E': SpecialCharacter.X}]
     MAP_DATA = [{'label': 'A', 'channel': '2'},
                 {'label': 'B', 'channel': '3'},
                 {'label': 'C', 'channel': '4'},
