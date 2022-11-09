@@ -585,7 +585,5 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
             s.trap_dc.set_line_packed(packed_solution[0])
             delay(1)
             for v, ch in zip(test_solution[0][0], test_solution[0][1]):
-                print(v)
-                print(ch)
                 self.expect_close(s.trap_dc._zotino,
                                   f'v_out_{ch}', v, places=3)

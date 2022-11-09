@@ -439,6 +439,7 @@ class TrapDcModule(DaxModule):
         """
         for val in line:
             self._zotino.bus.write(val)
+        self._zotino.load()
 
     @host_only
     def calculate_slack(self,
