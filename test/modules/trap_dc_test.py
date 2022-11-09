@@ -567,3 +567,25 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
         assert self.env.trap_dc._calculator._comm_delay_slope_mu == np.int64(3)
         assert self.env.trap_dc._calculator._dma_comm_delay_intercept_mu == np.int64(4)
         assert self.env.trap_dc._calculator._dma_comm_delay_slope_mu == np.int64(5)
+
+    @patch.object(BaseReader, '_read_channel_map')
+    def test_set_line_packed(self, _):
+        with temp_dir():
+            test_solution = [([1., 2., 3., 4.], [2, 3, 4, 5])]
+
+            s = self._construct_env()
+            s.trap_dc.init()
+            open('test.csv', 'w')
+            reader = ZotinoReader(pathlib.Path('.'),
+                                  pathlib.Path('test.csv'))
+            reader.init(self.env.trap_dc._zotino)
+            test_solution_mu = reader.convert_solution_to_mu(test_solution)
+
+            packed_solution = s.trap_dc.pack_solution(test_solution_mu)
+            s.trap_dc.set_line_packed(packed_solution[0])
+            delay(1)
+            for v, ch in zip(test_solution[0][0], test_solution[0][1]):
+                print(v)
+                print(ch)
+                self.expect_close(s.trap_dc._zotino,
+                                  f'v_out_{ch}', v, places=3)

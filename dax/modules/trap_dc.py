@@ -22,6 +22,7 @@ _ZOTINO_LINE_T = typing.Tuple[_ZOTINO_KEY_T, _ZOTINO_VALUE_T]
 _ZOTINO_SOLUTION_T = typing.List[_ZOTINO_LINE_T]
 _ZOTINO_LINE_T_MU = typing.Tuple[_ZOTINO_KEY_T_MU, _ZOTINO_VALUE_T]
 _ZOTINO_SOLUTION_T_MU = typing.List[_ZOTINO_LINE_T_MU]
+_ZOTION_SOLUTION_T_PACK = typing.List[typing.List[int]]
 
 __all__ = ['TrapDcModule', 'ZotinoReader']
 
@@ -221,6 +222,18 @@ class TrapDcModule(DaxModule):
         return path
 
     @host_only
+    def pack_solution(self, solution: _ZOTINO_SOLUTION_T_MU) -> _ZOTION_SOLUTION_T_PACK:
+        """Pack a solution of values into a form directly writeable to the SPI bus
+
+        :param solution: The Zotino MU solution to pack
+
+        :return: The packed solution where each solution row is a list of 32-bit integers
+            where the most significant 24 bits are the packed value
+        """
+        return [[artiq.coredevice.ad53xx.ad53xx_cmd_write_ch(ch, v, artiq.coredevice.ad53xx.AD53XX_CMD_DATA) << 8
+                for v, ch in zip(vs, chs)] for vs, chs in solution]
+
+    @host_only
     def list_solutions(self) -> typing.Sequence[str]:
         """Get a list of each solution file available in the solutions
         directory
@@ -363,6 +376,50 @@ class TrapDcModule(DaxModule):
         return
 
     @kernel
+    def shuttle_packed(self,
+                       solution: TList(TList(TInt32), TList(TInt32)),  # type: ignore[valid-type]
+                       line_delay: TFloat):
+        """Set sequential lines of voltages on the zotino device given a list of voltages (MU) and
+        corresponding channels
+
+        :param solution: A list of voltage lines where channel and voltage are packed into one 32-bit int
+        :param line_delay: A delay (s) inserted after the line is set
+            Must be greater than the SPI write time for the number of used channels
+        """
+        self.shuttle_mu_packed(solution, self.core.seconds_to_mu(line_delay))
+
+    @kernel
+    def shuttle_mu_packed(self,
+                          solution: TList(TList(TInt32), TList(TInt32)),  # type: ignore[valid-type]
+                          line_delay: TInt64):
+        """Set sequential lines of voltages on the zotino device given a list of voltages (MU) and
+        corresponding channels
+
+        :param solution: A list of voltage lines where channel and voltage are packed into one 32-bit int
+        :param line_delay: A delay (MU) inserted after the line is set
+            Must be greater than the SPI write time for the number of used channels
+        """
+        if line_delay <= self._min_line_delay_mu:
+            raise ValueError(f"Line Delay must be greater than {self._min_line_delay_mu}")
+        for t in solution:
+            self.set_line_packed(t)
+            delay_mu(line_delay)
+
+    @kernel
+    def shuttle_rate_packed(self,
+                            solution: TList(TList(TInt32), TList(TInt32)),  # type: ignore[valid-type]
+                            line_rate: TFloat):
+        """Set sequential lines of voltages on the zotino device given a list of voltages (MU) and
+        corresponding channels
+
+        :param solution: A list of voltage lines where channel and voltage are packed into one 32-bit int
+        :param line_rate: A rate (Hz) to define speed to set each line
+            Must be greater than the SPI write time for the number of used channels
+        """
+        self.shuttle_mu_packed(solution, self.core.seconds_to_mu(1 / line_rate))
+        return
+
+    @kernel
     def set_line(self,
                  line: TTuple([TList(TInt32), TList(TInt32)])):  # type: ignore[valid-type]
         """Set a line of voltages on the zotino device given a list of voltages (MU) and corresponding channels
@@ -371,6 +428,17 @@ class TrapDcModule(DaxModule):
         """
         voltages, channels = line
         self._zotino.set_dac_mu(voltages, channels)
+
+    @kernel
+    def set_line_packed(self,
+                        line: TList(TInt32)):  # type: ignore[valid-type]
+        """Set a line of voltages on the zotino device given a list of packed voltages and channels into one
+        32-bit int
+
+        :param line: Up to 32 (# of Zotino channels) 32-bit ints with voltage and channel packed in
+        """
+        for val in line:
+            self._zotino.bus.write(val)
 
     @host_only
     def calculate_slack(self,
