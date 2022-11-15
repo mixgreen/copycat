@@ -66,6 +66,19 @@ class SPIPeekTestCase(dax.sim.test_case.PeekTestCase):
         self.expect(self.env.dut, "cfg_flags", self._SPI_CONFIG)
         self.expect(self.env.dut, "mosi", "x")
 
+    def test_set_config_subscribe(self):
+        callback_args = []
+
+        def callback(*args):
+            callback_args.append(args)
+
+        self.env.dut.set_config_mu_subscribe(callback)
+
+        ref = [(1, 2, 3, 4), (5, 6, 7, 8)]
+        for args in ref:
+            self.env.dut.set_config_mu(*args)
+        self.assertListEqual(ref, callback_args)
+
     def test_write(self):
         self.expect(self.env.dut, "mosi", "x")
 
@@ -73,6 +86,19 @@ class SPIPeekTestCase(dax.sim.test_case.PeekTestCase):
         self.env.dut.write(10)
         self.assertEqual(self.env.dut._out_data.pull(offset=-2), 10)
         self.expect(self.env.dut, "mosi", "x")
+
+    def test_write_subscribe(self):
+        callback_data = []
+
+        def callback(data):
+            callback_data.append(data)
+
+        self.env.dut.write_subscribe(callback)
+
+        ref = [1, 2, 3, 4]
+        for data in ref:
+            self.env.dut.write(data)
+        self.assertListEqual(ref, callback_data)
 
     def test_read(self):
         with self.assertRaises(NotImplementedError):

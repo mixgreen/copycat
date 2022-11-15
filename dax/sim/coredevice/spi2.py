@@ -4,9 +4,12 @@
 # mypy: check_untyped_defs = False
 # mypy: disallow_subclassing_any = False
 
+import typing
+
 from artiq.coredevice.spi2 import SPIMaster as _SPIMaster  # type: ignore[import]
-from artiq.language.core import kernel, delay_mu
+from artiq.language.core import kernel, rpc, host_only, delay_mu
 from artiq.language.types import TNone
+
 from dax.sim.device import DaxSimDevice
 from dax.sim.signal import get_signal_manager
 
@@ -14,9 +17,16 @@ from dax.sim.signal import get_signal_manager
 class SPIMaster(DaxSimDevice, _SPIMaster):
     """Wraps calls to ARTIQ SPI devices."""
 
+    _set_config_mu_subscribers: typing.List[typing.Callable[[int, int, int, int], typing.Any]]
+    _write_subscribers: typing.List[typing.Callable[[int], typing.Any]]
+
     def __init__(self, dmgr, div=0, length=0, **kwargs) -> None:
         # Call super
         super().__init__(dmgr, **kwargs)
+
+        # Subscribers
+        self._set_config_mu_subscribers = []
+        self._write_subscribers = []
 
         # Register signals
         signal_manager = get_signal_manager()
@@ -47,12 +57,40 @@ class SPIMaster(DaxSimDevice, _SPIMaster):
         self._config_cs.push(cs)
         self._config_flags.push(flags)
         delay_mu(self.ref_period_mu)
+        self._set_config_mu_notify(flags, length, div, cs)
+
+    @host_only
+    def set_config_mu_subscribe(self, fn: typing.Callable[[int, int, int, int], typing.Any]) -> None:
+        """Subscribe to :func:`set_config` and :func:`set_config_mu` calls of this device.
+
+        :param fn: Callback function for the notification
+        """
+        self._set_config_mu_subscribers.append(fn)
+
+    @rpc
+    def _set_config_mu_notify(self, flags: int, length: int, div: int, cs: int) -> TNone:
+        for fn in self._set_config_mu_subscribers:
+            fn(flags, length, div, cs)
 
     @kernel
     def write(self, data) -> TNone:
         self._out_data.push(data)
         delay_mu(self.xfer_duration_mu)
         self._out_data.push("X")
+        self._write_notify(data)
+
+    @host_only
+    def write_subscribe(self, fn: typing.Callable[[int], typing.Any]) -> None:
+        """Subscribe to :func:`write` calls of this device.
+
+        :param fn: Callback function for the notification
+        """
+        self._write_subscribers.append(fn)
+
+    @rpc
+    def _write_notify(self, data: int) -> TNone:
+        for fn in self._write_subscribers:
+            fn(data)
 
     @kernel
     def read(self) -> TNone:
