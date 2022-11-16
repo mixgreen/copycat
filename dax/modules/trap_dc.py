@@ -22,7 +22,8 @@ _ZOTINO_LINE_T = typing.Tuple[_ZOTINO_KEY_T, _ZOTINO_VALUE_T]
 _ZOTINO_SOLUTION_T = typing.List[_ZOTINO_LINE_T]
 _ZOTINO_LINE_T_MU = typing.Tuple[_ZOTINO_KEY_T_MU, _ZOTINO_VALUE_T]
 _ZOTINO_SOLUTION_T_MU = typing.List[_ZOTINO_LINE_T_MU]
-_ZOTION_SOLUTION_T_PACK = typing.List[typing.List[int]]
+_ZOTION_LINE_T_PACK = typing.List[int]
+_ZOTION_SOLUTION_T_PACK = typing.List[_ZOTION_LINE_T_PACK]
 
 __all__ = ['TrapDcModule', 'ZotinoReader']
 
@@ -116,7 +117,7 @@ class TrapDcModule(DaxModule):
     def read_line_mu(self,
                      file_name: str,
                      index: int = 0,
-                     multiplier: float = 1.0) -> _ZOTINO_LINE_T_MU:
+                     multiplier: float = 1.0) -> _ZOTION_LINE_T_PACK:
         """Read in a single line of a solutions file and return the line in zotino form.
         Optionally apply multiplier to all voltages in path
 
@@ -129,8 +130,7 @@ class TrapDcModule(DaxModule):
         :return: Zotino module interpretable solution line with voltages in MU
         """
         path = self._read_line(file_name, index, multiplier)
-        path_mu = (self._reader.convert_to_mu(path[0]), path[1])
-        return path_mu
+        return self.pack_line((self._reader.convert_to_mu(path[0]), path[1]))
 
     @host_only
     def _read_line(self,
@@ -163,7 +163,7 @@ class TrapDcModule(DaxModule):
                          start: int = 0,
                          end: int = -1,
                          reverse: bool = False,
-                         multiplier: float = 1.0) -> _ZOTINO_SOLUTION_T_MU:
+                         multiplier: float = 1.0) -> _ZOTION_SOLUTION_T_PACK:
         """Read in a segment of a solutions file and return the path in zotino form.
         Optionally reverse path and/or apply multiplier to all voltages in path
 
@@ -179,7 +179,7 @@ class TrapDcModule(DaxModule):
         """
         path = self._read_solution(file_name, start, end,
                                    reverse, multiplier)
-        return self._reader.convert_solution_to_mu(path)
+        return self.pack_solution(self._reader.convert_solution_to_mu(path))
 
     @host_only
     def _read_solution(self,
@@ -222,6 +222,19 @@ class TrapDcModule(DaxModule):
         return path
 
     @host_only
+    def pack_line(self, line: _ZOTINO_LINE_T_MU) -> _ZOTION_LINE_T_PACK:
+        """Pack a line of values into a form directly writeable to the SPI bus
+
+        :param line: The Zotino MU line to pack
+
+        :return: The packed line which is a list of 32-bit integers
+            where the most significant 24 bits are the packed value
+        """
+        vs, chs = line
+        return [artiq.coredevice.ad53xx.ad53xx_cmd_write_ch(ch, v, artiq.coredevice.ad53xx.AD53XX_CMD_DATA) << 8
+                for v, ch in zip(vs, chs)]
+
+    @host_only
     def pack_solution(self, solution: _ZOTINO_SOLUTION_T_MU) -> _ZOTION_SOLUTION_T_PACK:
         """Pack a solution of values into a form directly writeable to the SPI bus
 
@@ -230,8 +243,7 @@ class TrapDcModule(DaxModule):
         :return: The packed solution where each solution row is a list of 32-bit integers
             where the most significant 24 bits are the packed value
         """
-        return [[artiq.coredevice.ad53xx.ad53xx_cmd_write_ch(ch, v, artiq.coredevice.ad53xx.AD53XX_CMD_DATA) << 8
-                for v, ch in zip(vs, chs)] for vs, chs in solution]
+        return [self.pack_line(line) for line in solution]
 
     @host_only
     def list_solutions(self) -> typing.Sequence[str]:
@@ -252,7 +264,7 @@ class TrapDcModule(DaxModule):
         of voltages (MU) and corresponding channels
 
         :param name: Name of DMA trace
-        :param solution: A list of voltage lines to set and corresponding channels for each line
+        :param solution: A list of packed voltage lines to set and corresponding channels for each line
         :param line_delay: A delay (s) inserted after the line is set
             Must be greater than the SPI write time for the number of used channels
 
@@ -265,13 +277,13 @@ class TrapDcModule(DaxModule):
     @kernel
     def record_dma_mu(self,
                       name: TStr,
-                      solution: TList(TTuple([TList(TInt32), TList(TInt32)])),  # type: ignore[valid-type]
+                      solution: TList(TList(TInt32)),  # type: ignore[valid-type]
                       line_delay: TInt64) -> TStr:
         """Record the setting of sequential lines of voltages on the zotino device given a list
         of voltages (MU) and corresponding channels
 
         :param name: Name of DMA trace
-        :param solution: A list of voltage lines to set and corresponding channels for each line
+        :param solution: A list of packed voltage lines to set and corresponding channels for each line
         :param line_delay: A delay (MU) inserted after the line is set
             Must be greater than the SPI write time for the number of used channels
 
@@ -289,13 +301,13 @@ class TrapDcModule(DaxModule):
     @kernel
     def record_dma_rate(self,
                         name: TStr,
-                        solution: TList(TTuple([TList(TInt32), TList(TInt32)])),  # type: ignore[valid-type]
+                        solution: TList(TList(TInt32)),  # type: ignore[valid-type]
                         line_rate: TFloat) -> TStr:
         """Record the setting of sequential lines of voltages on the zotino device given a list
         of voltages (MU) and corresponding channels
 
         :param name: Name of DMA trace
-        :param solution: A list of voltage lines to set and corresponding channels for each line
+        :param solution: A list of packed voltage lines to set and corresponding channels for each line
         :param line_rate: A rate (Hz) to define speed to set each line
             Must be greater than the SPI write time for the number of used channels
 
@@ -333,12 +345,12 @@ class TrapDcModule(DaxModule):
 
     @kernel
     def shuttle(self,
-                solution: TList(TTuple([TList(TInt32), TList(TInt32)])),  # type: ignore[valid-type]
+                solution: TList(TList(TInt32)),  # type: ignore[valid-type]
                 line_delay: TFloat):
         """Set sequential lines of voltages on the zotino device given a list of voltages (MU) and
         corresponding channels
 
-        :param solution: A list of voltage lines to set and corresponding channels for each line
+        :param solution: A list of packed voltage lines to set and corresponding channels for each line
         :param line_delay: A delay (s) inserted after the line is set
             Must be greater than the SPI write time for the number of used channels
         """
@@ -346,12 +358,12 @@ class TrapDcModule(DaxModule):
 
     @kernel
     def shuttle_mu(self,
-                   solution: TList(TTuple([TList(TInt32), TList(TInt32)])),  # type: ignore[valid-type]
+                   solution: TList(TList(TInt32)),  # type: ignore[valid-type]
                    line_delay: TInt64):
         """Set sequential lines of voltages on the zotino device given a list of voltages (MU) and
         corresponding channels
 
-        :param solution: A list of voltage lines to set and corresponding channels for each line
+        :param solution: A list of packed voltage lines to set and corresponding channels for each line
         :param line_delay: A delay (MU) inserted after the line is set
             Must be greater than the SPI write time for the number of used channels
         """
@@ -363,12 +375,12 @@ class TrapDcModule(DaxModule):
 
     @kernel
     def shuttle_rate(self,
-                     solution: TList(TTuple([TList(TInt32), TList(TInt32)])),  # type: ignore[valid-type]
+                     solution: TList(TList(TInt32)),  # type: ignore[valid-type]
                      line_rate: TFloat):
         """Set sequential lines of voltages on the zotino device given a list of voltages (MU) and
         corresponding channels
 
-        :param solution: A list of voltage lines to set and corresponding channels for each line
+        :param solution: A list of packed voltage lines to set and corresponding channels for each line
         :param line_rate: A rate (Hz) to define speed to set each line
             Must be greater than the SPI write time for the number of used channels
         """
@@ -376,62 +388,8 @@ class TrapDcModule(DaxModule):
         return
 
     @kernel
-    def shuttle_packed(self,
-                       solution: TList(TList(TInt32), TList(TInt32)),  # type: ignore[valid-type]
-                       line_delay: TFloat):
-        """Set sequential lines of voltages on the zotino device given a list of voltages (MU) and
-        corresponding channels
-
-        :param solution: A list of voltage lines where channel and voltage are packed into one 32-bit int
-        :param line_delay: A delay (s) inserted after the line is set
-            Must be greater than the SPI write time for the number of used channels
-        """
-        self.shuttle_mu_packed(solution, self.core.seconds_to_mu(line_delay))
-
-    @kernel
-    def shuttle_mu_packed(self,
-                          solution: TList(TList(TInt32), TList(TInt32)),  # type: ignore[valid-type]
-                          line_delay: TInt64):
-        """Set sequential lines of voltages on the zotino device given a list of voltages (MU) and
-        corresponding channels
-
-        :param solution: A list of voltage lines where channel and voltage are packed into one 32-bit int
-        :param line_delay: A delay (MU) inserted after the line is set
-            Must be greater than the SPI write time for the number of used channels
-        """
-        if line_delay <= self._min_line_delay_mu:
-            raise ValueError(f"Line Delay must be greater than {self._min_line_delay_mu}")
-        for t in solution:
-            self.set_line_packed(t)
-            delay_mu(line_delay)
-
-    @kernel
-    def shuttle_rate_packed(self,
-                            solution: TList(TList(TInt32), TList(TInt32)),  # type: ignore[valid-type]
-                            line_rate: TFloat):
-        """Set sequential lines of voltages on the zotino device given a list of voltages (MU) and
-        corresponding channels
-
-        :param solution: A list of voltage lines where channel and voltage are packed into one 32-bit int
-        :param line_rate: A rate (Hz) to define speed to set each line
-            Must be greater than the SPI write time for the number of used channels
-        """
-        self.shuttle_mu_packed(solution, self.core.seconds_to_mu(1 / line_rate))
-        return
-
-    @kernel
     def set_line(self,
-                 line: TTuple([TList(TInt32), TList(TInt32)])):  # type: ignore[valid-type]
-        """Set a line of voltages on the zotino device given a list of voltages (MU) and corresponding channels
-
-        :param line: Up to 32 (# of Zotino channels) voltages and corresponding channel numbers
-        """
-        voltages, channels = line
-        self._zotino.set_dac_mu(voltages, channels)
-
-    @kernel
-    def set_line_packed(self,
-                        line: TList(TInt32)):  # type: ignore[valid-type]
+                 line: TList(TInt32)):  # type: ignore[valid-type]
         """Set a line of voltages on the zotino device given a list of packed voltages and channels into one
         32-bit int
 

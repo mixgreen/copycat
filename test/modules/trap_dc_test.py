@@ -135,7 +135,7 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
                 path = []
                 for _ in range(num_path_rows):
                     num_data, v, v_mu, c = self._generate_random_compressed_line()
-                    path.append((v_mu, c))
+                    path.append(self.env.trap_dc.pack_line((v_mu, c)))
                     num_datas.append(num_data)
                     voltages.append(v)
 
@@ -157,7 +157,7 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
                 with self.subTest(v=v):
                     # Call functions
                     # self.env.trap_dc._zotino.write_offset_dacs_mu(o)
-                    self.env.trap_dc.set_line((v_mu, c))
+                    self.env.trap_dc.set_line(self.env.trap_dc.pack_line((v_mu, c)))
                     # Test
                     for i in range(num_data):
                         self.expect_close(self.env.trap_dc._zotino,
@@ -206,34 +206,38 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
     @patch.object(BaseReader, '_read_channel_map')
     def test_shuttle(self, _):
         with temp_dir():
-            shuttle_solution_mu = [([32768, 32768, 0, 32768, 32768,
-                                     32768, 32768, 32768, 32768, 32768,
-                                     32768, 32768, 32768, 32768, 32768,
-                                     32768, 32768, 32768, 32768,
-                                     32768, 32768, 32768, 32768,
-                                     32768, 32768, 32768, 32768,
-                                     32768, 32768, 32768, 32768, 32768],
-                                    [0, 1, 2, 3, 4, 5, 6, 7,
+            shuttle_solution = [([0., 0., -10, 0., 0.,
+                                  0., 0., 0., 0., 0.,
+                                  0., 0., 0., 0., 0.,
+                                  0., 0., 0., 0.,
+                                  0., 0., 0., 0.,
+                                  0., 0., 0., 0.,
+                                  0., 0., 0., 0., 0.],
+                                 [0, 1, 2, 3, 4, 5, 6, 7,
                                      8, 9, 10, 11, 12, 13, 14, 15,
                                      16, 17, 18, 19, 20, 21, 22, 23,
                                      24, 25, 26, 27, 28, 29, 30, 31]),
-                                   ([36045], [2]),
-                                   ([39322], [3]),
-                                   ([42598, 45875], [4, 5])]
+                                ([1.], [2]),
+                                ([2.], [3]),
+                                ([3., 4.], [4, 5])]
 
             s = self._construct_env()
             s.trap_dc.init()
 
+            shuttle_solution_mu = s.trap_dc._reader.convert_solution_to_mu(shuttle_solution)
+            shuttle_solution_packed = s.trap_dc.pack_solution(shuttle_solution_mu)
+            print(shuttle_solution_mu)
             line_delay_mu = 100000
             line_delay = s.core.mu_to_seconds(line_delay_mu)
 
             with parallel:
-                s.trap_dc.shuttle(shuttle_solution_mu, line_delay)
+                s.trap_dc.shuttle(shuttle_solution_packed, line_delay)
                 with sequential:
 
                     # create an offset for testing purposes
-                    delay_mu(200)
+                    delay_mu(50000)
                     for i in range(32):
+                        print(i)
                         if i != 2:
                             self.expect_close(s.trap_dc._zotino,
                                               f'v_out_{i}', 0, places=3)
@@ -582,7 +586,7 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
             test_solution_mu = reader.convert_solution_to_mu(test_solution)
 
             packed_solution = s.trap_dc.pack_solution(test_solution_mu)
-            s.trap_dc.set_line_packed(packed_solution[0])
+            s.trap_dc.set_line(packed_solution[0])
             delay(1)
             for v, ch in zip(test_solution[0][0], test_solution[0][1]):
                 self.expect_close(s.trap_dc._zotino,
