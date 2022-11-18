@@ -25,7 +25,7 @@ _ZOTINO_LINE_T_MU = typing.Tuple[_ZOTINO_KEY_T_MU, _ZOTINO_VALUE_T]
 _ZOTINO_SOLUTION_T_MU = typing.List[_ZOTINO_LINE_T_MU]
 
 
-class ConfigAttrs:
+class LinearComboConfigAttrs:
     _attrs: CONFIG_T
     _reader: ZotinoReader
 
@@ -60,14 +60,15 @@ class ConfigAttrs:
         return mini <= val <= maxi
 
 
-_ZOTINO_CONFIG_T = typing.Dict[str, ConfigAttrs]
+_ZOTINO_CONFIG_T = typing.Dict[str, LinearComboConfigAttrs]
 
 
-class ZotinoConfig:
+class ZotinoLinearComboModule:
     _config: _ZOTINO_CONFIG_T
 
-    def __init__(self, config: CONFIG_T, reader: ZotinoReader):
-        self._config = {d['name']: ConfigAttrs(d, reader) for d in config['params']}
+    def __init__(self, config_file: str, reader: ZotinoReader):
+        config = reader.read_config(config_file, schema=LINEAR_COMBO)
+        self._config = {d['name']: LinearComboConfigAttrs(d, reader) for d in config['params']}
 
     def __getitem__(self, arg):
         return self._config[arg]
@@ -76,31 +77,6 @@ class ZotinoConfig:
         for f, attrs in self._config.items():
             if not attrs.in_range():
                 raise ValueError(f'Field {f}={attrs["value"]} is out of range')
-
-    # def to_dataset_sys(self, module: TrapDcModule, group: str, **kwargs: typing.Any) -> None:
-    #     assert isinstance(module, TrapDcModule)
-    #     assert isinstance(group, str)
-    #     assert group.isalpha()
-
-    #     for f, attrs in self.config.items():
-    #         module.set_dataset_sys(f'{group}.{f}', attrs['value'], **kwargs)
-
-    # def __add__(self, other: ZotinoConfig) -> ZotinoConfig:
-    #     assert isinstance(other, ZotinoConfig)
-
-    #     for f, attrs in other.config.items():
-    #         self.config[f]['value'] += attrs['value']
-    #     return ZotinoConfig(self.config, self.reader)
-
-    # def from_module(self, module: TrapDcModule, group: str, **kwargs: typing.Any) -> ZotinoConfig:
-    #     assert isinstance(module, TrapDcModule)
-    #     assert isinstance(group, str)
-    #     assert group.isalpha()
-    #     assert isinstance(kwargs.get('default', 0.0), float)
-    #     assert isinstance(kwargs.get('fallback', 0.0), float)
-
-    #     fields = {f: module.get_dataset_sys(f'{group}.{f}', **kwargs) for f in self.fields()}
-    #     return ZotinoConfig(**fields)
 
     def from_arguments(self, env: HasEnvironment, *,
                        prefix: str = '', group: typing.Optional[str] = None) -> None:
@@ -170,7 +146,6 @@ class TrapDcModule(DaxModule):
     _reader: ZotinoReader
     _min_line_delay_mu: np.int64
     _calculator: ZotinoCalculator
-    _lc_config: ZotinoConfig
 
     def build(self,  # type: ignore[override]
               *,
@@ -230,23 +205,19 @@ class TrapDcModule(DaxModule):
         return self._reader.solution_path
 
     @property
-    def lc_config(self) -> ZotinoConfig:
-        """Get the linear combination config
+    def reader(self) -> str:
+        """Get the reader
 
-        :return: The linear combination config object
+        :return: The reader associated with this instance
         """
-        try:
-            return self._lc_config
-        except AttributeError:
-            raise AttributeError("LC Configuration is not yet defined. Use function set_lc_config.") from None
+        return self._reader
 
     @host_only
     def read_line_mu(self,
-                     *,
                      file_name: typing.Optional[str] = None,
-                     reader_solution: typing.Optional[SOLUTION_T] = None,
                      index: int = 0,
-                     multiplier: float = 1.0) -> _ZOTINO_LINE_T_MU:
+                     multiplier: float = 1.0,
+                     reader_solution: typing.Optional[SOLUTION_T] = None) -> _ZOTINO_LINE_T_MU:
         """Read in a single line of a solutions file and return the line in zotino form.
         Optionally apply multiplier to all voltages in path
 
@@ -357,15 +328,6 @@ class TrapDcModule(DaxModule):
                      for i, t in enumerate(trimmed_solution[1:])])
 
         return path
-
-    @host_only
-    def set_lc_config(self, config_file: str) -> None:
-        """Read the linear combination configuration file and set the instance variable
-
-        :param config_file: The linear combination configuration file path
-        """
-        self._lc_config = ZotinoConfig(self._reader.read_config(config_file, schema=LINEAR_COMBO),
-                                       self._reader)
 
     @host_only
     def list_solutions(self) -> typing.Sequence[str]:
@@ -629,22 +591,6 @@ class TrapDcModule(DaxModule):
                                    comm_delay_slope_mu=comm_delay_slope_mu,
                                    dma_comm_delay_intercept_mu=dma_comm_delay_intercept_mu,
                                    dma_comm_delay_slope_mu=dma_comm_delay_slope_mu)
-
-    # @host_only
-    # def update_global(self, global_: ZotinoConfig) -> None:
-    #     """Update global configuration in system datasets.
-
-    #     :param global_: The new global configuration
-    #     """
-    #     global_.to_dataset_sys(self, self.GLOBAL_GROUP_KEY)
-
-    # @host_only
-    # def update_offset(self, offset: ZotinoConfig) -> None:
-    #     """Update offset configuration in system datasets.
-
-    #     :param offset: The new offset configuration
-    #     """
-    #     offset.to_dataset_sys(self, self.OFFSET_GROUP_KEY)
 
     def _add_arguments(self, env: HasEnvironment, *,
                        global_: bool, offset: bool,
