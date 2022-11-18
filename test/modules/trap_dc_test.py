@@ -9,7 +9,7 @@ from unittest.mock import patch
 import pathlib
 
 from dax.experiment import *
-from dax.modules.trap_dc import LinearComboConfigAttrs, ZotinoConfig, ZotinoReader, TrapDcModule
+from dax.modules.trap_dc import LinearComboConfigAttrs, ZotinoLinearComboModule, ZotinoReader, TrapDcModule
 from trap_dac_utils.reader import SpecialCharacter, BaseReader
 from trap_dac_utils.types import LABEL_FIELD
 import dax.sim.coredevice.ad53xx
@@ -18,7 +18,6 @@ from test.environment import CI_ENABLED
 
 _NUM_SAMPLES = 1000 if CI_ENABLED else 100
 _CONFIG_PATH = 'config'
-_CONFIG_LINE_VALUE = [([0, 1, 1, 1, 1], [0, 1, 2, 3, 4])]
 
 
 class _TestSystem(DaxSystem):
@@ -38,7 +37,7 @@ class _TestSystem(DaxSystem):
                                         key='zotino0',
                                         solution_path='.',
                                         map_file=os.getcwd() + '/' + f.name,
-                                        ** kwargs)
+                                        **kwargs)
 
 
 class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
@@ -62,11 +61,8 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
                 {'label': 'D', 'channel': '5'},
                 {'label': 'E', 'channel': '6'}]
 
-    @patch.object(ZotinoReader, 'process_solution')
-    @patch.object(BaseReader, 'read_solution')
     @patch.object(BaseReader, '_read_channel_map')
-    def setUp(self, _, _mock_read_solution, mock_process_solution) -> None:
-        mock_process_solution.return_value = _CONFIG_LINE_VALUE
+    def setUp(self, _) -> None:
         self.rng = random.Random(self.SEED)
         self.env = self._construct_env()
 
@@ -117,11 +113,8 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
         }
     }
 
-    @patch.object(ZotinoReader, 'process_solution')
-    @patch.object(BaseReader, 'read_solution')
     @patch.object(BaseReader, '_read_channel_map')
-    def _construct_env(self, _, _mock_read_solution, mock_process_solution, **kwargs):
-        mock_process_solution.return_value = _CONFIG_LINE_VALUE
+    def _construct_env(self, _, **kwargs):
         return self.construct_env(_TestSystem, device_db=self._DEVICE_DB, build_kwargs=kwargs)
 
     def _test_uninitialized(self):
@@ -471,10 +464,9 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
             self.assertTupleEqual(prepared_line_result, expected_prepared_line)
 
     @patch.object(BaseReader, 'read_config')
-    def test_set_lc_configs(self, mock_read_solution):
+    def test_create_lc_configs(self, mock_read_solution):
         mock_read_solution.return_value = {"params": [{"name": "dx", "file": "configs.csv", "line": 1, "value": 2.3}]}
-        self.env.trap_dc.set_lc_config("config.json")
-        cfg = self.env.trap_dc.lc_config
+        cfg = ZotinoLinearComboModule("config.json", self.env.trap_dc.reader)
         assert len(cfg._config) == 1 and "dx" in cfg._config
         assert isinstance(cfg._config["dx"], LinearComboConfigAttrs)
         assert len(cfg._config["dx"]._attrs) == 4 and all(

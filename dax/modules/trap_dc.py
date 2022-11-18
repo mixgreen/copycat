@@ -27,11 +27,11 @@ _ZOTINO_SOLUTION_T_MU = typing.List[_ZOTINO_LINE_T_MU]
 
 
 class LinearComboConfigAttrs:
-    _attrs: CONFIG_T
+    _attrs: typing.Dict[str, typing.Any]
     _reader: ZotinoReader
 
     def __init__(self, cfg: CONFIG_T, reader: ZotinoReader):
-        self._attrs = cfg
+        self._attrs = dict(cfg)
         self._attrs.setdefault('value', 0.)
         self._reader = reader
 
@@ -206,7 +206,7 @@ class TrapDcModule(DaxModule):
         return self._reader.solution_path
 
     @property
-    def reader(self) -> str:
+    def reader(self) -> ZotinoReader:
         """Get the reader
 
         :return: The reader associated with this instance
@@ -594,6 +594,7 @@ class TrapDcModule(DaxModule):
                                    dma_comm_delay_slope_mu=dma_comm_delay_slope_mu)
 
     def _add_arguments(self, env: HasEnvironment, *,
+                       linear_combination_config: ZotinoLinearComboModule,
                        global_: bool, offset: bool,
                        enable: typing.Optional[bool], group: typing.Optional[str]) -> None:
         assert isinstance(env, HasEnvironment)
@@ -618,14 +619,15 @@ class TrapDcModule(DaxModule):
             )
 
         # Config arguments
-        self._lc_config.from_arguments(
+        linear_combination_config.from_arguments(
             env, prefix='Global ', group=group
         )
 
     @host_only
-    def add_global_arguments(self, env: HasEnvironment, *,
-                             enable: typing.Optional[bool] = False,
-                             group: typing.Optional[str] = 'DAC configuration') -> None:
+    def add_linear_combination_arguments(self, env: HasEnvironment, *,
+                                         linear_combination_config: ZotinoLinearComboModule,
+                                         enable: typing.Optional[bool] = False,
+                                         group: typing.Optional[str] = 'DAC configuration') -> None:
         """Add arguments to the experiment for overriding global configuration only (using system offset configuration).
 
         This function can only be called during the build phase.
@@ -635,24 +637,9 @@ class TrapDcModule(DaxModule):
         :param enable: Enable usage of arguments by default (use :const:`None` to force usage of arguments)
         :param group: Argument group name (optional)
         """
-        self._add_arguments(env, enable=enable, group=group,
+        self._add_arguments(env, linear_combination_config=linear_combination_config,
+                            enable=enable, group=group,
                             global_=True, offset=False)
-
-    @host_only
-    def add_offset_arguments(self, env: HasEnvironment, *,
-                             enable: typing.Optional[bool] = False,
-                             group: typing.Optional[str] = 'DAC configuration') -> None:
-        """Add arguments to the experiment for overriding offset configuration only (using system offset configuration).
-
-        This function can only be called during the build phase.
-        This function must be called **after** any system build function calls.
-
-        :param env: The ARTIQ environment object that is in the build phase (normally ``self``)
-        :param enable: Enable usage of arguments by default (use :const:`None` to force usage of arguments)
-        :param group: Argument group name (optional)
-        """
-        self._add_arguments(env, enable=enable, group=group,
-                            global_=False, offset=True)
 
 
 class ZotinoCalculator:
