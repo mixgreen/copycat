@@ -637,48 +637,26 @@ class TrapDcModule(DaxModule):
                                    dma_comm_delay_intercept_mu=dma_comm_delay_intercept_mu,
                                    dma_comm_delay_slope_mu=dma_comm_delay_slope_mu)
 
-    def _add_linear_combination_arguments(self, env: HasEnvironment, *,
-                                          linear_combination_config: ZotinoLinearComboModule,
-                                          enable: typing.Optional[bool], group: typing.Optional[str]) -> None:
-        assert isinstance(env, HasEnvironment)
-        assert isinstance(enable, bool) or enable is None
-        assert isinstance(group, str) or group is None
-
-        try:
-            self._args_enabled
-        except AttributeError:
-            raise RuntimeError('System build function was not called before adding DAC arguments') from None
-
-        # Enable argument
-        if enable is None:
-            self._args_enabled = True
-        else:
-            self._args_enabled = env.get_argument(
-                'Override DAC configuration', BooleanValue(enable), group=group,
-                tooltip='Override DAC configuration with the values provided by the arguments below'
-            )
-
-        # Config arguments
-        linear_combination_config.from_arguments(
-            env, prefix='', group=group
-        )
-
     @host_only
     def add_linear_combination_arguments(self, env: HasEnvironment, *,
                                          linear_combination_config: ZotinoLinearComboModule,
-                                         enable: typing.Optional[bool] = False,
                                          group: typing.Optional[str] = 'DAC configuration') -> None:
-        """Add arguments to the experiment for overriding global configuration only (using system offset configuration).
+        """Add arguments to the experiment for overriding configuration input configuration with values from user.
 
         This function can only be called during the build phase.
         This function must be called **after** any system build function calls.
 
         :param env: The ARTIQ environment object that is in the build phase (normally ``self``)
-        :param enable: Enable usage of arguments by default (use :const:`None` to force usage of arguments)
+        :param linear_combination_config: A linear combination configuration object to store user input values to
         :param group: Argument group name (optional)
         """
-        self._add_linear_combination_arguments(env, linear_combination_config=linear_combination_config,
-                                               enable=enable, group=group)
+        assert isinstance(env, HasEnvironment)
+        assert isinstance(group, str) or group is None
+
+        # Config arguments
+        linear_combination_config.from_arguments(
+            env, prefix='', group=group
+        )
 
 
 class ZotinoCalculator:
