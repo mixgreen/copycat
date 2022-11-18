@@ -136,11 +136,6 @@ class TrapDcModule(DaxModule):
     _DMA_STARTUP_TIME: typing.ClassVar[float] = 1.728 * us
     """Startup time for DMA (s). Measured in the RTIO benchmarking tests during CI"""
 
-    GLOBAL_GROUP_KEY: typing.ClassVar[str] = 'global'
-    """Dataset key for dac config global group"""
-    OFFSET_GROUP_KEY: typing.ClassVar[str] = 'offset'
-    """Dataset key for dac config offset group"""
-
     _zotino: artiq.coredevice.zotino.Zotino
     _solution_path: pathlib.Path
     _map_file: pathlib.Path
