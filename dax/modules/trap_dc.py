@@ -28,7 +28,6 @@ __all__ = ['TrapDcModule', 'ZotinoReader', 'ZotinoLinearComboModule']
 
 class _LinearComboConfigAttrs:
     """A module to represent a single parameter and it's corresponding data fields
-
     """
     _attrs: typing.Dict[str, typing.Any]
     _reader: ZotinoReader
@@ -263,9 +262,12 @@ class TrapDcModule(DaxModule):
 
         Note that the Zotino Path Voltages are given in **MU**.
 
+        May provide either file_name and reader_solution. If both or provided the file name will be used
+
         :param file_name: Solution file to parse the path from
         :param index: Line in path to get. A 0 indicates the first line
         :param multiplier: Optionally scale the voltages by a constant
+        :param reader_solution: Optional solution python object representation
 
         :return: Zotino module interpretable solution line with voltages in MU
         """
@@ -286,7 +288,10 @@ class TrapDcModule(DaxModule):
 
         Note that the Zotino Path Voltages are given in **V**.
 
-        :param file_name: Solution file to parse the path from
+        May provide either file_name and reader_solution. If both or provided the file name will be used
+
+        :param file_name: Optional solution file to parse the path from
+        :param reader_solution: Optional solution python object representation
         :param index: Line in path to get. A 0 indicates the first line
         :param multiplier: Optionally scale the voltages by a constant
 
@@ -632,13 +637,10 @@ class TrapDcModule(DaxModule):
                                    dma_comm_delay_intercept_mu=dma_comm_delay_intercept_mu,
                                    dma_comm_delay_slope_mu=dma_comm_delay_slope_mu)
 
-    def _add_arguments(self, env: HasEnvironment, *,
-                       linear_combination_config: ZotinoLinearComboModule,
-                       global_: bool, offset: bool,
-                       enable: typing.Optional[bool], group: typing.Optional[str]) -> None:
+    def _add_linear_combination_arguments(self, env: HasEnvironment, *,
+                                          linear_combination_config: ZotinoLinearComboModule,
+                                          enable: typing.Optional[bool], group: typing.Optional[str]) -> None:
         assert isinstance(env, HasEnvironment)
-        assert isinstance(global_, bool)
-        assert isinstance(offset, bool)
         assert isinstance(enable, bool) or enable is None
         assert isinstance(group, str) or group is None
 
@@ -648,7 +650,6 @@ class TrapDcModule(DaxModule):
             raise RuntimeError('System build function was not called before adding DAC arguments') from None
 
         # Enable argument
-        self.logger.debug(f'Adding configuration arguments: global={global_}, offset={offset}')
         if enable is None:
             self._args_enabled = True
         else:
@@ -659,7 +660,7 @@ class TrapDcModule(DaxModule):
 
         # Config arguments
         linear_combination_config.from_arguments(
-            env, prefix='Global ', group=group
+            env, prefix='', group=group
         )
 
     @host_only
@@ -676,9 +677,8 @@ class TrapDcModule(DaxModule):
         :param enable: Enable usage of arguments by default (use :const:`None` to force usage of arguments)
         :param group: Argument group name (optional)
         """
-        self._add_arguments(env, linear_combination_config=linear_combination_config,
-                            enable=enable, group=group,
-                            global_=True, offset=False)
+        self._add_linear_combination_arguments(env, linear_combination_config=linear_combination_config,
+                                               enable=enable, group=group)
 
 
 class ZotinoCalculator:
