@@ -23,10 +23,13 @@ _ZOTINO_SOLUTION_T = typing.List[_ZOTINO_LINE_T]
 _ZOTINO_LINE_T_MU = typing.Tuple[_ZOTINO_KEY_T_MU, _ZOTINO_VALUE_T]
 _ZOTINO_SOLUTION_T_MU = typing.List[_ZOTINO_LINE_T_MU]
 
-__all__ = ['TrapDcModule', 'ZotinoReader', 'ZotinoConfig']
+__all__ = ['TrapDcModule', 'ZotinoReader', 'ZotinoLinearComboModule']
 
 
-class LinearComboConfigAttrs:
+class _LinearComboConfigAttrs:
+    """A module to represent a single parameter and it's corresponding data fields
+
+    """
     _attrs: typing.Dict[str, typing.Any]
     _reader: ZotinoReader
 
@@ -61,26 +64,52 @@ class LinearComboConfigAttrs:
         return mini <= val <= maxi
 
 
-_ZOTINO_CONFIG_T = typing.Dict[str, LinearComboConfigAttrs]
+_ZOTINO_CONFIG_T = typing.Dict[str, _LinearComboConfigAttrs]
 
 
 class ZotinoLinearComboModule:
+    """A module to represent linear combination configuration files
+
+    This module can be used to get solution lines and combine them with others
+    Then these new lines can be fed back into the zotino module to continue processing
+    """
     _config: _ZOTINO_CONFIG_T
+    """The configuration dict that contains field names mapped to config data"""
 
     def __init__(self, config_file: str, reader: ZotinoReader):
-        config = reader.read_config(config_file, schema=LINEAR_COMBO)
-        self._config = {d['name']: LinearComboConfigAttrs(d, reader) for d in config['params']}
+        """Constructor of zotino linear combination module
 
-    def __getitem__(self, arg):
+        :param config_file: The string name of the file where the configuration is
+        :param reader: A reader to use for retrieving solutions corresponding to parameter
+        """
+        config = reader.read_config(config_file, schema=LINEAR_COMBO)
+        self._config = {d['name']: _LinearComboConfigAttrs(d, reader) for d in config['params']}
+
+    def __getitem__(self, arg: str) -> _LinearComboConfigAttrs:
+        """Method to make object indexible
+
+        :param arg: The string argument to index on
+
+        :return: The configuration attribute
+        """
         return self._config[arg]
 
     def verify(self) -> None:
+        """A method to check that the fields are all acceptible values as defined by
+        the instance contraints
+        """
         for f, attrs in self._config.items():
             if not attrs.in_range():
                 raise ValueError(f'Field {f}={attrs["value"]} is out of range')
 
     def from_arguments(self, env: HasEnvironment, *,
                        prefix: str = '', group: typing.Optional[str] = None) -> None:
+        """Updates the config with the values that the user input for each field
+
+        :param env: The environment to get the arguments from
+        :param prefix: The prefix to add to the field name when displaying
+        :param group: The name of the group to put the argument under
+        """
         assert isinstance(env, HasEnvironment)
 
         for f in self.fields():
@@ -90,6 +119,17 @@ class ZotinoLinearComboModule:
     def get_argument(self, env: HasEnvironment, field: str, default: float, *,
                      prefix: str = '', group: typing.Optional[str], tooltip: typing.Optional[str] = None,
                      **kwargs: typing.Any):
+        """A method to get the arguments from the environment, used in experiments to set the config fields
+
+        :param env: The environment to get the arguments from
+        :param field: The field to get the argument of
+        :param default: The default value to set for the argument of the field
+        :param prefix: The prefix to add to the field name when displaying
+        :param group: The name of the group to put the argument under
+        :param tooltip: A tooltip message to show for the argument
+
+        :return: The user input for the field argument value
+        """
         assert isinstance(env, HasEnvironment)
         assert isinstance(field, str)
         assert isinstance(default, float)
@@ -98,7 +138,7 @@ class ZotinoLinearComboModule:
         assert isinstance(tooltip, str) or tooltip is None
 
         if group is None:
-            group = 'Zotino offset overrides'
+            group = 'Zotino overrides'
 
         number_kwargs = self._config[field].get('args', {})
         number_kwargs.update(kwargs)
@@ -110,6 +150,10 @@ class ZotinoLinearComboModule:
         )
 
     def fields(self) -> typing.Sequence[str]:
+        """A method to get all of the config fields as a list of strings
+
+        :return: A list of strings of the config fields
+        """
         return list(self._config.keys())
 
 

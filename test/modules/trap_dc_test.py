@@ -9,7 +9,7 @@ from unittest.mock import patch
 import pathlib
 
 from dax.experiment import *
-from dax.modules.trap_dc import LinearComboConfigAttrs, ZotinoLinearComboModule, ZotinoReader, TrapDcModule
+from dax.modules.trap_dc import _LinearComboConfigAttrs, ZotinoLinearComboModule, ZotinoReader, TrapDcModule
 from trap_dac_utils.reader import SpecialCharacter, BaseReader
 from trap_dac_utils.types import LABEL_FIELD
 import dax.sim.coredevice.ad53xx
@@ -468,7 +468,7 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
         mock_read_solution.return_value = {"params": [{"name": "dx", "file": "configs.csv", "line": 1, "value": 2.3}]}
         cfg = ZotinoLinearComboModule("config.json", self.env.trap_dc.reader)
         assert len(cfg._config) == 1 and "dx" in cfg._config
-        assert isinstance(cfg._config["dx"], LinearComboConfigAttrs)
+        assert isinstance(cfg._config["dx"], _LinearComboConfigAttrs)
         assert len(cfg._config["dx"]._attrs) == 4 and all(
             attrs in cfg._config["dx"]._attrs for attrs in ["name", "file", "line"])
         assert cfg._config["dx"]._attrs["value"] == 2.3
