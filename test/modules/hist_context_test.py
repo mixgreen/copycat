@@ -142,6 +142,27 @@ class HistogramContextTestCase(unittest.TestCase):
             # Check buffer
             self.assertListEqual([], self.h._buffer, 'Buffer was not cleared when entering new context')
 
+    def test_extend(self):
+        data = [
+            [1, 9],
+            [2, 8],
+            [2, 7],
+            [3, 6],
+            [3, 5],
+            [3, 4],
+        ]
+
+        with self.h:
+            # Check buffer
+            self.assertListEqual([], self.h._buffer, 'Buffer was not cleared when entering new context')
+            self.h.extend(data)
+            # Check buffer
+            self.assertListEqual(data, self.h._buffer, 'Buffer did not contain expected data')
+
+        with self.h:
+            # Check buffer
+            self.assertListEqual([], self.h._buffer, 'Buffer was not cleared when entering new context')
+
     def test_empty_data(self):
         data = [[], [], []]
 

@@ -4,7 +4,8 @@ import csv
 import logging
 import numpy as np
 
-from artiq.language.core import *
+from artiq.language.core import kernel, portable, rpc, at_mu, now_mu, delay_mu, sequential, set_time_manager
+from artiq.language.types import TInt64
 import artiq.coredevice.core
 
 from dax.sim.device import DaxSimDevice, ARTIQ_MAJOR_VERSION
@@ -109,8 +110,9 @@ class BaseCore(DaxSimDevice):
     def close(self) -> None:
         pass
 
-    def compile(self, *args: typing.Any, **kwargs: typing.Any) -> typing.Any:
-        raise NotImplementedError('Simulated core does not implement the compile function')
+    def compile(self, function: typing.Any, args: typing.Sequence[typing.Any], kwargs: typing.Dict[str, typing.Any],
+                *args_: typing.Any, **kwargs_: typing.Any) -> typing.Any:
+        raise RuntimeError('Compile function not available')
 
     @portable
     def seconds_to_mu(self, seconds):  # type: (float) -> np.int64
@@ -130,7 +132,7 @@ class BaseCore(DaxSimDevice):
 
     @kernel
     def get_rtio_counter_mu(self):  # type: () -> np.int64
-        # In simulation there is no difference between the RTIO counter and the cursor
+        # In simulation without signal manager, there is no difference between the RTIO counter and the cursor
         return now_mu()
 
     # noinspection PyUnusedLocal
@@ -141,19 +143,15 @@ class BaseCore(DaxSimDevice):
 
     @kernel
     def reset(self):  # type: () -> None
-        # Call internal function to allow compilation
-        self._reset()
-
-    def _reset(self):  # type: () -> None
+        # Set timeline cursor to the time horizon
+        at_mu(self.get_rtio_counter_mu())
         # Move cursor
         delay_mu(self._reset_mu)
 
     @kernel
     def break_realtime(self):  # type: () -> None
-        # Call internal function to allow compilation
-        self._break_realtime()
-
-    def _break_realtime(self):  # type: () -> None
+        # Set timeline cursor to the time horizon
+        at_mu(self.get_rtio_counter_mu())
         # Move cursor
         delay_mu(self._break_realtime_mu)
 
@@ -252,9 +250,7 @@ class Core(BaseCore):
             args: typing.Tuple[typing.Any, ...], kwargs: typing.Dict[str, typing.Any]) -> typing.Any:
         if self._level == 0 and self._compiler is not None:
             # Compile the kernel
-            _logger.debug('Compiling kernel...')
-            _, kernel_library, _, _ = self._compiler.compile(function, args, kwargs)
-            _logger.debug(f'Kernel size: {len(kernel_library)} bytes')
+            self.compile(function, args, kwargs)
 
         # Unpack function
         kernel_fn = function.artiq_embedded.function
@@ -304,10 +300,32 @@ class Core(BaseCore):
                 csv_writer.writerows((self._fn_counter[fn], time, self.mu_to_seconds(time), fn.__qualname__)
                                      for fn, time in self._fn_time.items())
 
-    def compile(self, *args: typing.Any, **kwargs: typing.Any) -> typing.Any:
-        super(Core, self).compile(*args, **kwargs)
+    def compile(self, function: typing.Any, args: typing.Sequence[typing.Any], kwargs: typing.Dict[str, typing.Any],
+                *args_: typing.Any, **kwargs_: typing.Any) -> typing.Any:
+        if self._compiler is not None:
+            _logger.debug('Compiling kernel...')
+            result = self._compiler.compile(function, args, kwargs, *args_, **kwargs_)
+            _, kernel_library, _, _ = result
+            _logger.debug(f'Kernel size: {len(kernel_library)} bytes')
+            return result
+        else:
+            return super(Core, self).compile(function, args, kwargs, *args_, **kwargs_)
+
+    @kernel
+    def get_rtio_counter_mu(self):  # type: () -> np.int64
+        # RTIO counter value is estimated by the horizon
+        return self._get_rtio_counter_mu()
+
+    @rpc
+    def _get_rtio_counter_mu(self) -> TInt64:
+        return self._signal_manager.horizon()
+
+    @kernel
+    def reset(self):  # type: () -> None
+        self._reset()
 
     # noinspection PyTypeHints
+    @rpc
     def _reset(self, *, push_start=True, push_end=True):  # type: (bool, bool) -> None
         # Set timeline cursor to the time horizon
         at_mu(self._signal_manager.horizon())
@@ -320,15 +338,10 @@ class Core(BaseCore):
         for _, d in self._device_manager.active_devices:
             if isinstance(d, DaxSimDevice):
                 d.core_reset()
-        # Call super
-        super(Core, self)._reset()
+
+        # Move cursor
+        delay_mu(self._reset_mu)
 
         if push_end:
             # Reset signal back to 0
             self._reset_signal.push(False)
-
-    def _break_realtime(self):  # type: () -> None
-        # Set timeline cursor to the time horizon
-        at_mu(self._signal_manager.horizon())
-        # Call super
-        super(Core, self)._break_realtime()

@@ -9,6 +9,7 @@ import numpy as np
 from dax.experiment import *
 from trap_dac_utils.reader import BaseReader, SpecialCharacter, SOLUTION_T, MAP_T, CONFIG_T
 from trap_dac_utils.schemas import LINEAR_COMBO
+from trap_dac_utils.types import LABEL_FIELD
 
 import artiq.coredevice.zotino  # type: ignore[import]
 import artiq.coredevice.ad53xx  # type: ignore[import]
@@ -575,7 +576,7 @@ class TrapDcModule(DaxModule):
         Each configuration is set if and only if the argument is passed in and is not None
         All original values were calculated from benchmarking
 
-        :param dma_startup_time_mu: The time it takes for DMA to start up in (s)
+        :param dma_startup_time: The time it takes for DMA to start up in (s)
         :param comm_delay_intercept_mu: The intercept of the linear communication time between
             artiq and the kernel as a function of total channels
         :param comm_delay_slope_mu: The slope of the linear communication time between
@@ -750,7 +751,7 @@ class ZotinoCalculator:
         Each configuration is set if and only if the argument is passed in and is not None
         All original values were calculated from benchmarking
 
-        :param dma_startup_time: The time it takes for DMA to start up in (s)
+        :param dma_startup_time_mu: The time it takes for DMA to start up in (MU)
         :param comm_delay_intercept_mu: The intercept of the linear communication time between
         artiq and the kernel as a function of total channels
         :param comm_delay_slope_mu: The slope of the linear communication time between
@@ -894,10 +895,6 @@ class ZotinoReader(BaseReader[_ZOTINO_SOLUTION_T]):
         self._check_init("process_specials")
         if val == SpecialCharacter.X:
             return math.nan
-        elif val == SpecialCharacter.INF:
-            return self.voltage_high
-        elif val == SpecialCharacter.NEG_INF:
-            return self.voltage_low
         else:
             # Special character not handled
             raise ValueError(f'Special character {val} is not yet handled')
@@ -914,7 +911,7 @@ class ZotinoReader(BaseReader[_ZOTINO_SOLUTION_T]):
         :return: Representation of csv file as a single dictionary with the pin labels as the keys
         """
 
-        return {d[self._LABEL]: d[self._CHANNEL] for d in channel_map}
+        return {d[LABEL_FIELD]: d[self._CHANNEL] for d in channel_map}
 
     @host_only
     def convert_solution_to_mu(self,

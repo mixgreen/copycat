@@ -126,11 +126,31 @@ class AD53xxPeekTestCase(dax.sim.test_case.PeekTestCase):
             o = self.rng.randrange(2 ** 14)
             c = self.rng.randrange(self._NUM_CHANNELS)
             # Adjust voltage to make sure it is in range
-            v += dax.sim.coredevice.ad53xx._mu_to_voltage(0 * V, vref=self.env.dut.vref, offset_dacs=o)
+            v += dax.sim.coredevice.ad53xx._mu_to_voltage(0, vref=self.env.dut.vref, offset_dacs=o)
             with self.subTest(v=v, o=o):
                 # Call functions
                 self.env.dut.write_offset_dacs_mu(o)
                 self.env.dut.set_dac([v], [c])
+                # Test
+                self.expect_close(self.env.dut, f'v_out_{c}', v, places=3)
+
+    def test_v_out_bus(self):
+        self._test_uninitialized()
+        for _ in range(_NUM_SAMPLES):
+            # Generate parameters
+            v = self.rng.uniform(0 * V, 3.9 * self.env.dut.vref)  # Multiplier < 4.0 to prevent overflows
+            o = self.rng.randrange(2 ** 14)
+            c = self.rng.randrange(self._NUM_CHANNELS)
+            # Adjust voltage to make sure it is in range
+            v += dax.sim.coredevice.ad53xx._mu_to_voltage(0, vref=self.env.dut.vref, offset_dacs=o)
+            # Convert
+            v_mu = artiq.coredevice.ad53xx.voltage_to_mu(v, vref=self.env.dut.vref, offset_dacs=o)
+            cmd = artiq.coredevice.ad53xx.ad53xx_cmd_write_ch(c, v_mu, artiq.coredevice.ad53xx.AD53XX_CMD_DATA) << 8
+            with self.subTest(v=v, o=o):
+                # Call functions
+                self.env.dut.write_offset_dacs_mu(o)
+                self.env.dut.bus.write(cmd)
+                self.env.dut.load()
                 # Test
                 self.expect_close(self.env.dut, f'v_out_{c}', v, places=3)
 

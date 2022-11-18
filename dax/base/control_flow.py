@@ -32,10 +32,11 @@ class DaxControlFlow(dax.base.system.DaxBase, abc.ABC):
     Inheriting classes that implement an experiment template can or must implement the following functions:
 
     1. :func:`_dax_control_flow_while`
-    2. :func:`_dax_control_flow_is_kernel`
-    3. :func:`_dax_control_flow_run`
-    4. :func:`_dax_control_flow_setup` (optional)
-    5. :func:`_dax_control_flow_cleanup` (optional)
+    2. :func:`_dax_control_flow_check_pause` (optional)
+    3. :func:`_dax_control_flow_is_kernel`
+    4. :func:`_dax_control_flow_run`
+    5. :func:`_dax_control_flow_setup` (optional)
+    6. :func:`_dax_control_flow_cleanup` (optional)
     """
 
     DAX_CONTROL_FLOW_CORE_ATTR: typing.ClassVar[str] = 'core'
@@ -53,6 +54,7 @@ class DaxControlFlow(dax.base.system.DaxBase, abc.ABC):
 
         assert isinstance(self.DAX_CONTROL_FLOW_CORE_ATTR, str), 'Core attribute name must be of type str'
         assert dax.util.artiq.is_portable(self._dax_control_flow_while), 'While condition must be portable'
+        assert dax.util.artiq.is_portable(self._dax_control_flow_check_pause), 'Check pause must be portable'
         assert not dax.util.artiq.is_kernel(self._dax_control_flow_is_kernel), 'Is kernel cannot be a kernel'
         assert dax.util.artiq.is_portable(self._dax_control_flow_run), 'Run must be portable'
         assert not dax.util.artiq.is_kernel(self._dax_control_flow_setup), 'Setup cannot be a kernel'
@@ -155,9 +157,10 @@ class DaxControlFlow(dax.base.system.DaxBase, abc.ABC):
             self.device_setup()
 
             while self._dax_control_flow_while():
-                # Check for pause condition
-                if self._dax_control_flow_scheduler.check_pause():
-                    break  # Break to exit kernel
+                if self._dax_control_flow_check_pause():
+                    # Check for pause condition
+                    if self._dax_control_flow_scheduler.check_pause():  # Separate statement for compiler
+                        break  # Break to exit kernel
 
                 # Run the main control flow
                 self._dax_control_flow_run()
@@ -176,6 +179,14 @@ class DaxControlFlow(dax.base.system.DaxBase, abc.ABC):
         Additionally, this function must be portable.
         """
         pass
+
+    @portable
+    def _dax_control_flow_check_pause(self) -> TBool:
+        """Internal function that returns :const:`True` if the main control loop should check for experiment pausing.
+
+        :returns: :const:`True` if the experiment should check for a pause condition.
+        """
+        return True
 
     @abc.abstractmethod
     def _dax_control_flow_is_kernel(self) -> bool:  # pragma: no cover

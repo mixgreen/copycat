@@ -11,6 +11,7 @@ import pathlib
 from dax.experiment import *
 from dax.modules.trap_dc import LinearComboConfigAttrs, ZotinoConfig, ZotinoReader, TrapDcModule
 from trap_dac_utils.reader import SpecialCharacter, BaseReader
+from trap_dac_utils.types import LABEL_FIELD
 import dax.sim.coredevice.ad53xx
 import dax.sim.test_case
 from test.environment import CI_ENABLED
@@ -48,13 +49,13 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
     _VREF = 5
 
     PATH_DATA = [{'A': -10., 'B': 0., 'C': 0., 'D': 0.,
-                  'E': SpecialCharacter('x')},
+                  'E': SpecialCharacter.X},
                  {'A': 1., 'B': 0., 'C': 0, 'D': 0,
-                  'E': SpecialCharacter('x')},
+                  'E': SpecialCharacter.X},
                  {'A': 1., 'B': 2., 'C': 0., 'D': 0.,
-                  'E': SpecialCharacter('x')},
+                  'E': SpecialCharacter.X},
                  {'A': 1., 'B': 2., 'C': 3., 'D': 4.,
-                  'E': SpecialCharacter('x')}]
+                  'E': SpecialCharacter.X}]
     MAP_DATA = [{'label': 'A', 'channel': '2'},
                 {'label': 'B', 'channel': '3'},
                 {'label': 'C', 'channel': '4'},
@@ -329,15 +330,8 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
                     for j, channel in enumerate(t[1]):
                         label = self.channel_to_label(
                             channel, map_data, reader)
-                        if t[0][j] == -2 * self._VREF:
-                            self.assertEqual(
-                                expected_solution[i + 1][label], SpecialCharacter.NEG_INF)
-                        elif t[0][j] == 2 * self._VREF:
-                            self.assertEqual(
-                                expected_solution[i + 1][label], SpecialCharacter.INF)
-                        else:
-                            self.assertAlmostEqual(
-                                expected_solution[i + 1][label], t[0][j], places=3)
+                        self.assertAlmostEqual(
+                            expected_solution[i + 1][label], t[0][j], places=3)
 
     def generate_headers(self):
         return [self.rand_str() for _ in range(self._NUM_CHANNELS)]
@@ -345,7 +339,7 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
     def generate_path_data(self, headers):
         headers = [self.rand_str() for _ in range(self._NUM_CHANNELS)]
         path_data = []
-        special = [e for e in SpecialCharacter]
+        special = [SpecialCharacter.X]
         for _ in range(self._RNG.randint(1, 50)):
             pool = [
                 *special, self._RNG.uniform(-1.95 * self._VREF * V,
@@ -359,7 +353,7 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
     def generate_map_data(self, labels):
         channels = self._RNG.sample(
             range(self._NUM_CHANNELS), self._NUM_CHANNELS)
-        return [{ZotinoReader._LABEL: label,
+        return [{LABEL_FIELD: label,
                  ZotinoReader._CHANNEL: str(channels[i])}
                 for i, label in enumerate(labels)]
 
@@ -373,7 +367,7 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
                          reader):
         for d in map_data:
             if d[reader._CHANNEL] == str(channel):
-                return d[reader._LABEL]
+                return d[LABEL_FIELD]
         raise ValueError("Mapped to channel that isn't in channel map")
 
     @patch.object(BaseReader, 'read_solution')
