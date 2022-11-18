@@ -14,8 +14,6 @@ from trap_dac_utils.types import LABEL_FIELD
 import artiq.coredevice.zotino  # type: ignore[import]
 import artiq.coredevice.ad53xx  # type: ignore[import]
 
-__all__ = ['TrapDcModule', 'ZotinoReader', 'ZotinoConfig']
-
 """Zotino Path and Line types"""
 _ZOTINO_KEY_T = typing.List[float]
 _ZOTINO_KEY_T_MU = typing.List[int]
@@ -24,6 +22,8 @@ _ZOTINO_LINE_T = typing.Tuple[_ZOTINO_KEY_T, _ZOTINO_VALUE_T]
 _ZOTINO_SOLUTION_T = typing.List[_ZOTINO_LINE_T]
 _ZOTINO_LINE_T_MU = typing.Tuple[_ZOTINO_KEY_T_MU, _ZOTINO_VALUE_T]
 _ZOTINO_SOLUTION_T_MU = typing.List[_ZOTINO_LINE_T_MU]
+
+__all__ = ['TrapDcModule', 'ZotinoReader', 'ZotinoConfig']
 
 
 class LinearComboConfigAttrs:
