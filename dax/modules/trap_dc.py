@@ -466,7 +466,7 @@ class TrapDcModule(DaxModule):
         Each configuration is set if and only if the argument is passed in and is not None
         All original values were calculated from benchmarking
 
-        :param dma_startup_time_mu: The time it takes for DMA to start up in (s)
+        :param dma_startup_time: The time it takes for DMA to start up in (s)
         :param comm_delay_intercept_mu: The intercept of the linear communication time between
             artiq and the kernel as a function of total channels
         :param comm_delay_slope_mu: The slope of the linear communication time between
@@ -580,7 +580,7 @@ class ZotinoCalculator:
         Each configuration is set if and only if the argument is passed in and is not None
         All original values were calculated from benchmarking
 
-        :param dma_startup_time: The time it takes for DMA to start up in (s)
+        :param dma_startup_time_mu: The time it takes for DMA to start up in (MU)
         :param comm_delay_intercept_mu: The intercept of the linear communication time between
         artiq and the kernel as a function of total channels
         :param comm_delay_slope_mu: The slope of the linear communication time between

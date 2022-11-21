@@ -22,7 +22,7 @@ dependencies:
   - pyqt=5.9  # Limit version to help solver
   # Packages required for testing
   - pytest
-  - mypy
+  - mypy=0.910  # Fix version for predictability
   - pycodestyle
   - flake8-artiq
   - artiq-stubs
