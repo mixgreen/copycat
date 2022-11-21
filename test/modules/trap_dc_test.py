@@ -237,7 +237,6 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
                     # create an offset for testing purposes
                     delay_mu(50000)
                     for i in range(32):
-                        print(i)
                         if i != 2:
                             self.expect_close(s.trap_dc._zotino,
                                               f'v_out_{i}', 0, places=3)
