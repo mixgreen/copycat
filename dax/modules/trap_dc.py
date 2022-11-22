@@ -16,14 +16,11 @@ from trap_dac_utils.types import LABEL_FIELD
 
 """Zotino Path and Line types"""
 _ZOTINO_KEY_T = typing.List[float]
-_ZOTINO_KEY_T_MU = typing.List[int]
 _ZOTINO_VALUE_T = typing.List[int]
 _ZOTINO_LINE_T = typing.Tuple[_ZOTINO_KEY_T, _ZOTINO_VALUE_T]
 _ZOTINO_SOLUTION_T = typing.List[_ZOTINO_LINE_T]
-_ZOTINO_LINE_T_MU = typing.Tuple[_ZOTINO_KEY_T_MU, _ZOTINO_VALUE_T]
-_ZOTINO_SOLUTION_T_MU = typing.List[_ZOTINO_LINE_T_MU]
-_ZOTION_LINE_T_PACK = typing.List[int]
-_ZOTION_SOLUTION_T_PACK = typing.List[_ZOTION_LINE_T_PACK]
+_ZOTINO_LINE_PACK_T = typing.List[int]
+_ZOTINO_SOLUTION_PACK_T = typing.List[_ZOTINO_LINE_PACK_T]
 
 __all__ = ['TrapDcModule', 'ZotinoReader']
 
@@ -117,7 +114,7 @@ class TrapDcModule(DaxModule):
     def read_line_mu(self,
                      file_name: str,
                      index: int = 0,
-                     multiplier: float = 1.0) -> _ZOTION_LINE_T_PACK:
+                     multiplier: float = 1.0) -> _ZOTINO_LINE_PACK_T:
         """Read in a single line of a solutions file and return the line in zotino form.
         Optionally apply multiplier to all voltages in path
 
@@ -130,7 +127,7 @@ class TrapDcModule(DaxModule):
         :return: Zotino module interpretable solution line with voltages in MU
         """
         path = self._read_line(file_name, index, multiplier)
-        return self.pack_line((self._reader.convert_to_mu(path[0]), path[1]))
+        return self._reader.pack_line(path)
 
     @host_only
     def _read_line(self,
@@ -163,7 +160,7 @@ class TrapDcModule(DaxModule):
                          start: int = 0,
                          end: int = -1,
                          reverse: bool = False,
-                         multiplier: float = 1.0) -> _ZOTION_SOLUTION_T_PACK:
+                         multiplier: float = 1.0) -> _ZOTINO_SOLUTION_PACK_T:
         """Read in a segment of a solutions file and return the path in zotino form.
         Optionally reverse path and/or apply multiplier to all voltages in path
 
@@ -179,7 +176,7 @@ class TrapDcModule(DaxModule):
         """
         path = self._read_solution(file_name, start, end,
                                    reverse, multiplier)
-        return self.pack_solution(self._reader.convert_solution_to_mu(path))
+        return self._reader.pack_solution(path)
 
     @host_only
     def _read_solution(self,
@@ -220,30 +217,6 @@ class TrapDcModule(DaxModule):
                      for i, t in enumerate(trimmed_solution[1:])])
 
         return path
-
-    @host_only
-    def pack_line(self, line: _ZOTINO_LINE_T_MU) -> _ZOTION_LINE_T_PACK:
-        """Pack a line of values into a form directly writeable to the SPI bus
-
-        :param line: The Zotino MU line to pack
-
-        :return: The packed line which is a list of 32-bit integers
-            where the most significant 24 bits are the packed value
-        """
-        vs, chs = line
-        return [artiq.coredevice.ad53xx.ad53xx_cmd_write_ch(ch, v, artiq.coredevice.ad53xx.AD53XX_CMD_DATA) << 8
-                for v, ch in zip(vs, chs)]
-
-    @host_only
-    def pack_solution(self, solution: _ZOTINO_SOLUTION_T_MU) -> _ZOTION_SOLUTION_T_PACK:
-        """Pack a solution of values into a form directly writeable to the SPI bus
-
-        :param solution: The Zotino MU solution to pack
-
-        :return: The packed solution where each solution row is a list of 32-bit integers
-            where the most significant 24 bits are the packed value
-        """
-        return [self.pack_line(line) for line in solution]
 
     @host_only
     def list_solutions(self) -> typing.Sequence[str]:
@@ -401,7 +374,7 @@ class TrapDcModule(DaxModule):
 
     @host_only
     def calculate_slack(self,
-                        solution: _ZOTINO_SOLUTION_T_MU,
+                        solution: _ZOTINO_SOLUTION_PACK_T,
                         line_delay: float) -> float:
         """Calculate the slack required to shuttle solution with desired delay
         This method is used to prevent underflow when shuttling solutions
@@ -418,7 +391,7 @@ class TrapDcModule(DaxModule):
 
     @host_only
     def calculate_slack_mu(self,
-                           solution: _ZOTINO_SOLUTION_T_MU,
+                           solution: _ZOTINO_SOLUTION_PACK_T,
                            line_delay: np.int64) -> np.int64:
         """Calculate the slack required to shuttle solution with desired delay
         This method is used to prevent underflow when shuttling solutions
@@ -437,7 +410,7 @@ class TrapDcModule(DaxModule):
 
     @host_only
     def calculate_dma_slack(self,
-                            solution: _ZOTINO_SOLUTION_T_MU,
+                            solution: _ZOTINO_SOLUTION_PACK_T,
                             line_delay: float) -> float:
         """Calculate the slack required to shuttle solution with dma and with desired delay
         This method is used to prevent underflow when shuttling solutions
@@ -454,7 +427,7 @@ class TrapDcModule(DaxModule):
 
     @host_only
     def calculate_dma_slack_mu(self,
-                               solution: _ZOTINO_SOLUTION_T_MU,
+                               solution: _ZOTINO_SOLUTION_PACK_T,
                                line_delay: np.int64) -> np.int64:
         """Calculate the slack required to shuttle solution with dma and with desired delay
         This method is used to prevent underflow when shuttling solutions
@@ -473,13 +446,13 @@ class TrapDcModule(DaxModule):
                                          True)
 
     @host_only
-    def _list_num_channels(self, solution: _ZOTINO_SOLUTION_T_MU) -> typing.Sequence[int]:
+    def _list_num_channels(self, solution: _ZOTINO_SOLUTION_PACK_T) -> typing.Sequence[int]:
         """Given a zotino solution, list the length of each row in terms of number of channels
 
         :param solution: Any zotino solution
 
         :return: A list of number of channels that need to be set for each row"""
-        return [len(t[0]) for t in solution]
+        return [len(t) for t in solution]
 
     @host_only
     def configure_calculator(self,
@@ -770,23 +743,28 @@ class ZotinoReader(BaseReader[_ZOTINO_SOLUTION_T]):
         return {d[LABEL_FIELD]: d[self._CHANNEL] for d in channel_map}
 
     @host_only
-    def convert_solution_to_mu(self,
-                               solution: _ZOTINO_SOLUTION_T) -> _ZOTINO_SOLUTION_T_MU:
-        """Convert all voltages in zotino path from volts to machine units
+    def pack_line(self, line: _ZOTINO_LINE_T) -> _ZOTINO_LINE_PACK_T:
+        """Pack a line of values into a form directly writeable to the SPI bus
 
-        :param solution: The full zotino path object with voltages in V
+        :param line: The Zotino line to pack
 
-        :return: The full zotino path object with voltages in MU
+        :return: The packed line which is a list of 32-bit integers
+            where the most significant 24 bits are the packed value
         """
-        return [(self.convert_to_mu(t[0]), t[1]) for t in solution]
+        self._check_init("pack_line")
+        vs, chs = line
+        return [artiq.coredevice.ad53xx.ad53xx_cmd_write_ch(ch,
+                                                            self._voltage_to_mu(v),
+                                                            artiq.coredevice.ad53xx.AD53XX_CMD_DATA) << 8
+                for v, ch in zip(vs, chs)]
 
     @host_only
-    def convert_to_mu(self, voltages: _ZOTINO_KEY_T) -> _ZOTINO_KEY_T_MU:
-        """Convert a list of voltages from volts to machine units
+    def pack_solution(self, solution: _ZOTINO_SOLUTION_T) -> _ZOTINO_SOLUTION_PACK_T:
+        """Pack a solution of values into a form directly writeable to the SPI bus
 
-        :param voltages: A list of voltages in V
+        :param solution: The Zotino solution to pack
 
-        :return: A list of voltages in MU
+        :return: The packed solution where each solution row is a list of 32-bit integers
+            where the most significant 24 bits are the packed value
         """
-        self._check_init("convert_to_mu")
-        return [self._voltage_to_mu(v) for v in voltages]
+        return [self.pack_line(line) for line in solution]
