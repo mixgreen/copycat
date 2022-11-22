@@ -8,7 +8,7 @@ import typing
 
 from artiq.coredevice.spi2 import SPIMaster as _SPIMaster  # type: ignore[import]
 from artiq.language.core import kernel, rpc, host_only, delay_mu
-from artiq.language.types import TNone
+from artiq.language.types import TNone, TInt32
 
 from dax.sim.device import DaxSimDevice
 from dax.sim.signal import get_signal_manager
@@ -43,10 +43,6 @@ class SPIMaster(DaxSimDevice, _SPIMaster):
         self.update_xfer_duration_mu(div, length)
 
     @kernel
-    def set_config(self, flags, length, freq, cs) -> TNone:
-        self.set_config_mu(flags, length, self.frequency_to_div(freq), cs)
-
-    @kernel
     def set_config_mu(self, flags, length, div, cs) -> TNone:
         if length > 32 or length < 1:
             raise ValueError("Invalid SPI transfer length")
@@ -56,6 +52,7 @@ class SPIMaster(DaxSimDevice, _SPIMaster):
         self._config_clk_div.push(div)
         self._config_cs.push(cs)
         self._config_flags.push(flags)
+        self.update_xfer_duration_mu(div, length)
         delay_mu(self.ref_period_mu)
         self._set_config_mu_notify(flags, length, div, cs)
 
@@ -93,5 +90,5 @@ class SPIMaster(DaxSimDevice, _SPIMaster):
             fn(data)
 
     @kernel
-    def read(self) -> TNone:
+    def read(self) -> TInt32:
         raise NotImplementedError("Reads not simulated")
