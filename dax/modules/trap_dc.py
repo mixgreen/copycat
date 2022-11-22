@@ -124,7 +124,7 @@ class TrapDcModule(DaxModule):
         :param index: Line in path to get. A 0 indicates the first line
         :param multiplier: Optionally scale the voltages by a constant
 
-        :return: Zotino module interpretable solution line with voltages in MU
+        :return: Zotino module interpretable solution line with packed voltages and channels
         """
         path = self._read_line(file_name, index, multiplier)
         return self._reader.pack_line(path)
@@ -172,7 +172,7 @@ class TrapDcModule(DaxModule):
         :param reverse: Optionally return a reversed path. I.E. From end to start
         :param multiplier: Optionally scale the voltages by a constant
 
-        :return: Zotino module interpretable solution path with voltages in MU
+        :return: Zotino module interpretable solution path with packed voltages and channels
         """
         path = self._read_solution(file_name, start, end,
                                    reverse, multiplier)
