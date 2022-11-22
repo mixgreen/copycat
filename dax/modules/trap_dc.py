@@ -237,7 +237,7 @@ class TrapDcModule(DaxModule):
         of voltages (MU) and corresponding channels
 
         :param name: Name of DMA trace
-        :param solution: A list of packed voltage lines to set and corresponding channels for each line
+        :param solution: A list of packed voltage and channel lines to set
         :param line_delay: A delay (s) inserted after the line is set
             Must be greater than the SPI write time for the number of used channels
 
@@ -256,7 +256,7 @@ class TrapDcModule(DaxModule):
         of voltages (MU) and corresponding channels
 
         :param name: Name of DMA trace
-        :param solution: A list of packed voltage lines to set and corresponding channels for each line
+        :param solution: A list of packed voltage and channel lines to set
         :param line_delay: A delay (MU) inserted after the line is set
             Must be greater than the SPI write time for the number of used channels
 
@@ -280,7 +280,7 @@ class TrapDcModule(DaxModule):
         of voltages (MU) and corresponding channels
 
         :param name: Name of DMA trace
-        :param solution: A list of packed voltage lines to set and corresponding channels for each line
+        :param solution: A list of packed voltage and channel lines to set
         :param line_rate: A rate (Hz) to define speed to set each line
             Must be greater than the SPI write time for the number of used channels
 
@@ -323,7 +323,7 @@ class TrapDcModule(DaxModule):
         """Set sequential lines of voltages on the zotino device given a list of voltages (MU) and
         corresponding channels
 
-        :param solution: A list of packed voltage lines to set and corresponding channels for each line
+        :param solution: A list of packed voltage and channel lines to set
         :param line_delay: A delay (s) inserted after the line is set
             Must be greater than the SPI write time for the number of used channels
         """
@@ -336,7 +336,7 @@ class TrapDcModule(DaxModule):
         """Set sequential lines of voltages on the zotino device given a list of voltages (MU) and
         corresponding channels
 
-        :param solution: A list of packed voltage lines to set and corresponding channels for each line
+        :param solution: A list of packed voltage and channel lines to set
         :param line_delay: A delay (MU) inserted after the line is set
             Must be greater than the SPI write time for the number of used channels
         """
@@ -353,7 +353,7 @@ class TrapDcModule(DaxModule):
         """Set sequential lines of voltages on the zotino device given a list of voltages (MU) and
         corresponding channels
 
-        :param solution: A list of packed voltage lines to set and corresponding channels for each line
+        :param solution: A list of packed voltage and channel lines to set
         :param line_rate: A rate (Hz) to define speed to set each line
             Must be greater than the SPI write time for the number of used channels
         """
