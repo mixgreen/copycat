@@ -231,7 +231,7 @@ class TrapDcModule(DaxModule):
     @kernel
     def record_dma(self,
                    name: TStr,
-                   solution: TList(TTuple([TList(TInt32), TList(TInt32)])),  # type: ignore[valid-type]
+                   solution: TList(TList(TInt32)),  # type: ignore[valid-type]
                    line_delay: TFloat) -> TStr:
         """Record the setting of sequential lines of voltages on the zotino device given a list
         of voltages (MU) and corresponding channels
