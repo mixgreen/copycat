@@ -14,7 +14,7 @@ from dax.util.ccb import get_ccb_tool
 from dax.util.output import FileNameGenerator, BaseFileNameGenerator
 from dax.util.units import UnitsFormatter
 
-__all__ = ['HistogramContext', 'HistogramAnalyzer', 'HistogramContextError']
+__all__ = ['HistogramContext', 'DataBuffer', 'HistogramAnalyzer', 'HistogramContextError']
 
 
 class HistogramContextError(DataContextError):
@@ -615,6 +615,67 @@ class HistogramContext(DaxModule, DataContextInterface):
         """
         return [[HistogramAnalyzer.histogram_to_stdev_count(h) for h in histograms]
                 for histograms in self.get_histograms(dataset_key)]
+
+
+_INDEX_T = typing.Union[int, np.int32]
+"""Index type."""
+
+
+class DataBuffer:
+    """Histogram data buffer.
+
+    The histogram context requires all samples within a histogram to be inserted before the histogram context is closed.
+    Depending on the design of the experiment, that is not always possible.
+    For example, an experiment might yield one sample per point before yielding the next sample for each point.
+    The :class:`DataBuffer` allows users to yield samples for histograms in arbitrary order.
+    All data is inserted into the buffer with an index. When flushed, the data buffer transforms the buffered data
+    and inserts it correctly into the histogram context.
+
+    Because all data is buffered, real-time plots only receive data when the data buffer is flushed.
+    """
+
+    _context: HistogramContext
+    _buffer: typing.Dict[_INDEX_T, typing.MutableSequence[typing.Sequence[RAW_T]]]
+
+    def __init__(self, context: HistogramContext):
+        """Create a new data buffer object.
+
+        :param context: The :class:`HistogramContext` used by this data buffer
+        """
+        assert isinstance(context, HistogramContext), 'Context must be a HistogramContext'
+        self._context = context
+        self._buffer = {}
+
+    @rpc(flags={'async'})
+    def insert(self, index, data):  # type: (_INDEX_T, typing.Sequence[RAW_T]) -> None
+        """Insert data into the buffer.
+
+        :param index: The index associated with the data
+        :param data: The data to buffer
+        """
+        if index in self._buffer:
+            self._buffer[index].append(data)
+        else:
+            self._buffer[index] = [data]
+
+    @rpc(flags={'async'})
+    def clear(self):  # type: () -> None
+        """Clear the buffer."""
+        self._buffer.clear()
+
+    @rpc(flags={'async'})
+    def flush(self):  # type: () -> None
+        """Flush all data in the buffer to the underlying context.
+
+        The indices associated with the data are used to order the data when flushed to the context.
+        After flushing, the buffer is cleared.
+        """
+        # Flush data to the context ordered by index
+        for i in sorted(self._buffer):
+            with self._context:
+                self._context.extend(self._buffer[i])
+        # Clear the buffer
+        self.clear()
 
 
 class HistogramAnalyzer:
