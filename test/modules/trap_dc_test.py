@@ -135,7 +135,7 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
                 path = []
                 for _ in range(num_path_rows):
                     num_data, v, c = self._generate_random_compressed_line()
-                    path.append(self.env.trap_dc._reader.pack_line((v, c)))
+                    path.append(self.env.trap_dc._reader.line_to_mu((v, c)))
                     num_datas.append(num_data)
                     voltages.append(v)
 
@@ -157,7 +157,7 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
                 with self.subTest(v=v):
                     # Call functions
                     # self.env.trap_dc._zotino.write_offset_dacs_mu(o)
-                    self.env.trap_dc.set_line(self.env.trap_dc._reader.pack_line((v, c)))
+                    self.env.trap_dc.set_line(self.env.trap_dc._reader.line_to_mu((v, c)))
                     # Test
                     for i in range(num_data):
                         self.expect_close(self.env.trap_dc._zotino,
@@ -222,7 +222,7 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
             s = self._construct_env()
             s.trap_dc.init()
 
-            shuttle_solution_packed = s.trap_dc._reader.pack_solution(shuttle_solution)
+            shuttle_solution_packed = s.trap_dc._reader.solution_to_mu(shuttle_solution)
             line_delay_mu = 100000
             line_delay = s.core.mu_to_seconds(line_delay_mu)
 
@@ -441,9 +441,9 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
         reader = ZotinoReader(pathlib.Path('.'),
                               pathlib.Path('test.csv'))
         try:
-            reader.pack_line([1.0, 2.0, 3.0])
+            reader.line_to_mu([1.0, 2.0, 3.0])
         except RuntimeError as e:
-            assert str(e) == "Must initialize reader using init method to use function pack_line"
+            assert str(e) == "Must initialize reader using init method to use function line_to_mu"
 
     @patch.object(BaseReader, '_read_channel_map')
     def test_calculate_low_slack(self, _):
@@ -556,7 +556,7 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
             reader = ZotinoReader(pathlib.Path('.'),
                                   pathlib.Path('test.csv'))
             reader.init(self.env.trap_dc._zotino)
-            packed_solution = reader.pack_solution(test_solution)
+            packed_solution = reader.solution_to_mu(test_solution)
             s.trap_dc.set_line(packed_solution[0])
             delay(1)
             for v, ch in zip(test_solution[0][0], test_solution[0][1]):

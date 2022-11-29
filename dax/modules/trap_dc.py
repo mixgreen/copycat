@@ -19,8 +19,8 @@ _ZOTINO_KEY_T = typing.List[float]
 _ZOTINO_VALUE_T = typing.List[int]
 _ZOTINO_LINE_T = typing.Tuple[_ZOTINO_KEY_T, _ZOTINO_VALUE_T]
 _ZOTINO_SOLUTION_T = typing.List[_ZOTINO_LINE_T]
-_ZOTINO_LINE_PACK_T = typing.List[int]
-_ZOTINO_SOLUTION_PACK_T = typing.List[_ZOTINO_LINE_PACK_T]
+_ZOTINO_LINE_MU_T = typing.List[int]
+_ZOTINO_SOLUTION_MU_T = typing.List[_ZOTINO_LINE_MU_T]
 
 __all__ = ['TrapDcModule', 'ZotinoReader']
 
@@ -114,7 +114,7 @@ class TrapDcModule(DaxModule):
     def read_line_mu(self,
                      file_name: str,
                      index: int = 0,
-                     multiplier: float = 1.0) -> _ZOTINO_LINE_PACK_T:
+                     multiplier: float = 1.0) -> _ZOTINO_LINE_MU_T:
         """Read in a single line of a solutions file and return the line in zotino form.
         Optionally apply multiplier to all voltages in path
 
@@ -127,7 +127,7 @@ class TrapDcModule(DaxModule):
         :return: Zotino module interpretable solution line with packed voltages and channels
         """
         path = self._read_line(file_name, index, multiplier)
-        return self._reader.pack_line(path)
+        return self._reader.line_to_mu(path)
 
     @host_only
     def _read_line(self,
@@ -160,7 +160,7 @@ class TrapDcModule(DaxModule):
                          start: int = 0,
                          end: int = -1,
                          reverse: bool = False,
-                         multiplier: float = 1.0) -> _ZOTINO_SOLUTION_PACK_T:
+                         multiplier: float = 1.0) -> _ZOTINO_SOLUTION_MU_T:
         """Read in a segment of a solutions file and return the path in zotino form.
         Optionally reverse path and/or apply multiplier to all voltages in path
 
@@ -176,7 +176,7 @@ class TrapDcModule(DaxModule):
         """
         path = self._read_solution(file_name, start, end,
                                    reverse, multiplier)
-        return self._reader.pack_solution(path)
+        return self._reader.solution_to_mu(path)
 
     @host_only
     def _read_solution(self,
@@ -374,7 +374,7 @@ class TrapDcModule(DaxModule):
 
     @host_only
     def calculate_slack(self,
-                        solution: _ZOTINO_SOLUTION_PACK_T,
+                        solution: _ZOTINO_SOLUTION_MU_T,
                         line_delay: float) -> float:
         """Calculate the slack required to shuttle solution with desired delay
         This method is used to prevent underflow when shuttling solutions
@@ -391,7 +391,7 @@ class TrapDcModule(DaxModule):
 
     @host_only
     def calculate_slack_mu(self,
-                           solution: _ZOTINO_SOLUTION_PACK_T,
+                           solution: _ZOTINO_SOLUTION_MU_T,
                            line_delay: np.int64) -> np.int64:
         """Calculate the slack required to shuttle solution with desired delay
         This method is used to prevent underflow when shuttling solutions
@@ -410,7 +410,7 @@ class TrapDcModule(DaxModule):
 
     @host_only
     def calculate_dma_slack(self,
-                            solution: _ZOTINO_SOLUTION_PACK_T,
+                            solution: _ZOTINO_SOLUTION_MU_T,
                             line_delay: float) -> float:
         """Calculate the slack required to shuttle solution with dma and with desired delay
         This method is used to prevent underflow when shuttling solutions
@@ -427,7 +427,7 @@ class TrapDcModule(DaxModule):
 
     @host_only
     def calculate_dma_slack_mu(self,
-                               solution: _ZOTINO_SOLUTION_PACK_T,
+                               solution: _ZOTINO_SOLUTION_MU_T,
                                line_delay: np.int64) -> np.int64:
         """Calculate the slack required to shuttle solution with dma and with desired delay
         This method is used to prevent underflow when shuttling solutions
@@ -446,7 +446,7 @@ class TrapDcModule(DaxModule):
                                          True)
 
     @host_only
-    def _list_num_channels(self, solution: _ZOTINO_SOLUTION_PACK_T) -> typing.Sequence[int]:
+    def _list_num_channels(self, solution: _ZOTINO_SOLUTION_MU_T) -> typing.Sequence[int]:
         """Given a zotino solution, list the length of each row in terms of number of channels
 
         :param solution: Any zotino solution
@@ -743,7 +743,7 @@ class ZotinoReader(BaseReader[_ZOTINO_SOLUTION_T]):
         return {d[LABEL_FIELD]: d[self._CHANNEL] for d in channel_map}
 
     @host_only
-    def pack_line(self, line: _ZOTINO_LINE_T) -> _ZOTINO_LINE_PACK_T:
+    def line_to_mu(self, line: _ZOTINO_LINE_T) -> _ZOTINO_LINE_MU_T:
         """Pack a line of values into a form directly writeable to the SPI bus
 
         :param line: The Zotino line to pack
@@ -751,7 +751,7 @@ class ZotinoReader(BaseReader[_ZOTINO_SOLUTION_T]):
         :return: The packed line which is a list of 32-bit integers
             where the most significant 24 bits are the packed value
         """
-        self._check_init("pack_line")
+        self._check_init("line_to_mu")
         vs, chs = line
         return [artiq.coredevice.ad53xx.ad53xx_cmd_write_ch(ch,
                                                             self._voltage_to_mu(v),
@@ -759,7 +759,7 @@ class ZotinoReader(BaseReader[_ZOTINO_SOLUTION_T]):
                 for v, ch in zip(vs, chs)]
 
     @host_only
-    def pack_solution(self, solution: _ZOTINO_SOLUTION_T) -> _ZOTINO_SOLUTION_PACK_T:
+    def solution_to_mu(self, solution: _ZOTINO_SOLUTION_T) -> _ZOTINO_SOLUTION_MU_T:
         """Pack a solution of values into a form directly writeable to the SPI bus
 
         :param solution: The Zotino solution to pack
@@ -767,4 +767,4 @@ class ZotinoReader(BaseReader[_ZOTINO_SOLUTION_T]):
         :return: The packed solution where each solution row is a list of 32-bit integers
             where the most significant 24 bits are the packed value
         """
-        return [self.pack_line(line) for line in solution]
+        return [self.line_to_mu(line) for line in solution]
