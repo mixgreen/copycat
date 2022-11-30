@@ -7,25 +7,25 @@ Author: Jacob Whitlow
 """
 
 import abc
+import queue
+import threading
 import typing
 import pathlib
 import multiprocessing
 import numpy as np
 import natsort
+from qiskit.algorithms.optimizers import COBYLA
 
 from dax.experiment import *
 from dax.modules.hist_context import HistogramContext, HistogramAnalyzer
 from dax.interfaces.operation import OperationInterface
 from dax.interfaces.gate import GateInterface
 from dax.interfaces.data_context import DataContextInterface
-from dax.util.artiq import is_kernel, default_enumeration_value
+from dax.util.artiq import is_kernel, default_enumeration_value, is_rpc
 from dax.util.output import get_base_path
 from dax.base.servo import DaxServo
 
-__all__ = ['RandomizedBenchmarkingSQ', 'GateSetTomographySQ']
 
-
-@dax_client_factory
 class DaxVQEBase(DaxClient, DaxServo, Experiment):
     """VQE base client class for portable VQE experiments."""
 
@@ -122,13 +122,6 @@ class DaxVQEBase(DaxClient, DaxServo, Experiment):
 
     @abc.abstractmethod
     def iterate(self):
-        data = self._data_context.get_raw()
-        converge = self.convergence_condition(data)
-        params = self.optimizer(data)
-        return (converge, params)
-
-    @abc.abstractmethod
-    def optimizer(self, data):
         pass
 
     @abc.abstractmethod
@@ -136,7 +129,7 @@ class DaxVQEBase(DaxClient, DaxServo, Experiment):
         pass
 
     @abc.abstractmethod
-    def convergence_condition(self, data):
+    def get_result(self):
         pass
 
     @kernel
@@ -144,9 +137,6 @@ class DaxVQEBase(DaxClient, DaxServo, Experiment):
         """Entry point of the experiment."""
 
         try:
-            self._run_circuit(point)
-
-            self.update_new_result()
 
             converge, params = self.iterate()
 
@@ -154,6 +144,8 @@ class DaxVQEBase(DaxClient, DaxServo, Experiment):
                 self.stop_servo()
             else:
                 self.set_point(params, point)
+
+            self._run_circuit(point)
 
         except TerminationRequested:
             # Experiment was terminated
@@ -163,16 +155,15 @@ class DaxVQEBase(DaxClient, DaxServo, Experiment):
     @kernel  # noqa: ATQ306
     def _run_circuit(self, point):  # noqa: ATQ306
 
-        for _ in range(self._num_samples):
-            # Guarantee slack
-            self.core.break_realtime()
+        with self._data_context:
+            for i in range(self._num_samples):
+                # Guarantee slack
+                self.core.break_realtime()
 
-            # Initialize
-            self._operation.prep_0_all()
+                # Initialize
+                self._operation.prep_0_all()
 
-            # Perform gates
-            with self._data_context:
-                # Run gate
+                # Perform gates
                 self.ansatz_circuit(point)
                 self._operation.store_measurements_all()
 
@@ -200,10 +191,6 @@ class DaxVQEBase(DaxClient, DaxServo, Experiment):
         """Setup on the host, called once at entry."""
         # Save configuration
         self.set_dataset('num_qubits', self._operation.num_qubits)
-
-        # Check if the target qubit is in range (must be done in run())
-        if not 0 <= self._target_qubit < self._operation.num_qubits:
-            raise ValueError(f'Target qubit is out of range (number of qubits: {self._operation.num_qubits})')
 
         # Set realtime
         self._operation.set_realtime(self._real_time)
@@ -240,3 +227,83 @@ class DaxVQEBase(DaxClient, DaxServo, Experiment):
         """Cleanup on the host, called once at exit."""
         self.logger.info(f"Converged parameters {self.get_servo_values()}")
         self.logger.info(f"Converged data {self._data_context.get_raw()}")
+
+
+@dax_client_factory
+class SingleQubitVQE(DaxVQEBase):
+
+    def _add_arguments_internal(self) -> None:
+        np.random.seed(99999)
+        p0 = np.random.random()
+        self.target_dist = {0: p0, 1: 1 - p0}
+
+        self.params = np.random.rand(3)
+        self.theta = self.add_servo_argument('theta', 'theta', NumberValue(self.params[0]))
+        self.phi = self.add_servo_argument('phi', 'phi', NumberValue(self.params[1]))
+        self.lamb = self.add_servo_argument('lamb', 'lamb', NumberValue(self.params[2]))
+
+    def host_setup(self) -> None:
+        super().host_setup()
+        self.param_q = queue.Queue(1)
+        self.data_q = queue.Queue(1)
+        self.index = 0
+        self.opt_thread = threading.Thread(target=self.optimizer,
+                                           args=(3, self.objective_function),
+                                           kwargs={'initial_point': self.params})
+        self.opt_thread.start()
+
+    @kernel
+    def ansatz_circuit(self, point) -> TNone:
+        self._operation.rz(point.phi, 0)
+        self._operation.rx(-self._operation.pi / 2, 0)
+        self._operation.rz(point.theta, 0)
+        self._operation.rx(self._operation.pi / 2, 0)
+        self._operation.rz(point.lamb, 0)
+        self._operation.m_z_all()
+
+    def get_result(self):
+        mean_data = self._data_context.get_mean_counts()
+        last_run = mean_data[0][-1]
+        return last_run
+
+    def optimizer(self, num_vars, objective_function, initial_point=None):
+        opt_method = COBYLA(maxiter=500, tol=0.0001)
+        opt_result = opt_method.optimize(num_vars, objective_function, initial_point=initial_point)
+        self.param_q.put(None)
+
+    def objective_function(self, params):
+        # print(f'Curr obj params {params}')
+        self.param_q.put(params)
+        mean_counts = self.data_q.get()
+        # print(f'Got data {mean_counts}')
+        output_dist = {0: 1 - mean_counts, 1: mean_counts}
+        cost = sum(
+            abs(self.target_dist.get(i, 0) - output_dist.get(i, 0))
+            for i in range(2)
+        )
+        return cost
+
+    @rpc
+    def iterate(self) -> TTuple([TBool, TTuple([TFloat, TFloat, TFloat])]):
+        if self.index > 0:
+            self.data_q.put(self.get_result())
+
+        new_params = self.param_q.get()
+        if new_params is None:
+            converge = True
+            new_params = (0, 0, 0)
+        else:
+            converge = False
+
+        self.index += 1
+
+        return (converge, tuple(new_params))
+
+    @kernel
+    def set_point(self, params, point) -> TNone:
+        point.theta, point.phi, point.lamb = params
+
+    def host_cleanup(self) -> None:
+        super().host_cleanup()
+        # print(f"Initial parameters {self.params}")
+        # print(f"Target distribution {self.target_dist}")
