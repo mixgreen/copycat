@@ -215,8 +215,6 @@ class TrapDcModule(DaxModule):
         self._reader = ZotinoReader(
             self._solution_path, self._map_file)
 
-        self._args_enabled = False
-
     @host_only
     def init(self) -> None:
         """Initialize this module."""
