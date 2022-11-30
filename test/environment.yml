@@ -20,6 +20,7 @@ dependencies:
   - networkx
   - sortedcontainers
   - pyqt=5.9  # Limit version to help solver
+  - libffi=3.3  # Limit version to prevent broken environment
   # Packages required for testing
   - pytest
   - mypy=0.910  # Fix version for predictability
