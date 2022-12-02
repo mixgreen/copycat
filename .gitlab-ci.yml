@@ -30,6 +30,19 @@ build_nix:
   script:
     - nix build .#dax
 
+test_nix_legacy:
+  extends: .nix_env
+  stage: test
+  variables:
+    NIX_SHELL_FILE: "test/shell.nix"
+  script:
+    # Run test commands
+    - python3 --version
+    - pytest -v -rs
+    # Run build commands
+    - nix-build ./default.nix --no-out-link
+    - nix-shell ./shell.nix --run "python3 -c 'import dax; print(dax.__version__)'"
+
 test_conda:
   extends: .conda_env
   stage: test
