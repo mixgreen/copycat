@@ -57,6 +57,7 @@
           "h5py"
           "networkx"
           "sortedcontainers"
+          "libffi=3.3" # Limit version to prevent broken environment
         ];
 
         meta = with lib; {
