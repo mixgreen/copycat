@@ -14,6 +14,7 @@ class _ScanExperiment(DaxScan, HasEnvironment):
         self.setattr_device('core')
 
         self.add_scan('foo', 'foo', Scannable(ExplicitScan([1, 1])))
+        self.add_iterator('foobar', 'foobar', 2)
         self.add_static_scan('bar', [1, 1])
         self.result = 0
         self.host_setup_done = False
@@ -46,9 +47,9 @@ class _ScanExperiment(DaxScan, HasEnvironment):
 
 class ScanKernelTestCase(test.hw_test.HardwareTestCase):
 
-    def test_run(self, env_cls=_ScanExperiment, result=8, *, host=True, device=True, exception=False):
+    def test_run(self, env_cls=_ScanExperiment, result=16, *, host=True, device=True, exception=False):
         env = self.construct_env(env_cls)
-        with (self.assertRaises(RuntimeError) if exception else contextlib.nullcontext()):
+        with self.assertRaises(RuntimeError) if exception else contextlib.nullcontext():
             env.run()
         self.assertEqual(env.result, result)
         self.assertEqual(env.host_setup_done, host)

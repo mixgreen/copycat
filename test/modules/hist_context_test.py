@@ -9,7 +9,7 @@ import artiq.coredevice
 from dax.experiment import *
 import dax.base.system
 import dax.util.matplotlib_backend  # noqa: F401
-from dax.modules.hist_context import *
+from dax.modules.hist_context import HistogramContext, HistogramAnalyzer, HistogramContextError, DataBuffer
 from dax.interfaces.detection import DetectionInterface
 from dax.interfaces.data_context import DataContextInterface, DataContextError, validate_interface
 from dax.util.artiq import get_managers
@@ -141,6 +141,26 @@ class HistogramContextTestCase(unittest.TestCase):
         with self.h:
             # Check buffer
             self.assertListEqual([], self.h._buffer, 'Buffer was not cleared when entering new context')
+
+    def test_append_2(self):
+        test_data = [
+            [[1, 9], [2, 8], [2, 7]],
+            [[3, 6], [3, 5], [3, 4]],
+        ]
+
+        for data in test_data:
+            with self.h:
+                # Check buffer
+                self.assertListEqual([], self.h._buffer, 'Buffer was not cleared when entering new context')
+                for d in data:
+                    self.h.append(d)
+                    self.assertEqual(d, self.h._buffer[-1], 'Append did not appended data to buffer')
+                # Check buffer
+                self.assertListEqual(data, self.h._buffer, 'Buffer did not contain expected data')
+
+        # Check flushed data
+        raw = self.h.get_raw()
+        self.assertListEqual(raw, test_data)
 
     def test_extend(self):
         data = [
@@ -441,6 +461,40 @@ class HistogramContextTestCase(unittest.TestCase):
     def test_kernel_invariants(self):
         # Test kernel invariants
         test.helpers.test_system_kernel_invariants(self, self.s)
+
+
+class BucketBufferTestCase(unittest.TestCase):
+
+    def setUp(self) -> None:
+        self.managers = get_managers()
+        self.s = _TestSystem(self.managers)
+        self.s.dax_init()
+        self.h = self.s.hist_context
+        self.b = DataBuffer(self.h)
+
+    def tearDown(self) -> None:
+        # Close managers
+        self.managers.close()
+
+    def test_insert(self):
+        test_data = [
+            [[1, 9], [2, 8], [2, 7]],
+            [[3, 6], [3, 5], [3, 4]],
+        ]
+
+        # Buffer data
+        for data in zip(*test_data):
+            for i, d in enumerate(data):
+                self.b.insert(i, d)
+        # Check buffers
+        self.assertDictEqual({i: data for i, data in enumerate(test_data)}, self.b._buffer)
+        # Flush
+        self.b.flush()
+        self.assertDictEqual({}, self.b._buffer)
+
+        # Check flushed data
+        raw = self.h.get_raw()
+        self.assertListEqual(raw, test_data)
 
 
 class HistogramAnalyzerTestCase(unittest.TestCase):

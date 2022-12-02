@@ -74,6 +74,15 @@ class PeekTestCaseTestCase(dax.sim.test_case.PeekTestCase):
                         self.assertEqual(self.peek(scope, name), r)
                     delay(1 * us)
 
+    def test_expect_bool_fail(self):
+        scope = self.sys.ttl0
+        name = 'state'
+
+        scope.off()
+        for val in [True, 1, 'x', 'X', SignalNotSet, 'z', 'Z']:
+            with self.subTest(val=val), self.assertRaises(self.failureException):
+                self.expect(scope, name, val)
+
     def test_expect_bool_bad_value(self):
         scope = self.sys.ttl0
         name = 'state'
@@ -112,6 +121,16 @@ class PeekTestCaseTestCase(dax.sim.test_case.PeekTestCase):
                 self.assertEqual(self.peek(scope, name), val.lower())
                 delay(1 * us)
                 self.expect(scope, name, ref)
+
+    def test_expect_bool_vector_fail(self):
+        scope = self.sys.ad9910
+        name = 'phase_mode'
+        signal = get_signal_manager().signal(scope, name)  # Get signal to easily change signal
+
+        signal.push('00')
+        for val in ['11', '10', '01', 'xx', 'XX', SignalNotSet, 'zz', 'ZZ']:
+            with self.subTest(val=val), self.assertRaises(self.failureException):
+                self.expect(scope, name, val)
 
     def test_expect_bool_vector_bad_value(self):
         scope = self.sys.ad9910
@@ -152,6 +171,16 @@ class PeekTestCaseTestCase(dax.sim.test_case.PeekTestCase):
                     self.assertEqual(self.peek(scope, name), val)
                     delay(1 * us)
 
+    def test_expect_int_fail(self):
+        scope = self.sys.ec
+        name = 'count'
+        signal = get_signal_manager().signal(scope, name)  # Get signal to easily change signal
+
+        signal.push(0)
+        for val in [1, -1, 100, 'x', 'X', SignalNotSet, 'z', 'Z']:
+            with self.subTest(val=val), self.assertRaises(self.failureException):
+                self.expect(scope, name, val)
+
     def test_expect_int_bad_value(self):
         scope = self.sys.ec
         name = 'count'
@@ -186,6 +215,15 @@ class PeekTestCaseTestCase(dax.sim.test_case.PeekTestCase):
                 delay(1 * us)
                 self.expect(scope, name, ref)
                 self.expect_close(scope, name, ref, places=7)
+
+    def test_expect_float_fail(self):
+        scope = self.sys.ttl_clk
+        name = 'freq'
+
+        scope.set(0.0)
+        for val in [1.0, -1.0, 1e3, 'x', 'X', SignalNotSet, 'z', 'Z']:
+            with self.subTest(val=val), self.assertRaises(self.failureException):
+                self.expect(scope, name, val)
 
     def test_expect_float_bad_value(self):
         scope = self.sys.ttl_clk
@@ -229,6 +267,15 @@ class PeekTestCaseTestCase(dax.sim.test_case.PeekTestCase):
                 with self.assertRaises(self.failureException, msg='expect() did not fail on almost equality'):
                     self.expect_close(scope, name, ref, places=places + 1)
 
+    def test_expect_is_close_fail(self):
+        scope = self.sys.ttl_clk  # This driver has no checks on its set() function
+        name = 'freq'
+
+        scope.set(0.0)
+        for val in [1.0, -1.0, 1e3]:
+            with self.subTest(val=val), self.assertRaises(self.failureException):
+                self.expect_close(scope, name, val)
+
     def test_expect_is_close_notset(self):
         scope = self.sys.ttl_clk  # This driver has no checks on its set() function
         name = 'freq'
@@ -245,7 +292,7 @@ class PeekTestCaseTestCase(dax.sim.test_case.PeekTestCase):
         scope = self.sys.ttl_clk
         name = 'freq'
 
-        for v in [SignalNotSet, 'x', 'z']:
+        for v in [SignalNotSet, 'x', 'x', 'z', 'Z']:
             with self.assertRaises(TypeError, msg='Non-numerical value did not raise'):
                 self.expect_close(scope, name, v, places=1)
 

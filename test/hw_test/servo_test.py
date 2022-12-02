@@ -8,11 +8,13 @@ import test.hw_test
 
 
 class _ServoExperiment(DaxServo, HasEnvironment):
+    SERVO_KEY = 'foo'
+    SERVO_VALUE = 1
 
     def build_servo(self) -> None:
         self.setattr_device('core')
 
-        self.add_servo('foo', 1)
+        self.add_servo(self.SERVO_KEY, self.SERVO_VALUE)
         self.result = 0
         self.host_setup_done = False
         self.device_setup_done = False
@@ -29,6 +31,7 @@ class _ServoExperiment(DaxServo, HasEnvironment):
     @kernel
     def run_point(self, point, index):  # type: (typing.Any, typing.Any) -> None  # pragma: no cover
         self.result += point.foo
+        point.foo += 1  # Mutate the point
         self.stop_servo()
 
     @kernel
@@ -46,9 +49,10 @@ class ServoKernelTestCase(test.hw_test.HardwareTestCase):
 
     def test_run(self, env_cls=_ServoExperiment, result=1, *, host=True, device=True, exception=False):
         env = self.construct_env(env_cls)
-        with (self.assertRaises(RuntimeError) if exception else contextlib.nullcontext()):
+        with self.assertRaises(RuntimeError) if exception else contextlib.nullcontext():
             env.run()
         self.assertEqual(env.result, result)
+        self.assertDictEqual(env.get_servo_values(), {env.SERVO_KEY: env.SERVO_VALUE + result})
         self.assertEqual(env.host_setup_done, host)
         self.assertEqual(env.device_setup_done, device)
         self.assertEqual(env.device_cleanup_done, device)

@@ -11,6 +11,7 @@ import pathlib
 from dax.experiment import *
 from dax.modules.trap_dc import ZotinoReader, TrapDcModule
 from trap_dac_utils.reader import SpecialCharacter, BaseReader
+from trap_dac_utils.types import LABEL_FIELD
 import dax.sim.coredevice.ad53xx
 import dax.sim.test_case
 from test.environment import CI_ENABLED
@@ -44,13 +45,13 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
     _VREF = 5
 
     PATH_DATA = [{'A': -10., 'B': 0., 'C': 0., 'D': 0.,
-                  'E': SpecialCharacter('x')},
+                  'E': SpecialCharacter.X},
                  {'A': 1., 'B': 0., 'C': 0, 'D': 0,
-                  'E': SpecialCharacter('x')},
+                  'E': SpecialCharacter.X},
                  {'A': 1., 'B': 2., 'C': 0., 'D': 0.,
-                  'E': SpecialCharacter('x')},
+                  'E': SpecialCharacter.X},
                  {'A': 1., 'B': 2., 'C': 3., 'D': 4.,
-                  'E': SpecialCharacter('x')}]
+                  'E': SpecialCharacter.X}]
     MAP_DATA = [{'label': 'A', 'channel': '2'},
                 {'label': 'B', 'channel': '3'},
                 {'label': 'C', 'channel': '4'},
@@ -133,8 +134,8 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
                 voltages = []
                 path = []
                 for _ in range(num_path_rows):
-                    num_data, v, v_mu, c = self._generate_random_compressed_line()
-                    path.append((v_mu, c))
+                    num_data, v, c = self._generate_random_compressed_line()
+                    path.append(self.env.trap_dc._reader.line_to_mu((v, c)))
                     num_datas.append(num_data)
                     voltages.append(v)
 
@@ -152,11 +153,11 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
             self._test_uninitialized()
             self.env.dax_init()
             for _ in range(_NUM_SAMPLES):
-                num_data, v, v_mu, c = self._generate_random_compressed_line()
+                num_data, v, c = self._generate_random_compressed_line()
                 with self.subTest(v=v):
                     # Call functions
                     # self.env.trap_dc._zotino.write_offset_dacs_mu(o)
-                    self.env.trap_dc.set_line((v_mu, c))
+                    self.env.trap_dc.set_line(self.env.trap_dc._reader.line_to_mu((v, c)))
                     # Test
                     for i in range(num_data):
                         self.expect_close(self.env.trap_dc._zotino,
@@ -167,12 +168,10 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
     def _generate_random_compressed_line(self):
         num_data = self.rng.randrange(1, self._NUM_CHANNELS)
         c = self.rng.sample(range(self._NUM_CHANNELS), num_data)
-        # o = self.rng.sample(range(2 ** 14), num_data)
         voltages = [self.rng.uniform(0 * V, self.env.trap_dc._zotino.vref * 3.9) - 2 * self.env.trap_dc._zotino.vref
                     for _ in range(num_data)]
         # Adjust voltage to make sure it is in range
-        v_mu = [self.env.trap_dc._zotino.voltage_to_mu(voltage=v) for v in voltages]
-        return num_data, voltages, v_mu, c
+        return num_data, voltages, c
 
     @patch.object(BaseReader, '_read_channel_map')
     def test_shuttle_min_line_delay(self, mock_read_channel_map):
@@ -205,33 +204,34 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
     @patch.object(BaseReader, '_read_channel_map')
     def test_shuttle(self, _):
         with temp_dir():
-            shuttle_solution_mu = [([32768, 32768, 0, 32768, 32768,
-                                     32768, 32768, 32768, 32768, 32768,
-                                     32768, 32768, 32768, 32768, 32768,
-                                     32768, 32768, 32768, 32768,
-                                     32768, 32768, 32768, 32768,
-                                     32768, 32768, 32768, 32768,
-                                     32768, 32768, 32768, 32768, 32768],
-                                    [0, 1, 2, 3, 4, 5, 6, 7,
+            shuttle_solution = [([0., 0., -10, 0., 0.,
+                                  0., 0., 0., 0., 0.,
+                                  0., 0., 0., 0., 0.,
+                                  0., 0., 0., 0.,
+                                  0., 0., 0., 0.,
+                                  0., 0., 0., 0.,
+                                  0., 0., 0., 0., 0.],
+                                 [0, 1, 2, 3, 4, 5, 6, 7,
                                      8, 9, 10, 11, 12, 13, 14, 15,
                                      16, 17, 18, 19, 20, 21, 22, 23,
                                      24, 25, 26, 27, 28, 29, 30, 31]),
-                                   ([36045], [2]),
-                                   ([39322], [3]),
-                                   ([42598, 45875], [4, 5])]
+                                ([1.], [2]),
+                                ([2.], [3]),
+                                ([3., 4.], [4, 5])]
 
             s = self._construct_env()
             s.trap_dc.init()
 
+            shuttle_solution_packed = s.trap_dc._reader.solution_to_mu(shuttle_solution)
             line_delay_mu = 100000
             line_delay = s.core.mu_to_seconds(line_delay_mu)
 
             with parallel:
-                s.trap_dc.shuttle(shuttle_solution_mu, line_delay)
+                s.trap_dc.shuttle(shuttle_solution_packed, line_delay)
                 with sequential:
 
                     # create an offset for testing purposes
-                    delay_mu(200)
+                    delay_mu(50000)
                     for i in range(32):
                         if i != 2:
                             self.expect_close(s.trap_dc._zotino,
@@ -267,28 +267,6 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
                                       'v_out_5', 4, places=3)
                     delay_mu(line_delay_mu)
 
-    @patch.object(BaseReader, '_read_channel_map')
-    def test_mu_conversion(self, _):
-        with temp_dir():
-            vref = 5.
-            s = self._construct_env()
-            s.trap_dc.init()
-            open('test.csv', 'w')
-            reader = ZotinoReader(pathlib.Path('.'),
-                                  pathlib.Path('test.csv'))
-            reader.init(self.env.trap_dc._zotino)
-            for _ in range(_NUM_SAMPLES):
-                v = [self._RNG.uniform(-2.0 * vref, 1.99
-                                       * vref)  # v < 2*v_ref
-                     for _ in range(self._NUM_CHANNELS)]
-                with self.subTest(v_ref=vref, v_in=v):
-                    mu_array = reader.convert_to_mu(v)
-                    for i, mu in enumerate(mu_array):
-                        o = dax.sim.coredevice.ad53xx._mu_to_voltage(
-                            mu, vref=vref, offset_dacs=0x2000)
-                        self.assertAlmostEqual(
-                            v[i], o, places=3, msg='Input voltage does not match converted output voltage')
-
     @patch.object(BaseReader, 'read_solution')
     @patch.object(BaseReader, '_read_channel_map')
     def test_process_solution_random(self,
@@ -318,15 +296,8 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
                     for j, channel in enumerate(t[1]):
                         label = self.channel_to_label(
                             channel, map_data, reader)
-                        if t[0][j] == -2 * self._VREF:
-                            self.assertEqual(
-                                expected_solution[i + 1][label], SpecialCharacter.NEG_INF)
-                        elif t[0][j] == 2 * self._VREF:
-                            self.assertEqual(
-                                expected_solution[i + 1][label], SpecialCharacter.INF)
-                        else:
-                            self.assertAlmostEqual(
-                                expected_solution[i + 1][label], t[0][j], places=3)
+                        self.assertAlmostEqual(
+                            expected_solution[i + 1][label], t[0][j], places=3)
 
     def generate_headers(self):
         return [self.rand_str() for _ in range(self._NUM_CHANNELS)]
@@ -334,7 +305,7 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
     def generate_path_data(self, headers):
         headers = [self.rand_str() for _ in range(self._NUM_CHANNELS)]
         path_data = []
-        special = [e for e in SpecialCharacter]
+        special = [SpecialCharacter.X]
         for _ in range(self._RNG.randint(1, 50)):
             pool = [
                 *special, self._RNG.uniform(-1.95 * self._VREF * V,
@@ -348,7 +319,7 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
     def generate_map_data(self, labels):
         channels = self._RNG.sample(
             range(self._NUM_CHANNELS), self._NUM_CHANNELS)
-        return [{ZotinoReader._LABEL: label,
+        return [{LABEL_FIELD: label,
                  ZotinoReader._CHANNEL: str(channels[i])}
                 for i, label in enumerate(labels)]
 
@@ -362,7 +333,7 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
                          reader):
         for d in map_data:
             if d[reader._CHANNEL] == str(channel):
-                return d[reader._LABEL]
+                return d[LABEL_FIELD]
         raise ValueError("Mapped to channel that isn't in channel map")
 
     @patch.object(BaseReader, 'read_solution')
@@ -470,20 +441,20 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
         reader = ZotinoReader(pathlib.Path('.'),
                               pathlib.Path('test.csv'))
         try:
-            reader.convert_to_mu([1.0, 2.0, 3.0])
+            reader.line_to_mu([1.0, 2.0, 3.0])
         except RuntimeError as e:
-            assert str(e) == "Must initialize reader using init method to use function convert_to_mu"
+            assert str(e) == "Must initialize reader using init method to use function line_to_mu"
 
     @patch.object(BaseReader, '_read_channel_map')
     def test_calculate_low_slack(self, _):
         self.env.trap_dc.init()
-        test_solution = [([1., 2., 3., 4.], [2, 3, 4, 5]),
-                         ([0., 0.], [4, 5]),
-                         ([0.], [3]),
-                         ([-10.], [2])]
-        slack = self.env.trap_dc.calculate_slack(test_solution, .0002)
+        test_solution_packed = [[2, 3, 4, 5],
+                                [4, 5],
+                                [3],
+                                [2]]
+        slack = self.env.trap_dc.calculate_slack(test_solution_packed, .0002)
         l0 = self.env.core.mu_to_seconds(
-            self.env.trap_dc._calculator._calculate_line_comm_delay_mu(len(test_solution[0][0])))
+            self.env.trap_dc._calculator._calculate_line_comm_delay_mu(len(test_solution_packed[0])))
         assert slack > l0
         assert slack < l0 + self.env.trap_dc._min_line_delay_mu
 
@@ -491,19 +462,19 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
     def test_calculate_high_slack(self, _):
         line_delay = .0000016
         self.env.trap_dc.init()
-        test_solution = [([1., 2., 3., 4.], [2, 3, 4, 5]),
-                         ([0., 0.], [4, 5]),
-                         ([0.], [3]),
-                         ([-10.], [2])]
-        slack = self.env.trap_dc.calculate_slack(test_solution, line_delay)
+        test_solution_packed = [[2, 3, 4, 5],
+                                [4, 5],
+                                [3],
+                                [2]]
+        slack = self.env.trap_dc.calculate_slack(test_solution_packed, line_delay)
         l0 = self.env.core.mu_to_seconds(
-            self.env.trap_dc._calculator._calculate_line_comm_delay_mu(len(test_solution[0][0])))
+            self.env.trap_dc._calculator._calculate_line_comm_delay_mu(len(test_solution_packed[0])))
         l1 = self.env.core.mu_to_seconds(
-            self.env.trap_dc._calculator._calculate_line_comm_delay_mu(len(test_solution[1][0])))
+            self.env.trap_dc._calculator._calculate_line_comm_delay_mu(len(test_solution_packed[1])))
         l2 = self.env.core.mu_to_seconds(
-            self.env.trap_dc._calculator._calculate_line_comm_delay_mu(len(test_solution[2][0])))
+            self.env.trap_dc._calculator._calculate_line_comm_delay_mu(len(test_solution_packed[2])))
         l3 = self.env.core.mu_to_seconds(
-            self.env.trap_dc._calculator._calculate_line_comm_delay_mu(len(test_solution[3][0])))
+            self.env.trap_dc._calculator._calculate_line_comm_delay_mu(len(test_solution_packed[3])))
         assert slack > l0 + l1 + l2 + l3 - 3 * line_delay
         assert slack < l0 + l1 + l2 + l3 - 3 * line_delay + self.env.trap_dc._min_line_delay_mu
 
@@ -511,13 +482,13 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
     def test_calculate_dma_low_slack(self, _):
         line_delay = .00003
         self.env.trap_dc.init()
-        test_solution = [([1., 2., 3., 4.], [2, 3, 4, 5]),
-                         ([0., 0.], [4, 5]),
-                         ([0.], [3]),
-                         ([-10.], [2])]
-        slack = self.env.trap_dc.calculate_dma_slack(test_solution, line_delay)
+        test_solution_packed = [[2, 3, 4, 5],
+                                [4, 5],
+                                [3],
+                                [2]]
+        slack = self.env.trap_dc.calculate_dma_slack(test_solution_packed, line_delay)
         l0 = self.env.core.mu_to_seconds(
-            self.env.trap_dc._calculator._calculate_line_comm_delay_mu(len(test_solution[0][0]), True))
+            self.env.trap_dc._calculator._calculate_line_comm_delay_mu(len(test_solution_packed[0]), True))
         assert slack > l0
         assert slack < l0 + self.env.trap_dc._min_line_delay_mu + self.env.trap_dc._calculator._dma_startup_time_mu
 
@@ -525,12 +496,12 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
     def test_calculate_slack_too_low(self, _):
         line_delay = .000000001
         self.env.trap_dc.init()
-        test_solution = [([1., 2., 3., 4.], [2, 3, 4, 5]),
-                         ([0., 0.], [4, 5]),
-                         ([0.], [3]),
-                         ([-10.], [2])]
+        test_solution_packed = [[2, 3, 4, 5],
+                                [4, 5],
+                                [3],
+                                [2]]
         try:
-            self.env.trap_dc.calculate_slack(test_solution, line_delay)
+            self.env.trap_dc.calculate_slack(test_solution_packed, line_delay)
             assert False
         except ValueError as e:
             assert str(e) == f"Line Delay must be greater than {self.env.trap_dc._min_line_delay_mu}"
@@ -539,12 +510,12 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
     def test_calculate_dma_slack_too_low(self, _):
         line_delay = .0000001
         self.env.trap_dc.init()
-        test_solution = [([1., 2., 3., 4.], [2, 3, 4, 5]),
-                         ([0., 0.], [4, 5]),
-                         ([0.], [3]),
-                         ([-10.], [2])]
+        test_solution_packed = [[2, 3, 4, 5],
+                                [4, 5],
+                                [3],
+                                [2]]
         try:
-            self.env.trap_dc.calculate_dma_slack(test_solution, line_delay)
+            self.env.trap_dc.calculate_dma_slack(test_solution_packed, line_delay)
             assert False
         except ValueError as e:
             assert str(e) == f"Line Delay must be greater than {self.env.trap_dc._min_line_delay_mu}"
@@ -573,3 +544,21 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
         assert self.env.trap_dc._calculator._comm_delay_slope_mu == np.int64(3)
         assert self.env.trap_dc._calculator._dma_comm_delay_intercept_mu == np.int64(4)
         assert self.env.trap_dc._calculator._dma_comm_delay_slope_mu == np.int64(5)
+
+    @patch.object(BaseReader, '_read_channel_map')
+    def test_set_line_packed(self, _):
+        with temp_dir():
+            test_solution = [([1., 2., 3., 4.], [2, 3, 4, 5])]
+
+            s = self._construct_env()
+            s.trap_dc.init()
+            open('test.csv', 'w')
+            reader = ZotinoReader(pathlib.Path('.'),
+                                  pathlib.Path('test.csv'))
+            reader.init(self.env.trap_dc._zotino)
+            packed_solution = reader.solution_to_mu(test_solution)
+            s.trap_dc.set_line(packed_solution[0])
+            delay(1)
+            for v, ch in zip(test_solution[0][0], test_solution[0][1]):
+                self.expect_close(s.trap_dc._zotino,
+                                  f'v_out_{ch}', v, places=3)

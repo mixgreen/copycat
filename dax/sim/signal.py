@@ -601,7 +601,7 @@ class PeekSignal(Signal):
 
     def push(self, value: typing.Any, *,
              time: typing.Optional[_T_T] = None, offset: _O_T = 0) -> None:
-        # Normalize value and add value to event buffer
+        # Normalize value and add value to the event buffer
         # An existing value at the same timestamp will be overwritten, just as the ARTIQ RTIO system does
         self._events[_get_timestamp(time, offset)] = self.normalize(value)
 

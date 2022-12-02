@@ -95,12 +95,24 @@ class _MockScan2(_MockScan1):
 
 
 class _MockScan2Static(_MockScan2):
-    BAR_POINTS = list(range(16))
-    BAR = len(BAR_POINTS)
+    BAR = 16
+    BAR_POINTS = list(range(BAR))
 
     def build_scan(self) -> None:
         self.add_static_scan('bar', self.BAR_POINTS)
         super(_MockScan2Static, self).build_scan()
+
+    def _add_scan(self):
+        pass
+
+
+class _MockScan2Iterator(_MockScan2):
+    BAR = 16
+    BAR_POINTS = list(range(BAR))
+
+    def build_scan(self) -> None:
+        self.add_iterator('bar', 'bar', self.BAR)
+        super(_MockScan2Iterator, self).build_scan()
 
     def _add_scan(self):
         pass
@@ -293,11 +305,15 @@ class Scan1TestCase(unittest.TestCase):
                          'init_scan_elements counter did not match expected value')
 
     def test_raise_add_scan(self):
-        with self.assertRaises(RuntimeError, msg='Adding scan outside build did not raise'):
+        with self.assertRaises(RuntimeError):
             self.scan.add_scan('bar', 'bar', Scannable(NoScan(1)))
 
+    def test_raise_add_iterator(self):
+        with self.assertRaises(RuntimeError):
+            self.scan.add_iterator('bar', 'bar', 1)
+
     def test_raise_add_static_scan(self):
-        with self.assertRaises(RuntimeError, msg='Adding scan outside build did not raise'):
+        with self.assertRaises(RuntimeError):
             self.scan.add_static_scan('bar', [])
 
     def test_get_scan_points_too_early(self):
@@ -405,9 +421,11 @@ class ChainScanTestCase(Scan1TestCase):
         class MockChainScan(_MockScanCallback):
             def callback(self_scan):
                 self_scan.add_scan('foo', 'foo', Scannable(NoScan(1)))
-                with self.assertRaises(LookupError, msg='Reusing scan key did not raise'):
+                with self.assertRaises(LookupError):
                     self_scan.add_scan('foo', 'foo', Scannable(NoScan(1)))
-                with self.assertRaises(LookupError, msg='Reusing scan key for static scan did not raise'):
+                with self.assertRaises(LookupError):
+                    self_scan.add_iterator('foo', 'foo', 1)
+                with self.assertRaises(LookupError):
                     self_scan.add_static_scan('foo', [1])
 
         MockChainScan(self.managers)
@@ -427,9 +445,11 @@ class BuildScanTestCase(unittest.TestCase):
             # noinspection PyMethodParameters
             def callback(self_scan):
                 self_scan.add_scan('foo', 'foo', Scannable(NoScan(1)))
-                with self.assertRaises(LookupError, msg='Reusing scan key did not raise'):
+                with self.assertRaises(LookupError):
                     self_scan.add_scan('foo', 'foo', Scannable(NoScan(1)))
-                with self.assertRaises(LookupError, msg='Reusing scan key for static scan did not raise'):
+                with self.assertRaises(LookupError):
+                    self_scan.add_iterator('foo', 'foo', 1)
+                with self.assertRaises(LookupError):
                     self_scan.add_static_scan('foo', [1])
 
         MockScan(self.managers)
@@ -439,9 +459,11 @@ class BuildScanTestCase(unittest.TestCase):
             # noinspection PyMethodParameters
             def callback(self_scan):
                 self_scan.add_static_scan('foo', [])
-                with self.assertRaises(LookupError, msg='Reusing static scan key did not raise'):
+                with self.assertRaises(LookupError):
                     self_scan.add_scan('foo', 'foo', Scannable(NoScan(1)))
-                with self.assertRaises(LookupError, msg='Reusing static scan key for static scan did not raise'):
+                with self.assertRaises(LookupError):
+                    self_scan.add_iterator('foo', 'foo', 1)
+                with self.assertRaises(LookupError):
                     self_scan.add_static_scan('foo', [1])
 
         MockScan(self.managers)
@@ -522,6 +544,18 @@ class BuildScanTestCase(unittest.TestCase):
                     with self.subTest(key=k):
                         with self.assertRaises(ValueError, msg='Bad scan key did not raise'):
                             self_scan.add_scan(k, 'some name', Scannable(NoScan(1)))
+
+        MockScan(self.managers)
+
+    def test_raise_bad_iterator_key(self):
+        class MockScan(_MockScanCallback):
+            # noinspection PyMethodParameters
+            def callback(self_scan):
+                keys = ['aa.', '9int', 'foo-bar']
+                for k in keys:
+                    with self.subTest(key=k):
+                        with self.assertRaises(ValueError, msg='Bad iterator key did not raise'):
+                            self_scan.add_iterator(k, 'some name', 1)
 
         MockScan(self.managers)
 
@@ -609,6 +643,10 @@ class Scan2TestCase(Scan1TestCase):
 
 class Scan2StaticTestCase(Scan2TestCase):
     SCAN_CLASS = _MockScan2Static
+
+
+class Scan2IteratorTestCase(Scan2TestCase):
+    SCAN_CLASS = _MockScan2Iterator
 
 
 class ScanTerminateTestCase(unittest.TestCase):

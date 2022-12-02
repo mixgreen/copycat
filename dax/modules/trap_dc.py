@@ -12,14 +12,15 @@ from trap_dac_utils.reader import BaseReader, SpecialCharacter, SOLUTION_T, MAP_
 import artiq.coredevice.zotino  # type: ignore[import]
 import artiq.coredevice.ad53xx  # type: ignore[import]
 
+from trap_dac_utils.types import LABEL_FIELD
+
 """Zotino Path and Line types"""
 _ZOTINO_KEY_T = typing.List[float]
-_ZOTINO_KEY_T_MU = typing.List[int]
 _ZOTINO_VALUE_T = typing.List[int]
 _ZOTINO_LINE_T = typing.Tuple[_ZOTINO_KEY_T, _ZOTINO_VALUE_T]
 _ZOTINO_SOLUTION_T = typing.List[_ZOTINO_LINE_T]
-_ZOTINO_LINE_T_MU = typing.Tuple[_ZOTINO_KEY_T_MU, _ZOTINO_VALUE_T]
-_ZOTINO_SOLUTION_T_MU = typing.List[_ZOTINO_LINE_T_MU]
+_ZOTINO_LINE_MU_T = typing.List[int]
+_ZOTINO_SOLUTION_MU_T = typing.List[_ZOTINO_LINE_MU_T]
 
 __all__ = ['TrapDcModule', 'ZotinoReader']
 
@@ -113,7 +114,7 @@ class TrapDcModule(DaxModule):
     def read_line_mu(self,
                      file_name: str,
                      index: int = 0,
-                     multiplier: float = 1.0) -> _ZOTINO_LINE_T_MU:
+                     multiplier: float = 1.0) -> _ZOTINO_LINE_MU_T:
         """Read in a single line of a solutions file and return the line in zotino form.
         Optionally apply multiplier to all voltages in path
 
@@ -123,11 +124,10 @@ class TrapDcModule(DaxModule):
         :param index: Line in path to get. A 0 indicates the first line
         :param multiplier: Optionally scale the voltages by a constant
 
-        :return: Zotino module interpretable solution line with voltages in MU
+        :return: Zotino module interpretable solution line with packed voltages and channels
         """
         path = self._read_line(file_name, index, multiplier)
-        path_mu = (self._reader.convert_to_mu(path[0]), path[1])
-        return path_mu
+        return self._reader.line_to_mu(path)
 
     @host_only
     def _read_line(self,
@@ -160,7 +160,7 @@ class TrapDcModule(DaxModule):
                          start: int = 0,
                          end: int = -1,
                          reverse: bool = False,
-                         multiplier: float = 1.0) -> _ZOTINO_SOLUTION_T_MU:
+                         multiplier: float = 1.0) -> _ZOTINO_SOLUTION_MU_T:
         """Read in a segment of a solutions file and return the path in zotino form.
         Optionally reverse path and/or apply multiplier to all voltages in path
 
@@ -172,11 +172,11 @@ class TrapDcModule(DaxModule):
         :param reverse: Optionally return a reversed path. I.E. From end to start
         :param multiplier: Optionally scale the voltages by a constant
 
-        :return: Zotino module interpretable solution path with voltages in MU
+        :return: Zotino module interpretable solution path with packed voltages and channels
         """
         path = self._read_solution(file_name, start, end,
                                    reverse, multiplier)
-        return self._reader.convert_solution_to_mu(path)
+        return self._reader.solution_to_mu(path)
 
     @host_only
     def _read_solution(self,
@@ -231,13 +231,13 @@ class TrapDcModule(DaxModule):
     @kernel
     def record_dma(self,
                    name: TStr,
-                   solution: TList(TTuple([TList(TInt32), TList(TInt32)])),  # type: ignore[valid-type]
+                   solution: TList(TList(TInt32)),  # type: ignore[valid-type]
                    line_delay: TFloat) -> TStr:
         """Record the setting of sequential lines of voltages on the zotino device given a list
         of voltages (MU) and corresponding channels
 
         :param name: Name of DMA trace
-        :param solution: A list of voltage lines to set and corresponding channels for each line
+        :param solution: A list of packed voltage and channel lines to set
         :param line_delay: A delay (s) inserted after the line is set
             Must be greater than the SPI write time for the number of used channels
 
@@ -250,13 +250,13 @@ class TrapDcModule(DaxModule):
     @kernel
     def record_dma_mu(self,
                       name: TStr,
-                      solution: TList(TTuple([TList(TInt32), TList(TInt32)])),  # type: ignore[valid-type]
+                      solution: TList(TList(TInt32)),  # type: ignore[valid-type]
                       line_delay: TInt64) -> TStr:
         """Record the setting of sequential lines of voltages on the zotino device given a list
         of voltages (MU) and corresponding channels
 
         :param name: Name of DMA trace
-        :param solution: A list of voltage lines to set and corresponding channels for each line
+        :param solution: A list of packed voltage and channel lines to set
         :param line_delay: A delay (MU) inserted after the line is set
             Must be greater than the SPI write time for the number of used channels
 
@@ -274,13 +274,13 @@ class TrapDcModule(DaxModule):
     @kernel
     def record_dma_rate(self,
                         name: TStr,
-                        solution: TList(TTuple([TList(TInt32), TList(TInt32)])),  # type: ignore[valid-type]
+                        solution: TList(TList(TInt32)),  # type: ignore[valid-type]
                         line_rate: TFloat) -> TStr:
         """Record the setting of sequential lines of voltages on the zotino device given a list
         of voltages (MU) and corresponding channels
 
         :param name: Name of DMA trace
-        :param solution: A list of voltage lines to set and corresponding channels for each line
+        :param solution: A list of packed voltage and channel lines to set
         :param line_rate: A rate (Hz) to define speed to set each line
             Must be greater than the SPI write time for the number of used channels
 
@@ -318,12 +318,12 @@ class TrapDcModule(DaxModule):
 
     @kernel
     def shuttle(self,
-                solution: TList(TTuple([TList(TInt32), TList(TInt32)])),  # type: ignore[valid-type]
+                solution: TList(TList(TInt32)),  # type: ignore[valid-type]
                 line_delay: TFloat):
         """Set sequential lines of voltages on the zotino device given a list of voltages (MU) and
         corresponding channels
 
-        :param solution: A list of voltage lines to set and corresponding channels for each line
+        :param solution: A list of packed voltage and channel lines to set
         :param line_delay: A delay (s) inserted after the line is set
             Must be greater than the SPI write time for the number of used channels
         """
@@ -331,12 +331,12 @@ class TrapDcModule(DaxModule):
 
     @kernel
     def shuttle_mu(self,
-                   solution: TList(TTuple([TList(TInt32), TList(TInt32)])),  # type: ignore[valid-type]
+                   solution: TList(TList(TInt32)),  # type: ignore[valid-type]
                    line_delay: TInt64):
         """Set sequential lines of voltages on the zotino device given a list of voltages (MU) and
         corresponding channels
 
-        :param solution: A list of voltage lines to set and corresponding channels for each line
+        :param solution: A list of packed voltage and channel lines to set
         :param line_delay: A delay (MU) inserted after the line is set
             Must be greater than the SPI write time for the number of used channels
         """
@@ -348,12 +348,12 @@ class TrapDcModule(DaxModule):
 
     @kernel
     def shuttle_rate(self,
-                     solution: TList(TTuple([TList(TInt32), TList(TInt32)])),  # type: ignore[valid-type]
+                     solution: TList(TList(TInt32)),  # type: ignore[valid-type]
                      line_rate: TFloat):
         """Set sequential lines of voltages on the zotino device given a list of voltages (MU) and
         corresponding channels
 
-        :param solution: A list of voltage lines to set and corresponding channels for each line
+        :param solution: A list of packed voltage and channel lines to set
         :param line_rate: A rate (Hz) to define speed to set each line
             Must be greater than the SPI write time for the number of used channels
         """
@@ -362,17 +362,19 @@ class TrapDcModule(DaxModule):
 
     @kernel
     def set_line(self,
-                 line: TTuple([TList(TInt32), TList(TInt32)])):  # type: ignore[valid-type]
-        """Set a line of voltages on the zotino device given a list of voltages (MU) and corresponding channels
+                 line: TList(TInt32)):  # type: ignore[valid-type]
+        """Set a line of voltages on the zotino device given a list of packed voltages and channels into one
+        32-bit int
 
-        :param line: Up to 32 (# of Zotino channels) voltages and corresponding channel numbers
+        :param line: Up to 32 (# of Zotino channels) 32-bit ints with voltage and channel packed in
         """
-        voltages, channels = line
-        self._zotino.set_dac_mu(voltages, channels)
+        for val in line:
+            self._zotino.bus.write(val)
+        self._zotino.load()
 
     @host_only
     def calculate_slack(self,
-                        solution: _ZOTINO_SOLUTION_T_MU,
+                        solution: _ZOTINO_SOLUTION_MU_T,
                         line_delay: float) -> float:
         """Calculate the slack required to shuttle solution with desired delay
         This method is used to prevent underflow when shuttling solutions
@@ -389,7 +391,7 @@ class TrapDcModule(DaxModule):
 
     @host_only
     def calculate_slack_mu(self,
-                           solution: _ZOTINO_SOLUTION_T_MU,
+                           solution: _ZOTINO_SOLUTION_MU_T,
                            line_delay: np.int64) -> np.int64:
         """Calculate the slack required to shuttle solution with desired delay
         This method is used to prevent underflow when shuttling solutions
@@ -408,7 +410,7 @@ class TrapDcModule(DaxModule):
 
     @host_only
     def calculate_dma_slack(self,
-                            solution: _ZOTINO_SOLUTION_T_MU,
+                            solution: _ZOTINO_SOLUTION_MU_T,
                             line_delay: float) -> float:
         """Calculate the slack required to shuttle solution with dma and with desired delay
         This method is used to prevent underflow when shuttling solutions
@@ -425,7 +427,7 @@ class TrapDcModule(DaxModule):
 
     @host_only
     def calculate_dma_slack_mu(self,
-                               solution: _ZOTINO_SOLUTION_T_MU,
+                               solution: _ZOTINO_SOLUTION_MU_T,
                                line_delay: np.int64) -> np.int64:
         """Calculate the slack required to shuttle solution with dma and with desired delay
         This method is used to prevent underflow when shuttling solutions
@@ -444,13 +446,13 @@ class TrapDcModule(DaxModule):
                                          True)
 
     @host_only
-    def _list_num_channels(self, solution: _ZOTINO_SOLUTION_T_MU) -> typing.Sequence[int]:
+    def _list_num_channels(self, solution: _ZOTINO_SOLUTION_MU_T) -> typing.Sequence[int]:
         """Given a zotino solution, list the length of each row in terms of number of channels
 
         :param solution: Any zotino solution
 
         :return: A list of number of channels that need to be set for each row"""
-        return [len(t[0]) for t in solution]
+        return [len(t) for t in solution]
 
     @host_only
     def configure_calculator(self,
@@ -464,7 +466,7 @@ class TrapDcModule(DaxModule):
         Each configuration is set if and only if the argument is passed in and is not None
         All original values were calculated from benchmarking
 
-        :param dma_startup_time_mu: The time it takes for DMA to start up in (s)
+        :param dma_startup_time: The time it takes for DMA to start up in (s)
         :param comm_delay_intercept_mu: The intercept of the linear communication time between
             artiq and the kernel as a function of total channels
         :param comm_delay_slope_mu: The slope of the linear communication time between
@@ -578,7 +580,7 @@ class ZotinoCalculator:
         Each configuration is set if and only if the argument is passed in and is not None
         All original values were calculated from benchmarking
 
-        :param dma_startup_time: The time it takes for DMA to start up in (s)
+        :param dma_startup_time_mu: The time it takes for DMA to start up in (MU)
         :param comm_delay_intercept_mu: The intercept of the linear communication time between
         artiq and the kernel as a function of total channels
         :param comm_delay_slope_mu: The slope of the linear communication time between
@@ -691,6 +693,9 @@ class ZotinoReader(BaseReader[_ZOTINO_SOLUTION_T]):
 
         :return: Solutions file representation for a zotino
         """
+        if not self.verify_solution(solution):
+            raise ValueError("Solution is not a valid. (e.g. values are not in accepted range)")
+
         channel_map_dict = self._simplify_map(self.map_file)
 
         parsed_solution = []
@@ -722,10 +727,6 @@ class ZotinoReader(BaseReader[_ZOTINO_SOLUTION_T]):
         self._check_init("process_specials")
         if val == SpecialCharacter.X:
             return math.nan
-        elif val == SpecialCharacter.INF:
-            return self.voltage_high
-        elif val == SpecialCharacter.NEG_INF:
-            return self.voltage_low
         else:
             # Special character not handled
             raise ValueError(f'Special character {val} is not yet handled')
@@ -742,26 +743,31 @@ class ZotinoReader(BaseReader[_ZOTINO_SOLUTION_T]):
         :return: Representation of csv file as a single dictionary with the pin labels as the keys
         """
 
-        return {d[self._LABEL]: d[self._CHANNEL] for d in channel_map}
+        return {d[LABEL_FIELD]: d[self._CHANNEL] for d in channel_map}
 
     @host_only
-    def convert_solution_to_mu(self,
-                               solution: _ZOTINO_SOLUTION_T) -> _ZOTINO_SOLUTION_T_MU:
-        """Convert all voltages in zotino path from volts to machine units
+    def line_to_mu(self, line: _ZOTINO_LINE_T) -> _ZOTINO_LINE_MU_T:
+        """Pack a line of values into a form directly writeable to the SPI bus
 
-        :param solution: The full zotino path object with voltages in V
+        :param line: The Zotino line to pack
 
-        :return: The full zotino path object with voltages in MU
+        :return: The packed line which is a list of 32-bit integers
+            where the most significant 24 bits are the packed value
         """
-        return [(self.convert_to_mu(t[0]), t[1]) for t in solution]
+        self._check_init("line_to_mu")
+        vs, chs = line
+        return [artiq.coredevice.ad53xx.ad53xx_cmd_write_ch(ch,
+                                                            self._voltage_to_mu(v),
+                                                            artiq.coredevice.ad53xx.AD53XX_CMD_DATA) << 8
+                for v, ch in zip(vs, chs)]
 
     @host_only
-    def convert_to_mu(self, voltages: _ZOTINO_KEY_T) -> _ZOTINO_KEY_T_MU:
-        """Convert a list of voltages from volts to machine units
+    def solution_to_mu(self, solution: _ZOTINO_SOLUTION_T) -> _ZOTINO_SOLUTION_MU_T:
+        """Pack a solution of values into a form directly writeable to the SPI bus
 
-        :param voltages: A list of voltages in V
+        :param solution: The Zotino solution to pack
 
-        :return: A list of voltages in MU
+        :return: The packed solution where each solution row is a list of 32-bit integers
+            where the most significant 24 bits are the packed value
         """
-        self._check_init("convert_to_mu")
-        return [self._voltage_to_mu(v) for v in voltages]
+        return [self.line_to_mu(line) for line in solution]

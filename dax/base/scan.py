@@ -11,7 +11,7 @@ import h5py
 import numpy as np
 
 from artiq.language.core import portable, host_only
-from artiq.language.environment import BooleanValue
+from artiq.language.environment import BooleanValue, NumberValue
 from artiq.language.types import TBool
 from artiq.language.scan import ScanObject, Scannable
 
@@ -116,6 +116,7 @@ class DaxScan(dax.base.control_flow.DaxControlFlow, abc.ABC):
     Users can inherit this class to implement their scanning experiments.
     The first step is to build the scan by overriding the :func:`build_scan` function.
     Use the :func:`add_scan` function to add normal ARTIQ scannables to this scan object.
+    Scannable iterators can be added using the :func:`add_iterator` function.
     Static scans can be added using the :func:`add_static_scan` function.
     Regular ARTIQ functions are available to obtain other arguments.
 
@@ -257,7 +258,7 @@ class DaxScan(dax.base.control_flow.DaxControlFlow, abc.ABC):
     def build_scan(self) -> None:  # pragma: no cover
         """Users should override this method to build their scan.
 
-        To build the scan, use the :func:`add_scan` and :func:`add_static_scan` functions.
+        To build the scan, use the :func:`add_scan`, :func:`add_iterator`, and :func:`add_static_scan` functions.
         Additionally, users can also add normal arguments using the standard ARTIQ functions.
 
         It is possible to pass arguments from the constructor to this function using the
@@ -318,6 +319,52 @@ class DaxScan(dax.base.control_flow.DaxControlFlow, abc.ABC):
         self._dax_scan_scannables[key] = self.get_argument(name, scannable, group=group, tooltip=tooltip)
 
     @host_only
+    def add_iterator(self, key: str, name: str, default: int, *,
+                     group: typing.Optional[str] = None, tooltip: typing.Optional[str] = None) -> None:
+        """Register a scannable iterator.
+
+        An iterator is handled the same as a regular scan (see :func:`add_scan`).
+        The difference is that an iterator only adds a number value field to the user interface.
+
+        :param key: Unique key of the scan, used to obtain the value later
+        :param name: The name of the argument
+        :param default: The default value of the iterator
+        :param group: The argument group name
+        :param tooltip: The shown tooltip
+        """
+        assert isinstance(key, str), 'Key must be of type str'
+        assert isinstance(name, str), 'Name must be of type str'
+        assert isinstance(group, str) or group is None, 'Group must be of type str or None'
+        assert isinstance(tooltip, str) or tooltip is None, 'Tooltip must be of type str or None'
+
+        # Verify this function was called in the build_scan() function
+        if not self.__in_build:
+            raise RuntimeError('add_iterator() can only be called in the build_scan() method')
+
+        # Verify type and value of the given default
+        if not isinstance(default, int):
+            raise TypeError('The given default value must be an int')
+        if not default > 0:
+            raise ValueError('The given default must be greater than zero')
+
+        # Verify the key is valid and not in use
+        if not key.isidentifier():
+            raise ValueError(f'Provided key "{key}" is not valid')
+        if key in self._dax_scan_scannables:
+            raise LookupError(f'Provided key "{key}" is already in use')
+
+        # Add argument
+        num_iterations = self.get_argument(
+            name,
+            NumberValue(default, step=1, min=1, ndecimals=0),
+            group=group,
+            tooltip=tooltip
+        )
+
+        # Add iterator to the list of scannables
+        self._dax_scan_scannables[key] = list(range(num_iterations)) if isinstance(num_iterations, int) else []
+
+    @host_only
     def add_static_scan(self, key: str, points: typing.Sequence[typing.Any]) -> None:
         """Register a static scan.
 
@@ -332,7 +379,7 @@ class DaxScan(dax.base.control_flow.DaxControlFlow, abc.ABC):
 
         # Verify this function was called in the build_scan() function
         if not self.__in_build:
-            raise RuntimeError('add_scan() can only be called in the build_scan() method')
+            raise RuntimeError('add_static_scan() can only be called in the build_scan() method')
 
         # Verify type of the points
         if not isinstance(points, collections.abc.Sequence):

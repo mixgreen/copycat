@@ -167,11 +167,13 @@ class PeekTestCase(unittest.TestCase):
             # Raise if the signal has an unsupported type
             raise TypeError(f'Signal "{signal}" of type "{signal.type}" can not be tested for equality')
 
-        # Match with special values
-        if any(value in s and peek in s for s in [{'x', 'X', SignalNotSet}, {'z', 'Z'}]):  # type: ignore[operator]
-            return  # We have a match on a special value
-        # Normalize the value
-        value = signal.normalize(value)
+        if value in {'x', 'X', SignalNotSet, 'z', 'Z'}:
+            # Handle special values
+            if any(value in s and peek in s for s in [{'x', 'X', SignalNotSet}, {'z', 'Z'}]):  # type: ignore[operator]
+                return  # We have a match on a special value
+        else:
+            # Normalize the value
+            value = signal.normalize(value)
 
         if msg is None:
             # Set default error message
