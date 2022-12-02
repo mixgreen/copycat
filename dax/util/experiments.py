@@ -5,6 +5,7 @@ import inspect
 import numpy as np
 
 import artiq.experiment
+import artiq.language.units
 
 __all__ = ['Barrier', 'SetDataset']
 
@@ -78,13 +79,9 @@ class SetDataset(artiq.experiment.EnvExperiment):
     Note that since ARTIQ 7, this experiment has become obsolete. See https://github.com/m-labs/artiq/pull/1716.
     """
 
-    _UNITS: typing.ClassVar[typing.Dict[str, float]] = {unit: getattr(artiq.experiment, unit)
-                                                        for unit in ['ps', 'ns', 'us', 'ms', 's',
-                                                                     'mHz', 'Hz', 'kHz', 'MHz', 'GHz',
-                                                                     'dB',
-                                                                     'uV', 'mV', 'V', 'kV',
-                                                                     'uA', 'mA', 'A',
-                                                                     'nW', 'uW', 'mW', 'W']}
+    _UNITS: typing.ClassVar[typing.Dict[str, float]] = {
+        unit: getattr(artiq.language.units, unit) for unit in artiq.language.units.__all__
+    }
     """Dict with all units."""
 
     def build(self) -> None:  # type: ignore[override]
