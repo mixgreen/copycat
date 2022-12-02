@@ -37,7 +37,8 @@ from artiq.coredevice.adf5356 import (  # type: ignore[import]
     calculate_pll
 )
 
-from dax.sim.device import DaxSimDevice, ARTIQ_MAJOR_VERSION
+from dax.util.artiq_version import ARTIQ_MAJOR_VERSION
+from dax.sim.device import DaxSimDevice
 from dax.sim.signal import get_signal_manager
 
 

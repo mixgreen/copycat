@@ -11,7 +11,8 @@ from artiq.language.types import TInt32
 from artiq.coredevice.dac34h84 import DAC34H84  # type: ignore
 from artiq.coredevice.trf372017 import TRF372017  # type: ignore
 
-from dax.sim.device import DaxSimDevice, ARTIQ_MAJOR_VERSION
+from dax.util.artiq_version import ARTIQ_MAJOR_VERSION
+from dax.sim.device import DaxSimDevice
 from dax.sim.signal import get_signal_manager
 
 

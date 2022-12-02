@@ -3,7 +3,7 @@ from artiq.experiment import *
 import dax.sim.test_case
 import dax.sim.coredevice.phaser
 import dax.sim.signal
-from dax.sim.device import ARTIQ_MAJOR_VERSION
+from dax.util.artiq_version import ARTIQ_MAJOR_VERSION
 import test.sim.coredevice._compile_testcase as compile_testcase
 
 

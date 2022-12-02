@@ -8,7 +8,8 @@ from artiq.language.core import kernel, portable, rpc, at_mu, now_mu, delay_mu, 
 from artiq.language.types import TInt64
 import artiq.coredevice.core
 
-from dax.sim.device import DaxSimDevice, ARTIQ_MAJOR_VERSION
+from dax.util.artiq_version import ARTIQ_MAJOR_VERSION
+from dax.sim.device import DaxSimDevice
 from dax.sim.signal import get_signal_manager, DaxSignalManager, Signal
 from dax.sim.ddb import DAX_SIM_CONFIG_KEY
 from dax.sim.time import DaxTimeManager
