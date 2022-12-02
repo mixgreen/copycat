@@ -241,6 +241,15 @@ class TrapDcModule(DaxModule):
         return self._reader.solution_path
 
     @host_only
+    def get_ZotinoLinearComboModule(self, config_file: str) -> ZotinoLinearComboModule:
+        """Factory method to encapsulate creation of ZotinoLinearComboModule
+
+        :param config_file: Name of the config file to read into the object
+
+        :return: The ZotinoLinearComboModule object"""
+        return ZotinoLinearComboModule(config_file, self._reader)
+
+    @host_only
     def read_solution(self,
                       file_name: str) -> SOLUTION_T:
         """Read in a solutions file and return the solution in base reader form
