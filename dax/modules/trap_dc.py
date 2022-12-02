@@ -241,11 +241,49 @@ class TrapDcModule(DaxModule):
         return self._reader.solution_path
 
     @host_only
+    def read_solution(self,
+                      file_name: str) -> SOLUTION_T:
+        """Read in a solutions file and return the solution in base reader form
+
+        Note that the Zotino Path Voltages are given in **V**.
+
+        :param file_name: Solution file to parse the path from
+
+        :return: Base reader solution form
+        """
+        return self._reader.read_solution(file_name)
+
+    @host_only
+    def solution_to_line_mu(self,
+                            *,
+                            solution: SOLUTION_T,
+                            index: int = 0,
+                            multiplier: float = 1.0) -> _ZOTINO_LINE_MU_T:
+        """Read in a solutions file and return the line in zotino form.
+        Optionally apply multiplier to all voltages in path
+
+        Note that the Zotino Path Voltages are given in **MU**.
+
+        :param reader_solution: Solution python object representation
+        :param index: Line in path to get. A 0 indicates the first line
+        :param multiplier: Optionally scale the voltages by a constant
+
+        :return: Zotino module interpretable solution line with voltages in V
+        """
+        unprepared_line = self._reader.process_solution(solution)[index]
+
+        # multiply each solution list with multiplier
+        line = (
+            (np.asarray(unprepared_line[0]) * multiplier).tolist(),  # type: ignore[attr-defined]
+            unprepared_line[1])
+
+        return self._reader.line_to_mu(line)
+
+    @host_only
     def read_line_mu(self,
-                     file_name: typing.Optional[str] = None,
+                     file_name: str,
                      index: int = 0,
-                     multiplier: float = 1.0,
-                     reader_solution: typing.Optional[SOLUTION_T] = None) -> _ZOTINO_LINE_MU_T:
+                     multiplier: float = 1.0) -> _ZOTINO_LINE_MU_T:
         """Read in a single line of a solutions file and return the line in zotino form.
         Optionally apply multiplier to all voltages in path
 
@@ -256,47 +294,50 @@ class TrapDcModule(DaxModule):
         :param file_name: Solution file to parse the path from
         :param index: Line in path to get. A 0 indicates the first line
         :param multiplier: Optionally scale the voltages by a constant
-        :param reader_solution: Optional solution python object representation
 
         :return: Zotino module interpretable solution line with packed voltages and channels
         """
-        path = self._read_line(file_name=file_name, index=index, multiplier=multiplier,
-                               reader_solution=reader_solution)
-        return self._reader.line_to_mu(path)
+        solution = self.read_solution(file_name)
+        return self.solution_to_line_mu(solution=solution, index=index, multiplier=multiplier)
 
     @host_only
-    def _read_line(self,
-                   *,
-                   file_name: typing.Optional[str] = None,
-                   reader_solution: typing.Optional[SOLUTION_T] = None,
-                   index: int = 0,
-                   multiplier: float = 1.0) -> _ZOTINO_LINE_T:
-        """Read in a single line of a solutions file and return the line in zotino form.
-        Optionally apply multiplier to all voltages in path
+    def solution_to_mu(self,
+                       *,
+                       solution: SOLUTION_T,
+                       start: int = 0,
+                       end: int = -1,
+                       reverse: bool = False,
+                       multiplier: float = 1.0) -> _ZOTINO_SOLUTION_MU_T:
+        """Read in a segment of a solutions file and return the path in zotino form.
+        Optionally reverse path and/or apply multiplier to all voltages in path
 
         Note that the Zotino Path Voltages are given in **V**.
 
-        May provide either file_name and reader_solution. If both are provided the file name will be used
-
-        :param file_name: Optional solution file to parse the path from
-        :param reader_solution: Optional solution python object representation
-        :param index: Line in path to get. A 0 indicates the first line
+        :param solution: Solution file to parse the path from
+        :param start: Starting index of path (inclusive). Default 0 signals to start with first solution line
+        :param end: End index of path (inclusive). Default -1 signals to end with last solution line
+        :param reverse: Optionally return a reversed path. I.E. From end to start
         :param multiplier: Optionally scale the voltages by a constant
 
-        :return: Zotino module interpretable solution line with voltages in V
+        :return: Zotino module interpretable solution path with voltages in V
         """
-        if file_name is not None:
-            unprepared_line = self._reader.process_solution(self._reader.read_solution(file_name))[index]
-        elif reader_solution is not None:
-            unprepared_line = self._reader.process_solution(reader_solution)[index]
-        else:
-            raise ValueError("Must pass in either file_name or reader_solution")
-        # multiply each solution list with multiplier
-        line = (
-            (np.asarray(unprepared_line[0]) * multiplier).tolist(),  # type: ignore[attr-defined]
-            unprepared_line[1])
 
-        return line
+        processed_solution = self._reader.process_solution(solution)
+
+        # multiply each solution list with multiplier
+        for i, t in enumerate(processed_solution):
+            processed_solution[i] = (
+                (np.asarray(t[0]) * multiplier).tolist(), t[1])  # type: ignore[attr-defined]
+
+        trimmed_solution = processed_solution[start:(end % len(processed_solution)) + 1]
+        if reverse:
+            trimmed_solution.reverse()
+
+        path: _ZOTINO_SOLUTION_T = [trimmed_solution[0]]
+        path.extend([self._reader.get_line_diff(t, trimmed_solution[i])
+                     for i, t in enumerate(trimmed_solution[1:])])
+
+        return self._reader.solution_to_mu(path)
 
     @host_only
     def read_solution_mu(self,
@@ -318,49 +359,8 @@ class TrapDcModule(DaxModule):
 
         :return: Zotino module interpretable solution path with packed voltages and channels
         """
-        path = self._read_solution(file_name, start, end,
-                                   reverse, multiplier)
-        return self._reader.solution_to_mu(path)
-
-    @host_only
-    def _read_solution(self,
-                       file_name: str,
-                       start: int = 0,
-                       end: int = -1,
-                       reverse: bool = False,
-                       multiplier: float = 1.0) -> _ZOTINO_SOLUTION_T:
-        """Read in a segment of a solutions file and return the path in zotino form.
-        Optionally reverse path and/or apply multiplier to all voltages in path
-
-        Note that the Zotino Path Voltages are given in **V**.
-
-        :param file_name: Solution file to parse the path from
-        :param start: Starting index of path (inclusive). Default 0 signals to start with first solution line
-        :param end: End index of path (inclusive). Default -1 signals to end with last solution line
-        :param reverse: Optionally return a reversed path. I.E. From end to start
-        :param multiplier: Optionally scale the voltages by a constant
-
-        :return: Zotino module interpretable solution path with voltages in V
-        """
-
-        solution = self._reader.process_solution(self._reader.read_solution(file_name))
-        if end == -1:
-            end = len(solution) - 1
-
-        # multiply each solution list with multiplier
-        for i, t in enumerate(solution):
-            solution[i] = (
-                (np.asarray(t[0]) * multiplier).tolist(), t[1])  # type: ignore[attr-defined]
-
-        trimmed_solution = solution[start:end + 1]
-        if reverse:
-            trimmed_solution.reverse()
-
-        path: _ZOTINO_SOLUTION_T = [trimmed_solution[0]]
-        path.extend([self._reader.get_line_diff(t, trimmed_solution[i])
-                     for i, t in enumerate(trimmed_solution[1:])])
-
-        return path
+        solution = self.read_solution(file_name)
+        return self.solution_to_mu(solution=solution, start=start, end=end, reverse=reverse, multiplier=multiplier)
 
     @host_only
     def list_solutions(self) -> typing.Sequence[str]:

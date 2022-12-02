@@ -379,17 +379,19 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
     def test_get_path(self, _, _mock_read_solution, mock_process_solution):
         with temp_dir():
             self.env.trap_dc.init()
+            mock_reader_solution = []
             mock_process_solution.return_value = [([-5., 0., 0., 0.], [2, 3, 4, 5]),
                                                   ([1., 0., 0., 0.], [2, 3, 4, 5]),
                                                   ([1., 2., 0., 0.], [2, 3, 4, 5]),
                                                   ([1., 2., 3., 4.], [2, 3, 4, 5])]
-            expected_prepared_path = [([-10., 0., 0., 0.], [2, 3, 4, 5]),
-                                      ([2.], [2]),
-                                      ([4.], [3]),
-                                      ([6., 8.], [4, 5])]
-            prepared_path_result = self.env.trap_dc._read_solution(
-                "name_of_file.csv", multiplier=2)
-            self.assertListEqual(prepared_path_result, expected_prepared_path)
+            expected_prepared_path_v = [([-10., 0., 0., 0.], [2, 3, 4, 5]),
+                                        ([2.], [2]),
+                                        ([4.], [3]),
+                                        ([6., 8.], [4, 5])]
+            expected_prepared_path_mu = self.env.trap_dc._reader.solution_to_mu(expected_prepared_path_v)
+            prepared_path_result = self.env.trap_dc.solution_to_mu(
+                solution=mock_reader_solution, multiplier=2)
+            self.assertListEqual(prepared_path_result, expected_prepared_path_mu)
 
     @patch.object(ZotinoReader, 'process_solution')
     @patch.object(BaseReader, 'read_solution')
@@ -397,17 +399,19 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
     def test_get_path_reverse(self, _, _mock_read_solution, mock_process_solution):
         with temp_dir():
             self.env.trap_dc.init()
+            mock_reader_solution = []
             mock_process_solution.return_value = [([-10., 0., 0., 0.], [2, 3, 4, 5]),
                                                   ([1., 0., 0., 0.], [2, 3, 4, 5]),
                                                   ([1., 2., 0., 0.], [2, 3, 4, 5]),
                                                   ([1., 2., 3., 4.], [2, 3, 4, 5])]
-            expected_prepared_path = [([1., 2., 3., 4.], [2, 3, 4, 5]),
-                                      ([0., 0.], [4, 5]),
-                                      ([0.], [3]),
-                                      ([-10.], [2])]
-            prepared_path_result = self.env.trap_dc._read_solution(
-                "name_of_file.csv", reverse=True)
-            self.assertListEqual(prepared_path_result, expected_prepared_path)
+            expected_prepared_path_v = [([1., 2., 3., 4.], [2, 3, 4, 5]),
+                                        ([0., 0.], [4, 5]),
+                                        ([0.], [3]),
+                                        ([-10.], [2])]
+            expected_prepared_path_mu = self.env.trap_dc._reader.solution_to_mu(expected_prepared_path_v)
+            prepared_path_result = self.env.trap_dc.solution_to_mu(
+                solution=mock_reader_solution, reverse=True)
+            self.assertListEqual(prepared_path_result, expected_prepared_path_mu)
 
     @patch.object(ZotinoReader, 'process_solution')
     @patch.object(BaseReader, 'read_solution')
@@ -415,15 +419,17 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
     def test_get_path_segment(self, _, _mock_read_solution, mock_process_solution):
         with temp_dir():
             self.env.trap_dc.init()
+            mock_reader_solution = []
             mock_process_solution.return_value = [([-10., 0., 0., 0.], [2, 3, 4, 5]),
                                                   ([1., 0., 0., 0.], [2, 3, 4, 5]),
                                                   ([1., 2., 0., 0.], [2, 3, 4, 5]),
                                                   ([1., 2., 3., 4.], [2, 3, 4, 5])]
-            expected_prepared_path = [([1., 0., 0., 0.], [2, 3, 4, 5]),
-                                      ([2.], [3])]
-            prepared_path_result = self.env.trap_dc._read_solution(
-                'name_of_file.csv', 1, 2)
-            self.assertListEqual(prepared_path_result, expected_prepared_path)
+            expected_prepared_path_v = [([1., 0., 0., 0.], [2, 3, 4, 5]),
+                                        ([2.], [3])]
+            expected_prepared_path_mu = self.env.trap_dc._reader.solution_to_mu(expected_prepared_path_v)
+            prepared_path_result = self.env.trap_dc.solution_to_mu(
+                solution=mock_reader_solution, start=1, end=2)
+            self.assertListEqual(prepared_path_result, expected_prepared_path_mu)
 
     @patch.object(ZotinoReader, 'process_solution')
     @patch.object(BaseReader, 'read_solution')
@@ -431,14 +437,16 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
     def test_get_line(self, _, _mock_read_solution, mock_process_solution):
         with temp_dir():
             self.env.trap_dc.init()
+            mock_reader_solution = []
             mock_process_solution.return_value = [([-10., 0., 0., 0.], [2, 3, 4, 5]),
                                                   ([1., 0., 0., 0.], [2, 3, 4, 5]),
                                                   ([1., 2., 0., 0.], [2, 3, 4, 5]),
                                                   ([1., 2., 3., 4.], [2, 3, 4, 5])]
-            expected_prepared_line = ([3.5, 7., 0., 0.], [2, 3, 4, 5])
-            prepared_line_result = self.env.trap_dc._read_line(
-                file_name='name_of_file.csv', index=2, multiplier=3.5)
-            self.assertTupleEqual(prepared_line_result, expected_prepared_line)
+            expected_prepared_line_v = ([3.5, 7., 0., 0.], [2, 3, 4, 5])
+            expected_prepared_line_mu = self.env.trap_dc._reader.line_to_mu(expected_prepared_line_v)
+            prepared_line_result = self.env.trap_dc.solution_to_line_mu(
+                solution=mock_reader_solution, index=2, multiplier=3.5)
+            self.assertListEqual(prepared_line_result, expected_prepared_line_mu)
 
     @patch.object(BaseReader, 'read_config')
     def test_create_lc_configs(self, mock_read_solution):
