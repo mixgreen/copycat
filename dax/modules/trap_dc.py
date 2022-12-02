@@ -240,14 +240,6 @@ class TrapDcModule(DaxModule):
         """
         return self._reader.solution_path
 
-    @property
-    def reader(self) -> ZotinoReader:
-        """Get the reader
-
-        :return: The reader associated with this instance
-        """
-        return self._reader
-
     @host_only
     def read_line_mu(self,
                      file_name: typing.Optional[str] = None,

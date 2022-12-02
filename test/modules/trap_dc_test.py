@@ -443,7 +443,7 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
     @patch.object(BaseReader, 'read_config')
     def test_create_lc_configs(self, mock_read_solution):
         mock_read_solution.return_value = {"params": [{"name": "dx", "file": "configs.csv", "line": 1, "value": 2.3}]}
-        cfg = ZotinoLinearComboModule("config.json", self.env.trap_dc.reader)
+        cfg = ZotinoLinearComboModule("config.json", self.env.trap_dc._reader)
         assert len(cfg._config) == 1 and "dx" in cfg._config
         assert isinstance(cfg._config["dx"], _LinearComboConfigAttrs)
         assert len(cfg._config["dx"]._attrs) == 4 and all(
