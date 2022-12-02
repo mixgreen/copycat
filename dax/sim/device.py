@@ -4,10 +4,12 @@ import abc
 import artiq
 import artiq.coredevice.core
 
+import dax.util.artiq_version
+
 __all__ = ['DaxSimDevice', 'ARTIQ_MAJOR_VERSION']
 
-ARTIQ_MAJOR_VERSION: int = int(artiq.__version__[0])
-"""The ARTIQ major version number."""
+ARTIQ_MAJOR_VERSION: int = dax.util.artiq_version.ARTIQ_MAJOR_VERSION
+"""**Deprecated**, use :attr:`dax.util.artiq_version.ARTIQ_MAJOR_VERSION` instead."""
 
 
 class DaxSimDevice(abc.ABC):
