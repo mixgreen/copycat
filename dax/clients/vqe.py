@@ -10,19 +10,14 @@ import abc
 import queue
 import threading
 import typing
-import pathlib
-import multiprocessing
 import numpy as np
-import natsort
-from qiskit.algorithms.optimizers import COBYLA
+from qiskit.algorithms.optimizers import COBYLA  # type: ignore[import]
 
 from dax.experiment import *
-from dax.modules.hist_context import HistogramContext, HistogramAnalyzer
+from dax.modules.hist_context import HistogramContext
 from dax.interfaces.operation import OperationInterface
-from dax.interfaces.gate import GateInterface
 from dax.interfaces.data_context import DataContextInterface
 from dax.util.artiq import is_kernel, default_enumeration_value, is_rpc
-from dax.util.output import get_base_path
 from dax.base.servo import DaxServo
 
 
@@ -32,7 +27,7 @@ class DaxVQEBase(DaxClient, DaxServo, Experiment):
     DEFAULT_OPERATION_KEY: typing.ClassVar[typing.Union[str, typing.Type[NoDefault]]] = NoDefault
     """Key of the default operation interface."""
 
-    def build_servo(self) -> None:  # type: ignore[override]
+    def build_servo(self) -> None:
         assert is_kernel(self.device_setup), 'device_setup() must be a kernel function'
         assert is_kernel(self.device_cleanup), 'device_cleanup() must be a kernel function'
         assert not is_kernel(self.host_setup), 'host_setup() can not be a kernel function'
@@ -133,7 +128,8 @@ class DaxVQEBase(DaxClient, DaxServo, Experiment):
         pass
 
     @kernel
-    def run_point(self, point, index):  # type: (typing.Any, typing.Any) -> None  # pragma: no cover(self) -> None:
+    def run_point(self, point, index):  # noqa: ATQ306
+        # type: (typing.Any, typing.Any) -> None  # pragma: no cover(self) -> None:
         """Entry point of the experiment."""
 
         try:
@@ -152,7 +148,7 @@ class DaxVQEBase(DaxClient, DaxServo, Experiment):
             self.logger.warning('Experiment interrupted (this experiment can not pause)')
             raise
 
-    @kernel  # noqa: ATQ306
+    @kernel
     def _run_circuit(self, point):  # noqa: ATQ306
 
         with self._data_context:
@@ -233,19 +229,19 @@ class DaxVQEBase(DaxClient, DaxServo, Experiment):
 class SingleQubitVQE(DaxVQEBase):
 
     def _add_arguments_internal(self) -> None:
-        np.random.seed(99999)
-        p0 = np.random.random()
+        np.random.seed(99999)  # type: ignore[attr-defined]
+        p0 = np.random.random()  # type: ignore[attr-defined]
         self.target_dist = {0: p0, 1: 1 - p0}
 
-        self.params = np.random.rand(3)
+        self.params = np.random.rand(3)  # type: ignore[attr-defined]
         self.theta = self.add_servo_argument('theta', 'theta', NumberValue(self.params[0]))
         self.phi = self.add_servo_argument('phi', 'phi', NumberValue(self.params[1]))
         self.lamb = self.add_servo_argument('lamb', 'lamb', NumberValue(self.params[2]))
 
     def host_setup(self) -> None:
         super().host_setup()
-        self.param_q = queue.Queue(1)
-        self.data_q = queue.Queue(1)
+        self.param_q: queue.Queue = queue.Queue(1)
+        self.data_q: queue.Queue = queue.Queue(1)
         self.index = 0
         self.opt_thread = threading.Thread(target=self.optimizer,
                                            args=(3, self.objective_function),
@@ -253,7 +249,7 @@ class SingleQubitVQE(DaxVQEBase):
         self.opt_thread.start()
 
     @kernel
-    def ansatz_circuit(self, point) -> TNone:
+    def ansatz_circuit(self, point) -> TNone:  # noqa: ATQ306
         self._operation.rz(point.phi, 0)
         self._operation.rx(-self._operation.pi / 2, 0)
         self._operation.rz(point.theta, 0)
@@ -268,7 +264,7 @@ class SingleQubitVQE(DaxVQEBase):
 
     def optimizer(self, num_vars, objective_function, initial_point=None):
         opt_method = COBYLA(maxiter=500, tol=0.0001)
-        opt_result = opt_method.optimize(num_vars, objective_function, initial_point=initial_point)
+        opt_method.optimize(num_vars, objective_function, initial_point=initial_point)
         self.param_q.put(None)
 
     def objective_function(self, params):
@@ -284,7 +280,7 @@ class SingleQubitVQE(DaxVQEBase):
         return cost
 
     @rpc
-    def iterate(self) -> TTuple([TBool, TTuple([TFloat, TFloat, TFloat])]):
+    def iterate(self) -> TTuple([TBool, TTuple([TFloat, TFloat, TFloat])]):  # type: ignore[valid-type]  # noqa: ATQ309
         if self.index > 0:
             self.data_q.put(self.get_result())
 
@@ -300,7 +296,7 @@ class SingleQubitVQE(DaxVQEBase):
         return (converge, tuple(new_params))
 
     @kernel
-    def set_point(self, params, point) -> TNone:
+    def set_point(self, params, point) -> TNone:  # noqa: ATQ306
         point.theta, point.phi, point.lamb = params
 
     def host_cleanup(self) -> None:
