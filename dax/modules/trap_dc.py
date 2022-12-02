@@ -259,7 +259,7 @@ class TrapDcModule(DaxModule):
 
         Note that the Zotino Path Voltages are given in **MU**.
 
-        May provide either file_name and reader_solution. If both or provided the file name will be used
+        May provide either file_name and reader_solution. If both are provided the file name will be used
 
         :param file_name: Solution file to parse the path from
         :param index: Line in path to get. A 0 indicates the first line
@@ -284,7 +284,7 @@ class TrapDcModule(DaxModule):
 
         Note that the Zotino Path Voltages are given in **V**.
 
-        May provide either file_name and reader_solution. If both or provided the file name will be used
+        May provide either file_name and reader_solution. If both are provided the file name will be used
 
         :param file_name: Optional solution file to parse the path from
         :param reader_solution: Optional solution python object representation
