@@ -22,10 +22,10 @@ _ZOTINO_SOLUTION_T = typing.List[_ZOTINO_LINE_T]
 _ZOTINO_LINE_MU_T = typing.List[int]
 _ZOTINO_SOLUTION_MU_T = typing.List[_ZOTINO_LINE_MU_T]
 
-__all__ = ['TrapDcModule', 'ZotinoReader', 'ZotinoLinearComboModule']
+__all__ = ['TrapDcModule', 'ZotinoReader', 'LinearCombo']
 
 
-class _LinearComboConfigAttrs:
+class _LinearComboAttrs:
     """A module to represent a single parameter and it's corresponding data fields
     """
     _attrs: typing.Dict[str, typing.Any]
@@ -62,10 +62,10 @@ class _LinearComboConfigAttrs:
         return mini <= val <= maxi
 
 
-_ZOTINO_CONFIG_T = typing.Dict[str, _LinearComboConfigAttrs]
+_ZOTINO_CONFIG_T = typing.Dict[str, _LinearComboAttrs]
 
 
-class ZotinoLinearComboModule:
+class LinearCombo:
     """A module to represent linear combination configuration files
 
     This module can be used to get solution lines and combine them with others
@@ -74,16 +74,16 @@ class ZotinoLinearComboModule:
     _config: _ZOTINO_CONFIG_T
     """The configuration dict that contains field names mapped to config data"""
 
-    def __init__(self, config_file: str, reader: ZotinoReader):
+    def __init__(self, reader: ZotinoReader, config_file: str):
         """Constructor of zotino linear combination module
 
         :param config_file: The string name of the file where the configuration is
         :param reader: A reader to use for retrieving solutions corresponding to parameter
         """
         config = reader.read_config(config_file, schema=LINEAR_COMBO)
-        self._config = {d['name']: _LinearComboConfigAttrs(d, reader) for d in config['params']}
+        self._config = {d['name']: _LinearComboAttrs(d, reader) for d in config['params']}
 
-    def __getitem__(self, arg: str) -> _LinearComboConfigAttrs:
+    def __getitem__(self, arg: str) -> _LinearComboAttrs:
         """Method to make object indexible
 
         :param arg: The string argument to index on
@@ -174,6 +174,7 @@ class TrapDcModule(DaxModule):
       without underflow. However, this is meant to be an approximate calculation and can be configured as needed.
     - Everything in this module is Zotino specific. As other DC traps are needed they should be created separately.
     """
+    _LC_T = typing.TypeVar('_LC_T', bound='LinearCombo')
 
     _DMA_STARTUP_TIME: typing.ClassVar[float] = 1.728 * us
     """Startup time for DMA (s). Measured in the RTIO benchmarking tests during CI"""
@@ -241,13 +242,13 @@ class TrapDcModule(DaxModule):
         return self._reader.solution_path
 
     @host_only
-    def get_ZotinoLinearComboModule(self, config_file: str) -> ZotinoLinearComboModule:
+    def create_linear_combo(self, config_file: str, *args, cls: typing.Type[_LC_T], **kwargs) -> _LC_T:
         """Factory method to encapsulate creation of ZotinoLinearComboModule
 
         :param config_file: Name of the config file to read into the object
 
         :return: The ZotinoLinearComboModule object"""
-        return ZotinoLinearComboModule(config_file, self._reader)
+        return cls(self._reader, config_file, *args, **kwargs)  # type: ignore[call-arg]
 
     @host_only
     def read_line(self,
@@ -651,27 +652,6 @@ class TrapDcModule(DaxModule):
                                    comm_delay_slope_mu=comm_delay_slope_mu,
                                    dma_comm_delay_intercept_mu=dma_comm_delay_intercept_mu,
                                    dma_comm_delay_slope_mu=dma_comm_delay_slope_mu)
-
-    @host_only
-    def add_linear_combination_arguments(self, env: HasEnvironment, *,
-                                         linear_combination_config: ZotinoLinearComboModule,
-                                         group: typing.Optional[str] = 'DAC configuration') -> None:
-        """Add arguments to the experiment for overriding configuration input configuration with values from user.
-
-        This function can only be called during the build phase.
-        This function must be called **after** any system build function calls.
-
-        :param env: The ARTIQ environment object that is in the build phase (normally ``self``)
-        :param linear_combination_config: A linear combination configuration object to store user input values to
-        :param group: Argument group name (optional)
-        """
-        assert isinstance(env, HasEnvironment)
-        assert isinstance(group, str) or group is None
-
-        # Config arguments
-        linear_combination_config.from_arguments(
-            env, prefix='', group=group
-        )
 
 
 class ZotinoCalculator:
