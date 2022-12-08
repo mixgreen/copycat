@@ -7,9 +7,9 @@ import pathlib
 import numpy as np
 
 from dax.experiment import *
-from trap_dac_utils.reader import BaseReader, SpecialCharacter, SOLUTION_T, MAP_T, CONFIG_T
+from trap_dac_utils.reader import BaseReader
 from trap_dac_utils.schemas import LINEAR_COMBO
-from trap_dac_utils.types import LABEL_FIELD
+from trap_dac_utils.types import LABEL_FIELD, LINE_T, SpecialCharacter, SOLUTION_T, MAP_T, CONFIG_T
 
 import artiq.coredevice.zotino  # type: ignore[import]
 import artiq.coredevice.ad53xx  # type: ignore[import]
@@ -250,43 +250,46 @@ class TrapDcModule(DaxModule):
         return ZotinoLinearComboModule(config_file, self._reader)
 
     @host_only
-    def read_solution(self,
-                      file_name: str) -> SOLUTION_T:
-        """Read in a solutions file and return the solution in base reader form
+    def read_line(self,
+                  file_name: str,
+                  index: int) -> LINE_T:
+        """Read in a solutions file and return the specific line in base reader form
 
         Note that the Zotino Path Voltages are given in **V**.
 
         :param file_name: Solution file to parse the path from
+        :param index: Line index in solution file
 
-        :return: Base reader solution form
+        :return: Base reader line form
         """
-        return self._reader.read_solution(file_name)
+        solution = self._reader.read_solution(file_name)
+        if index >= len(solution):
+            raise ValueError("Index is out of the range of the solution file")
+        return solution[index]
 
     @host_only
-    def solution_to_line_mu(self,
-                            *,
-                            solution: SOLUTION_T,
-                            index: int = 0,
-                            multiplier: float = 1.0) -> _ZOTINO_LINE_MU_T:
+    def line_to_mu(self,
+                   *,
+                   line: LINE_T,
+                   multiplier: float = 1.0) -> _ZOTINO_LINE_MU_T:
         """Read in a solutions file and return the line in zotino form.
         Optionally apply multiplier to all voltages in path
 
         Note that the Zotino Path Voltages are given in **MU**.
 
-        :param reader_solution: Solution python object representation
-        :param index: Line in path to get. A 0 indicates the first line
+        :param reader_line: Line python object representation
         :param multiplier: Optionally scale the voltages by a constant
 
         :return: Zotino module interpretable solution line with voltages in V
         """
-        unprepared_line = self._reader.process_solution(solution)[index]
+        unprepared_line = self._reader.process_solution(SOLUTION_T(line,))[0]
 
         # multiply each solution list with multiplier
-        line = (
+        prepared_line = (
             (np.asarray(unprepared_line[0]) * multiplier).tolist(),  # type: ignore[attr-defined]
             unprepared_line[1])
 
-        return self._reader.line_to_mu(line)
+        return self._reader.line_to_mu(prepared_line)
 
     @host_only
     def read_line_mu(self,
@@ -306,8 +309,21 @@ class TrapDcModule(DaxModule):
 
         :return: Zotino module interpretable solution line with packed voltages and channels
         """
-        solution = self.read_solution(file_name)
-        return self.solution_to_line_mu(solution=solution, index=index, multiplier=multiplier)
+        line = self.read_line(file_name, index)
+        return self.line_to_mu(line=line, multiplier=multiplier)
+
+    @host_only
+    def read_solution(self,
+                      file_name: str) -> SOLUTION_T:
+        """Read in a solutions file and return the solution in base reader form
+
+        Note that the Zotino Path Voltages are given in **V**.
+
+        :param file_name: Solution file to parse the path from
+
+        :return: Base reader solution form
+        """
+        return self._reader.read_solution(file_name)
 
     @host_only
     def solution_to_mu(self,

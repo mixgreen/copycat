@@ -10,8 +10,8 @@ import pathlib
 
 from dax.experiment import *
 from dax.modules.trap_dc import _LinearComboConfigAttrs, ZotinoLinearComboModule, ZotinoReader, TrapDcModule
-from trap_dac_utils.reader import SpecialCharacter, BaseReader
-from trap_dac_utils.types import LABEL_FIELD
+from trap_dac_utils.reader import BaseReader
+from trap_dac_utils.types import LABEL_FIELD, SpecialCharacter
 import dax.sim.coredevice.ad53xx
 import dax.sim.test_case
 from test.environment import CI_ENABLED
@@ -437,15 +437,12 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
     def test_get_line(self, _, _mock_read_solution, mock_process_solution):
         with temp_dir():
             self.env.trap_dc.init()
-            mock_reader_solution = []
-            mock_process_solution.return_value = [([-10., 0., 0., 0.], [2, 3, 4, 5]),
-                                                  ([1., 0., 0., 0.], [2, 3, 4, 5]),
-                                                  ([1., 2., 0., 0.], [2, 3, 4, 5]),
-                                                  ([1., 2., 3., 4.], [2, 3, 4, 5])]
+            mock_reader_line = ()
+            mock_process_solution.return_value = [([1., 2., 0., 0.], [2, 3, 4, 5])]
             expected_prepared_line_v = ([3.5, 7., 0., 0.], [2, 3, 4, 5])
             expected_prepared_line_mu = self.env.trap_dc._reader.line_to_mu(expected_prepared_line_v)
-            prepared_line_result = self.env.trap_dc.solution_to_line_mu(
-                solution=mock_reader_solution, index=2, multiplier=3.5)
+            prepared_line_result = self.env.trap_dc.line_to_mu(
+                line=mock_reader_line, multiplier=3.5)
             self.assertListEqual(prepared_line_result, expected_prepared_line_mu)
 
     @patch.object(BaseReader, 'read_config')
