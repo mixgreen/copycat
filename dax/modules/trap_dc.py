@@ -270,8 +270,8 @@ class TrapDcModule(DaxModule):
 
     @host_only
     def line_to_mu(self,
-                   *,
                    line: LINE_T,
+                   *,
                    multiplier: float = 1.0) -> _ZOTINO_LINE_MU_T:
         """Read in a solutions file and return the line in zotino form.
         Optionally apply multiplier to all voltages in path
@@ -328,8 +328,8 @@ class TrapDcModule(DaxModule):
 
     @host_only
     def solution_to_mu(self,
-                       *,
                        solution: SOLUTION_T,
+                       *,
                        start: int = 0,
                        end: int = -1,
                        reverse: bool = False,
