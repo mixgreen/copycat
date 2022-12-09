@@ -379,7 +379,7 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
     def test_get_path(self, _, _mock_read_solution, mock_process_solution):
         with temp_dir():
             self.env.trap_dc.init()
-            mock_reader_solution = []
+            mock_reader_solution = [{}, {}, {}, {}]
             mock_process_solution.return_value = [([-5., 0., 0., 0.], [2, 3, 4, 5]),
                                                   ([1., 0., 0., 0.], [2, 3, 4, 5]),
                                                   ([1., 2., 0., 0.], [2, 3, 4, 5]),
@@ -399,7 +399,7 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
     def test_get_path_reverse(self, _, _mock_read_solution, mock_process_solution):
         with temp_dir():
             self.env.trap_dc.init()
-            mock_reader_solution = []
+            mock_reader_solution = [{}, {}, {}, {}]
             mock_process_solution.return_value = [([-10., 0., 0., 0.], [2, 3, 4, 5]),
                                                   ([1., 0., 0., 0.], [2, 3, 4, 5]),
                                                   ([1., 2., 0., 0.], [2, 3, 4, 5]),
@@ -419,7 +419,7 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
     def test_get_path_segment(self, _, _mock_read_solution, mock_process_solution):
         with temp_dir():
             self.env.trap_dc.init()
-            mock_reader_solution = []
+            mock_reader_solution = [{}, {}, {}, {}]
             mock_process_solution.return_value = [([-10., 0., 0., 0.], [2, 3, 4, 5]),
                                                   ([1., 0., 0., 0.], [2, 3, 4, 5]),
                                                   ([1., 2., 0., 0.], [2, 3, 4, 5]),

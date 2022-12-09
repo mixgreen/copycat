@@ -348,13 +348,18 @@ class TrapDcModule(DaxModule):
         :return: Zotino module interpretable solution path with voltages in V
         """
 
-        processed_solution = self._reader.process_solution(solution)
+        if start >= len(solution):
+            raise ValueError("Start index is out of the range of the solution file")
+        if end >= len(solution):
+            raise ValueError("End index is out of the range of the solution file")
 
+        processed_solution = self._reader.process_solution(solution)
         # multiply each solution list with multiplier
         for i, t in enumerate(processed_solution):
             processed_solution[i] = (
                 (np.asarray(t[0]) * multiplier).tolist(), t[1])  # type: ignore[attr-defined]
 
+        # The modulus fixes the endpoint problem for -1
         trimmed_solution = processed_solution[start:(end % len(processed_solution)) + 1]
         if reverse:
             trimmed_solution.reverse()
