@@ -295,6 +295,7 @@ class TrapDcModule(DaxModule):
     @host_only
     def read_line_mu(self,
                      file_name: str,
+                     *,
                      index: int = 0,
                      multiplier: float = 1.0) -> _ZOTINO_LINE_MU_T:
         """Read in a single line of a solutions file and return the line in zotino form.
@@ -373,6 +374,7 @@ class TrapDcModule(DaxModule):
     @host_only
     def read_solution_mu(self,
                          file_name: str,
+                         *,
                          start: int = 0,
                          end: int = -1,
                          reverse: bool = False,
