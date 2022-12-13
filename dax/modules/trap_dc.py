@@ -19,7 +19,7 @@ _ZOTINO_KEY_T = typing.List[float]
 _ZOTINO_VALUE_T = typing.List[int]
 _ZOTINO_LINE_T = typing.Tuple[_ZOTINO_KEY_T, _ZOTINO_VALUE_T]
 _ZOTINO_SOLUTION_T = typing.List[_ZOTINO_LINE_T]
-_ZOTINO_LINE_MU_T = typing.List[int]
+_ZOTINO_LINE_MU_T = typing.List[np.int32]
 _ZOTINO_SOLUTION_MU_T = typing.List[_ZOTINO_LINE_MU_T]
 
 __all__ = ['TrapDcModule', 'ZotinoReader', 'LinearCombo']
@@ -74,14 +74,14 @@ class LinearCombo:
     _config: _ZOTINO_CONFIG_T
     """The configuration dict that contains field names mapped to config data"""
 
-    def __init__(self, reader: ZotinoReader, config_file: str):
+    def __init__(self, trap_dc: TrapDcModule, config_file: str):
         """Constructor of zotino linear combination module
 
         :param config_file: The string name of the file where the configuration is
         :param reader: A reader to use for retrieving solutions corresponding to parameter
         """
-        config = reader.read_config(config_file, schema=LINEAR_COMBO)
-        self._config = {d['name']: _LineAttrs(d, reader) for d in config['params']}
+        config = trap_dc.read_linear_combo(config_file)
+        self._config = {d['name']: _LineAttrs(d, trap_dc) for d in config['params']}
 
     def __getitem__(self, arg: str) -> _LineAttrs:
         """Method to make object indexible
@@ -248,7 +248,20 @@ class TrapDcModule(DaxModule):
         :param config_file: Name of the config file to read into the object
 
         :return: The ZotinoLinearComboModule object"""
-        return cls(self._reader, config_file, *args, **kwargs)  # type: ignore[call-arg]
+        return cls(self, config_file, *args, **kwargs)  # type: ignore[call-arg]
+
+    @host_only
+    def read_linear_combo(self,
+                          file_name: str) -> CONFIG_T:
+        """Read in a linear combo config file and return the config in base reader form
+
+        Note that the Zotino Path Voltages are given in **V**.
+
+        :param file_name: Solution file to parse the path from
+
+        :return: Base reader solution form
+        """
+        return self._reader.read_config(file_name, schema=LINEAR_COMBO)
 
     @host_only
     def read_line(self,
@@ -933,9 +946,9 @@ class ZotinoReader(BaseReader[_ZOTINO_SOLUTION_T]):
         """
         self._check_init("line_to_mu")
         vs, chs = line
-        return [artiq.coredevice.ad53xx.ad53xx_cmd_write_ch(ch,
-                                                            self._voltage_to_mu(v),
-                                                            artiq.coredevice.ad53xx.AD53XX_CMD_DATA) << 8
+        return [np.int32(artiq.coredevice.ad53xx.ad53xx_cmd_write_ch(ch,
+                                                                     self._voltage_to_mu(v),
+                                                                     artiq.coredevice.ad53xx.AD53XX_CMD_DATA)) << 8
                 for v, ch in zip(vs, chs)]
 
     @host_only
