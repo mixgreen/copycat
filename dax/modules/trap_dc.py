@@ -25,16 +25,16 @@ _ZOTINO_SOLUTION_MU_T = typing.List[_ZOTINO_LINE_MU_T]
 __all__ = ['TrapDcModule', 'ZotinoReader', 'LinearCombo']
 
 
-class _LinearComboAttrs:
+class _LineAttrs:
     """A module to represent a single parameter and it's corresponding data fields
     """
     _attrs: typing.Dict[str, typing.Any]
-    _reader: ZotinoReader
+    _trap_dc: TrapDcModule
 
-    def __init__(self, cfg: CONFIG_T, reader: ZotinoReader):
+    def __init__(self, cfg: CONFIG_T, trap_dc: TrapDcModule):
         self._attrs = dict(cfg)
         self._attrs.setdefault('value', 0.)
-        self._reader = reader
+        self._trap_dc = trap_dc
 
     def __getitem__(self, arg: str) -> typing.Any:
         return self._attrs[arg]
@@ -43,17 +43,17 @@ class _LinearComboAttrs:
         self._attrs[arg] = newvalue
 
     def get(self, arg: str, default: typing.Any) -> typing.Any:
-        self._attrs.get(arg, default=default)
+        self._attrs.get(arg, default)
 
-    def solution(self) -> SOLUTION_T:
-        file = self._attrs.get('file', default=f'{self._attrs["name"]}.csv')
-        line = self._attrs.get('line', default=0)
-        return self._reader.read_solution(file, line, line)
+    def line(self) -> LINE_T:
+        file = self._attrs.get('file', f'{self._attrs["name"]}.csv')
+        line = self._attrs.get('line', 0)
+        return self._trap_dc.read_line(file, line)
 
     def in_range(self) -> bool:
         val = self._attrs['value']
-        maxi = self._attrs.get('max', default=float('inf'))
-        mini = self._attrs.get('min', default=float('-inf'))
+        maxi = self._attrs.get('max', float('inf'))
+        mini = self._attrs.get('min', float('-inf'))
 
         if val is None:
             return True
@@ -62,7 +62,7 @@ class _LinearComboAttrs:
         return mini <= val <= maxi
 
 
-_ZOTINO_CONFIG_T = typing.Dict[str, _LinearComboAttrs]
+_ZOTINO_CONFIG_T = typing.Dict[str, _LineAttrs]
 
 
 class LinearCombo:
@@ -81,9 +81,9 @@ class LinearCombo:
         :param reader: A reader to use for retrieving solutions corresponding to parameter
         """
         config = reader.read_config(config_file, schema=LINEAR_COMBO)
-        self._config = {d['name']: _LinearComboAttrs(d, reader) for d in config['params']}
+        self._config = {d['name']: _LineAttrs(d, reader) for d in config['params']}
 
-    def __getitem__(self, arg: str) -> _LinearComboAttrs:
+    def __getitem__(self, arg: str) -> _LineAttrs:
         """Method to make object indexible
 
         :param arg: The string argument to index on
