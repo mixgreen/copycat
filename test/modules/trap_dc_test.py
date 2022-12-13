@@ -455,12 +455,17 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
             attrs in cfg._config["dx"]._attrs for attrs in ["name", "file", "line"])
         assert cfg._config["dx"]._attrs["value"] == 2.3
 
+    def test_reader_line_to_mu(self):
+        self.env.trap_dc.init()
+        line_mu = self.env.trap_dc._reader.line_to_mu(([1., 2., 3.], [0, 1, 2]))
+        assert isinstance(line_mu[0], np.int32)
+
     @patch.object(BaseReader, '_read_channel_map')
     def test_reader_zotino_uninitialized(self, _):
         reader = ZotinoReader(pathlib.Path('.'),
                               pathlib.Path('test.csv'))
         try:
-            reader.line_to_mu([1.0, 2.0, 3.0])
+            reader.line_to_mu(([1., 2., 3.], [0, 1, 2]))
         except RuntimeError as e:
             assert str(e) == "Must initialize reader using init method to use function line_to_mu"
 

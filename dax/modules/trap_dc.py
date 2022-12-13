@@ -948,7 +948,7 @@ class ZotinoReader(BaseReader[_ZOTINO_SOLUTION_T]):
         vs, chs = line
         return [np.int32(artiq.coredevice.ad53xx.ad53xx_cmd_write_ch(ch,
                                                                      self._voltage_to_mu(v),
-                                                                     artiq.coredevice.ad53xx.AD53XX_CMD_DATA)) << 8
+                                                                     artiq.coredevice.ad53xx.AD53XX_CMD_DATA) << 8)
                 for v, ch in zip(vs, chs)]
 
     @host_only
