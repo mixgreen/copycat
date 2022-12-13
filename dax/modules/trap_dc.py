@@ -296,7 +296,7 @@ class TrapDcModule(DaxModule):
 
         :return: Zotino module interpretable solution line with voltages in V
         """
-        unprepared_line = self._reader.process_solution(SOLUTION_T(line,))[0]
+        unprepared_line = self._reader.process_solution(SOLUTION_T((line,)))[0]
 
         # multiply each solution list with multiplier
         prepared_line = (
