@@ -74,6 +74,7 @@
         inherit dax;
         flake8-artiq = flake8-artiq.packages.x86_64-linux.flake8-artiq;
         artiq-stubs = artiq-stubs.packages.x86_64-linux.artiq-stubs;
+        trap-dac-utils = trap-dac-utils.packages.x86_64-linux.trap-dac-utils;
         default = pkgs.python3.withPackages (ps: [ dax ]);
       };
       # shells for `nix develop`
