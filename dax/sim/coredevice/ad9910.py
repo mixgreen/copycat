@@ -10,7 +10,8 @@ from artiq.language.types import TBool, TInt32, TInt64, TFloat, TList, TTuple
 from artiq.coredevice.ad9910 import (PHASE_MODE_CONTINUOUS, PHASE_MODE_ABSOLUTE,  # type: ignore[import]
                                      PHASE_MODE_TRACKING, RAM_DEST_FTW, RAM_DEST_POW, RAM_DEST_ASF, RAM_DEST_POWASF)
 
-from dax.sim.device import DaxSimDevice, ARTIQ_MAJOR_VERSION
+from dax.util.artiq_version import ARTIQ_MAJOR_VERSION
+from dax.sim.device import DaxSimDevice
 from dax.sim.signal import get_signal_manager
 from dax.sim.coredevice.urukul import CPLD, DEFAULT_PROFILE, NUM_PROFILES
 
