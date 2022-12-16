@@ -6,6 +6,8 @@ import numpy as np
 import artiq.language.core
 import artiq.language.units
 
+from dax.util.artiq_version import ARTIQ_MAJOR_VERSION
+
 __all__ = ['time_to_str', 'str_to_time',
            'freq_to_str', 'str_to_freq',
            'volt_to_str', 'str_to_volt',
@@ -14,6 +16,8 @@ __all__ = ['time_to_str', 'str_to_time',
            'UnitsFormatter']
 
 _R_T = typing.Union[int, float, np.int32, np.int64]  # Real number type
+
+_WATT_UNITS: typing.Sequence[str] = ['W', 'mW', 'uW', 'nW'] if ARTIQ_MAJOR_VERSION >= 7 else ['W', 'mW', 'uW']
 
 
 @artiq.language.core.host_only
@@ -65,11 +69,11 @@ def ampere_to_str(ampere: _R_T, *, threshold: _R_T = 1.0, precision: int = 2) ->
 @artiq.language.core.host_only
 def watt_to_str(watt: _R_T, *, threshold: _R_T = 1.0, precision: int = 2) -> str:
     """Convert a wattage to a string for pretty printing."""
-    return _value_to_str(watt, threshold, precision, ['W', 'mW', 'uW'])
+    return _value_to_str(watt, threshold, precision, _WATT_UNITS)
 
 
 @artiq.language.core.host_only
-def _str_to_value(string_: str, units: typing.Set[str]) -> float:
+def _str_to_value(string_: str, units: typing.FrozenSet[str]) -> float:
     assert isinstance(string_, str), 'Input must be of type str'
 
     try:
@@ -91,31 +95,31 @@ def _str_to_value(string_: str, units: typing.Set[str]) -> float:
 @artiq.language.core.host_only
 def str_to_time(string_: str) -> float:
     """Convert a string to a time."""
-    return _str_to_value(string_, {'s', 'ms', 'us', 'ns', 'ps'})
+    return _str_to_value(string_, frozenset(['s', 'ms', 'us', 'ns', 'ps']))
 
 
 @artiq.language.core.host_only
 def str_to_freq(string_: str) -> float:
     """Convert a string to a frequency."""
-    return _str_to_value(string_, {'GHz', 'MHz', 'kHz', 'Hz', 'mHz'})
+    return _str_to_value(string_, frozenset(['GHz', 'MHz', 'kHz', 'Hz', 'mHz']))
 
 
 @artiq.language.core.host_only
 def str_to_volt(string_: str) -> float:
     """Convert a string to a voltage."""
-    return _str_to_value(string_, {'kV', 'V', 'mV', 'uV'})
+    return _str_to_value(string_, frozenset(['kV', 'V', 'mV', 'uV']))
 
 
 @artiq.language.core.host_only
 def str_to_ampere(string_: str) -> float:
     """Convert a string to an amperage."""
-    return _str_to_value(string_, {'A', 'mA', 'uA'})
+    return _str_to_value(string_, frozenset(['A', 'mA', 'uA']))
 
 
 @artiq.language.core.host_only
 def str_to_watt(string_: str) -> float:
     """Convert a string to a wattage."""
-    return _str_to_value(string_, {'W', 'mW', 'uW'})
+    return _str_to_value(string_, frozenset(_WATT_UNITS))
 
 
 class UnitsFormatter(string.Formatter):

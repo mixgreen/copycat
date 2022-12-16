@@ -106,6 +106,7 @@ class CcbTestCase(unittest.TestCase):
         self.assertIsNone(ccb.plot_xy_multi('name', 'key'))
         self.assertIsNone(ccb.plot_hist('name', 'key'))
         self.assertIsNone(ccb.plot_hist_multi('name', 'key'))
+        self.assertIsNone(ccb.plot_progress_bar('name', 'key'))
         self.assertIsNone(ccb.plot_xy_hist('name', 'key', 'key', 'key'))
         self.assertIsNone(ccb.disable_applet('name'))
         self.assertIsNone(ccb.disable_applet_group('group'))

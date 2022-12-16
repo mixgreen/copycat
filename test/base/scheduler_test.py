@@ -2025,7 +2025,7 @@ class OptimusCalibrationTestCase(unittest.TestCase):
         adj = np.zeros((num_nodes, num_nodes))
         for i in range(num_nodes):
             for j in range(i + 1, num_nodes):
-                adj[i, j] = rng.choice([1, 0], p=[p, 1 - p])  # type: ignore[index,attr-defined]
+                adj[i, j] = rng.choice([1, 0], p=[p, 1 - p])  # type: ignore[index]
         # redundant since scheduler also calls this, but need to make sure we're working with the exact same graph
         g: nx.DiGraph = nx.convert_matrix.from_numpy_array(adj, create_using=nx.DiGraph)  # type: ignore[attr-defined]
         g = nx.algorithms.transitive_reduction(g)
