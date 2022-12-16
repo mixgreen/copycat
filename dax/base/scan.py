@@ -749,9 +749,11 @@ class DaxScanChain:
 
 
 class DaxScanZip:
-    """DAX.scan utility class to allow parallel execution of multiple scan ranges with the same length.
+    """DAX.scan utility class allows parallel execution of multiple scan ranges with the same length. This
+    can be useful, for example, when you want to compare the Raman sideband spectrum of different axes within the
+    same period of time. 
 
-    Users may use this class within :class:`DaxScan` experiments to create a single scan of disparate ranges.
+    Users may use this class within :class:`DaxScan` experiments to create a single scan of tuples of points.
     The resulting scan will be treated as a single value with a key defined in the :func:`__init__` method.
     As a result, this class must be only used within the :func:`build_scan` function.
 
@@ -785,14 +787,14 @@ class DaxScanZip:
         """Create a new :class:`DaxScanZip` object.
 
         :param dax_scan: The :class:`DaxScan` object to which this chain will be added
-        :param key: Unique key of the chained scan, used to obtain the value later
+        :param key: Unique key of the zipped scan, used to obtain the value later
         :param group: The argument group name
         """
         assert isinstance(dax_scan, DaxScan), 'Must be given a DaxScan class'
         assert isinstance(key, str), 'Key must be of type str'
         assert isinstance(group, str) or group is None, 'Group must be of type str or None'
 
-        # The DaxScan class and key will be used to add the chained scans into the experiment
+        # The DaxScan class and key will be used to add the zipped scans into the experiment
         self._dax_scan = dax_scan
         self._key = key
         self._group = group
@@ -805,8 +807,7 @@ class DaxScanZip:
     def add_scan(self, name: str, scannable: Scannable, *, tooltip: typing.Optional[str] = None) -> None:
         """Register a scannable.
 
-        Scans will be chained linearly. The first scan will represent the first range to be scanned over, the second
-        scan the second range, etc.
+        Scans will be zipped into a single scan with tuples of scan points.
 
         Note that scans can be reordered using the :func:`set_scan_order` function, but only in the context.
         The order in the ARTIQ dashboard will not change, but the scans will be scanned over in a different order.
