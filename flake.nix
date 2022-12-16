@@ -12,6 +12,7 @@
       url = git+https://gitlab.com/duke-artiq/artiq-stubs.git;
       inputs.artiqpkgs.follows = "artiqpkgs";
       inputs.nixpkgs.follows = "nixpkgs";
+      inputs.flake8-artiq.follows = "flake8-artiq";
     };
     trap-dac-utils = {
       url = git+https://gitlab.com/duke-artiq/trap-dac-utils.git;

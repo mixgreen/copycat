@@ -31,7 +31,9 @@
         "artiqpkgs": [
           "artiqpkgs"
         ],
-        "flake8-artiq": "flake8-artiq",
+        "flake8-artiq": [
+          "flake8-artiq"
+        ],
         "nixpkgs": [
           "nixpkgs"
         ]
@@ -93,31 +95,6 @@
     "flake8-artiq": {
       "inputs": {
         "artiqpkgs": [
-          "artiq-stubs",
-          "artiqpkgs"
-        ],
-        "nixpkgs": [
-          "artiq-stubs",
-          "nixpkgs"
-        ]
-      },
-      "locked": {
-        "lastModified": 1669758648,
-        "narHash": "sha256-nomQRpu/b8YTAma6kmbSRrz5D9l1l0TV+trKHukT1V8=",
-        "ref": "refs/heads/master",
-        "rev": "c4949e7a415d5e35a242d552d4bb83614693b92e",
-        "revCount": 85,
-        "type": "git",
-        "url": "https://gitlab.com/duke-artiq/flake8-artiq.git"
-      },
-      "original": {
-        "type": "git",
-        "url": "https://gitlab.com/duke-artiq/flake8-artiq.git"
-      }
-    },
-    "flake8-artiq_2": {
-      "inputs": {
-        "artiqpkgs": [
           "artiqpkgs"
         ],
         "nixpkgs": [
@@ -174,7 +151,7 @@
       "inputs": {
         "artiq-stubs": "artiq-stubs",
         "artiqpkgs": "artiqpkgs",
-        "flake8-artiq": "flake8-artiq_2",
+        "flake8-artiq": "flake8-artiq",
         "nixpkgs": [
           "artiqpkgs",
           "nixpkgs"
