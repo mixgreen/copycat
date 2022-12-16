@@ -395,8 +395,8 @@ class DaxScan(dax.base.control_flow.DaxControlFlow, abc.ABC):
                 raise TypeError('The point types must be homogeneous')
             if len(points) > 0 and not isinstance(points[0], (int, float, bool, str, tuple)):
                 raise TypeError('The point type is not supported')
-            if isinstance(points[0], tuple) and not isinstance(points[0][0], (int, float, bool, str, tuple)):
-                raise TypeError('The type of element in tuple is not supported')
+            # if isinstance(points[0], tuple) and not isinstance(points[0][0], (int, float, bool, str, tuple)):
+            #     raise TypeError('The type of element in tuple is not supported')
 
         # Verify the key is valid and not in use
         if not key.isidentifier():

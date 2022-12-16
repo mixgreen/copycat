@@ -164,8 +164,8 @@ class _MockScanZip(_MockScan1):
         self.counter: typing.Counter[str] = collections.Counter()
 
         with DaxScanZip(self, 'foo', group='bar') as scan_zip:
-            scan_zip.add_scan('1', Scannable(RangeScan(1,self.FOO, self.FOO, randomize=False)))
-            scan_zip.add_scan('2', Scannable(RangeScan(1,self.FOO, self.FOO, randomize=False)))
+            scan_zip.add_scan('1', Scannable(RangeScan(1, self.FOO, self.FOO, randomize=False)))
+            scan_zip.add_scan('2', Scannable(RangeScan(1, self.FOO, self.FOO, randomize=False)))
 
 
 class _MockScanInfiniteNoArgument(_MockScanInfinite):
@@ -504,6 +504,38 @@ class ZipScanTestCase(Scan1TestCase):
                     self_scan.add_static_scan('foo', [1])
 
         MockZipScan(self.managers)
+
+    def test_scan_reader(self):
+        self.scan.run()
+
+        with temp_dir():
+            # Write data to HDF5 file
+            file_name = 'result.h5'
+            with h5py.File(file_name, 'w') as f:
+                self.managers.dataset_mgr.write_hdf5(f)
+
+            # Read HDF5 file with scan reader
+            r = DaxScanReader(file_name)
+
+            # Verify if the data matches with the scan object
+            scannables = self.scan.get_scannables()
+            scan_points = self.scan.get_scan_points()
+            keys = list(scannables.keys())
+            self.assertSetEqual(set(r.keys), set(keys), 'Keys in reader did not match object keys')
+            for k in keys:
+                self.assertListEqual([list(x) for x in scannables[k]], r.scannables[k].tolist(),
+                                     'Scannable in reader did not match object scannable')
+                self.assertListEqual(np.array(scan_points[k]).tolist(), r.scan_points[k].tolist(),
+                                     'Scan points in reader did not match object scan points')
+
+            # Verify if the data matches with a scan reader using a different source
+            r_ = DaxScanReader(self.scan)
+            self.assertSetEqual(set(r.keys), set(r_.keys), 'Keys in readers did not match')
+            for k in r.keys:
+                self.assertListEqual([list(x) for x in r_.scannables[k]], r.scannables[k].tolist(),
+                                     'Scannable in readers did not match')
+                self.assertListEqual([list(x) for x in r_.scan_points[k]], r.scan_points[k].tolist(),
+                                     'Scan points in readers did not match')
 
 
 class BuildScanTestCase(unittest.TestCase):
