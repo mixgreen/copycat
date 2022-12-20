@@ -1,9 +1,7 @@
 """
-Clients that use pyGSTi. See https://github.com/pyGSTio/pyGSTi.
+Clients for VQE experiments
 
-Note that pyGSTi is an optional dependency of DAX.
-
-Author: Jacob Whitlow
+Author: Aniket S. Dalvi
 """
 
 import abc
@@ -117,14 +115,17 @@ class DaxVQEBase(DaxClient, DaxServo, Experiment):
 
     @abc.abstractmethod
     def iterate(self):
+        """Function to define each iteration of VQE"""
         pass
 
     @abc.abstractmethod
     def ansatz_circuit(self, params):
+        """Function to define ansatz circuit representing the hamiltonian"""
         pass
 
     @abc.abstractmethod
     def get_result(self):
+        """Functions to define metric of stored measurements that the VQE experiiment uses"""
         pass
 
     @kernel
@@ -165,6 +166,7 @@ class DaxVQEBase(DaxClient, DaxServo, Experiment):
 
     @abc.abstractmethod
     def set_point(self, params, point):
+        """Function to set next point of VQE in the servo infrastructure"""
         pass
 
     def analyze(self) -> None:
@@ -268,10 +270,8 @@ class SingleQubitVQE(DaxVQEBase):
         self.param_q.put(None)
 
     def objective_function(self, params):
-        # print(f'Curr obj params {params}')
         self.param_q.put(params)
         mean_counts = self.data_q.get()
-        # print(f'Got data {mean_counts}')
         output_dist = {0: 1 - mean_counts, 1: mean_counts}
         cost = sum(
             abs(self.target_dist.get(i, 0) - output_dist.get(i, 0))
@@ -301,5 +301,3 @@ class SingleQubitVQE(DaxVQEBase):
 
     def host_cleanup(self) -> None:
         super().host_cleanup()
-        # print(f"Initial parameters {self.params}")
-        # print(f"Target distribution {self.target_dist}")
