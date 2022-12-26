@@ -30,9 +30,6 @@ import dax.util.git
 __all__ = ['DaxModule', 'DaxSystem', 'DaxService',
            'DaxClient', 'dax_client_factory']
 
-# Workaround: Add Numpy ndarray as a sequence type (see https://github.com/numpy/numpy/issues/2776)
-collections.abc.Sequence.register(np.ndarray)
-
 _KEY_SEPARATOR: str = '.'
 """Key separator for datasets."""
 
@@ -1630,19 +1627,23 @@ class DaxDataStoreInfluxDb(DaxDataStore):
         if isinstance(value, self._FIELD_TYPES):
             # Write a single point
             self._write_points([self._make_point(key, value)])
+        elif isinstance(value, np.ndarray) and any(np.issubdtype(value.dtype, t) for t in self._NP_FIELD_TYPES):
+            # Numpy array
+            if value.size:
+                # If the array is not empty, write a list of points
+                if value.ndim > 1:  # This if-else statement contains some redundant code, required to make mypy pass
+                    points = [self._make_point(key, v, i) for i, v in np.ndenumerate(value)]
+                else:
+                    points = [self._make_point(key, v, i) for i, v in enumerate(value)]
+                self._write_points(points)
         elif isinstance(value, collections.abc.Sequence) and all(isinstance(e, self._FIELD_TYPES) for e in value):
-            # One-dimensional list
+            # One-dimensional sequence
             if len(value):
                 # If the list is not empty, write a list of points
                 self._write_points([self._make_point(key, v, i) for i, v in enumerate(value)])
-            # Store the length of the sequence for emulated appending later
-            self._index_table[key] = len(value)
-        elif isinstance(value, np.ndarray) and value.ndim > 1 and any(np.issubdtype(value.dtype, t)
-                                                                      for t in self._NP_FIELD_TYPES):
-            # Multi-dimensional array
-            if value.size:
-                # If the array is not empty, write a list of points
-                self._write_points([self._make_point(key, v, i) for i, v in np.ndenumerate(value)])
+            if isinstance(value, collections.abc.MutableSequence):
+                # Store the length of the mutable sequence for emulated appending later
+                self._index_table[key] = len(value)
         else:
             # Unsupported type, do not raise but warn user instead
             self._logger.warning(f'Could not store value for key "{key}", unsupported value type for value "{value}"')

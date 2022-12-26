@@ -1,7 +1,6 @@
 import unittest
 import numpy as np
 import logging
-import collections.abc
 import typing
 import itertools
 from unittest.mock import Mock, call
@@ -204,11 +203,6 @@ class DaxHelpersTestCase(unittest.TestCase):
                             'List of virtual devices in test does not match DAX base virtual device list')
         for k in virtual_devices:
             self.assertEqual(s.registry.get_unique_device_key(k), k, 'Virtual device key not returned correctly')
-
-    def test_ndarray_isinstance_sequence(self):
-        # See https://github.com/numpy/numpy/issues/2776 for more information
-        a = np.zeros(4)
-        self.assertIsInstance(a, collections.abc.Sequence, 'numpy ndarray is not considered an abstract sequence')
 
     def test_async_rpc_logger(self):
         # Test if logger is async rpc and kernel invariant
@@ -767,6 +761,12 @@ class DaxDataStoreInfluxDbTestCase(unittest.TestCase):
             (key, 1),
             (key, 'complex(3, 5)'),
             (key, 5.5),
+            (key, np.zeros(4)),
+            (key, np.zeros(0)),
+            (key, range(0)),
+            (key, range(6)),
+            (key, tuple()),
+            (key, (1, 2, 4)),
         ]
 
         for k, v in test_data:
@@ -780,11 +780,7 @@ class DaxDataStoreInfluxDbTestCase(unittest.TestCase):
         test_data = [
             ('k.b.c', []),
             ('k.a', list()),
-            ('fds.aaa', np.zeros(0)),
-            ('kfh', range(0)),
             ('ka.a', [5, 7, 3, 2]),
-            ('kh.rt', np.zeros(4)),
-            ('kee', range(6)),
         ]
 
         # Test empty cache
