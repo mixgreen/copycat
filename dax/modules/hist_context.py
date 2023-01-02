@@ -1205,7 +1205,7 @@ class HistogramAnalyzer:
             self.plot_histogram(key, **kwargs)
 
     def plot_probability(self, key: str, *,
-                         x_values: typing.Optional[typing.Sequence[typing.Union[float, int]]] = None,
+                         x_values: typing.Union[None, typing.Sequence[typing.Union[float, int]], np.ndarray] = None,
                          x_label: typing.Optional[str] = None,
                          y_label: typing.Optional[str] = 'State probability',
                          labels: typing.Optional[typing.Sequence[str]] = None,
@@ -1234,7 +1234,7 @@ class HistogramAnalyzer:
         :param kwargs: Keyword arguments for the plot function
         """
         assert isinstance(key, str)
-        assert isinstance(x_values, collections.abc.Sequence) or x_values is None
+        assert isinstance(x_values, (collections.abc.Sequence, np.ndarray)) or x_values is None
         assert isinstance(x_label, str) or x_label is None
         assert isinstance(y_label, str) or y_label is None
         assert isinstance(labels, collections.abc.Sequence) or labels is None
@@ -1306,7 +1306,7 @@ class HistogramAnalyzer:
             self.plot_probability(key, **kwargs)
 
     def plot_mean_count(self, key: str, *,
-                        x_values: typing.Optional[typing.Sequence[typing.Union[float, int]]] = None,
+                        x_values: typing.Union[None, typing.Sequence[typing.Union[float, int]], np.ndarray] = None,
                         x_label: typing.Optional[str] = None,
                         y_label: typing.Optional[str] = 'Mean count',
                         labels: typing.Optional[typing.Sequence[str]] = None,
@@ -1332,7 +1332,7 @@ class HistogramAnalyzer:
         :param kwargs: Keyword arguments for the plot function
         """
         assert isinstance(key, str)
-        assert isinstance(x_values, collections.abc.Sequence) or x_values is None
+        assert isinstance(x_values, (collections.abc.Sequence, np.ndarray)) or x_values is None
         assert isinstance(x_label, str) or x_label is None
         assert isinstance(y_label, str) or y_label is None
         assert isinstance(labels, collections.abc.Sequence) or labels is None
@@ -1401,7 +1401,8 @@ class HistogramAnalyzer:
             self.plot_mean_count(key, **kwargs)
 
     def plot_state_probability(self, key: str, *,
-                               x_values: typing.Optional[typing.Sequence[typing.Union[float, int]]] = None,
+                               x_values: typing.Union[
+                                   None, typing.Sequence[typing.Union[float, int]], np.ndarray] = None,
                                x_label: typing.Optional[str] = None,
                                y_label: typing.Optional[str] = '|State> probability',
                                labels: typing.Optional[typing.Sequence[str]] = None,
@@ -1430,7 +1431,7 @@ class HistogramAnalyzer:
         :param kwargs: Keyword arguments for the plot function
         """
         assert isinstance(key, str)
-        assert isinstance(x_values, collections.abc.Sequence) or x_values is None
+        assert isinstance(x_values, (collections.abc.Sequence, np.ndarray)) or x_values is None
         assert isinstance(x_label, str) or x_label is None
         assert isinstance(y_label, str) or y_label is None
         assert isinstance(labels, collections.abc.Sequence) or labels is None

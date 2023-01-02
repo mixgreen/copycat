@@ -382,19 +382,19 @@ class DaxScan(dax.base.control_flow.DaxControlFlow, abc.ABC):
             raise RuntimeError('add_static_scan() can only be called in the build_scan() method')
 
         # Verify type of the points
-        if not isinstance(points, collections.abc.Sequence):
-            raise TypeError('Points must be a sequence')
         if isinstance(points, np.ndarray):
             if not any(np.issubdtype(points.dtype, t)
                        for t in [np.int32, np.int64, np.floating, np.bool_, np.character]):
                 raise TypeError('The NumPy point type is not supported')
             if points.ndim != 1:
                 raise TypeError('Only NumPy arrays with one dimension are supported')
-        else:
+        elif isinstance(points, collections.abc.Sequence):
             if not all(isinstance(e, type(points[0])) for e in points):
                 raise TypeError('The point types must be homogeneous')
             if len(points) > 0 and not isinstance(points[0], (int, float, bool, str)):
                 raise TypeError('The point type is not supported')
+        else:
+            raise TypeError('Points must be a sequence or array')
 
         # Verify the key is valid and not in use
         if not key.isidentifier():
