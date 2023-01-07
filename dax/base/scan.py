@@ -760,7 +760,7 @@ class DaxScanZip:
 
     This class must be used as a context, with example code below::
 
-        def build(self):
+        def build_scan(self):
             ...
             with DaxScanZip(self, 'zip_key', group='group') as scan_zip:
                 scan_zip.add_scan('name1', scannable, tooltip='tooltip')
