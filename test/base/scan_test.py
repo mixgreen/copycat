@@ -7,7 +7,7 @@ import h5py
 
 from artiq.experiment import *
 
-from dax.base.scan import DaxScan, DaxScanReader, DaxScanChain
+from dax.base.scan import DaxScan, DaxScanReader, DaxScanChain, DaxScanZip
 from dax.base.system import DaxSystem
 from dax.util.artiq import get_managers
 from dax.util.output import temp_dir
@@ -157,6 +157,15 @@ class _MockScanChain(_MockScan1):
         with DaxScanChain(self, 'foo', group='bar') as chain:
             chain.add_scan('1', Scannable(RangeScan(1, self.FOO, self.FOO, randomize=False)))
             chain.add_scan('2', Scannable(RangeScan(1, self.FOO, self.FOO, randomize=False)))
+
+
+class _MockScanZip(_MockScan1):
+    def build_scan(self) -> None:
+        self.counter: typing.Counter[str] = collections.Counter()
+
+        with DaxScanZip(self, 'foo', group='bar') as scan_zip:
+            scan_zip.add_scan('1', Scannable(RangeScan(1, self.FOO, self.FOO, randomize=False)))
+            scan_zip.add_scan('2', Scannable(RangeScan(1, self.FOO, self.FOO, randomize=False)))
 
 
 class _MockScanInfiniteNoArgument(_MockScanInfinite):
@@ -429,6 +438,104 @@ class ChainScanTestCase(Scan1TestCase):
                     self_scan.add_static_scan('foo', [1])
 
         MockChainScan(self.managers)
+
+
+class ZipScanTestCase(Scan1TestCase):
+    # Run all the same tests as before to ensure that nothing breaks
+    # Note: zip was created with two of the same scannable
+    SCAN_CLASS = _MockScanZip
+
+    def test_get_scannables(self):
+        scannables = self.scan.get_scannables()
+        self.assertIn('foo', scannables)
+        self.assertEqual(len(scannables['foo']), self.scan.FOO)
+
+    def test_call_counters(self):
+        # Run the scan
+        self.scan.run()
+
+        # Verify counters
+        counter_ref = {
+            'init_scan_elements': 1,
+            'host_enter': 1,
+            'host_setup': 1,
+            '_dax_control_flow_setup': 1,
+            'device_setup': 1,
+            'run_point': self.scan.FOO,
+            'device_cleanup': 1,
+            '_dax_control_flow_cleanup': 1,
+            'host_cleanup': 1,
+            'host_exit': 1,
+        }
+
+        self.assertDictEqual(self.scan.counter, counter_ref, 'Function counters did not match expected values')
+
+    def test_raise_reentrant_context_in_order(self):
+        class MockZipScan(_MockScanCallback):
+            def callback(self_scan):
+                with DaxScanZip(self_scan, key='foo') as scan_zip:
+                    scan_zip.add_scan('bar', Scannable(NoScan(1)))
+                with self.assertRaises(RuntimeError, msg='Reentering scan context after exit did not raise'):
+                    with scan_zip:
+                        pass
+
+        MockZipScan(self.managers)
+
+    def test_raise_reentrant_context_in_context(self):
+        class MockZipScan(_MockScanCallback):
+            def callback(self_scan):
+                with DaxScanZip(self_scan, key='foo') as chain:
+                    chain.add_scan('bar', Scannable(NoScan(1)))
+                    with self.assertRaises(RuntimeError, msg='Reentering scan context in context did not raise'):
+                        with chain:
+                            pass
+
+        MockZipScan(self.managers)
+
+    def test_raise_duplicate_scan_key(self):
+        class MockZipScan(_MockScanCallback):
+            def callback(self_scan):
+                self_scan.add_scan('foo', 'foo', Scannable(NoScan(1)))
+                with self.assertRaises(LookupError):
+                    self_scan.add_scan('foo', 'foo', Scannable(NoScan(1)))
+                with self.assertRaises(LookupError):
+                    self_scan.add_iterator('foo', 'foo', 1)
+                with self.assertRaises(LookupError):
+                    self_scan.add_static_scan('foo', [1])
+
+        MockZipScan(self.managers)
+
+    def test_scan_reader(self):
+        self.scan.run()
+
+        with temp_dir():
+            # Write data to HDF5 file
+            file_name = 'result.h5'
+            with h5py.File(file_name, 'w') as f:
+                self.managers.dataset_mgr.write_hdf5(f)
+
+            # Read HDF5 file with scan reader
+            r = DaxScanReader(file_name)
+
+            # Verify if the data matches with the scan object
+            scannables = self.scan.get_scannables()
+            scan_points = self.scan.get_scan_points()
+            keys = list(scannables.keys())
+            self.assertSetEqual(set(r.keys), set(keys), 'Keys in reader did not match object keys')
+            for k in keys:
+                self.assertListEqual([list(x) for x in scannables[k]], r.scannables[k].tolist(),
+                                     'Scannable in reader did not match object scannable')
+                self.assertListEqual(np.array(scan_points[k]).tolist(), r.scan_points[k].tolist(),
+                                     'Scan points in reader did not match object scan points')
+
+            # Verify if the data matches with a scan reader using a different source
+            r_ = DaxScanReader(self.scan)
+            self.assertSetEqual(set(r.keys), set(r_.keys), 'Keys in readers did not match')
+            for k in r.keys:
+                self.assertListEqual([list(x) for x in r_.scannables[k]], r.scannables[k].tolist(),
+                                     'Scannable in readers did not match')
+                self.assertListEqual([list(x) for x in r_.scan_points[k]], r.scan_points[k].tolist(),
+                                     'Scan points in readers did not match')
 
 
 class BuildScanTestCase(unittest.TestCase):
