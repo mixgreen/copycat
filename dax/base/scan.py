@@ -125,6 +125,7 @@ class DaxScan(dax.base.control_flow.DaxControlFlow, abc.ABC):
     The first scan added represents the dimension which is only scanned once.
     All next scans are repeatedly performed to form the cartesian product.
     To chain multiple scans into a single dimension, see :class:`DaxScanChain`.
+    To zip multiple scans into a single dimension, see :class:`DaxScanZip`.
 
     The scan class inherits from the :class:`dax.base.control_flow.DaxControlFlow` class for setup and cleanup
     procedures. The :func:`prepare` and :func:`analyze` functions are not implemented by the scan class,
@@ -391,8 +392,12 @@ class DaxScan(dax.base.control_flow.DaxControlFlow, abc.ABC):
         elif isinstance(points, collections.abc.Sequence):
             if not all(isinstance(e, type(points[0])) for e in points):
                 raise TypeError('The point types must be homogeneous')
-            if len(points) > 0 and not isinstance(points[0], (int, float, bool, str, tuple)):
-                raise TypeError('The point type is not supported')
+            if len(points) > 0:
+                if not isinstance(points[0], (int, float, bool, str, tuple)):
+                    raise TypeError('The point type is not supported')
+                if isinstance(points[0], tuple):
+                    if not all(all(isinstance(e, (int, float, bool, str)) for e in p) for p in points):
+                        raise TypeError('The tuple point type is not supported')
         else:
             raise TypeError('Points must be a sequence or array')
 
