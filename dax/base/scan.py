@@ -749,7 +749,7 @@ class DaxScanChain:
 class DaxScanZip:
     """DAX.scan utility class allows parallel execution of multiple scan ranges with the same length. This
     can be useful, for example, when you want to compare the Raman sideband spectrum of different axes within the
-    same period of time. 
+    same period of time.
 
     Users may use this class within :class:`DaxScan` experiments to create a single scan of tuples of points.
     The resulting scan will be treated as a single value with a key defined in the :func:`__init__` method.
