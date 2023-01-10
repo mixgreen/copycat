@@ -242,7 +242,11 @@ class TrapDcModule(DaxModule):
         return self._reader.solution_path
 
     @host_only
-    def create_linear_combo(self, config_file: str, *args, cls: typing.Type[_LC_T], **kwargs) -> _LC_T:
+    def create_linear_combo(self,
+                            config_file: str,
+                            *args,
+                            cls: typing.Type[_LC_T] = LinearCombo,  # type: ignore[assignment]
+                            **kwargs) -> _LC_T:
         """Factory method to encapsulate creation of ZotinoLinearComboModule
 
         :param config_file: Name of the config file to read into the object
