@@ -9,7 +9,8 @@ from artiq.language.core import kernel, host_only, delay, delay_mu, portable
 from artiq.language.units import us, ms, dB
 from artiq.language.types import TInt32, TFloat, TBool
 
-from dax.sim.device import DaxSimDevice, ARTIQ_MAJOR_VERSION
+from dax.util.artiq_version import ARTIQ_MAJOR_VERSION
+from dax.sim.device import DaxSimDevice
 from dax.sim.signal import get_signal_manager
 
 DEFAULT_PROFILE = 0 if ARTIQ_MAJOR_VERSION < 7 else 7

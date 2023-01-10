@@ -148,7 +148,7 @@ class DaxServo(dax.base.control_flow.DaxControlFlow, abc.ABC):
         self.logger.debug('Building servo')
         self.__in_build = True
         # noinspection PyArgumentList
-        self.build_servo(*servo_args, **servo_kwargs)  # type: ignore[call-arg]
+        self.build_servo(*servo_args, **servo_kwargs)
         self.__in_build = False
 
         # Add an argument for the number of servo iterations

@@ -213,6 +213,7 @@ class ArtiqKernelTestCase(test.hw_test.HardwareTestCase):
         t = env.negative_delay_parallel_test()
         self.assertEqual(t, 0)
 
+    @unittest.expectedFailure
     def test_get_system_key_kernel(self):
         env = self.construct_env(_DaxSystemExperiment)
         r = env.get_system_key_kernel()

@@ -8,7 +8,8 @@ from artiq.language.core import kernel, delay, portable
 from artiq.language.types import TInt32, TFloat
 from artiq.language.units import us
 
-from dax.sim.device import DaxSimDevice, ARTIQ_MAJOR_VERSION
+from dax.util.artiq_version import ARTIQ_MAJOR_VERSION
+from dax.sim.device import DaxSimDevice
 from dax.sim.signal import get_signal_manager
 
 # From ARTIQ code

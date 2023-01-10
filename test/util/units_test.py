@@ -3,6 +3,8 @@ import numpy as np
 
 from artiq.language.units import *
 
+from dax.util.artiq_version import ARTIQ_MAJOR_VERSION
+
 
 class UnitsTestCase(unittest.TestCase):
 
@@ -51,6 +53,8 @@ class UnitsTestCase(unittest.TestCase):
         self.assertEqual(watt_to_str(0.089 * mW, precision=0), '89 uW')
         self.assertEqual(watt_to_str(1200567.8 * uW, precision=7), '1.2005678 W')
         self.assertEqual(watt_to_str(8 * W, threshold=1000.0, precision=1), '8000.0 mW')
+        if ARTIQ_MAJOR_VERSION >= 7:
+            self.assertEqual(watt_to_str(0.089 * uW, precision=0), '89 nW')
 
     def test_str_to_time(self):
         from dax.util.units import str_to_time
@@ -96,6 +100,8 @@ class UnitsTestCase(unittest.TestCase):
         self.assertRaises(ValueError, str_to_watt, 'foo')
         self.assertRaises(ValueError, str_to_watt, '5mW')
         self.assertRaises(ValueError, str_to_watt, '4.6 UW')
+        if ARTIQ_MAJOR_VERSION >= 7:
+            self.assertEqual(str_to_watt('10 nW'), 10 * nW)
 
 
 class UnitsFormatterTestCase(unittest.TestCase):

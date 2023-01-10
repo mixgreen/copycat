@@ -62,6 +62,7 @@ __SHAPE_T = typing.Union[int, __SHAPE_TUPLE_T]
 
 # noinspection PyPep8Naming
 class ndarray(collections.abc.Sequence, typing.Generic[__E_T]):
+    # TODO: ndarray is NOT a subclass of sequence at runtime, though it makes type checking much easier
 
     def __init__(self, shape: __SHAPE_TUPLE_T, dtype: typing.Optional[type] = ..., buffer: typing.Any = ...,
                  offset: int = ..., strides: typing.Optional[typing.Tuple[int]] = ...,

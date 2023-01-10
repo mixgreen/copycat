@@ -12,6 +12,7 @@
       url = git+https://gitlab.com/duke-artiq/artiq-stubs.git;
       inputs.artiqpkgs.follows = "artiqpkgs";
       inputs.nixpkgs.follows = "nixpkgs";
+      inputs.flake8-artiq.follows = "flake8-artiq";
     };
     trap-dac-utils = {
       url = git+https://gitlab.com/duke-artiq/trap-dac-utils.git;
@@ -57,6 +58,7 @@
           "h5py"
           "networkx"
           "sortedcontainers"
+          "libffi=3.3" # Limit version to prevent broken environment
         ];
 
         meta = with lib; {
@@ -72,20 +74,40 @@
         inherit dax;
         flake8-artiq = flake8-artiq.packages.x86_64-linux.flake8-artiq;
         artiq-stubs = artiq-stubs.packages.x86_64-linux.artiq-stubs;
+        trap-dac-utils = trap-dac-utils.packages.x86_64-linux.trap-dac-utils;
         default = pkgs.python3.withPackages (ps: [ dax ]);
       };
-      # default shell for `nix develop`
-      devShells.x86_64-linux.default = pkgs.mkShell {
-        name = "dax-dev-shell";
-        buildInputs = [
-          (pkgs.python3.withPackages (ps:
-            # basic environment
-            dax.propagatedBuildInputs ++
-            # test dependencies
-            (with ps; [ pytest mypy pycodestyle coverage ]) ++
-            ([ packages.x86_64-linux.flake8-artiq packages.x86_64-linux.artiq-stubs ])
-          ))
-        ];
+      # shells for `nix develop`
+      devShells.x86_64-linux = {
+        default = pkgs.mkShell {
+          name = "dax-dev-shell";
+          buildInputs = [
+            (pkgs.python3.withPackages (ps:
+              # basic environment
+              dax.propagatedBuildInputs ++
+              # test dependencies
+              (with ps; [ pytest mypy pycodestyle coverage ]) ++
+              ([ packages.x86_64-linux.flake8-artiq packages.x86_64-linux.artiq-stubs ])
+            ))
+            # required for compile/hardware testcases
+            pkgs.unixtools.ping
+            pkgs.lld_11
+            pkgs.llvm_11
+          ];
+        };
+        docs = pkgs.mkShell {
+          name = "docs-dev-shell";
+          buildInputs = [
+            (pkgs.python3.withPackages (ps:
+              # basic environment
+              dax.propagatedBuildInputs ++
+              # Packages required for documentation
+              [ ps.sphinx ps.sphinx_rtd_theme ]
+            ))
+            pkgs.git # Required to set the correct copyright year
+            pkgs.gnumake
+          ];
+        };
       };
       # enables use of `nix fmt`
       formatter.x86_64-linux = nixpkgs.legacyPackages.x86_64-linux.nixpkgs-fmt;

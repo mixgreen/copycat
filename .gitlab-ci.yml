@@ -7,11 +7,12 @@ stages:
   - deploy
 
 test_nix:
-  extends: .nix_env
+  extends: .nix_flake_env
   stage: test
   coverage: '/^TOTAL.+?(\d+\.\d+\%)$/'
   variables:
-    NIX_SHELL_FILE: "test/shell.nix"
+    NIX_DEV_ENV: "default"
+    UPDATE_FLAKE: 1
   script:
     # Run test commands
     - python3 --version
@@ -19,6 +20,25 @@ test_nix:
     - flake8 --version; flake8
     - coverage --version; coverage run -m pytest -v -rs
     - coverage report
+
+build_nix:
+  extends: .nix_flake_env
+  stage: test
+  variables:
+    NIX_DEV_ENV: ""  # `nix build` doesn't work in dev shell
+    UPDATE_FLAKE: 1
+  script:
+    - nix build .#dax
+
+test_nix_legacy:
+  extends: .nix_env
+  stage: test
+  variables:
+    NIX_SHELL_FILE: "test/shell.nix"
+  script:
+    # Run test commands
+    - python3 --version
+    - pytest -v -rs
     # Run build commands
     - nix-build ./default.nix --no-out-link
     - nix-shell ./shell.nix --run "python3 -c 'import dax; print(dax.__version__)'"
@@ -37,12 +57,13 @@ test_conda:
     - pytest -v -rs
 
 test_hardware:
-  extends: .nix_env
+  extends: .nix_flake_env
   stage: test
   tags:
     - kasli
   variables:
-    NIX_SHELL_FILE: "test/shell.nix"
+    NIX_DEV_ENV: "default"
+    UPDATE_FLAKE: 1
     HW_TEST_ENABLED: "1"
   script:
     # Run test commands
@@ -50,10 +71,11 @@ test_hardware:
     - pytest -v -rs --log-cli-level info test/hw_test/
 
 pages:
-  extends: .nix_env
+  extends: .nix_flake_env
   stage: deploy
   variables:
-    NIX_SHELL_FILE: "doc/shell.nix"
+    NIX_DEV_ENV: "docs"
+    UPDATE_FLAKE: 1
   script:
     # Generate documentation
     - make -C doc/ html

@@ -10,7 +10,8 @@ from artiq.language.types import TBool, TInt32, TInt64, TFloat, TList, TTuple
 from artiq.coredevice.ad9910 import (PHASE_MODE_CONTINUOUS, PHASE_MODE_ABSOLUTE,  # type: ignore[import]
                                      PHASE_MODE_TRACKING, RAM_DEST_FTW, RAM_DEST_POW, RAM_DEST_ASF, RAM_DEST_POWASF)
 
-from dax.sim.device import DaxSimDevice, ARTIQ_MAJOR_VERSION
+from dax.util.artiq_version import ARTIQ_MAJOR_VERSION
+from dax.sim.device import DaxSimDevice
 from dax.sim.signal import get_signal_manager
 from dax.sim.coredevice.urukul import CPLD, DEFAULT_PROFILE, NUM_PROFILES
 
@@ -217,7 +218,7 @@ class AD9910(DaxSimDevice):
 
     if ARTIQ_MAJOR_VERSION >= 7:
         @kernel
-        def set_mu(self, ftw: TInt32, pow_: TInt32 = 0, asf: TInt32 = 0x3fff,
+        def set_mu(self, ftw: TInt32 = 0, pow_: TInt32 = 0, asf: TInt32 = 0x3fff,
                    phase_mode: TInt32 = _PHASE_MODE_DEFAULT,
                    ref_time_mu: TInt64 = int64(-1), profile: TInt32 = DEFAULT_PROFILE,
                    ram_destination: TInt32 = -1) -> TInt32:
@@ -374,7 +375,7 @@ class AD9910(DaxSimDevice):
 
     if ARTIQ_MAJOR_VERSION >= 7:
         @kernel
-        def set(self, frequency: TFloat, phase: TFloat = 0.0,
+        def set(self, frequency: TFloat = 0.0, phase: TFloat = 0.0,
                 amplitude: TFloat = 1.0, phase_mode: TInt32 = _PHASE_MODE_DEFAULT,
                 ref_time_mu: TInt64 = int64(-1), profile: TInt32 = DEFAULT_PROFILE,
                 ram_destination: TInt32 = -1) -> TFloat:

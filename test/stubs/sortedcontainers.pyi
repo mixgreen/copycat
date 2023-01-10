@@ -9,7 +9,7 @@ _VT = typing.TypeVar('_VT')
 
 
 # class SortedKeysView(typing.KeysView[_KT], typing.Sequence[_KT]):
-class SortedKeysView(typing.FrozenSet[_KT]):
+class SortedKeysView(typing.KeysView[_KT]):
 
     def __getitem__(self, index: int) -> _KT:
         ...
