@@ -252,7 +252,7 @@ class TrapDcModule(DaxModule):
         :param config_file: Name of the config file to read into the object
 
         :return: The ZotinoLinearComboModule object"""
-        return cls(self, config_file, *args, **kwargs)  # type: ignore[call-arg]
+        return cls(self, config_file, *args, **kwargs)
 
     @host_only
     def read_linear_combo(self,
