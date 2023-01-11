@@ -7,22 +7,151 @@ import pathlib
 import numpy as np
 
 from dax.experiment import *
-from trap_dac_utils.reader import BaseReader, SpecialCharacter, SOLUTION_T, MAP_T
+from trap_dac_utils.reader import BaseReader
+from trap_dac_utils.schemas import LINEAR_COMBO
+from trap_dac_utils.types import LABEL_FIELD, LINE_T, SpecialCharacter, SOLUTION_T, MAP_T, CONFIG_T
 
 import artiq.coredevice.zotino  # type: ignore[import]
 import artiq.coredevice.ad53xx  # type: ignore[import]
-
-from trap_dac_utils.types import LABEL_FIELD
 
 """Zotino Path and Line types"""
 _ZOTINO_KEY_T = typing.List[float]
 _ZOTINO_VALUE_T = typing.List[int]
 _ZOTINO_LINE_T = typing.Tuple[_ZOTINO_KEY_T, _ZOTINO_VALUE_T]
 _ZOTINO_SOLUTION_T = typing.List[_ZOTINO_LINE_T]
-_ZOTINO_LINE_MU_T = typing.List[int]
+_ZOTINO_LINE_MU_T = typing.List[np.int32]
 _ZOTINO_SOLUTION_MU_T = typing.List[_ZOTINO_LINE_MU_T]
 
-__all__ = ['TrapDcModule', 'ZotinoReader']
+__all__ = ['TrapDcModule', 'ZotinoReader', 'LinearCombo']
+
+
+class _LineAttrs:
+    """A module to represent a single parameter and it's corresponding data fields
+    """
+    _attrs: typing.Dict[str, typing.Any]
+    _trap_dc: TrapDcModule
+
+    def __init__(self, cfg: CONFIG_T, trap_dc: TrapDcModule):
+        self._attrs = dict(cfg)
+        self._attrs.setdefault('value', 0.)
+        self._trap_dc = trap_dc
+
+    def __getitem__(self, arg: str) -> typing.Any:
+        return self._attrs[arg]
+
+    def __setitem__(self, arg: str, newvalue: typing.Any) -> None:
+        self._attrs[arg] = newvalue
+
+    def get(self, arg: str, default: typing.Any) -> typing.Any:
+        self._attrs.get(arg, default)
+
+    def line(self) -> LINE_T:
+        file = self._attrs.get('file', f'{self._attrs["name"]}.csv')
+        line = self._attrs.get('line', 0)
+        return self._trap_dc.read_line(file, line)
+
+    def in_range(self) -> bool:
+        val = self._attrs['value']
+        maxi = self._attrs.get('max', float('inf'))
+        mini = self._attrs.get('min', float('-inf'))
+
+        if val is None:
+            return True
+        assert isinstance(val, float) and isinstance(mini, float) and isinstance(maxi, float)
+        assert mini < maxi
+        return mini <= val <= maxi
+
+
+_ZOTINO_CONFIG_T = typing.Dict[str, _LineAttrs]
+
+
+class LinearCombo:
+    """A module to represent linear combination configuration files
+
+    This module can be used to get solution lines and combine them with others
+    Then these new lines can be fed back into the zotino module to continue processing
+    """
+    _config: _ZOTINO_CONFIG_T
+    """The configuration dict that contains field names mapped to config data"""
+
+    def __init__(self, trap_dc: TrapDcModule, config: CONFIG_T):
+        """Constructor of zotino linear combination module
+
+        :param config_file: The string name of the file where the configuration is
+        :param reader: A reader to use for retrieving solutions corresponding to parameter
+        """
+        self._config = {d['name']: _LineAttrs(d, trap_dc) for d in config['params']}
+
+    def __getitem__(self, arg: str) -> _LineAttrs:
+        """Method to make object indexible
+
+        :param arg: The string argument to index on
+
+        :return: The configuration attribute
+        """
+        return self._config[arg]
+
+    def verify(self) -> None:
+        """A method to check that the fields are all acceptible values as defined by
+        the instance contraints
+        """
+        for f, attrs in self._config.items():
+            if not attrs.in_range():
+                raise ValueError(f'Field {f}={attrs["value"]} is out of range')
+
+    def from_arguments(self, env: HasEnvironment, *,
+                       prefix: str = '', group: typing.Optional[str] = None) -> None:
+        """Updates the config with the values that the user input for each field
+
+        :param env: The environment to get the arguments from
+        :param prefix: The prefix to add to the field name when displaying
+        :param group: The name of the group to put the argument under
+        """
+        assert isinstance(env, HasEnvironment)
+
+        for f in self.fields():
+            self._config[f]['value'] = self.get_argument(
+                env, f, default=self._config[f]['value'], prefix=prefix, group=group)
+
+    def get_argument(self, env: HasEnvironment, field: str, default: float, *,
+                     prefix: str = '', group: typing.Optional[str], tooltip: typing.Optional[str] = None,
+                     **kwargs: typing.Any):
+        """A method to get the arguments from the environment, used in experiments to set the config fields
+
+        :param env: The environment to get the arguments from
+        :param field: The field to get the argument of
+        :param default: The default value to set for the argument of the field
+        :param prefix: The prefix to add to the field name when displaying
+        :param group: The name of the group to put the argument under
+        :param tooltip: A tooltip message to show for the argument
+
+        :return: The user input for the field argument value
+        """
+        assert isinstance(env, HasEnvironment)
+        assert isinstance(field, str)
+        assert isinstance(default, float)
+        assert isinstance(prefix, str)
+        assert isinstance(group, str) or group is None
+        assert isinstance(tooltip, str) or tooltip is None
+
+        if group is None:
+            group = 'Zotino overrides'
+
+        number_kwargs = self._config[field].get('args', {})
+        number_kwargs.update(kwargs)
+
+        return env.get_argument(
+            f'{prefix}{field.upper()}',
+            NumberValue(default, **number_kwargs),
+            group=group, tooltip=tooltip
+        )
+
+    def fields(self) -> typing.Sequence[str]:
+        """A method to get all of the config fields as a list of strings
+
+        :return: A list of strings of the config fields
+        """
+        return list(self._config.keys())
 
 
 class TrapDcModule(DaxModule):
@@ -44,6 +173,7 @@ class TrapDcModule(DaxModule):
       without underflow. However, this is meant to be an approximate calculation and can be configured as needed.
     - Everything in this module is Zotino specific. As other DC traps are needed they should be created separately.
     """
+    _LC_T = typing.TypeVar('_LC_T', bound='LinearCombo')
 
     _DMA_STARTUP_TIME: typing.ClassVar[float] = 1.728 * us
     """Startup time for DMA (s). Measured in the RTIO benchmarking tests during CI"""
@@ -111,8 +241,65 @@ class TrapDcModule(DaxModule):
         return self._reader.solution_path
 
     @host_only
+    def create_linear_combo(self,
+                            config_file: str,
+                            *args,
+                            cls: typing.Type[_LC_T] = LinearCombo,  # type: ignore[assignment]
+                            **kwargs) -> _LC_T:
+        """Factory method to encapsulate creation of ZotinoLinearComboModule
+
+        :param config_file: Name of the config file to read into the object
+
+        :return: The ZotinoLinearComboModule object"""
+        config = self._reader.read_config(config_file, schema=LINEAR_COMBO)
+        return cls(self, config, *args, **kwargs)
+
+    @host_only
+    def read_line(self,
+                  file_name: str,
+                  index: int) -> LINE_T:
+        """Read in a solutions file and return the specific line in base reader form
+
+        Note that the Zotino Path Voltages are given in **V**.
+
+        :param file_name: Solution file to parse the path from
+        :param index: Line index in solution file
+
+        :return: Base reader line form
+        """
+        solution = self._reader.read_solution(file_name)
+        if index >= len(solution):
+            raise ValueError("Index is out of the range of the solution file")
+        return solution[index]
+
+    @host_only
+    def line_to_mu(self,
+                   line: LINE_T,
+                   *,
+                   multiplier: float = 1.0) -> _ZOTINO_LINE_MU_T:
+        """Read in a solutions file and return the line in zotino form.
+        Optionally apply multiplier to all voltages in path
+
+        Note that the Zotino Path Voltages are given in **MU**.
+
+        :param reader_line: Line python object representation
+        :param multiplier: Optionally scale the voltages by a constant
+
+        :return: Zotino module interpretable solution line with voltages in V
+        """
+        unprepared_line = self._reader.process_solution(SOLUTION_T((line,)))[0]
+
+        # multiply each solution list with multiplier
+        prepared_line = (
+            (np.asarray(unprepared_line[0]) * multiplier).tolist(),  # type: ignore[attr-defined]
+            unprepared_line[1])
+
+        return self._reader.line_to_mu(prepared_line)
+
+    @host_only
     def read_line_mu(self,
                      file_name: str,
+                     *,
                      index: int = 0,
                      multiplier: float = 1.0) -> _ZOTINO_LINE_MU_T:
         """Read in a single line of a solutions file and return the line in zotino form.
@@ -120,43 +307,78 @@ class TrapDcModule(DaxModule):
 
         Note that the Zotino Path Voltages are given in **MU**.
 
+        May provide either file_name and reader_solution. If both are provided the file name will be used
+
         :param file_name: Solution file to parse the path from
         :param index: Line in path to get. A 0 indicates the first line
         :param multiplier: Optionally scale the voltages by a constant
 
         :return: Zotino module interpretable solution line with packed voltages and channels
         """
-        path = self._read_line(file_name, index, multiplier)
-        return self._reader.line_to_mu(path)
+        line = self.read_line(file_name, index)
+        return self.line_to_mu(line=line, multiplier=multiplier)
 
     @host_only
-    def _read_line(self,
-                   file_name: str,
-                   index: int = 0,
-                   multiplier: float = 1.0) -> _ZOTINO_LINE_T:
-        """Read in a single line of a solutions file and return the line in zotino form.
-        Optionally apply multiplier to all voltages in path
+    def read_solution(self,
+                      file_name: str) -> SOLUTION_T:
+        """Read in a solutions file and return the solution in base reader form
 
         Note that the Zotino Path Voltages are given in **V**.
 
         :param file_name: Solution file to parse the path from
-        :param index: Line in path to get. A 0 indicates the first line
+
+        :return: Base reader solution form
+        """
+        return self._reader.read_solution(file_name)
+
+    @host_only
+    def solution_to_mu(self,
+                       solution: SOLUTION_T,
+                       *,
+                       start: int = 0,
+                       end: int = -1,
+                       reverse: bool = False,
+                       multiplier: float = 1.0) -> _ZOTINO_SOLUTION_MU_T:
+        """Read in a segment of a solutions file and return the path in zotino form.
+        Optionally reverse path and/or apply multiplier to all voltages in path
+
+        Note that the Zotino Path Voltages are given in **V**.
+
+        :param solution: Solution file to parse the path from
+        :param start: Starting index of path (inclusive). Default 0 signals to start with first solution line
+        :param end: End index of path (inclusive). Default -1 signals to end with last solution line
+        :param reverse: Optionally return a reversed path. I.E. From end to start
         :param multiplier: Optionally scale the voltages by a constant
 
-        :return: Zotino module interpretable solution line with voltages in V
+        :return: Zotino module interpretable solution path with voltages in V
         """
-        unprepared_line = self._reader.process_solution(self._reader.read_solution(file_name))[index]
 
+        if start >= len(solution):
+            raise ValueError("Start index is out of the range of the solution file")
+        if end >= len(solution):
+            raise ValueError("End index is out of the range of the solution file")
+
+        processed_solution = self._reader.process_solution(solution)
         # multiply each solution list with multiplier
-        line = (
-            (np.asarray(unprepared_line[0]) * multiplier).tolist(),  # type: ignore[attr-defined]
-            unprepared_line[1])
+        for i, t in enumerate(processed_solution):
+            processed_solution[i] = (
+                (np.asarray(t[0]) * multiplier).tolist(), t[1])  # type: ignore[attr-defined]
 
-        return line
+        # The modulus fixes the endpoint problem for -1
+        trimmed_solution = processed_solution[start:(end % len(processed_solution)) + 1]
+        if reverse:
+            trimmed_solution.reverse()
+
+        path: _ZOTINO_SOLUTION_T = [trimmed_solution[0]]
+        path.extend([self._reader.get_line_diff(t, trimmed_solution[i])
+                     for i, t in enumerate(trimmed_solution[1:])])
+
+        return self._reader.solution_to_mu(path)
 
     @host_only
     def read_solution_mu(self,
                          file_name: str,
+                         *,
                          start: int = 0,
                          end: int = -1,
                          reverse: bool = False,
@@ -174,49 +396,8 @@ class TrapDcModule(DaxModule):
 
         :return: Zotino module interpretable solution path with packed voltages and channels
         """
-        path = self._read_solution(file_name, start, end,
-                                   reverse, multiplier)
-        return self._reader.solution_to_mu(path)
-
-    @host_only
-    def _read_solution(self,
-                       file_name: str,
-                       start: int = 0,
-                       end: int = -1,
-                       reverse: bool = False,
-                       multiplier: float = 1.0) -> _ZOTINO_SOLUTION_T:
-        """Read in a segment of a solutions file and return the path in zotino form.
-        Optionally reverse path and/or apply multiplier to all voltages in path
-
-        Note that the Zotino Path Voltages are given in **V**.
-
-        :param file_name: Solution file to parse the path from
-        :param start: Starting index of path (inclusive). Default 0 signals to start with first solution line
-        :param end: End index of path (inclusive). Default -1 signals to end with last solution line
-        :param reverse: Optionally return a reversed path. I.E. From end to start
-        :param multiplier: Optionally scale the voltages by a constant
-
-        :return: Zotino module interpretable solution path with voltages in V
-        """
-
-        solution = self._reader.process_solution(self._reader.read_solution(file_name))
-        if end == -1:
-            end = len(solution) - 1
-
-        # multiply each solution list with multiplier
-        for i, t in enumerate(solution):
-            solution[i] = (
-                (np.asarray(t[0]) * multiplier).tolist(), t[1])  # type: ignore[attr-defined]
-
-        trimmed_solution = solution[start:end + 1]
-        if reverse:
-            trimmed_solution.reverse()
-
-        path: _ZOTINO_SOLUTION_T = [trimmed_solution[0]]
-        path.extend([self._reader.get_line_diff(t, trimmed_solution[i])
-                     for i, t in enumerate(trimmed_solution[1:])])
-
-        return path
+        solution = self.read_solution(file_name)
+        return self.solution_to_mu(solution=solution, start=start, end=end, reverse=reverse, multiplier=multiplier)
 
     @host_only
     def list_solutions(self) -> typing.Sequence[str]:
@@ -756,9 +937,9 @@ class ZotinoReader(BaseReader[_ZOTINO_SOLUTION_T]):
         """
         self._check_init("line_to_mu")
         vs, chs = line
-        return [artiq.coredevice.ad53xx.ad53xx_cmd_write_ch(ch,
-                                                            self._voltage_to_mu(v),
-                                                            artiq.coredevice.ad53xx.AD53XX_CMD_DATA) << 8
+        return [np.int32(artiq.coredevice.ad53xx.ad53xx_cmd_write_ch(ch,
+                                                                     self._voltage_to_mu(v),
+                                                                     artiq.coredevice.ad53xx.AD53XX_CMD_DATA) << 8)
                 for v, ch in zip(vs, chs)]
 
     @host_only
