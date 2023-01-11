@@ -74,13 +74,12 @@ class LinearCombo:
     _config: _ZOTINO_CONFIG_T
     """The configuration dict that contains field names mapped to config data"""
 
-    def __init__(self, trap_dc: TrapDcModule, config_file: str):
+    def __init__(self, trap_dc: TrapDcModule, config: CONFIG_T):
         """Constructor of zotino linear combination module
 
         :param config_file: The string name of the file where the configuration is
         :param reader: A reader to use for retrieving solutions corresponding to parameter
         """
-        config = trap_dc.read_linear_combo(config_file)
         self._config = {d['name']: _LineAttrs(d, trap_dc) for d in config['params']}
 
     def __getitem__(self, arg: str) -> _LineAttrs:
@@ -252,20 +251,8 @@ class TrapDcModule(DaxModule):
         :param config_file: Name of the config file to read into the object
 
         :return: The ZotinoLinearComboModule object"""
-        return cls(self, config_file, *args, **kwargs)
-
-    @host_only
-    def read_linear_combo(self,
-                          file_name: str) -> CONFIG_T:
-        """Read in a linear combo config file and return the config in base reader form
-
-        Note that the Zotino Path Voltages are given in **V**.
-
-        :param file_name: Solution file to parse the path from
-
-        :return: Base reader solution form
-        """
-        return self._reader.read_config(file_name, schema=LINEAR_COMBO)
+        config = self._reader.read_config(config_file, schema=LINEAR_COMBO)
+        return cls(self, config, *args, **kwargs)
 
     @host_only
     def read_line(self,
