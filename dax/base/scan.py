@@ -18,7 +18,7 @@ from artiq.language.scan import ScanObject, Scannable
 import dax.base.control_flow
 import dax.util.artiq
 
-__all__ = ['DaxScan', 'DaxScanReader', 'DaxScanChain']
+__all__ = ['DaxScan', 'DaxScanReader', 'DaxScanChain', 'DaxScanZip']
 
 _S_T = typing.Union[ScanObject, typing.Sequence[typing.Any]]  # Scan object type
 
@@ -125,6 +125,7 @@ class DaxScan(dax.base.control_flow.DaxControlFlow, abc.ABC):
     The first scan added represents the dimension which is only scanned once.
     All next scans are repeatedly performed to form the cartesian product.
     To chain multiple scans into a single dimension, see :class:`DaxScanChain`.
+    To zip multiple scans into a single dimension, see :class:`DaxScanZip`.
 
     The scan class inherits from the :class:`dax.base.control_flow.DaxControlFlow` class for setup and cleanup
     procedures. The :func:`prepare` and :func:`analyze` functions are not implemented by the scan class,
@@ -391,8 +392,12 @@ class DaxScan(dax.base.control_flow.DaxControlFlow, abc.ABC):
         elif isinstance(points, collections.abc.Sequence):
             if not all(isinstance(e, type(points[0])) for e in points):
                 raise TypeError('The point types must be homogeneous')
-            if len(points) > 0 and not isinstance(points[0], (int, float, bool, str)):
-                raise TypeError('The point type is not supported')
+            if len(points) > 0:
+                if not isinstance(points[0], (int, float, bool, str, tuple)):
+                    raise TypeError('The point type is not supported')
+                if isinstance(points[0], tuple):
+                    if not all(all(isinstance(e, (int, float, bool, str)) for e in p) for p in points):
+                        raise TypeError('The tuple point type is not supported')
         else:
             raise TypeError('Points must be a sequence or array')
 
@@ -743,4 +748,135 @@ class DaxScanChain:
 
         # Set flags
         DaxScanChain.__in_context = False
+        self._added_scan = True
+
+
+class DaxScanZip:
+    """DAX.scan utility class allows parallel execution of multiple scan ranges with the same length. This
+    can be useful, for example, when you want to compare the Raman sideband spectrum of different axes within the
+    same period of time.
+
+    Users may use this class within :class:`DaxScan` experiments to create a single scan of tuples of points.
+    The resulting scan will be treated as a single value with a key defined in the :func:`__init__` method.
+    As a result, this class must be only used within the :func:`build_scan` function.
+
+    The :func:`add_scan` will allow the scans to appear in the ARTIQ Dashboard. Take care to call the
+    function from this class, not from the :class:`DaxScan` experiment class.
+
+    This class must be used as a context, with example code below::
+
+        def build_scan(self):
+            ...
+            with DaxScanZip(self, 'zip_key', group='group') as scan_zip:
+                scan_zip.add_scan('name1', scannable, tooltip='tooltip')
+                scan_zip.add_scan('name2', scannable, tooltip='tooltip')
+            ...
+
+        def run_point(self, point, index):
+            ...
+            name1, name2 = point.zip_key
+            ...
+    """
+
+    __in_context: typing.ClassVar[bool] = False  # Treat as a static class variable to ensure no reentrant context
+
+    _dax_scan: DaxScan
+    _key: str
+    _group: typing.Optional[str]
+    _scannables: _SD_T
+    _added_scan: bool
+
+    def __init__(self, dax_scan: DaxScan, key: str, *, group: typing.Optional[str] = None):
+        """Create a new :class:`DaxScanZip` object.
+
+        :param dax_scan: The :class:`DaxScan` object to which this chain will be added
+        :param key: Unique key of the zipped scan, used to obtain the value later
+        :param group: The argument group name
+        """
+        assert isinstance(dax_scan, DaxScan), 'Must be given a DaxScan class'
+        assert isinstance(key, str), 'Key must be of type str'
+        assert isinstance(group, str) or group is None, 'Group must be of type str or None'
+
+        # The DaxScan class and key will be used to add the zipped scans into the experiment
+        self._dax_scan = dax_scan
+        self._key = key
+        self._group = group
+
+        # Set default values
+        self._scannables = collections.OrderedDict()
+        self._added_scan = False
+
+    @host_only
+    def add_scan(self, name: str, scannable: Scannable, *, tooltip: typing.Optional[str] = None) -> None:
+        """Register a scannable.
+
+        Scans will be zipped into a single scan with tuples of scan points.
+
+        Note that scans can be reordered using the :func:`set_scan_order` function, but only in the context.
+        The order in the ARTIQ dashboard will not change, but the scans will be scanned over in a different order.
+
+        Scannables are normal ARTIQ :class:`Scannable` objects and will appear in the user interface.
+
+        This function can only be called in the :class:`DaxScanZip` context,
+        and it may only be used in the :func:`DaxScan.build_scan` function.
+
+        :param name: The name of the argument
+        :param scannable: An ARTIQ :class:`Scannable` object
+        :param tooltip: The shown tooltip
+        """
+        assert isinstance(name, str), 'Name must be of type str'
+        assert isinstance(tooltip, str) or tooltip is None, 'Tooltip must be of type str or None'
+
+        # Verify this function was called in the DaxScanZip context
+        if not DaxScanZip.__in_context:
+            raise RuntimeError('add_scan() can only be called in the DaxScanZip context')
+
+        # Verify type of the given scannable
+        if not isinstance(scannable, Scannable):
+            raise TypeError('The given processor is not a scannable')
+
+        # Verify that names are unique within the group
+        if name in self._scannables.keys():
+            raise LookupError('Scan names must be unique within a group')
+
+        # Add argument to the ordered dict of scannables
+        self._scannables[name] = self._dax_scan.get_argument(name, scannable, group=self._group, tooltip=tooltip)
+
+    def _get_zipped_scan(self) -> typing.Sequence[typing.Any]:
+        """Get the scan points zipped into a single list of tuples.
+
+        Create the zipped scan object. The values are returned in the same order as provided on the actual run.
+
+        :return: All the scan points zipped into a list of tuples
+        """
+        # Function will only need to run successfully during actual experiment runs, not during the build phase
+        return [] if None in self._scannables.values() else list(zip(*self._scannables.values()))
+
+    def __enter__(self) -> DaxScanZip:
+        """Enter the scan zip context.
+
+        Normally this function should not be called directly but by the ``with`` statement instead.
+        """
+        if DaxScanZip.__in_context or self._added_scan:
+            raise RuntimeError('DaxScanZip is not reentrant')
+        if self._added_scan:
+            raise RuntimeError('DaxScanZip cannot be entered twice')
+
+        # Set flags
+        DaxScanZip.__in_context = True
+
+        # Must return self to allow setting variables using the with statement
+        return self
+
+    def __exit__(self, exc_type: typing.Any, exc_val: typing.Any, exc_tb: typing.Any) -> None:
+        """Exit the scan zip context.
+
+        Normally this function should not be called directly but by the ``with`` statement instead.
+        """
+
+        # Add all scan points as a static scan
+        self._dax_scan.add_static_scan(self._key, self._get_zipped_scan())
+
+        # Set flags
+        DaxScanZip.__in_context = False
         self._added_scan = True
