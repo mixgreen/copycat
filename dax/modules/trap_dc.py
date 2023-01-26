@@ -554,6 +554,14 @@ class TrapDcModule(DaxModule):
         self._zotino.load()
 
     @host_only
+    def list_map_labels(self) -> typing.Sequence[str]:
+        """Lists the labels that are in the map file
+
+        :return: The labels from the map file
+        """
+        return self._reader.list_map_labels()
+
+    @host_only
     def calculate_slack(self,
                         solution: _ZOTINO_SOLUTION_MU_T,
                         line_delay: float) -> float:
