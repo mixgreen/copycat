@@ -112,3 +112,134 @@ class SUServo(DaxSimDevice):
 
 class Channel(DaxSimDevice):
     """Simulation SUServo Channel device"""
+
+    # kernel_invariants = {"channel", "core", "servo", "servo_channel"}
+
+    def __init__(self, dmgr, channel, servo_device):
+        # TODO:
+        self.servo = dmgr.get(servo_device)
+        self.core = self.servo.core
+        self.channel = channel
+        # FIXME: this assumes the mem channel is right after the control
+        # channels
+        self.servo_channel = self.channel + 8 - self.servo.channel
+
+    @kernel
+    def set(self, en_out, en_iir=0, profile=0):
+        # TODO:
+        rtio_output(self.channel << 8,
+                    en_out | (en_iir << 1) | (profile << 2))
+
+    @kernel
+    def set_dds_mu(self, profile, ftw, offs, pow_=0):
+        # TODO:
+        base = (self.servo_channel << 8) | (profile << 3)
+        self.servo.write(base + 0, ftw >> 16)
+        self.servo.write(base + 6, (ftw & 0xffff))
+        self.set_dds_offset_mu(profile, offs)
+        self.servo.write(base + 2, pow_)
+
+    @kernel
+    def set_dds(self, profile, frequency, offset, phase=0.):
+        # TODO:
+        if self.servo_channel < 4:
+            dds = self.servo.dds0
+        else:
+            dds = self.servo.dds1
+        ftw = dds.frequency_to_ftw(frequency)
+        pow_ = dds.turns_to_pow(phase)
+        offs = self.dds_offset_to_mu(offset)
+        self.set_dds_mu(profile, ftw, offs, pow_)
+
+    @kernel
+    def set_dds_offset_mu(self, profile, offs):
+        # TODO:
+        base = (self.servo_channel << 8) | (profile << 3)
+        self.servo.write(base + 4, offs)
+
+    @kernel
+    def set_dds_offset(self, profile, offset):
+        # TODO:
+        self.set_dds_offset_mu(profile, self.dds_offset_to_mu(offset))
+
+    @portable
+    def dds_offset_to_mu(self, offset):
+        # TODO:
+        return int(round(offset * (1 << COEFF_WIDTH - 1)))
+
+    @kernel
+    def set_iir_mu(self, profile, adc, a1, b0, b1, dly=0):
+        # TODO:
+        base = (self.servo_channel << 8) | (profile << 3)
+        self.servo.write(base + 3, adc | (dly << 8))
+        self.servo.write(base + 1, b1)
+        self.servo.write(base + 5, a1)
+        self.servo.write(base + 7, b0)
+
+    @kernel
+    def set_iir(self, profile, adc, kp, ki=0., g=0., delay=0.):
+        # TODO:
+        B_NORM = 1 << COEFF_SHIFT + 1
+        A_NORM = 1 << COEFF_SHIFT
+        COEFF_MAX = 1 << COEFF_WIDTH - 1
+
+        kp *= B_NORM
+        if ki == 0.:
+            # pure P
+            a1 = 0
+            b1 = 0
+            b0 = int(round(kp))
+        else:
+            # I or PI
+            ki *= B_NORM * T_CYCLE / 2.
+            if g == 0.:
+                c = 1.
+                a1 = A_NORM
+            else:
+                c = 1. / (1. + ki / (g * B_NORM))
+                a1 = int(round((2. * c - 1.) * A_NORM))
+            b0 = int(round(kp + ki * c))
+            b1 = int(round(kp + (ki - 2. * kp) * c))
+            if b1 == -b0:
+                raise ValueError("low integrator gain and/or gain limit")
+
+        if (b0 >= COEFF_MAX or b0 < -COEFF_MAX
+                or b1 >= COEFF_MAX or b1 < -COEFF_MAX):
+            raise ValueError("high gains")
+
+        dly = int(round(delay / T_CYCLE))
+        self.set_iir_mu(profile, adc, a1, b0, b1, dly)
+
+    @kernel
+    def get_profile_mu(self, profile, data):
+        # TODO:
+        base = (self.servo_channel << 8) | (profile << 3)
+        for i in range(len(data)):
+            data[i] = self.servo.read(base + i)
+            delay(4 * us)
+
+    @kernel
+    def get_y_mu(self, profile):
+        # TODO:
+        return self.servo.read(STATE_SEL | (self.servo_channel << 5) | profile)
+
+    @kernel
+    def get_y(self, profile):
+        # TODO:
+        return y_mu_to_full_scale(self.get_y_mu(profile))
+
+    @kernel
+    def set_y_mu(self, profile, y):
+        # TODO:
+        # State memory is 25 bits wide and signed.
+        # Reads interact with the 18 MSBs (coefficient memory width)
+        self.servo.write(STATE_SEL | (self.servo_channel << 5) | profile, y)
+
+    @kernel
+    def set_y(self, profile, y):
+        # TODO
+        y_mu = int(round(y * Y_FULL_SCALE_MU))
+        if y_mu < 0 or y_mu > (1 << 17) - 1:
+            raise ValueError("Invalid SUServo y-value!")
+        self.set_y_mu(profile, y_mu)
+        return y_mu
