@@ -25,5 +25,6 @@ dependencies:
   - pytest
   - mypy=0.941  # Fix version for predictability
   - pycodestyle
+  - flake8>3.0.0,<5  # Limit version to avoid breaking changes in newer versions
   - flake8-artiq
   - artiq-stubs
