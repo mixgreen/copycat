@@ -48,7 +48,7 @@ class EdgeCounter(DaxSimDevice):
     _input_freq: Signal
     _input_stdev: Signal
 
-    def __init__(self, dmgr: typing.Any, gateware_width: int = 31, *,
+    def __init__(self, dmgr: typing.Any, channel: typing.Optional[int] = None, gateware_width: int = 31, *,
                  input_freq: float = 0.0, input_stdev: float = 0.0, seed: typing.Optional[int] = None,
                  **kwargs: typing.Any):
         """Simulation driver for :class:`artiq.coredevice.edge_counter.EdgeCounter`.
@@ -64,9 +64,6 @@ class EdgeCounter(DaxSimDevice):
         # Call super
         super(EdgeCounter, self).__init__(dmgr, **kwargs)
 
-        # From ARTIQ code
-        self.counter_max = (1 << (gateware_width - 1)) - 1
-
         # Initialize rng
         self._rng = random.Random(seed)
         # Buffers to store counts
@@ -79,6 +76,11 @@ class EdgeCounter(DaxSimDevice):
         self._count = signal_manager.register(self, 'count', int, init='z')
         self._input_freq = signal_manager.register(self, 'input_freq', float, init=input_freq)
         self._input_stdev = signal_manager.register(self, 'input_stdev', float, init=input_stdev)
+
+        # Store attributes and parameters (from ARTIQ code)
+        if channel is not None:
+            self.channel = channel
+        self.counter_max = (1 << (gateware_width - 1)) - 1
 
     def core_reset(self) -> None:
         # Clear buffers
