@@ -19,7 +19,7 @@ from dax.sim.signal import get_signal_manager
 class TTLOut(DaxSimDevice):
     _subscribers: typing.List[typing.Callable[[], typing.Any]]
 
-    def __init__(self, dmgr: typing.Any, **kwargs: typing.Any):
+    def __init__(self, dmgr: typing.Any, channel: typing.Optional[int] = None, **kwargs: typing.Any):
         # Call super
         super(TTLOut, self).__init__(dmgr, **kwargs)
 
@@ -29,6 +29,11 @@ class TTLOut(DaxSimDevice):
         # Register signals
         signal_manager = get_signal_manager()
         self._state = signal_manager.register(self, 'state', bool, size=1)
+
+        # Store attributes (from ARTIQ code)
+        if channel is not None:
+            self.channel = channel
+            self.target_o = channel << 8
 
     @kernel
     def output(self):
@@ -83,7 +88,8 @@ class TTLInOut(TTLOut):
     _edge_buffer: typing.Deque[np.int64]
     _sample_buffer: typing.Deque[np.int32]
 
-    def __init__(self, dmgr: typing.Any, *,
+    def __init__(self, dmgr: typing.Any,
+                 channel: typing.Optional[int] = None, gate_latency_mu: typing.Optional[int] = None, *,
                  input_freq: float = 0.0, input_stdev: float = 0.0, input_prob: float = 0.0,
                  seed: typing.Optional[int] = None, **kwargs: typing.Any):
         """Simulation driver for :class:`artiq.coredevice.ttl.TTLInOut`.
@@ -99,7 +105,7 @@ class TTLInOut(TTLOut):
         assert 0.0 <= input_prob <= 1.0, 'Input probability must be between 0.0 and 1.0'
 
         # Call super
-        super(TTLInOut, self).__init__(dmgr, **kwargs)
+        super(TTLInOut, self).__init__(dmgr, channel, **kwargs)
 
         # Random number generator for generating values
         self._rng = random.Random(seed)
@@ -114,6 +120,16 @@ class TTLInOut(TTLOut):
         self._input_freq = signal_manager.register(self, 'input_freq', float, init=input_freq)
         self._input_stdev = signal_manager.register(self, 'input_stdev', float, init=input_stdev)
         self._input_prob = signal_manager.register(self, 'input_prob', float, init=input_prob)
+
+        # Store attributes (from ARTIQ code)\
+        if gate_latency_mu is None:
+            gate_latency_mu = 13 * self.core.ref_multiplier
+        self.gate_latency_mu = gate_latency_mu
+        if channel is not None:
+            self.target_o = (channel << 8) + 0
+            self.target_oe = (channel << 8) + 1
+            self.target_sens = (channel << 8) + 2
+            self.target_sample = (channel << 8) + 3
 
     def core_reset(self) -> None:
         # Clear buffers
@@ -290,16 +306,19 @@ class TTLInOut(TTLOut):
 
 class TTLClockGen(DaxSimDevice):
 
-    def __init__(self, dmgr, acc_width=24, **kwargs):
+    def __init__(self, dmgr, channel=None, acc_width=24, **kwargs):
         # Call super
         super(TTLClockGen, self).__init__(dmgr, **kwargs)
-
-        # Store parameters
-        self._acc_width = np.int64(acc_width)
 
         # Register signals
         signal_manager = get_signal_manager()
         self._freq = signal_manager.register(self, 'freq', float)
+
+        # Store attributes and parameters (from ARTIQ code)
+        if channel is not None:
+            self.channel = channel
+            self.target = channel << 8
+        self._acc_width = np.int64(acc_width)
 
     @portable
     def frequency_to_ftw(self, frequency):
