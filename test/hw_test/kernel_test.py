@@ -118,8 +118,8 @@ class _DaxSystemExperiment(DaxSystem):
     DAX_INFLUX_DB_KEY = None
 
     @kernel
-    def get_system_key_kernel(self, bar: TStr = 'bar') -> TStr:
-        return self.get_system_key('foo', bar)
+    def get_system_key_eq_kernel(self, ref: TStr, bar: TStr = 'bar') -> TBool:
+        return self.get_system_key('foo', bar) == ref
 
     @kernel
     def set_dataset_sys_kernel(self, key: TStr, value: TInt32) -> TNone:
@@ -213,11 +213,9 @@ class ArtiqKernelTestCase(test.hw_test.HardwareTestCase):
         t = env.negative_delay_parallel_test()
         self.assertEqual(t, 0)
 
-    @unittest.expectedFailure
     def test_get_system_key_kernel(self):
         env = self.construct_env(_DaxSystemExperiment)
-        r = env.get_system_key_kernel()
-        self.assertEqual(r, env.get_system_key('foo', 'bar'))
+        self.assertTrue(env.get_system_key_eq_kernel(env.get_system_key('foo', 'bar')))
 
     def test_set_dataset_sys_kernel(self):
         env = self.construct_env(_DaxSystemExperiment)
