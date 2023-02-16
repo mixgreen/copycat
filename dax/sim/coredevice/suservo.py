@@ -1,24 +1,31 @@
 import typing
+from copy import deepcopy
 
 from artiq.language.core import kernel, host_only, delay, dealy_mu, portable
 from artiq.language.units import us, ns
 from artiq.coredevice import spi2 as spi
-from artiq.coredevice.suservo import y_mu_to_full_scale, STATE_SEL
+from artiq.coredevice.sampler import adc_mu_to_volt
+from artiq.coredevice.core import coarse_ref_period, ref_multiplier, seconds_to_mu
+from artiq.coredevice.suservo import y_mu_to_full_scale, STATE_SEL, COEFF_SHIFT, COEFF_SHIFT, COEFF_WIDTH, T_CYCLE, Y_FULL_SCALE_MU
 
 from dax.sim.device import DaxSimDevice
 from dax.sim.signal import get_signal_manager
-from dax.sim.coredevice import urukul, sampler
+from dax.sim.device.urukul import turns_to_pow, frequency_to_ftw
 
-# NOTE: import from artiq core device if needed
-# COEFF_WIDTH = 18
-# Y_FULL_SCALE_MU = (1 << (COEFF_WIDTH - 1)) - 1
-# COEFF_DEPTH = 10 + 1
-# WE = 1 << COEFF_DEPTH + 1
-# STATE_SEL = 1 << COEFF_DEPTH
-# CONFIG_SEL = 1 << COEFF_DEPTH - 1
-# CONFIG_ADDR = CONFIG_SEL | STATE_SEL
-# T_CYCLE = (2 * (8 + 64) + 2) * 8 * ns  # Must match gateware Servo.t_cycle.
-# COEFF_SHIFT = 11
+# SUServo defaults
+DEFAULT_CONFIG = 0
+
+# Channel defaults
+# TODO: replace with correct defaults
+DEFAULT_OUT = 0
+DEFAULT_PROFILE = 0
+DEFAULT_Y = 0
+DEFAULT_IIR = 0
+DDS_DEFAULTS = {"profile": 0,
+                "ftw": 0,
+                "offs": 0,
+                "pow_": 0,
+                }
 
 
 @portable
@@ -27,7 +34,7 @@ def adc_mu_to_volts(x, gain):
     val = (x >> 1) & 0xffff
     mask = 1 << 15
     val = -(val & mask) + (val & ~mask)
-    return sampler.adc_mu_to_volt(val, gain)
+    return adc_mu_to_volt(val, gain)
 
 
 class SUServo(DaxSimDevice):
@@ -41,36 +48,36 @@ class SUServo(DaxSimDevice):
         # Call super
         super(SUServo, self).__init__(dmgr, **kwargs)
 
-        # TODO: sampler sim driver
+        # TODO: need sampler sim driver
         # self.pgia = dmgr.get(pgia_device)
         # self.pgia.update_xfer_duration_mu(div=4, length=16)
+
         self.dds0 = dmgr.get(dds0_device)
         self.dds1 = dmgr.get(dds1_device)
         self.cpld0 = dmgr.get(cpld0_device)
         self.cpld1 = dmgr.get(cpld1_device)
         self.channel = channel
         self.gains = gains
-
-        # TODO: how to sim this? use sim.core or core functions?
-        self.ref_period_mu = self.core.seconds_to_mu(
-            self.core.coarse_ref_period)
-        assert self.ref_period_mu == self.core.ref_multiplier
+        self.ref_period_mu = seconds_to_mu(coarse_ref_period)
+        assert self.ref_period_mu == ref_multiplier
 
         # Register signals
         signal_manager = get_signal_manager()
         self._init = signal_manager.register(self, 'init', bool, size=1)
-        self._config = signal_manager.register(self, 'config', int)
-        self._state_sel = signal_manager.register(self, 'state_sel', int)
 
         # Internal registers
+        self._config = DEFAULT_CONFIG
 
     @kernel
     def init(self):
         self.set_config(enable=0)
         delay(3 * us)  # pipeline flush
-        self.pgia.set_config_mu(
-            sampler.SPI_CONFIG | spi.SPI_END,
-            16, 4, sampler.SPI_CS_PGIA)
+
+        # TODO: need sampler sim driver
+        # self.pgia.set_config_mu(
+        #     sampler.SPI_CONFIG | spi.SPI_END,
+        #     16, 4, sampler.SPI_CS_PGIA)
+
         self.cpld0.init(blind=True)
         self.dds0.init(blind=True)
         self.cpld1.init(blind=True)
@@ -86,15 +93,15 @@ class SUServo(DaxSimDevice):
 
     @kernel
     def set_config(self, enable):
-        self._config.push(enable)
+        self._config = enable
 
     @kernel
     def get_status(self):
-        return self._config.pull()
+        return self._config
 
     @kernel
     def get_adc_mu(self, adc):
-        return self._state_sel.pull(STATE_SEL | (adc << 1) | (1 << 8))
+        raise NotImplementedError
 
     @kernel
     def set_pgia_mu(self, channel, gain):
@@ -113,72 +120,61 @@ class SUServo(DaxSimDevice):
 class Channel(DaxSimDevice):
     """Simulation SUServo Channel device"""
 
-    # kernel_invariants = {"channel", "core", "servo", "servo_channel"}
+    def __init__(self, dmgr, channel, servo_device, **kwargs):
 
-    def __init__(self, dmgr, channel, servo_device):
-        # TODO:
+        # Call super
+        super(Channel, self).__init__(dmgr, **kwargs)
+
         self.servo = dmgr.get(servo_device)
-        self.core = self.servo.core
         self.channel = channel
-        # FIXME: this assumes the mem channel is right after the control
         # channels
         self.servo_channel = self.channel + 8 - self.servo.channel
 
+        # Internal registers
+        self._dds = deepcopy(DDS_DEFAULTS)
+        self._profile = DEFAULT_PROFILE
+        self._out = DEFAULT_OUT
+        self._iir = DEFAULT_IIR
+        self._y = DEFAULT_Y
+
     @kernel
     def set(self, en_out, en_iir=0, profile=0):
-        # TODO:
-        rtio_output(self.channel << 8,
-                    en_out | (en_iir << 1) | (profile << 2))
+        self._profile = profile  # NOTE: currently, profiles do not store seperate sets of settings in sim
+        self._out = en_out
+        self._iir = en_iir
 
     @kernel
     def set_dds_mu(self, profile, ftw, offs, pow_=0):
-        # TODO:
-        base = (self.servo_channel << 8) | (profile << 3)
-        self.servo.write(base + 0, ftw >> 16)
-        self.servo.write(base + 6, (ftw & 0xffff))
+        self._dds["ftw"] = ftw
         self.set_dds_offset_mu(profile, offs)
-        self.servo.write(base + 2, pow_)
+        self._dds["pow_"] = pow_
 
     @kernel
     def set_dds(self, profile, frequency, offset, phase=0.):
-        # TODO:
-        if self.servo_channel < 4:
-            dds = self.servo.dds0
-        else:
-            dds = self.servo.dds1
-        ftw = dds.frequency_to_ftw(frequency)
-        pow_ = dds.turns_to_pow(phase)
+        ftw = frequency_to_ftw(frequency)
+        pow_ = turns_to_pow(phase)
         offs = self.dds_offset_to_mu(offset)
         self.set_dds_mu(profile, ftw, offs, pow_)
 
     @kernel
     def set_dds_offset_mu(self, profile, offs):
-        # TODO:
-        base = (self.servo_channel << 8) | (profile << 3)
-        self.servo.write(base + 4, offs)
+        self._dds["offs"] = offs
 
     @kernel
     def set_dds_offset(self, profile, offset):
-        # TODO:
         self.set_dds_offset_mu(profile, self.dds_offset_to_mu(offset))
 
     @portable
     def dds_offset_to_mu(self, offset):
-        # TODO:
         return int(round(offset * (1 << COEFF_WIDTH - 1)))
 
     @kernel
     def set_iir_mu(self, profile, adc, a1, b0, b1, dly=0):
-        # TODO:
-        base = (self.servo_channel << 8) | (profile << 3)
-        self.servo.write(base + 3, adc | (dly << 8))
-        self.servo.write(base + 1, b1)
-        self.servo.write(base + 5, a1)
-        self.servo.write(base + 7, b0)
+        # NOTE: currently no function to return iir
+        pass
 
     @kernel
     def set_iir(self, profile, adc, kp, ki=0., g=0., delay=0.):
-        # TODO:
         B_NORM = 1 << COEFF_SHIFT + 1
         A_NORM = 1 << COEFF_SHIFT
         COEFF_MAX = 1 << COEFF_WIDTH - 1
@@ -212,32 +208,22 @@ class Channel(DaxSimDevice):
 
     @kernel
     def get_profile_mu(self, profile, data):
-        # TODO:
-        base = (self.servo_channel << 8) | (profile << 3)
-        for i in range(len(data)):
-            data[i] = self.servo.read(base + i)
-            delay(4 * us)
+        return self._profile
 
     @kernel
     def get_y_mu(self, profile):
-        # TODO:
-        return self.servo.read(STATE_SEL | (self.servo_channel << 5) | profile)
+        return self._y
 
     @kernel
     def get_y(self, profile):
-        # TODO:
         return y_mu_to_full_scale(self.get_y_mu(profile))
 
     @kernel
     def set_y_mu(self, profile, y):
-        # TODO:
-        # State memory is 25 bits wide and signed.
-        # Reads interact with the 18 MSBs (coefficient memory width)
-        self.servo.write(STATE_SEL | (self.servo_channel << 5) | profile, y)
+        self._y = y
 
     @kernel
     def set_y(self, profile, y):
-        # TODO
         y_mu = int(round(y * Y_FULL_SCALE_MU))
         if y_mu < 0 or y_mu > (1 << 17) - 1:
             raise ValueError("Invalid SUServo y-value!")
