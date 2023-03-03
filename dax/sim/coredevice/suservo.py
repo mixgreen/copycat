@@ -1,16 +1,15 @@
-import typing
 from copy import deepcopy
 
-from artiq.language.core import kernel, host_only, delay, dealy_mu, portable
-from artiq.language.units import us, ns
-from artiq.coredevice import spi2 as spi
+from artiq.language.core import kernel, portable
+from artiq.language.units import us
 from artiq.coredevice.sampler import adc_mu_to_volt
-from artiq.coredevice.core import coarse_ref_period, ref_multiplier, seconds_to_mu
+# from artiq.coredevice.urukul import turns_to_pow, frequency_to_ftw
+# from artiq.coredevice.core import coarse_ref_period, ref_multiplier, seconds_to_mu
 from artiq.coredevice.suservo import y_mu_to_full_scale, STATE_SEL, COEFF_SHIFT, COEFF_SHIFT, COEFF_WIDTH, T_CYCLE, Y_FULL_SCALE_MU
 
 from dax.sim.device import DaxSimDevice
 from dax.sim.signal import get_signal_manager
-from dax.sim.device.urukul import turns_to_pow, frequency_to_ftw
+
 
 # SUServo defaults
 DEFAULT_CONFIG = None
@@ -128,6 +127,10 @@ class Channel(DaxSimDevice):
         self.channel = channel
         # channels
         self.servo_channel = self.channel + 8 - self.servo.channel
+
+        # Register signals
+        signal_manager = get_signal_manager()
+        self._init = signal_manager.register(self, 'init', bool, size=1)
 
         # Internal registers
         self._dds = deepcopy(DDS_DEFAULTS)
