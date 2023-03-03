@@ -13,15 +13,14 @@ from dax.sim.signal import get_signal_manager
 from dax.sim.device.urukul import turns_to_pow, frequency_to_ftw
 
 # SUServo defaults
-DEFAULT_CONFIG = 0
+DEFAULT_CONFIG = None
 
 # Channel defaults
-# TODO: replace with correct defaults
-DEFAULT_OUT = 0
-DEFAULT_PROFILE = 0
-DEFAULT_Y = 0
-DEFAULT_IIR = 0
-DDS_DEFAULTS = {"profile": 0,
+DEFAULT_OUT = None
+DEFAULT_PROFILE = None
+DEFAULT_Y = None
+DEFAULT_IIR = None
+DDS_DEFAULTS = {"profile": DEFAULT_PROFILE,
                 "ftw": 0,
                 "offs": 0,
                 "pow_": 0,
