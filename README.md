@@ -139,7 +139,7 @@ pytest
 
 ## Main contributors
 
-- Leon Riesebos (Duke University)
+- Leon Riesebos (formerly Duke University)
 - Brad Bondurant (Duke University)
 
 ## Publications
