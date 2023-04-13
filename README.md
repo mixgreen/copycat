@@ -146,6 +146,7 @@ pytest
 
 - DAX system: [Modular Software for Real-Time Quantum Control Systems (2022)](https://doi.org/10.1109/QCE53715.2022.00077)
 - DAX.sim: [Functional Simulation of Real-Time Quantum Control Software (2022)](https://doi.org/10.1109/QCE53715.2022.00076)
+  - [QCE22 Best Paper Award, Track: Quantum Systems Software](https://qce.quantum.ieee.org/2022/technical-papers-program)
 - DAX.scheduler: [Universal Graph-Based Scheduling for Quantum Systems (2021)](https://doi.org/10.1109/MM.2021.3094968)
 
 ## Acknowledgements
