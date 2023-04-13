@@ -134,7 +134,7 @@ The major version number of DAX matches the version of the targeted ARTIQ releas
 Use pytest (installed separately) to run the DAX unit tests.
 
 ```shell
-$ pytest
+pytest
 ```
 
 ## Main contributors
@@ -156,7 +156,7 @@ Testbed QSCOUT.
 
 More information about these projects can be found at:
 
-- EPiQC: https://www.epiqc.cs.uchicago.edu/
-- STAQ: https://staq.pratt.duke.edu/
-- LogiQ: https://www.iarpa.gov/index.php/research-programs/logiq
-- QSCOUT: https://www.sandia.gov/quantum/Projects/QSCOUT.html
+- EPiQC: <https://www.epiqc.cs.uchicago.edu/>
+- STAQ: <https://staq.pratt.duke.edu/>
+- LogiQ: <https://www.iarpa.gov/index.php/research-programs/logiq>
+- QSCOUT: <https://www.sandia.gov/quantum/Projects/QSCOUT.html>
