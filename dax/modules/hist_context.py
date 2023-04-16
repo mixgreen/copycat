@@ -1,6 +1,7 @@
 import typing
 import collections
 import collections.abc
+import functools
 import numpy as np
 import h5py
 import natsort
@@ -57,6 +58,10 @@ class HistogramContext(DaxModule, DataContextInterface):
     """Dataset name for plotting latest full state probability graph."""
     STATE_PROBABILITY_PLOT_NAME: typing.ClassVar[str] = 'state_probability'
     """Name of the full state probability plot applet."""
+    STATE_PARITY_PLOT_KEY_FORMAT: typing.ClassVar[str] = 'plot.{base}.histogram_context.state_parity'
+    """Dataset name for plotting latest full state parity graph."""
+    STATE_PARITY_PLOT_NAME: typing.ClassVar[str] = 'state_parity'
+    """Name of the full state parity plot applet."""
 
     PLOT_GROUP_FORMAT: typing.ClassVar[str] = '{base}.histogram_context'
     """Group to which the plot applets belong."""
@@ -76,6 +81,7 @@ class HistogramContext(DaxModule, DataContextInterface):
     _buffer: typing.List[typing.Sequence[RAW_T]]
     _first_close: bool
     _plot_state_probability: bool
+    _plot_state_parity: bool
     _raw_cache: typing.Dict[str, typing.List[typing.Sequence[typing.Sequence[RAW_T]]]]
     _histogram_cache: typing.Dict[str, typing.List[typing.Sequence[typing.Counter[RAW_T]]]]
     _dataset_key: str
@@ -87,6 +93,7 @@ class HistogramContext(DaxModule, DataContextInterface):
     _mean_count_plot_key: str
     _stdev_count_plot_key: str
     _state_probability_plot_key: str
+    _state_parity_plot_key: str
     _plot_group: str
 
     def build(self, *,  # type: ignore[override]
@@ -135,6 +142,8 @@ class HistogramContext(DaxModule, DataContextInterface):
         self._first_close = True
         # Flag to plot state probability at runtime
         self._plot_state_probability = False
+        # Flag to plot state parity at runtime
+        self._plot_state_parity = False
 
         # Cache for raw data
         self._raw_cache = {}
@@ -158,6 +167,7 @@ class HistogramContext(DaxModule, DataContextInterface):
         self._mean_count_plot_key = self.MEAN_COUNT_PLOT_KEY_FORMAT.format(base=base)
         self._stdev_count_plot_key = self.STDEV_COUNT_PLOT_KEY_FORMAT.format(base=base)
         self._state_probability_plot_key = self.STATE_PROBABILITY_PLOT_KEY_FORMAT.format(base=base)
+        self._state_parity_plot_key = self.STATE_PARITY_PLOT_KEY_FORMAT.format(base=base)
         # Generate applet plot group
         base = self._plot_group_base_key.format(scheduler=self._scheduler)
         self._plot_group = self.PLOT_GROUP_FORMAT.format(base=base)
@@ -289,6 +299,8 @@ class HistogramContext(DaxModule, DataContextInterface):
             self.clear_mean_count_plot()
             if self._plot_state_probability:
                 self.clear_state_probability_plot()
+            if self._plot_state_parity:
+                self.clear_state_parity_plot()
             # Clear flag
             self._first_close = False
 
@@ -336,6 +348,11 @@ class HistogramContext(DaxModule, DataContextInterface):
                 state_probability = HistogramAnalyzer.raw_to_flat_state_probability(
                     self._buffer, self._state_detection_threshold)
                 self.append_to_dataset(self._state_probability_plot_key, state_probability)
+
+            if self._plot_state_parity:
+                # Calculate state parity only if the feature is enabled
+                state_parity = HistogramAnalyzer.raw_to_state_parity(self._buffer, self._state_detection_threshold)
+                self.append_to_dataset(self._state_parity_plot_key, state_parity)
 
         else:
             # Add empty element to the caches (keeps indexing consistent)
@@ -454,6 +471,43 @@ class HistogramContext(DaxModule, DataContextInterface):
                                 group=self._plot_group, **kwargs)
 
     @rpc(flags={'async'})
+    def plot_state_parity(self, dataset_key=None,
+                          **kwargs):  # type: (typing.Optional[str], typing.Any) -> None
+        """Open the applet that shows the full state parity graph.
+
+        If this function is called before data is available, the histogram context will be configured to plot the state
+        parity real-time. Calculating state parity is computationally intensive, and doing so in real-time
+        might degrade the performance of the experiment.
+        Alternatively, this function can be called after the experiment finished and all data is available.
+        The contents of the graph will then be computed at once when calling this function.
+
+        :param dataset_key: Key of the dataset to plot
+        :param kwargs: Extra keyword arguments for the plot
+        """
+
+        # Set flag
+        self._plot_state_parity = True
+
+        try:
+            # Obtain raw data from cache
+            raw = self.get_raw(dataset_key)
+        except KeyError:
+            # No data available at this moment
+            pass
+        else:
+            # Transform and broadcast data immediately from cache
+            state_parities = HistogramAnalyzer.raw_to_state_parities(
+                raw, state_detection_threshold=self._state_detection_threshold)
+            self.set_dataset(self._state_parity_plot_key, state_parities, broadcast=True, archive=False)
+
+        # Set defaults
+        kwargs.setdefault('y_label', '|State> parity')
+        kwargs.setdefault('title', f'RID {self._scheduler.rid}')
+        # Plot
+        self._ccb.plot_xy(self.STATE_PARITY_PLOT_NAME, self._state_parity_plot_key,
+                          group=self._plot_group, **kwargs)
+
+    @rpc(flags={'async'})
     def clear_probability_plot(self):  # type: () -> None
         """Clear the probability plot.
 
@@ -479,6 +533,14 @@ class HistogramContext(DaxModule, DataContextInterface):
         This function can only be called after the module is initialized.
         """
         self.set_dataset(self._state_probability_plot_key, [], broadcast=True, archive=False)
+
+    @rpc(flags={'async'})
+    def clear_state_parity_plot(self):  # type: () -> None
+        """Clear the state parity plot.
+
+        This function can only be called after the module is initialized.
+        """
+        self.set_dataset(self._state_parity_plot_key, [], broadcast=True, archive=False)
 
     @rpc(flags={'async'})
     def disable_histogram_plot(self):  # type: () -> None
@@ -511,6 +573,14 @@ class HistogramContext(DaxModule, DataContextInterface):
         This function can only be called after the module is initialized.
         """
         self._ccb.disable_applet(self.STATE_PROBABILITY_PLOT_NAME, self._plot_group)
+
+    @rpc(flags={'async'})
+    def disable_state_parity_plot(self):  # type: () -> None
+        """Close the full state parity plot.
+
+        This function can only be called after the module is initialized.
+        """
+        self._ccb.disable_applet(self.STATE_PARITY_PLOT_NAME, self._plot_group)
 
     @rpc(flags={'async'})
     def disable_all_plots(self):  # type: () -> None
@@ -1112,6 +1182,62 @@ class HistogramAnalyzer:
         num_states = 2 ** num_bits
         # Flatten data and return result
         return [[p.get(i, 0.0) for i in range(num_states)] for p in state_probabilities]
+
+    @classmethod
+    @functools.lru_cache(None)
+    def _state_to_parity_sign(cls, num_bits: int, state: int) -> int:
+        # Get the number of ones from the minimal length bitstring
+        ones = bin(state).count('1', 2)
+        # Derive the number of zeroes
+        zeroes = num_bits - ones
+        # Return parity sign based on number of zeroes
+        return -1 if zeroes & 1 else 1
+
+    @classmethod
+    def raw_to_state_parity(cls, raw: typing.Sequence[typing.Sequence[RAW_T]],
+                            state_detection_threshold: int) -> float:
+        """Convert raw data into a flattened full state parity.
+
+        :param raw: The raw data to process
+        :param state_detection_threshold: The state detection threshold to use
+        :return: The full state parity
+        """
+
+        try:
+            # Obtain the number of bits and states (assumes there is at least one measurement)
+            num_bits = len(raw[0])
+        except IndexError:
+            raise ValueError('Provided raw data is empty') from None
+
+        # Get the state probabilities as dicts
+        state_probability = cls._states_to_probabilities(
+            [cls._vector_to_int(point, state_detection_threshold) for point in raw]
+        )
+
+        # Return parity
+        return sum(cls._state_to_parity_sign(num_bits, k) * v for k, v in state_probability.items())
+
+    @classmethod
+    def raw_to_state_parities(cls, raw: typing.Sequence[typing.Sequence[typing.Sequence[RAW_T]]],
+                              state_detection_threshold: int) -> typing.Sequence[float]:
+        """Convert raw data into a flattened full state parities.
+
+        :param raw: The raw data to process
+        :param state_detection_threshold: The state detection threshold to use
+        :return: A list containing full state parity data
+        """
+
+        try:
+            # Obtain the number of bits and states (assumes there is at least one measurement)
+            num_bits = len(raw[0][0])
+        except IndexError:
+            raise ValueError('Provided raw data is empty') from None
+
+        # Get the state probabilities as dicts
+        state_probabilities = cls.raw_to_state_probabilities(raw, state_detection_threshold=state_detection_threshold)
+
+        # Return parities
+        return [sum(cls._state_to_parity_sign(num_bits, k) * v for k, v in p.items()) for p in state_probabilities]
 
     """Plotting functions"""
 
