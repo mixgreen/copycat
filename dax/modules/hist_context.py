@@ -1073,22 +1073,21 @@ class HistogramAnalyzer:
         :return: A list containing full state probability data (integer state)
         """
 
+        try:
+            # Obtain the number of bits and states (assumes there is at least one measurement)
+            num_bits = len(raw[0])
+        except IndexError:
+            raise ValueError('Provided raw data is empty') from None
+
         # Get the state probabilities as dicts
         state_probability = cls._states_to_probabilities(
             [cls._vector_to_int(point, state_detection_threshold) for point in raw]
         )
 
-        try:
-            # Obtain the number of bits and states (assumes there is at least one measurement)
-            num_bits = len(raw[0])
-        except IndexError:
-            # No data, return empty list
-            return []
-        else:
-            # Calculate the number of states
-            num_states = 2 ** num_bits
-            # Flatten data and return result
-            return [state_probability.get(i, 0.0) for i in range(num_states)]
+        # Calculate the number of states
+        num_states = 2 ** num_bits
+        # Flatten data and return result
+        return [state_probability.get(i, 0.0) for i in range(num_states)]
 
     @classmethod
     def raw_to_flat_state_probabilities(cls, raw: typing.Sequence[typing.Sequence[typing.Sequence[RAW_T]]],
@@ -1100,20 +1099,19 @@ class HistogramAnalyzer:
         :return: A 2-dimensional list containing full state probability data (iteration, integer state)
         """
 
-        # Get the state probabilities as dicts
-        state_probabilities = cls.raw_to_state_probabilities(raw, state_detection_threshold=state_detection_threshold)
-
         try:
             # Obtain the number of bits and states (assumes there is at least one measurement)
             num_bits = len(raw[0][0])
         except IndexError:
-            # No data, return empty list
-            return []
-        else:
-            # Calculate the number of states
-            num_states = 2 ** num_bits
-            # Flatten data and return result
-            return [[p.get(i, 0.0) for i in range(num_states)] for p in state_probabilities]
+            raise ValueError('Provided raw data is empty') from None
+
+        # Get the state probabilities as dicts
+        state_probabilities = cls.raw_to_state_probabilities(raw, state_detection_threshold=state_detection_threshold)
+
+        # Calculate the number of states
+        num_states = 2 ** num_bits
+        # Flatten data and return result
+        return [[p.get(i, 0.0) for i in range(num_states)] for p in state_probabilities]
 
     """Plotting functions"""
 
