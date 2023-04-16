@@ -86,7 +86,7 @@
               # basic environment
               dax.propagatedBuildInputs ++
               # test dependencies
-              (with ps; [ pytest mypy pycodestyle coverage ]) ++
+              (with ps; [ pytest mypy pycodestyle coverage autopep8 ]) ++
               ([ packages.x86_64-linux.flake8-artiq packages.x86_64-linux.artiq-stubs ])
             ))
             # required for compile/hardware testcases
