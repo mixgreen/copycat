@@ -65,7 +65,7 @@
           description = "Duke ARTIQ Extensions (DAX)";
           maintainers = [ "Duke University" ];
           homepage = "https://gitlab.com/duke-artiq/dax";
-          license = licenses.asl20;
+          license = licenses.mit;
         };
       });
     in
