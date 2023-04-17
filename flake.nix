@@ -86,7 +86,7 @@
               # basic environment
               dax.propagatedBuildInputs ++
               # test dependencies
-              (with ps; [ pytest mypy pycodestyle coverage ]) ++
+              (with ps; [ pytest mypy pycodestyle coverage autopep8 ]) ++
               ([ packages.x86_64-linux.flake8-artiq packages.x86_64-linux.artiq-stubs ])
             ))
             # required for compile/hardware testcases
@@ -115,9 +115,8 @@
 
   nixConfig = {
     extra-trusted-public-keys = [
-      "build-mblab.duckdns.org:PKlwT12HTBdsh4MyiDoMj/zTUA6f0vi2hzLa6tYoEpM="
       "nixbld.m-labs.hk-1:5aSRVA5b320xbNvu30tqxVPXpld73bhtOeH6uAjRyHc="
     ];
-    extra-substituters = [ "http://build-mblab.duckdns.org" "https://nixbld.m-labs.hk" ];
+    extra-substituters = [ "https://nixbld.m-labs.hk" ];
   };
 }
