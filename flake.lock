@@ -94,19 +94,16 @@
     },
     "flake8-artiq": {
       "inputs": {
-        "artiqpkgs": [
-          "artiqpkgs"
-        ],
         "nixpkgs": [
           "nixpkgs"
         ]
       },
       "locked": {
-        "lastModified": 1681416207,
-        "narHash": "sha256-WvkerZLWX3LV5e0cqq8dwM2/8Plz5mw2m0i/jyIJKL4=",
+        "lastModified": 1681932181,
+        "narHash": "sha256-DffFqCG/xWb7KGuKYCUH8ItnaqgjcSpVy3g2bI/bIgs=",
         "ref": "refs/heads/master",
-        "rev": "cbe18af80b118fe12ac0650b170a7b6745ee3c94",
-        "revCount": 90,
+        "rev": "8247f653ffc643ad8db00fd7fb52663aff4a48ef",
+        "revCount": 97,
         "type": "git",
         "url": "https://gitlab.com/duke-artiq/flake8-artiq.git"
       },
@@ -236,19 +233,16 @@
     },
     "trap-dac-utils": {
       "inputs": {
-        "artiqpkgs": [
-          "artiqpkgs"
-        ],
         "nixpkgs": [
           "nixpkgs"
         ]
       },
       "locked": {
-        "lastModified": 1681399289,
-        "narHash": "sha256-BaaRECzXkrF5dREnoFuYJoE/QWwLGS2XNZ6XO22DHrY=",
+        "lastModified": 1681932204,
+        "narHash": "sha256-ZvnaEiNWH7bWWt/MLHZrEeeqgTGBl0EBKS61N+YsiTs=",
         "ref": "refs/heads/master",
-        "rev": "57c72502daa9f12a857969b322d72eb9a29b6d87",
-        "revCount": 273,
+        "rev": "d3af0ff98d6f2d065f04013533de8b760f8e47e5",
+        "revCount": 278,
         "type": "git",
         "url": "https://gitlab.com/duke-artiq/trap-dac-utils.git"
       },

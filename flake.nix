@@ -5,7 +5,6 @@
     sipyco.follows = "artiqpkgs/sipyco";
     flake8-artiq = {
       url = git+https://gitlab.com/duke-artiq/flake8-artiq.git;
-      inputs.artiqpkgs.follows = "artiqpkgs";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     artiq-stubs = {
@@ -16,7 +15,6 @@
     };
     trap-dac-utils = {
       url = git+https://gitlab.com/duke-artiq/trap-dac-utils.git;
-      inputs.artiqpkgs.follows = "artiqpkgs";
       inputs.nixpkgs.follows = "nixpkgs";
     };
   };
