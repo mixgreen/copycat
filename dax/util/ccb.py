@@ -339,6 +339,7 @@ class CcbTool(CcbToolBase):
                 x: typing.Optional[str] = None,
                 error: typing.Optional[str] = None,
                 fit: typing.Optional[str] = None,
+                fit_x: typing.Optional[str] = None,
                 v_lines: typing.Optional[str] = None,
                 h_lines: typing.Optional[str] = None,
                 sliding_window: typing.Optional[int] = None,
@@ -360,6 +361,7 @@ class CcbTool(CcbToolBase):
         :param x: X-value dataset
         :param error: Error dataset
         :param fit: Fit dataset
+        :param fit_x: X values for fit dataset
         :param v_lines: Vertical lines dataset
         :param h_lines: Horizontal lines dataset
         :param sliding_window: Only show the latest data points
@@ -377,7 +379,7 @@ class CcbTool(CcbToolBase):
         """
         # Assemble command
         command = generate_command(f'{self.DAX_APPLET}plot_xy', y,
-                                   x=x, error=error, fit=fit, v_lines=v_lines, h_lines=h_lines,
+                                   x=x, error=error, fit=fit, fit_x=fit_x, v_lines=v_lines, h_lines=h_lines,
                                    sliding_window=sliding_window, subsample=subsample, multiplier=multiplier,
                                    title=title, crosshair=crosshair, last=last, moving_average=moving_average,
                                    x_label=x_label, y_label=y_label, update_delay=update_delay, **kwargs)
@@ -388,6 +390,7 @@ class CcbTool(CcbToolBase):
                       x: typing.Optional[str] = None,
                       error: typing.Optional[str] = None,
                       fit: typing.Optional[str] = None,
+                      fit_x: typing.Optional[str] = None,
                       v_lines: typing.Optional[str] = None,
                       h_lines: typing.Optional[str] = None,
                       index: typing.Union[None, int, typing.Collection[int]] = None,
@@ -408,6 +411,7 @@ class CcbTool(CcbToolBase):
         :param x: X-value dataset
         :param error: Error dataset (multiple graphs)
         :param fit: Fit dataset (multiple graphs)
+        :param fit_x: X values for fit datasets
         :param v_lines: Vertical lines dataset
         :param h_lines: Horizontal lines dataset
         :param index: A single or multiple indices of the results to plot (default plots all)
@@ -424,10 +428,10 @@ class CcbTool(CcbToolBase):
         """
         # Assemble command
         command = generate_command(f'{self.DAX_APPLET}plot_xy_multi', y,
-                                   x=x, error=error, fit=fit, v_lines=v_lines, h_lines=h_lines, index=index,
-                                   sliding_window=sliding_window, subsample=subsample, multiplier=multiplier,
-                                   plot_names=plot_names, title=title, x_label=x_label, y_label=y_label,
-                                   update_delay=update_delay, **kwargs)
+                                   x=x, error=error, fit=fit, fit_x=fit_x, v_lines=v_lines, h_lines=h_lines,
+                                   index=index, sliding_window=sliding_window, subsample=subsample,
+                                   multiplier=multiplier, plot_names=plot_names, title=title, x_label=x_label,
+                                   y_label=y_label, update_delay=update_delay, **kwargs)
         # Create applet
         self.create_applet(name, command, group=group)
 
