@@ -104,6 +104,7 @@ class CcbTestCase(unittest.TestCase):
         self.assertIsNone(ccb.image('name', 'key'))
         self.assertIsNone(ccb.plot_xy('name', 'key'))
         self.assertIsNone(ccb.plot_xy_multi('name', 'key'))
+        self.assertIsNone(ccb.plot_xy_var('name', 'key'))
         self.assertIsNone(ccb.plot_hist('name', 'key'))
         self.assertIsNone(ccb.plot_hist_multi('name', 'key'))
         self.assertIsNone(ccb.plot_progress_bar('name', 'key'))

@@ -5,7 +5,6 @@
     sipyco.follows = "artiqpkgs/sipyco";
     flake8-artiq = {
       url = git+https://gitlab.com/duke-artiq/flake8-artiq.git;
-      inputs.artiqpkgs.follows = "artiqpkgs";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     artiq-stubs = {
@@ -16,7 +15,6 @@
     };
     trap-dac-utils = {
       url = git+https://gitlab.com/duke-artiq/trap-dac-utils.git;
-      inputs.artiqpkgs.follows = "artiqpkgs";
       inputs.nixpkgs.follows = "nixpkgs";
     };
   };
@@ -65,7 +63,7 @@
           description = "Duke ARTIQ Extensions (DAX)";
           maintainers = [ "Duke University" ];
           homepage = "https://gitlab.com/duke-artiq/dax";
-          license = licenses.asl20;
+          license = licenses.mit;
         };
       });
     in
@@ -75,7 +73,7 @@
         flake8-artiq = flake8-artiq.packages.x86_64-linux.flake8-artiq;
         artiq-stubs = artiq-stubs.packages.x86_64-linux.artiq-stubs;
         trap-dac-utils = trap-dac-utils.packages.x86_64-linux.trap-dac-utils;
-        default = pkgs.python3.withPackages (ps: [ dax ]);
+        default = dax;
       };
       # shells for `nix develop`
       devShells.x86_64-linux = {
@@ -86,7 +84,7 @@
               # basic environment
               dax.propagatedBuildInputs ++
               # test dependencies
-              (with ps; [ pytest mypy pycodestyle coverage ]) ++
+              (with ps; [ pytest mypy pycodestyle coverage autopep8 ]) ++
               ([ packages.x86_64-linux.flake8-artiq packages.x86_64-linux.artiq-stubs ])
             ))
             # required for compile/hardware testcases
@@ -115,9 +113,8 @@
 
   nixConfig = {
     extra-trusted-public-keys = [
-      "build-mblab.duckdns.org:PKlwT12HTBdsh4MyiDoMj/zTUA6f0vi2hzLa6tYoEpM="
       "nixbld.m-labs.hk-1:5aSRVA5b320xbNvu30tqxVPXpld73bhtOeH6uAjRyHc="
     ];
-    extra-substituters = [ "http://build-mblab.duckdns.org" "https://nixbld.m-labs.hk" ];
+    extra-substituters = [ "https://nixbld.m-labs.hk" ];
   };
 }

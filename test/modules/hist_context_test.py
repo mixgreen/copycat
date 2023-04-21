@@ -431,12 +431,16 @@ class HistogramContextTestCase(unittest.TestCase):
             self.h.plot_probability()
             self.h.plot_mean_count()
             self.h.plot_state_probability()
+            self.h.plot_state_parity()
             self.h.clear_probability_plot()
             self.h.clear_mean_count_plot()
+            self.h.clear_state_probability_plot()
+            self.h.clear_state_parity_plot()
             self.h.disable_histogram_plot()
             self.h.disable_probability_plot()
             self.h.disable_mean_count_plot()
             self.h.disable_state_probability_plot()
+            self.h.disable_state_parity_plot()
             self.h.disable_all_plots()
 
         plot_fn()
@@ -701,6 +705,32 @@ class HistogramAnalyzerTestCase(unittest.TestCase):
         result = HistogramAnalyzer.raw_to_state_probabilities(raw, threshold)
         self.assertListEqual(result, ref, 'State probabilities did not matched reference')
 
+    def test_raw_to_flat_state_probability(self):
+        num_bits = 3
+        num_states = 2 ** num_bits
+        threshold = 2
+
+        raw = [
+            [[1, 2, 0], [5, 5, 5], [5, 5, 5], [6, 7, 0], ],
+            [[6, 7, 0], [1, 2, 0], [1, 2, 0], [5, 5, 5], ],
+            [[True, True, False], [False, False, False], [False, False, False], [True, True, True], ],
+        ]
+        assert all(all(all(u < num_states for u in t) for t in s) for s in raw)
+
+        ref_sparse = [
+            {0b000: 0.25, 0b111: 0.5, 0b011: 0.25},
+            {0b011: 0.25, 0b000: 0.5, 0b111: 0.25},
+            {0b011: 0.25, 0b000: 0.5, 0b111: 0.25},
+        ]
+        assert all(all(v < num_states for v in r.values()) for r in ref_sparse)
+
+        # Flatten sparse reference
+        ref = [[r.get(i, 0.0) for i in range(num_states)] for r in ref_sparse]
+
+        result = [HistogramAnalyzer.raw_to_flat_state_probability(r, threshold) for r in raw]
+        for a, b in zip(result, ref):
+            self.assertListEqual(a, b, 'Flat state probability did not matched reference')
+
     def test_raw_to_flat_state_probabilities(self):
         num_bits = 3
         num_states = 2 ** num_bits
@@ -726,6 +756,44 @@ class HistogramAnalyzerTestCase(unittest.TestCase):
         result = HistogramAnalyzer.raw_to_flat_state_probabilities(raw, threshold)
         for a, b in zip(result, ref):
             self.assertListEqual(a, b, 'Flat state probabilities did not matched reference')
+
+    def test_raw_to_state_parity(self):
+        num_bits = 3
+        num_states = num_bits ** 2
+        threshold = 2
+
+        raw = [
+            [[5, 6, 0], [5, 7, 0], [6, 6, 0], ],
+            [[6, 7, 5], [3, 7, 6], [5, 4, 7], ],
+            [[True, True, False], [True, True, False], [True, True, False], ],
+            [[True, True, True], [True, True, False], [False, False, False], [True, False, False]],
+        ]
+        assert all(all(all(u < num_states for u in t) for t in s) for s in raw)
+
+        # Reference
+        ref = [-1, 1, -1, 0]
+
+        results = [HistogramAnalyzer.raw_to_state_parity(r, threshold) for r in raw]
+        self.assertListEqual(results, ref, 'Parity did not matched reference')
+
+    def test_raw_to_state_parities(self):
+        num_bits = 3
+        num_states = num_bits ** 2
+        threshold = 2
+
+        raw = [
+            [[5, 6, 0], [5, 7, 0], [6, 6, 0], ],
+            [[6, 7, 5], [3, 7, 6], [5, 4, 7], ],
+            [[True, True, False], [True, True, False], [True, True, False], ],
+            [[True, True, True], [True, True, False], [False, False, False], [True, False, False]],
+        ]
+        assert all(all(all(u < num_states for u in t) for t in s) for s in raw)
+
+        # Reference
+        ref = [-1, 1, -1, 0]
+
+        results = HistogramAnalyzer.raw_to_state_parities(raw, threshold)
+        self.assertListEqual(results, ref, 'Parities did not matched reference')
 
     def _generate_hdf5_data(self, *, keep_raw=True, add_legacy=False, binary_measurements=False):
         num_histograms = 8

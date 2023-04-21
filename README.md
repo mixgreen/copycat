@@ -134,18 +134,19 @@ The major version number of DAX matches the version of the targeted ARTIQ releas
 Use pytest (installed separately) to run the DAX unit tests.
 
 ```shell
-$ pytest
+pytest
 ```
 
 ## Main contributors
 
-- Leon Riesebos (Duke University)
+- Leon Riesebos (formerly Duke University)
 - Brad Bondurant (Duke University)
 
 ## Publications
 
 - DAX system: [Modular Software for Real-Time Quantum Control Systems (2022)](https://doi.org/10.1109/QCE53715.2022.00077)
 - DAX.sim: [Functional Simulation of Real-Time Quantum Control Software (2022)](https://doi.org/10.1109/QCE53715.2022.00076)
+  - [QCE22 Best Paper Award, Track: Quantum Systems Software](https://qce.quantum.ieee.org/2022/technical-papers-program)
 - DAX.scheduler: [Universal Graph-Based Scheduling for Quantum Systems (2021)](https://doi.org/10.1109/MM.2021.3094968)
 
 ## Acknowledgements
@@ -156,7 +157,7 @@ Testbed QSCOUT.
 
 More information about these projects can be found at:
 
-- EPiQC: https://www.epiqc.cs.uchicago.edu/
-- STAQ: https://staq.pratt.duke.edu/
-- LogiQ: https://www.iarpa.gov/index.php/research-programs/logiq
-- QSCOUT: https://www.sandia.gov/quantum/Projects/QSCOUT.html
+- EPiQC: <https://www.epiqc.cs.uchicago.edu/>
+- STAQ: <https://staq.pratt.duke.edu/>
+- LogiQ: <https://www.iarpa.gov/index.php/research-programs/logiq>
+- QSCOUT: <https://www.sandia.gov/quantum/Projects/QSCOUT.html>

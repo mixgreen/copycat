@@ -199,11 +199,24 @@ class CcbToolBase(CcbWrapper, abc.ABC):  # pragma: no cover
                       x: typing.Optional[str] = None,
                       group: typing.Optional[_G_T] = None,
                       **kwargs: typing.Any) -> None:
-        """Create a plot XY applet with multiple plots.
+        """Create a plot XY applet with multiple uniform plots.
 
         :param name: Name of the applet
         :param y: Y-values dataset (multiple graphs)
         :param x: X-value dataset
+        :param group: Optional group of the applet
+        :param kwargs: Other optional arguments for the applet
+        """
+        pass
+
+    @abc.abstractmethod
+    def plot_xy_var(self, name: str, *args: str,
+                    group: typing.Optional[_G_T] = None,
+                    **kwargs: typing.Any) -> None:
+        """Create a plot XY applet with a variable amount of plots.
+
+        :param name: Name of the applet
+        :param args: The plot arguments in triplets: x, y, fmt, ...
         :param group: Optional group of the applet
         :param kwargs: Other optional arguments for the applet
         """
@@ -266,7 +279,13 @@ class CcbToolBase(CcbWrapper, abc.ABC):  # pragma: no cover
 
 
 class CcbTool(CcbToolBase):
-    """A CCB tool with functions to directly create ARTIQ applets and DAX applets."""
+    """A CCB tool with functions to directly create ARTIQ applets and DAX applets.
+
+    For more detailed argument descriptions of applets, see the ARTIQ and DAX applets source files:
+
+    - https://github.com/m-labs/artiq
+    - https://gitlab.com/duke-artiq/dax-applets
+    """
 
     ARTIQ_APPLET: typing.ClassVar[str] = '${artiq_applet}'
     """The ARTIQ applet variable which can be used in CCB commands."""
@@ -320,6 +339,7 @@ class CcbTool(CcbToolBase):
                 x: typing.Optional[str] = None,
                 error: typing.Optional[str] = None,
                 fit: typing.Optional[str] = None,
+                fit_x: typing.Optional[str] = None,
                 v_lines: typing.Optional[str] = None,
                 h_lines: typing.Optional[str] = None,
                 sliding_window: typing.Optional[int] = None,
@@ -341,6 +361,7 @@ class CcbTool(CcbToolBase):
         :param x: X-value dataset
         :param error: Error dataset
         :param fit: Fit dataset
+        :param fit_x: X values for fit dataset
         :param v_lines: Vertical lines dataset
         :param h_lines: Horizontal lines dataset
         :param sliding_window: Only show the latest data points
@@ -358,7 +379,7 @@ class CcbTool(CcbToolBase):
         """
         # Assemble command
         command = generate_command(f'{self.DAX_APPLET}plot_xy', y,
-                                   x=x, error=error, fit=fit, v_lines=v_lines, h_lines=h_lines,
+                                   x=x, error=error, fit=fit, fit_x=fit_x, v_lines=v_lines, h_lines=h_lines,
                                    sliding_window=sliding_window, subsample=subsample, multiplier=multiplier,
                                    title=title, crosshair=crosshair, last=last, moving_average=moving_average,
                                    x_label=x_label, y_label=y_label, update_delay=update_delay, **kwargs)
@@ -369,6 +390,7 @@ class CcbTool(CcbToolBase):
                       x: typing.Optional[str] = None,
                       error: typing.Optional[str] = None,
                       fit: typing.Optional[str] = None,
+                      fit_x: typing.Optional[str] = None,
                       v_lines: typing.Optional[str] = None,
                       h_lines: typing.Optional[str] = None,
                       index: typing.Union[None, int, typing.Collection[int]] = None,
@@ -389,6 +411,7 @@ class CcbTool(CcbToolBase):
         :param x: X-value dataset
         :param error: Error dataset (multiple graphs)
         :param fit: Fit dataset (multiple graphs)
+        :param fit_x: X values for fit datasets
         :param v_lines: Vertical lines dataset
         :param h_lines: Horizontal lines dataset
         :param index: A single or multiple indices of the results to plot (default plots all)
@@ -405,9 +428,44 @@ class CcbTool(CcbToolBase):
         """
         # Assemble command
         command = generate_command(f'{self.DAX_APPLET}plot_xy_multi', y,
-                                   x=x, error=error, fit=fit, v_lines=v_lines, h_lines=h_lines, index=index,
-                                   sliding_window=sliding_window, subsample=subsample, multiplier=multiplier,
-                                   plot_names=plot_names, title=title, x_label=x_label, y_label=y_label,
+                                   x=x, error=error, fit=fit, fit_x=fit_x, v_lines=v_lines, h_lines=h_lines,
+                                   index=index, sliding_window=sliding_window, subsample=subsample,
+                                   multiplier=multiplier, plot_names=plot_names, title=title, x_label=x_label,
+                                   y_label=y_label, update_delay=update_delay, **kwargs)
+        # Create applet
+        self.create_applet(name, command, group=group)
+
+    def plot_xy_var(self, name: str, *args: str,
+                    labels: typing.Optional[str] = None,
+                    v_lines: typing.Optional[str] = None,
+                    h_lines: typing.Optional[str] = None,
+                    title: typing.Optional[str] = None,
+                    x_label: typing.Optional[str] = None,
+                    y_label: typing.Optional[str] = None,
+                    update_delay: typing.Optional[float] = None,
+                    group: typing.Optional[_G_T] = None,
+                    **kwargs: typing.Any) -> None:
+        """Create a plot XY applet with a variable amount of plots.
+
+        See https://gitlab.com/duke-artiq/dax-applets/-/blob/master/dax_applets/plot_xy_var.py for more details and
+        formatting string syntax.
+
+        :param name: Name of the applet
+        :param args: The plot arguments in triplets: x (dataset), y (dataset), fmt, ...
+        :param labels: Plot labels dataset
+        :param v_lines: Vertical lines dataset
+        :param h_lines: Horizontal lines dataset
+        :param title: Graph title
+        :param x_label: X-axis label
+        :param y_label: Y-axis label
+        :param update_delay: Time to wait after a modification before updating graph
+        :param group: Optional group of the applet
+        :param kwargs: Other optional arguments for the applet
+        """
+        # Assemble command
+        command = generate_command(f'{self.DAX_APPLET}plot_xy_var', *args,
+                                   labels=labels, v_lines=v_lines, h_lines=h_lines,
+                                   title=title, x_label=x_label, y_label=y_label,
                                    update_delay=update_delay, **kwargs)
         # Create applet
         self.create_applet(name, command, group=group)

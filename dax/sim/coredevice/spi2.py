@@ -20,7 +20,7 @@ class SPIMaster(DaxSimDevice, _SPIMaster):
     _set_config_mu_subscribers: typing.List[typing.Callable[[int, int, int, int], typing.Any]]
     _write_subscribers: typing.List[typing.Callable[[int], typing.Any]]
 
-    def __init__(self, dmgr, div=0, length=0, **kwargs) -> None:
+    def __init__(self, dmgr, channel=None, div=0, length=0, **kwargs) -> None:
         # Call super
         super().__init__(dmgr, **kwargs)
 
@@ -40,6 +40,8 @@ class SPIMaster(DaxSimDevice, _SPIMaster):
         self.ref_period_mu = self.core.seconds_to_mu(
             self.core.coarse_ref_period)
         assert self.ref_period_mu == self.core.ref_multiplier
+        if channel is not None:
+            self.channel = channel
         self.update_xfer_duration_mu(div, length)
 
     @kernel

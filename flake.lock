@@ -63,11 +63,11 @@
         "src-pythonparser": "src-pythonparser"
       },
       "locked": {
-        "lastModified": 1671029240,
-        "narHash": "sha256-CWvxRJyI37ekYmcWcN66+QH3tmDP03nMo/sUBrlZGkU=",
+        "lastModified": 1680398827,
+        "narHash": "sha256-t71PL12XxQyZNRQB4UAt8zmXc5KndzgsxB7QSAXZC+Y=",
         "ref": "release-7",
-        "rev": "ce57d6c34680360da95465295044b1c4a51a4864",
-        "revCount": 8154,
+        "rev": "3acffe8b9f6817583de0d47ba4290592e714cb1b",
+        "revCount": 8164,
         "type": "git",
         "url": "https://github.com/m-labs/artiq"
       },
@@ -94,19 +94,16 @@
     },
     "flake8-artiq": {
       "inputs": {
-        "artiqpkgs": [
-          "artiqpkgs"
-        ],
         "nixpkgs": [
           "nixpkgs"
         ]
       },
       "locked": {
-        "lastModified": 1669758648,
-        "narHash": "sha256-nomQRpu/b8YTAma6kmbSRrz5D9l1l0TV+trKHukT1V8=",
+        "lastModified": 1681932181,
+        "narHash": "sha256-DffFqCG/xWb7KGuKYCUH8ItnaqgjcSpVy3g2bI/bIgs=",
         "ref": "refs/heads/master",
-        "rev": "c4949e7a415d5e35a242d552d4bb83614693b92e",
-        "revCount": 85,
+        "rev": "8247f653ffc643ad8db00fd7fb52663aff4a48ef",
+        "revCount": 97,
         "type": "git",
         "url": "https://gitlab.com/duke-artiq/flake8-artiq.git"
       },
@@ -236,19 +233,16 @@
     },
     "trap-dac-utils": {
       "inputs": {
-        "artiqpkgs": [
-          "artiqpkgs"
-        ],
         "nixpkgs": [
           "nixpkgs"
         ]
       },
       "locked": {
-        "lastModified": 1671136817,
-        "narHash": "sha256-6uVX0st+0rp0sl2i9MOepxPpgpjGdlfwZ7jndnNKR9k=",
+        "lastModified": 1681932204,
+        "narHash": "sha256-ZvnaEiNWH7bWWt/MLHZrEeeqgTGBl0EBKS61N+YsiTs=",
         "ref": "refs/heads/master",
-        "rev": "8b754f0735c5efd0e467bed7680f9d1d93d027c3",
-        "revCount": 261,
+        "rev": "d3af0ff98d6f2d065f04013533de8b760f8e47e5",
+        "revCount": 278,
         "type": "git",
         "url": "https://gitlab.com/duke-artiq/trap-dac-utils.git"
       },
