@@ -9,9 +9,9 @@ from unittest.mock import patch
 import pathlib
 
 from dax.experiment import *
-from dax.modules.trap_dc import _LineAttrs, LinearCombo, ZotinoReader, TrapDcModule
+from dax.modules.trap_dc import _LineAttrs, _SolutionAttrs, LinearCombo, SmartDma, ZotinoReader, TrapDcModule
 from trap_dac_utils.reader import BaseReader
-from trap_dac_utils.types import LABEL_FIELD, SpecialCharacter
+from trap_dac_utils.types import LABEL_FIELD, SpecialCharacter, SOLUTION_T
 import dax.sim.coredevice.ad53xx
 import dax.sim.test_case
 from test.environment import CI_ENABLED
@@ -454,6 +454,42 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
         assert len(cfg._config["dx"]._attrs) == 4 and all(
             attrs in cfg._config["dx"]._attrs for attrs in ["name", "file", "line"])
         assert cfg._config["dx"]._attrs["value"] == 2.3
+
+    @patch.object(TrapDcModule, 'read_solution')
+    @patch.object(TrapDcModule, 'solution_to_mu')
+    @patch.object(BaseReader, 'read_config')
+    def test_create_dma_configs(self, mock_read_config, mock_solution_mu, mock_read_solution):
+        mock_read_config.return_value = {"params": [{"name": "s1", "file": "solutions.csv",
+                                                     "start": 1, "end": 3, "reverse": False,
+                                                     "multiplier": 2.3, "line_delay": 10.0},
+                                                    {"name": "s2", "file": "solutions.csv", "line_delay": 20.0}]}
+        mock_solution_mu.return_value = [[1234], [2345]]
+        mock_read_solution.return_value = SOLUTION_T([{'A': 1.0}])
+        h = mock_read_solution.return_value.hash
+
+        cfg = self.env.trap_dc.create_smart_dma("config.json", cls=SmartDma)
+        assert len(cfg._config) == 2 and "s1" in cfg._config and "s2" in cfg._config
+        assert isinstance(cfg._config["s1"], _SolutionAttrs)
+        assert isinstance(cfg._config["s2"], _SolutionAttrs)
+
+        assert len(cfg._config["s1"]._attrs) == 7 and all(
+            attrs in cfg._config["s1"]._attrs for attrs in ["name", "file", "start", "end", "reverse", "multiplier",
+                                                            "line_delay"])
+        assert len(cfg._config["s2"]._attrs) == 3 and all(
+            attrs in cfg._config["s2"]._attrs for attrs in ["name", "file", "line_delay"])
+
+        lds = cfg.line_delays()
+        assert len(lds) == 2 and all(v in lds for v in [10.0, 20.0])
+
+        mus = cfg.solution_mus()
+        assert len(mus) == 2 and mus[0] == [[1234], [2345]] and mus[1] == [[1234], [2345]]
+
+        names = cfg.names()
+        assert len(names) == 2 and all(v in names for v in ["s1", "s2"])
+
+        cfg.store_solutions()
+        assert len(cfg._incoming_dma_dict) == 2 and cfg._incoming_dma_dict["s1"] == (h, 10.0, False, 2.3) \
+            and cfg._incoming_dma_dict["s2"] == (h, 20.0, False, 1.0)
 
     def test_reader_line_to_mu(self):
         self.env.trap_dc.init()

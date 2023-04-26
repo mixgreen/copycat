@@ -8,7 +8,7 @@ import numpy as np
 
 from dax.experiment import *
 from trap_dac_utils.reader import BaseReader
-from trap_dac_utils.schemas import LINEAR_COMBO
+from trap_dac_utils.schemas import LINEAR_COMBO, SMART_DMA
 from trap_dac_utils.types import LABEL_FIELD, LINE_T, SpecialCharacter, SOLUTION_T, MAP_T, CONFIG_T
 
 import artiq.coredevice.zotino  # type: ignore[import]
@@ -22,7 +22,116 @@ _ZOTINO_SOLUTION_T = typing.List[_ZOTINO_LINE_T]
 _ZOTINO_LINE_MU_T = typing.List[np.int32]
 _ZOTINO_SOLUTION_MU_T = typing.List[_ZOTINO_LINE_MU_T]
 
-__all__ = ['TrapDcModule', 'ZotinoReader', 'LinearCombo']
+__all__ = ['TrapDcModule', 'ZotinoReader', 'LinearCombo', 'SmartDma']
+
+
+class _SolutionAttrs:
+    """A module to represent a single shuttling solution and it's corresponding data fields
+    """
+
+    _attrs: typing.Dict[str, typing.Any]
+    _trap_dc: TrapDcModule
+
+    def __init__(self, cfg: CONFIG_T, trap_dc: TrapDcModule) -> None:
+        self._attrs = dict(cfg)
+        self._trap_dc = trap_dc
+
+    def __getitem__(self, arg: str) -> typing.Any:
+        return self._attrs[arg]
+
+    def __setitem__(self, arg: str, newvalue: typing.Any) -> None:
+        self._attrs[arg] = newvalue
+
+    def get(self, arg: str, default: typing.Any) -> typing.Any:
+        self._attrs.get(arg, default)
+
+    def solution(self) -> SOLUTION_T:
+        file = self._attrs.get('file', f'{self._attrs["name"]}.csv')
+        start = self._attrs.get('start', 0)
+        end = self._attrs.get('end', -1)
+        return self._trap_dc.read_solution(file, start, end)
+
+    def solution_mu(self) -> _ZOTINO_SOLUTION_MU_T:
+        return self._trap_dc.solution_to_mu(self.solution(),
+                                            reverse=self.reverse(),
+                                            multiplier=self.multiplier())
+
+    def line_delay(self) -> float:
+        ld = self._attrs.get('line_delay')
+        if ld is None or not isinstance(ld, float):
+            raise ValueError("Line delay must be set to a float")
+        return ld
+
+    def reverse(self) -> bool:
+        return self._attrs.get('reverse', False)
+
+    def multiplier(self) -> float:
+        return self._attrs.get('multiplier', 1.0)
+
+    def name(self) -> str:
+        name = self._attrs.get('name')
+        if name is None or not isinstance(name, str):
+            raise ValueError("Name must be set to a str")
+        return str(name)
+
+
+_SMART_DMA_CONFIG_T = typing.Dict[str, _SolutionAttrs]
+
+
+class SmartDma:
+    """A module to represent smart DMA configuration files
+
+    This module can be used to get the shuttling solutions and intelligently
+    store them in DMA for low latency use
+    """
+    _config: _SMART_DMA_CONFIG_T
+    """The configuration dict that contains field names mapped to config data"""
+
+    _incoming_dma_dict: typing.Dict[str, typing.Any] = {}
+
+    def __init__(self, trap_dc: TrapDcModule, config: CONFIG_T):
+        """Constructor of zotino linear combination module
+
+        :param trap_dc: The trap DC module associated with this configuration
+        :param config: The string name of the file where the configuration is
+        """
+        self._config = {d['name']: _SolutionAttrs(d, trap_dc) for d in config['params']}
+
+    def store_solutions(self) -> None:
+        """A method to store all the solutions in a dictionary for comparison"""
+        self._incoming_dma_dict = {sol_attr.name(): (sol_attr.solution().hash,
+                                                     sol_attr.line_delay(),
+                                                     sol_attr.reverse(),
+                                                     sol_attr.multiplier())
+                                   for sol_attr in self._config.values()}
+
+    def names(self) -> typing.Sequence[str]:
+        """A method to get all of the string names
+
+        :return: A list of string names
+        """
+        return [sol_attr.name() for sol_attr in self._config.values()]
+
+    def solution_mus(self) -> typing.Sequence[_ZOTINO_SOLUTION_MU_T]:
+        """A method to get all of the solutions in MU
+
+        :return: A list of solutions in MU
+        """
+        return [sol_attr.solution_mu() for sol_attr in self._config.values()]
+
+    def line_delays(self) -> typing.Sequence[float]:
+        """A method to get all of the line delays as a list of floats
+
+        :return: A list of floats of the line delays
+        """
+        return [sol_attr.line_delay() for sol_attr in self._config.values()]
+
+    def fields(self) -> typing.Sequence[str]:
+        """A method to get all of the config fields as a list of strings
+
+        :return: A list of strings of the config fields
+        """
+        return list(self._config.keys())
 
 
 class _LineAttrs:
@@ -62,7 +171,7 @@ class _LineAttrs:
         return mini <= val <= maxi
 
 
-_ZOTINO_CONFIG_T = typing.Dict[str, _LineAttrs]
+_LINEAR_COMBO_CONFIG_T = typing.Dict[str, _LineAttrs]
 
 
 class LinearCombo:
@@ -71,7 +180,7 @@ class LinearCombo:
     This module can be used to get solution lines and combine them with others
     Then these new lines can be fed back into the zotino module to continue processing
     """
-    _config: _ZOTINO_CONFIG_T
+    _config: _LINEAR_COMBO_CONFIG_T
     """The configuration dict that contains field names mapped to config data"""
 
     def __init__(self, trap_dc: TrapDcModule, config: CONFIG_T):
@@ -174,6 +283,7 @@ class TrapDcModule(DaxModule):
     - Everything in this module is Zotino specific. As other DC traps are needed they should be created separately.
     """
     _LC_T = typing.TypeVar('_LC_T', bound='LinearCombo')
+    _SD_T = typing.TypeVar('_SD_T', bound='SmartDma')
 
     _DMA_STARTUP_TIME: typing.ClassVar[float] = 1.728 * us
     """Startup time for DMA (s). Measured in the RTIO benchmarking tests during CI"""
@@ -255,6 +365,20 @@ class TrapDcModule(DaxModule):
         return cls(self, config, *args, **kwargs)
 
     @host_only
+    def create_smart_dma(self,
+                         config_file: str,
+                         *args,
+                         cls: typing.Type[_SD_T] = SmartDma,  # type: ignore[assignment]
+                         **kwargs) -> _SD_T:
+        """Factory method to encapsulate creation of SmartDma
+
+        :param config_file: Name of the config file to read into the object
+
+        :return: The SmartDma object"""
+        config = self._reader.read_config(config_file, schema=SMART_DMA)
+        return cls(self, config, *args, **kwargs)
+
+    @host_only
     def read_line(self,
                   file_name: str,
                   index: int) -> LINE_T:
@@ -320,7 +444,9 @@ class TrapDcModule(DaxModule):
 
     @host_only
     def read_solution(self,
-                      file_name: str) -> SOLUTION_T:
+                      file_name: str,
+                      start: int = 0,
+                      end: int = -1) -> SOLUTION_T:
         """Read in a solutions file and return the solution in base reader form
 
         Note that the Zotino Path Voltages are given in **V**.
@@ -329,7 +455,7 @@ class TrapDcModule(DaxModule):
 
         :return: Base reader solution form
         """
-        return self._reader.read_solution(file_name)
+        return self._reader.read_solution(file_name, start=start, end=end)
 
     @host_only
     def solution_to_mu(self,
