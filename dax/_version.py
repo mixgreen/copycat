@@ -2,4 +2,4 @@ import os
 
 
 def get_version():
-    return os.getenv("VERSIONEER_OVERRIDE", default="7.0.unknown")
+    return os.getenv("VERSIONEER_OVERRIDE", default="7.0.dev0")
