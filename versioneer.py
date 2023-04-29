@@ -17,7 +17,7 @@ def write_to_version_file(filename, version):
 
 
 def get_version():
-    return os.getenv("VERSIONEER_OVERRIDE", default="7.0.unknown")
+    return os.getenv("VERSIONEER_OVERRIDE", default="7.0.dev0")
 
 
 def get_cmdclass():
