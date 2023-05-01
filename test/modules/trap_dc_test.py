@@ -4,6 +4,7 @@ import typing
 import random
 
 import numpy as np
+from dax.sim.coredevice.cache import CoreCache
 from dax.util.output import temp_dir
 from unittest.mock import patch
 import pathlib
@@ -468,6 +469,7 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
         h = mock_read_solution.return_value.hash
 
         cfg = self.env.trap_dc.create_smart_dma("config.json", cls=SmartDma)
+        assert isinstance(cfg, SmartDma)
         assert len(cfg._config) == 2 and "s1" in cfg._config and "s2" in cfg._config
         assert isinstance(cfg._config["s1"], _SolutionAttrs)
         assert isinstance(cfg._config["s2"], _SolutionAttrs)
@@ -478,25 +480,139 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
         assert len(cfg._config["s2"]._attrs) == 3 and all(
             attrs in cfg._config["s2"]._attrs for attrs in ["name", "file", "line_delay"])
 
-        lds = cfg.line_delays()
-        assert len(lds) == 2 and all(v in lds for v in [10.0, 20.0])
+        assert len(cfg._line_delays) == 2 and all(v in cfg._line_delays for v in [10.0, 20.0])
 
-        mus = cfg.solution_mus()
+        mus = cfg._solution_mus
         assert len(mus) == 2 and mus[0] == [[1234], [2345]] and mus[1] == [[1234], [2345]]
 
-        names = cfg.names()
-        assert len(names) == 2 and all(v in names for v in ["s1", "s2"])
+        assert len(cfg._names) == 2 and all(v in cfg._names for v in ["s1", "s2"])
 
-        cfg.store_solutions()
-        assert len(cfg._incoming_dma_dict) == 2 and cfg._incoming_dma_dict["s1"] == (h, 10.0, False, 2.3) \
-            and cfg._incoming_dma_dict["s2"] == (h, 20.0, False, 1.0)
+        assert len(cfg._trap_dc._incoming_dma_dict) == 2 \
+            and cfg._trap_dc._incoming_dma_dict["s1"] == (h, 10.0, False, 2.3) \
+            and cfg._trap_dc._incoming_dma_dict["s2"] == (h, 20.0, False, 1.0)
+
+    @patch.object(SmartDma, 'line_delays')
+    @patch.object(SmartDma, 'solution_mus')
+    @patch.object(SmartDma, 'names')
+    @patch.object(SmartDma, 'solution_dict')
+    @patch.object(TrapDcModule, 'get_dataset_sys')
+    @patch.object(BaseReader, 'read_config')
+    def test_compare_dma(self, _, mock_get_dataset_sys, mock_solution_dict, mock_names,
+                         mock_solution_mus, mock_line_delays):
+        mock_solution_dict.return_value = {'s1': ('abc123', 1.0),
+                                           's2': ('abc456', 2.0),
+                                           's3': ('abc789', 3.0),
+                                           's4': ('abc101112', 4.0)}
+        mock_names.return_value = ['s1', 's2', 's3', 's4']
+        mock_solution_mus.return_value = [[([1, 2, 3]), ([3])],
+                                          [([0, 0, 0]), ([1])],
+                                          [([4, 4, 4]), ([5])],
+                                          [([5, 6, 5]), ([0])]]
+        mock_line_delays.return_value = [1.0, 2.0, 3.0, 4.0]
+        mock_get_dataset_sys.return_value = {'s2': ('abc456', 2.0),
+                                             's4': ('abc101112', 10.0),
+                                             's3': ('def987', 3.0),
+                                             's5': ('def654', 5.0)}
+
+        cfg = self.env.trap_dc.create_smart_dma("config.json", cls=SmartDma)
+        assert isinstance(cfg, SmartDma)
+
+        cfg.compare_dma_dict()
+
+        self.assertSetEqual(set(cfg._erase_names), {'s4', 's3', 's5'})
+        self.assertSetEqual(set(cfg._record_names), {'s1', 's3', 's4'})
+
+    @patch.object(SmartDma, 'line_delays')
+    @patch.object(SmartDma, 'solution_mus')
+    @patch.object(SmartDma, 'names')
+    @patch.object(SmartDma, 'solution_dict')
+    @patch.object(CoreCache, 'get')
+    @patch.object(BaseReader, 'read_config')
+    @patch.object(BaseReader, '_read_channel_map')
+    def test_update_dma(self, _, _mock_read_config, mock_cache_get, mock_solution_dict, mock_names,
+                        mock_solution_mus, mock_line_delays):
+        self.env.trap_dc.init()
+        dma_dict = {'s1': ('abc123', 1.0),
+                    's2': ('abc456', 2.0),
+                    's3': ('abc789', 3.0),
+                    's4': ('abc101112', 4.0)}
+        mock_solution_dict.return_value = dma_dict
+
+        self.env.core_dma._dma_traces = {'system.trap_dc.s2': None,
+                                         'system.trap_dc.s3': None,
+                                         'system.trap_dc.s4': None,
+                                         'system.trap_dc.s5': None}
+        mock_cache_get.return_value = [1]
+
+        mock_names.return_value = ['s1', 's2', 's3', 's4']
+        mock_solution_mus.return_value = [[([1, 2, 3]), ([3])],
+                                          [([0, 0, 0]), ([1])],
+                                          [([4, 4, 4]), ([5])],
+                                          [([5, 6, 5]), ([0])]]
+        mock_line_delays.return_value = [1.0, 2.0, 3.0, 4.0]
+
+        cfg = self.env.trap_dc.create_smart_dma("config.json", cls=SmartDma)
+        assert isinstance(cfg, SmartDma)
+
+        # The below two lines effectively mock compare_dma_dict
+        cfg._erase_names = ['s4', 's3', 's5']
+        cfg._record_names = ['s1', 's3', 's4']
+
+        keys = cfg.update_dma_dict()
+        self.assertTrue('system.trap_dc.s1' in keys)
+        self.assertTrue('system.trap_dc.s2' in keys)
+        self.assertTrue('system.trap_dc.s3' in keys)
+        self.assertTrue('system.trap_dc.s4' in keys)
+
+        self.assertTrue('system.trap_dc.s1' in self.env.core_dma._dma_traces)
+        self.assertTrue('system.trap_dc.s2' in self.env.core_dma._dma_traces)
+        self.assertTrue('system.trap_dc.s3' in self.env.core_dma._dma_traces)
+        self.assertTrue('system.trap_dc.s4' in self.env.core_dma._dma_traces)
+        self.assertTrue('system.trap_dc.s5' not in self.env.core_dma._dma_traces)
+
+        self.assertDictEqual(self.env.trap_dc.get_dataset_sys("dma_dict"), dma_dict)
+
+    @patch.object(SmartDma, 'line_delays')
+    @patch.object(SmartDma, 'solution_mus')
+    @patch.object(SmartDma, 'names')
+    @patch.object(SmartDma, 'solution_dict')
+    @patch.object(BaseReader, 'read_config')
+    @patch.object(BaseReader, '_read_channel_map')
+    def test_update_dma_powercycle(self, _, _mock_read_config, _mock_solution_dict, mock_names,
+                                   mock_solution_mus, mock_line_delays):
+        self.env.trap_dc.init()
+
+        mock_names.return_value = ['s1', 's2', 's3', 's4']
+        mock_solution_mus.return_value = [[([1, 2, 3]), ([3])],
+                                          [([0, 0, 0]), ([1])],
+                                          [([4, 4, 4]), ([5])],
+                                          [([5, 6, 5]), ([0])]]
+        mock_line_delays.return_value = [1.0, 2.0, 3.0, 4.0]
+
+        cfg = self.env.trap_dc.create_smart_dma("config.json", cls=SmartDma)
+        assert isinstance(cfg, SmartDma)
+        # The below two lines effectively mock compare_dma_dict
+        cfg._erase_names = ['s4', 's3', 's5']
+        cfg._record_names = ['s1', 's3', 's4']
+
+        keys = cfg.update_dma_dict()
+        self.assertTrue('system.trap_dc.s1' in keys)
+        self.assertTrue('system.trap_dc.s2' in keys)
+        self.assertTrue('system.trap_dc.s3' in keys)
+        self.assertTrue('system.trap_dc.s4' in keys)
+
+        self.assertTrue('system.trap_dc.s1' in self.env.core_dma._dma_traces)
+        self.assertTrue('system.trap_dc.s2' in self.env.core_dma._dma_traces)
+        self.assertTrue('system.trap_dc.s3' in self.env.core_dma._dma_traces)
+        self.assertTrue('system.trap_dc.s4' in self.env.core_dma._dma_traces)
+        self.assertTrue('system.trap_dc.s5' not in self.env.core_dma._dma_traces)
 
     def test_reader_line_to_mu(self):
         self.env.trap_dc.init()
         line_mu = self.env.trap_dc._reader.line_to_mu(([1., 2., 3.], [0, 1, 2]))
         assert isinstance(line_mu[0], np.int32)
 
-    @patch.object(BaseReader, '_read_channel_map')
+    @ patch.object(BaseReader, '_read_channel_map')
     def test_reader_zotino_uninitialized(self, _):
         reader = ZotinoReader(pathlib.Path('.'),
                               pathlib.Path('test.csv'))
@@ -505,7 +621,7 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
         except RuntimeError as e:
             assert str(e) == "Must initialize reader using init method to use function line_to_mu"
 
-    @patch.object(BaseReader, '_read_channel_map')
+    @ patch.object(BaseReader, '_read_channel_map')
     def test_calculate_low_slack(self, _):
         self.env.trap_dc.init()
         test_solution_packed = [[2, 3, 4, 5],
@@ -518,7 +634,7 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
         assert slack > l0
         assert slack < l0 + self.env.trap_dc._min_line_delay_mu
 
-    @patch.object(BaseReader, '_read_channel_map')
+    @ patch.object(BaseReader, '_read_channel_map')
     def test_calculate_high_slack(self, _):
         line_delay = .0000016
         self.env.trap_dc.init()
@@ -538,7 +654,7 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
         assert slack > l0 + l1 + l2 + l3 - 3 * line_delay
         assert slack < l0 + l1 + l2 + l3 - 3 * line_delay + self.env.trap_dc._min_line_delay_mu
 
-    @patch.object(BaseReader, '_read_channel_map')
+    @ patch.object(BaseReader, '_read_channel_map')
     def test_calculate_dma_low_slack(self, _):
         line_delay = .00003
         self.env.trap_dc.init()
@@ -552,7 +668,7 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
         assert slack > l0
         assert slack < l0 + self.env.trap_dc._min_line_delay_mu + self.env.trap_dc._calculator._dma_startup_time_mu
 
-    @patch.object(BaseReader, '_read_channel_map')
+    @ patch.object(BaseReader, '_read_channel_map')
     def test_calculate_slack_too_low(self, _):
         line_delay = .000000001
         self.env.trap_dc.init()
@@ -566,7 +682,7 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
         except ValueError as e:
             assert str(e) == f"Line Delay must be greater than {self.env.trap_dc._min_line_delay_mu}"
 
-    @patch.object(BaseReader, '_read_channel_map')
+    @ patch.object(BaseReader, '_read_channel_map')
     def test_calculate_dma_slack_too_low(self, _):
         line_delay = .0000001
         self.env.trap_dc.init()
@@ -580,7 +696,7 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
         except ValueError as e:
             assert str(e) == f"Line Delay must be greater than {self.env.trap_dc._min_line_delay_mu}"
 
-    @patch.object(BaseReader, '_read_channel_map')
+    @ patch.object(BaseReader, '_read_channel_map')
     def test_configure_calculator(self, _):
         dma_startup_mu = 1210
         dma_startup_time = self.env.core.mu_to_seconds(dma_startup_mu)
@@ -605,7 +721,7 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
         assert self.env.trap_dc._calculator._dma_comm_delay_intercept_mu == np.int64(4)
         assert self.env.trap_dc._calculator._dma_comm_delay_slope_mu == np.int64(5)
 
-    @patch.object(BaseReader, '_read_channel_map')
+    @ patch.object(BaseReader, '_read_channel_map')
     def test_set_line_packed(self, _):
         with temp_dir():
             test_solution = [([1., 2., 3., 4.], [2, 3, 4, 5])]

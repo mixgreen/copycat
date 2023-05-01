@@ -87,7 +87,14 @@ class SmartDma:
     _config: _SMART_DMA_CONFIG_T
     """The configuration dict that contains field names mapped to config data"""
 
-    _incoming_dma_dict: typing.Dict[str, typing.Any] = {}
+    _trap_dc: TrapDcModule
+
+    _names: typing.Sequence[str]
+    _solution_mus: typing.Sequence[_ZOTINO_SOLUTION_MU_T]
+    _line_delays: typing.Sequence[float]
+
+    _erase_names: typing.Sequence[str]
+    _record_names: typing.Sequence[str]
 
     def __init__(self, trap_dc: TrapDcModule, config: CONFIG_T):
         """Constructor of zotino linear combination module
@@ -96,14 +103,57 @@ class SmartDma:
         :param config: The string name of the file where the configuration is
         """
         self._config = {d['name']: _SolutionAttrs(d, trap_dc) for d in config['params']}
+        self._trap_dc = trap_dc
 
-    def store_solutions(self) -> None:
-        """A method to store all the solutions in a dictionary for comparison"""
-        self._incoming_dma_dict = {sol_attr.name(): (sol_attr.solution().hash,
-                                                     sol_attr.line_delay(),
-                                                     sol_attr.reverse(),
-                                                     sol_attr.multiplier())
-                                   for sol_attr in self._config.values()}
+        self._names = self.names()
+        self._solution_mus = self.solution_mus()
+        self._line_delays = self.line_delays()
+
+        self._trap_dc.set_incoming_dma_dict(self.solution_dict())
+
+    def solution_dict(self) -> typing.Dict[str, typing.Any]:
+        """A method to return all the solutions in a dictionary for comparison
+
+        :return: The incoming dma dictionary of solution details for comparison"""
+        return {sol_attr.name(): (sol_attr.solution().hash,
+                                  sol_attr.line_delay(),
+                                  sol_attr.reverse(),
+                                  sol_attr.multiplier())
+                for sol_attr in self._config.values()}
+
+    def compare_dma_dict(self) -> None:
+        """Compare the incoming dma dictionary populated by :func:`solution_dict` to the dictionary in
+        the dataset
+        Goal is to figure out the dma trace names that need to be erased (no longer needed or overwritten
+        with a new hash or line delay) and the trace names that need to be recorded (weren't previously in
+        trace or overwritted with a new hash or line_delay)
+
+        :return: Two lists of dma trace names, the first for erasures, the second for recordings
+        """
+        self._erase_names, self._record_names = self._trap_dc.compare_dma_dict()
+
+    def update_dma_dict(self, force_record: bool = False) -> typing.Sequence[str]:
+        """Update the dma traces by erasing and recording the incoming data. The erase_names and new_record_names
+        should come from the return of :func:`compare_dma`. The record_names, solutions, and line_delay fields should
+        be the same data used as the argument to :func:`compare_dma` but transposed. The :func:`compare_dma` will
+        transpose and return them.
+        This function will also check for a powercycle of the core device
+        This function should be called from the kernel in the init_kernel function of the module using it
+        Whether there is a powercycle, force_record, or neither, the returned keys (i.e. the available dma traces)
+        should always be the same
+
+        :param force_record: False by default. If true all dma traces passed in will be recorded. Otherwise only the
+            new dma traces will be recorded
+
+
+        :return: Two lists of dma trace names, the first for erasures, the second for recordings
+        """
+        return list(self._trap_dc.update_dma(self._names,
+                                             self._solution_mus,
+                                             self._line_delays,
+                                             erase_names=self._erase_names,
+                                             record_names=self._record_names,
+                                             force_record=force_record))
 
     def names(self) -> typing.Sequence[str]:
         """A method to get all of the string names
@@ -294,6 +344,7 @@ class TrapDcModule(DaxModule):
     _reader: ZotinoReader
     _min_line_delay_mu: np.int64
     _calculator: ZotinoCalculator
+    _incoming_dma_dict: typing.Dict[str, typing.Any]
 
     def build(self,  # type: ignore[override]
               *,
@@ -323,6 +374,9 @@ class TrapDcModule(DaxModule):
         # Initialize Zotino Reader
         self._reader = ZotinoReader(
             self._solution_path, self._map_file)
+
+        # Initialize incoming dma dict
+        self._incoming_dma_dict = {}
 
     @host_only
     def init(self) -> None:
@@ -377,6 +431,10 @@ class TrapDcModule(DaxModule):
         :return: The SmartDma object"""
         config = self._reader.read_config(config_file, schema=SMART_DMA)
         return cls(self, config, *args, **kwargs)
+
+    @host_only
+    def set_incoming_dma_dict(self, dma_dict: typing.Dict[str, typing.Any]) -> None:
+        self._incoming_dma_dict = dma_dict
 
     @host_only
     def read_line(self,
@@ -535,6 +593,103 @@ class TrapDcModule(DaxModule):
 
         return self._reader.list_solutions()
 
+    @host_only
+    def compare_dma_dict(self) -> typing.Tuple[typing.Sequence[str], typing.Sequence[str]]:
+        """Compare the incoming dma dictionary populated by :func:`compare_dma` to the dictionary in
+        the dataset
+        Goal is to figure out the dma trace names that need to be erased (no longer needed or overwritten
+        with a new hash or line delay) and the trace names that need to be recorded (weren't previously in
+        trace or overwritted with a new hash or line_delay)
+
+        :return: Two lists of dma trace names, the first for erasures, the second for recordings
+        """
+        dma_dict = self.get_dataset_sys("dma_dict", {}, archive=False)
+        old_names = set(dma_dict.keys())
+        incoming_names = set(self._incoming_dma_dict.keys())
+        erase_names = old_names.difference(incoming_names)
+        overwrite_names = old_names.intersection(incoming_names)
+        record_names = incoming_names.difference(old_names)
+
+        for name in overwrite_names:
+            assert (name in dma_dict and name in self._incoming_dma_dict)
+            if (dma_dict[name] != self._incoming_dma_dict[name]):
+                erase_names.add(name)
+                record_names.add(name)
+
+        return list(erase_names), list(record_names)
+
+    @kernel
+    def update_dma(self,
+                   names: TList(TStr),  # type: ignore[valid-type]
+                   solutions: TList(TList(TInt32)),  # type: ignore[valid-type]
+                   line_delays: TList(TFloat),  # type: ignore[valid-type]
+                   erase_names: TList(TStr) = [],  # type: ignore[valid-type]
+                   record_names: TList(TStr) = [],  # type: ignore[valid-type]
+                   force_record: TBool = False) -> TList(Tstr):  # type: ignore[valid-type]
+        """Update the dma traces by erasing and recording the incoming data. The erase_names and new_record_names
+        should come from the return of :func:`compare_dma`. The record_names, solutions, and line_delay fields should
+        be the same data used as the argument to :func:`compare_dma` but transposed. The :func:`compare_dma` will
+        transpose and return them.
+        This function will also check for a powercycle of the core device
+        This function should be called from the kernel in the init_kernel function of the module using it
+        Whether there is a powercycle, force_record, or neither, the returned keys (i.e. the available dma traces)
+        should always be the same
+
+        :param record_names: List of all names that are needed in the dma trace
+        :param solutions: List of solutions. One for each recording name. If force_record enable, all will be recorded
+        :param line_delays: List of line delays. One for each shuttle solution
+        :param erase_names: List of names to erase from the dma trace
+        :param new_record_names: Names to record if force_record is not enabled
+        :param force_record: False by default. If true all dma traces passed in will be recorded. Otherwise only the
+            new dma traces will be recorded
+
+        :return: List of dma trace keys that are available to the user. Keys can be used to get the corresponding
+            handles
+        """
+
+        keys = []
+        powercycle = len(self.core_cache.get("powercycle")) == 0
+        if force_record or powercycle:
+            if not powercycle:
+                for name in names:
+                    self.erase_dma(name)
+
+            keys = [self.record_dma(name, solutions[i], line_delays[i])
+                    for i, name in enumerate(names)]
+
+        else:
+            for name in erase_names:
+                self.erase_dma(name)
+
+            keys = []
+            for i, name in enumerate(names):
+                if name in record_names:
+                    self.logger.debug("Recording trace " + name)
+                    keys.append(self.record_dma(name, solutions[i], line_delays[i]))
+                else:
+                    keys.append(self.get_dma_key(name))
+
+        self._update_dma_dataset()
+
+        return keys
+
+    @rpc(flags={'async'})
+    def _update_dma_dataset(self):
+        """Updates the datset to the incoming dataset populated by :func:`compare_dma`
+        Will reset the incoming dma dictionary variable once finished
+        """
+        self.set_dataset_sys("dma_dict", self._incoming_dma_dict, archive=False, data_store=False)
+        self._incoming_dma_dict = {}
+
+    @rpc
+    def get_dma_key(self, name: str) -> TStr:
+        """Return the dma trace key given a name
+        :param name: Name for the dma trace
+
+        :return: Key for the dma trace
+        """
+        return self.get_system_key(name)
+
     @kernel
     def record_dma(self,
                    name: TStr,
@@ -571,7 +726,7 @@ class TrapDcModule(DaxModule):
         """
         if line_delay <= self._min_line_delay_mu:
             raise ValueError(f"Line Delay must be greater than {self._min_line_delay_mu}")
-        dma_name = self.get_system_key(name)
+        dma_name = self.get_dma_key(name)
         with self.core_dma.record(dma_name):
             for t in solution:
                 self.set_line(t)
@@ -598,13 +753,32 @@ class TrapDcModule(DaxModule):
                                   self.core.seconds_to_mu(1.0 / line_rate))
 
     @kernel
-    def get_dma_handle(self, key: TStr) -> TTuple([TInt32, TInt64, TInt32]):  # type: ignore[valid-type]
+    def erase_dma(self, name: TStr):
+        """Erase a dma trace from the dma cache.
+
+        :param name: Name of dma trace to erase
+        """
+        dma_name = self.get_dma_key(name)
+        try:
+            self.core_dma.erase(dma_name)
+        except KeyError:
+            self.logger.debug("Data not found for " + dma_name + " when erasing")
+
+    @kernel
+    def get_dma_handle(self,
+                       key: TStr,
+                       set_powercycle: TBool = True) -> TTuple([TInt32, TInt64, TInt32]):  # type: ignore[valid-type]
         """Get the DMA handle associated with the name of the recording
 
         :param key: Unique key of the recording
+        :param set_powercycle: True by default. If set to True, will add an entry to the core cache which is used to
+            determine powercycles
 
         :return: Handle used to playback the DMA Recording
         """
+        if set_powercycle:
+            self.core_cache.put("powercycle", [1])
+
         return self.core_dma.get_handle(key)
 
     @kernel
