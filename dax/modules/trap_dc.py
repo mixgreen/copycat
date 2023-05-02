@@ -648,7 +648,7 @@ class TrapDcModule(DaxModule):
         """
 
         keys = []
-        powercycle = len(self.core_cache.get("powercycle")) == 0
+        powercycle = len(self.core_cache.get(self.get_system_key("powercycle"))) == 0
         if force_record or powercycle:
             if not powercycle:
                 for name in names:
@@ -664,7 +664,7 @@ class TrapDcModule(DaxModule):
             keys = []
             for i, name in enumerate(names):
                 if name in record_names:
-                    self.logger.debug("Recording trace " + name)
+                    self.logger.debug("Recording trace %s", name)
                     keys.append(self.record_dma(name, solutions[i], line_delays[i]))
                 else:
                     keys.append(self.get_dma_key(name))
@@ -762,7 +762,7 @@ class TrapDcModule(DaxModule):
         try:
             self.core_dma.erase(dma_name)
         except KeyError:
-            self.logger.debug("Data not found for " + dma_name + " when erasing")
+            self.logger.warn("Data not found for %s when erasing", dma_name)
 
     @kernel
     def get_dma_handle(self,
@@ -777,7 +777,7 @@ class TrapDcModule(DaxModule):
         :return: Handle used to playback the DMA Recording
         """
         if set_powercycle:
-            self.core_cache.put("powercycle", [1])
+            self.core_cache.put(self.get_system_key("powercycle"), [1])
 
         return self.core_dma.get_handle(key)
 
