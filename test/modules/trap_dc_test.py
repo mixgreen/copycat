@@ -21,6 +21,39 @@ _NUM_SAMPLES = 1000 if CI_ENABLED else 100
 _CONFIG_PATH = 'config'
 
 
+class DmaTrapDcModule(TrapDcModule):
+    def build(self, *, solution_path, map_file):
+        super(DmaTrapDcModule, self).build(key='zotino0',
+                                           solution_path=solution_path,
+                                           map_file=map_file)
+        self.dma_cfg = self.create_smart_dma('dma.yml', cls=SmartDma)
+
+    def init(self):
+        super().init()
+
+    def post_init(self):
+        super().post_init()
+
+
+class _DmaTestSystem(DaxSystem):
+    SYS_ID = 'unittest_system'
+    SYS_VER = 0
+    CORE_LOG_KEY = None
+    DAX_INFLUX_DB_KEY = None
+
+    def build(self, **kwargs) -> None:  # type: ignore[override]
+        with temp_dir():
+            super(_DmaTestSystem, self).build()
+            f = open("test_map.csv", "w")
+            os.makedirs(_CONFIG_PATH)
+            open(_CONFIG_PATH + "/dx.csv", "w+")
+            self.trap_dc = DmaTrapDcModule(self,
+                                           'trap_dc',
+                                           solution_path='.',
+                                           map_file=os.getcwd() + '/' + f.name,
+                                           **kwargs)
+
+
 class _TestSystem(DaxSystem):
     SYS_ID = 'unittest_system'
     SYS_VER = 0
@@ -51,18 +84,18 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
     PATH_DATA = [{'A': -10., 'B': 0., 'C': 0., 'D': 0.,
                   'E': SpecialCharacter.X},
                  {'A': 1., 'B': 0., 'C': 0, 'D': 0,
-                  'E': SpecialCharacter.X},
+                 'E': SpecialCharacter.X},
                  {'A': 1., 'B': 2., 'C': 0., 'D': 0.,
-                  'E': SpecialCharacter.X},
+                 'E': SpecialCharacter.X},
                  {'A': 1., 'B': 2., 'C': 3., 'D': 4.,
-                  'E': SpecialCharacter.X}]
+                 'E': SpecialCharacter.X}]
     MAP_DATA = [{'label': 'A', 'channel': '2'},
                 {'label': 'B', 'channel': '3'},
                 {'label': 'C', 'channel': '4'},
                 {'label': 'D', 'channel': '5'},
                 {'label': 'E', 'channel': '6'}]
 
-    @patch.object(BaseReader, '_read_channel_map')
+    @ patch.object(BaseReader, '_read_channel_map')
     def setUp(self, _) -> None:
         self.rng = random.Random(self.SEED)
         self.env = self._construct_env()
@@ -114,7 +147,13 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
         }
     }
 
-    @patch.object(BaseReader, '_read_channel_map')
+    @ patch.object(BaseReader, 'read_config')
+    @ patch.object(BaseReader, '_read_channel_map')
+    def _construct_dma_env(self, cfg, _, mock_read_config, **kwargs):
+        mock_read_config.return_value = cfg
+        return self.construct_env(_DmaTestSystem, device_db=self._DEVICE_DB, build_kwargs=kwargs)
+
+    @ patch.object(BaseReader, '_read_channel_map')
     def _construct_env(self, _, **kwargs):
         return self.construct_env(_TestSystem, device_db=self._DEVICE_DB, build_kwargs=kwargs)
 
@@ -125,8 +164,8 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
             self.expect(self.env.trap_dc._zotino, f'v_out_{i}', 'x')
             self.expect(self.env.trap_dc._zotino, f'v_offset_{i}', 'x')
 
-    @patch.object(BaseReader, '_read_channel_map')
-    @patch.object(TrapDcModule, 'get_system_key')
+    @ patch.object(BaseReader, '_read_channel_map')
+    @ patch.object(TrapDcModule, 'get_system_key')
     def test_dma(self, mock_get_system_key, _):
         num_path_rows = 10
         mock_get_system_key.return_value = "ZotinoTest"
@@ -152,7 +191,7 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
                     self.assertEqual(
                         self.env.core_dma._dma_play_name.pull(), "ZotinoTest")
 
-    @patch.object(BaseReader, '_read_channel_map')
+    @ patch.object(BaseReader, '_read_channel_map')
     def test_set_line(self, _):
         with temp_dir():
             self._test_uninitialized()
@@ -178,7 +217,7 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
         # Adjust voltage to make sure it is in range
         return num_data, voltages, c
 
-    @patch.object(BaseReader, '_read_channel_map')
+    @ patch.object(BaseReader, '_read_channel_map')
     def test_shuttle_min_line_delay(self, mock_read_channel_map):
         mock_read_channel_map.return_value = [{'label': 'A', 'channel': '0'},
                                               {'label': 'B', 'channel': '1'},
@@ -192,7 +231,7 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
         except ValueError as e:
             assert str(e) == f"Line Delay must be greater than {s.trap_dc._min_line_delay_mu}"
 
-    @patch.object(BaseReader, '_read_channel_map')
+    @ patch.object(BaseReader, '_read_channel_map')
     def test_record_dma_min_line_delay(self, mock_read_channel_map):
         mock_read_channel_map.return_value = [{'label': 'A', 'channel': '0'},
                                               {'label': 'B', 'channel': '1'},
@@ -206,20 +245,20 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
         except ValueError as e:
             assert str(e) == f"Line Delay must be greater than {s.trap_dc._min_line_delay_mu}"
 
-    @patch.object(BaseReader, '_read_channel_map')
+    @ patch.object(BaseReader, '_read_channel_map')
     def test_shuttle(self, _):
         with temp_dir():
             shuttle_solution = [([0., 0., -10, 0., 0.,
-                                  0., 0., 0., 0., 0.,
-                                  0., 0., 0., 0., 0.,
-                                  0., 0., 0., 0.,
-                                  0., 0., 0., 0.,
-                                  0., 0., 0., 0.,
-                                  0., 0., 0., 0., 0.],
+                                0., 0., 0., 0., 0.,
+                                0., 0., 0., 0., 0.,
+                                0., 0., 0., 0.,
+                                0., 0., 0., 0.,
+                                0., 0., 0., 0.,
+                                0., 0., 0., 0., 0.],
                                  [0, 1, 2, 3, 4, 5, 6, 7,
-                                     8, 9, 10, 11, 12, 13, 14, 15,
-                                     16, 17, 18, 19, 20, 21, 22, 23,
-                                     24, 25, 26, 27, 28, 29, 30, 31]),
+                                8, 9, 10, 11, 12, 13, 14, 15,
+                                16, 17, 18, 19, 20, 21, 22, 23,
+                                24, 25, 26, 27, 28, 29, 30, 31]),
                                 ([1.], [2]),
                                 ([2.], [3]),
                                 ([3., 4.], [4, 5])]
@@ -272,8 +311,8 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
                                       'v_out_5', 4, places=3)
                     delay_mu(line_delay_mu)
 
-    @patch.object(BaseReader, 'read_solution')
-    @patch.object(BaseReader, '_read_channel_map')
+    @ patch.object(BaseReader, 'read_solution')
+    @ patch.object(BaseReader, '_read_channel_map')
     def test_process_solution_random(self,
                                      mock_read_channel_map,
                                      mock_read_solution):
@@ -341,8 +380,8 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
                 return d[LABEL_FIELD]
         raise ValueError("Mapped to channel that isn't in channel map")
 
-    @patch.object(BaseReader, 'read_solution')
-    @patch.object(BaseReader, '_read_channel_map')
+    @ patch.object(BaseReader, 'read_solution')
+    @ patch.object(BaseReader, '_read_channel_map')
     def test_process_solution(self,
                               mock_read_channel_map,
                               mock_read_solution):
@@ -374,9 +413,9 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
                 self.assertListEqual(t[0], expected_zotino_path[i][0])
                 self.assertListEqual(t[1], expected_zotino_path[i][1])
 
-    @patch.object(ZotinoReader, 'process_solution')
-    @patch.object(BaseReader, 'read_solution')
-    @patch.object(BaseReader, '_read_channel_map')
+    @ patch.object(ZotinoReader, 'process_solution')
+    @ patch.object(BaseReader, 'read_solution')
+    @ patch.object(BaseReader, '_read_channel_map')
     def test_get_path(self, _, _mock_read_solution, mock_process_solution):
         with temp_dir():
             self.env.trap_dc.init()
@@ -394,9 +433,9 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
                 solution=mock_reader_solution, multiplier=2)
             self.assertListEqual(prepared_path_result, expected_prepared_path_mu)
 
-    @patch.object(ZotinoReader, 'process_solution')
-    @patch.object(BaseReader, 'read_solution')
-    @patch.object(BaseReader, '_read_channel_map')
+    @ patch.object(ZotinoReader, 'process_solution')
+    @ patch.object(BaseReader, 'read_solution')
+    @ patch.object(BaseReader, '_read_channel_map')
     def test_get_path_reverse(self, _, _mock_read_solution, mock_process_solution):
         with temp_dir():
             self.env.trap_dc.init()
@@ -414,9 +453,9 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
                 solution=mock_reader_solution, reverse=True)
             self.assertListEqual(prepared_path_result, expected_prepared_path_mu)
 
-    @patch.object(ZotinoReader, 'process_solution')
-    @patch.object(BaseReader, 'read_solution')
-    @patch.object(BaseReader, '_read_channel_map')
+    @ patch.object(ZotinoReader, 'process_solution')
+    @ patch.object(BaseReader, 'read_solution')
+    @ patch.object(BaseReader, '_read_channel_map')
     def test_get_path_segment(self, _, _mock_read_solution, mock_process_solution):
         with temp_dir():
             self.env.trap_dc.init()
@@ -432,9 +471,9 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
                 solution=mock_reader_solution, start=1, end=2)
             self.assertListEqual(prepared_path_result, expected_prepared_path_mu)
 
-    @patch.object(ZotinoReader, 'process_solution')
-    @patch.object(BaseReader, 'read_solution')
-    @patch.object(BaseReader, '_read_channel_map')
+    @ patch.object(ZotinoReader, 'process_solution')
+    @ patch.object(BaseReader, 'read_solution')
+    @ patch.object(BaseReader, '_read_channel_map')
     def test_get_line(self, _, _mock_read_solution, mock_process_solution):
         with temp_dir():
             self.env.trap_dc.init()
@@ -446,7 +485,7 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
                 line=mock_reader_line, multiplier=3.5)
             self.assertListEqual(prepared_line_result, expected_prepared_line_mu)
 
-    @patch.object(BaseReader, 'read_config')
+    @ patch.object(BaseReader, 'read_config')
     def test_create_lc_configs(self, mock_read_solution):
         mock_read_solution.return_value = {"params": [{"name": "dx", "file": "configs.csv", "line": 1, "value": 2.3}]}
         cfg = self.env.trap_dc.create_linear_combo("config.json", cls=LinearCombo)
@@ -456,49 +495,53 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
             attrs in cfg._config["dx"]._attrs for attrs in ["name", "file", "line"])
         assert cfg._config["dx"]._attrs["value"] == 2.3
 
-    @patch.object(TrapDcModule, 'read_solution')
-    @patch.object(TrapDcModule, 'solution_to_mu')
-    @patch.object(BaseReader, 'read_config')
-    def test_create_dma_configs(self, mock_read_config, mock_solution_mu, mock_read_solution):
-        mock_read_config.return_value = {"params": [{"name": "s1", "file": "solutions.csv",
-                                                     "start": 1, "end": 3, "reverse": False,
-                                                     "multiplier": 2.3, "line_delay": 10.0},
-                                                    {"name": "s2", "file": "solutions.csv", "line_delay": 20.0}]}
+    @ patch.object(TrapDcModule, 'read_solution')
+    @ patch.object(TrapDcModule, 'solution_to_mu')
+    def test_create_dma_configs(self, mock_solution_mu, mock_read_solution):
+        cfg = {"params": [{"name": "s1", "file": "solutions.csv",
+                           "start": 1, "end": 3, "reverse": False,
+                           "multiplier": 2.3, "line_delay": 10.0},
+                          {"name": "s2", "file": "solutions.csv", "line_delay": 20.0}]}
         mock_solution_mu.return_value = [[1234], [2345]]
         mock_read_solution.return_value = SOLUTION_T([{'A': 1.0}])
         h = mock_read_solution.return_value.hash
 
-        cfg = self.env.trap_dc.create_smart_dma("config.json", cls=SmartDma)
-        assert isinstance(cfg, SmartDma)
-        assert len(cfg._config) == 2 and "s1" in cfg._config and "s2" in cfg._config
-        assert isinstance(cfg._config["s1"], _SolutionAttrs)
-        assert isinstance(cfg._config["s2"], _SolutionAttrs)
+        s = self._construct_dma_env(cfg)
 
-        assert len(cfg._config["s1"]._attrs) == 7 and all(
-            attrs in cfg._config["s1"]._attrs for attrs in ["name", "file", "start", "end", "reverse", "multiplier",
-                                                            "line_delay"])
-        assert len(cfg._config["s2"]._attrs) == 3 and all(
-            attrs in cfg._config["s2"]._attrs for attrs in ["name", "file", "line_delay"])
+        dma_cfg = s.trap_dc.dma_cfg
+        assert isinstance(dma_cfg, SmartDma)
+        assert len(dma_cfg._config) == 2 and "s1" in dma_cfg._config and "s2" in dma_cfg._config
+        assert isinstance(dma_cfg._config["s1"], _SolutionAttrs)
+        assert isinstance(dma_cfg._config["s2"], _SolutionAttrs)
 
-        assert len(cfg._line_delays) == 2 and all(v in cfg._line_delays for v in [10.0, 20.0])
+        assert len(dma_cfg._config["s1"]._attrs) == 7 and all(
+            attrs in dma_cfg._config["s1"]._attrs for attrs in ["name", "file", "start", "end", "reverse", "multiplier",
+                                                                "line_delay"])
+        assert len(dma_cfg._config["s2"]._attrs) == 3 and all(
+            attrs in dma_cfg._config["s2"]._attrs for attrs in ["name", "file", "line_delay"])
 
-        mus = cfg._solution_mus
+        assert len(dma_cfg._line_delays) == 2 and all(v in dma_cfg._line_delays for v in [10.0, 20.0])
+
+        mus = dma_cfg._solution_mus
         assert len(mus) == 2 and mus[0] == [[1234], [2345]] and mus[1] == [[1234], [2345]]
 
-        assert len(cfg._names) == 2 and all(v in cfg._names for v in ["s1", "s2"])
+        assert len(dma_cfg._names) == 2 and all(v in dma_cfg._names for v in ["s1", "s2"])
 
-        assert len(cfg._trap_dc._incoming_dma_dict) == 2 \
-            and cfg._trap_dc._incoming_dma_dict["s1"] == (h, 10.0, False, 2.3) \
-            and cfg._trap_dc._incoming_dma_dict["s2"] == (h, 20.0, False, 1.0)
+        assert len(dma_cfg._incoming_dma_dict) == 2 \
+            and dma_cfg._incoming_dma_dict["s1"] == (h, 10.0, False, 2.3) \
+            and dma_cfg._incoming_dma_dict["s2"] == (h, 20.0, False, 1.0)
 
-    @patch.object(SmartDma, 'line_delays')
-    @patch.object(SmartDma, 'solution_mus')
-    @patch.object(SmartDma, 'names')
-    @patch.object(SmartDma, 'solution_dict')
-    @patch.object(TrapDcModule, 'get_dataset_sys')
-    @patch.object(BaseReader, 'read_config')
-    def test_compare_dma(self, _, mock_get_dataset_sys, mock_solution_dict, mock_names,
+    @ patch.object(SmartDma, 'line_delays')
+    @ patch.object(SmartDma, 'solution_mus')
+    @ patch.object(SmartDma, 'names')
+    @ patch.object(SmartDma, 'solution_dict')
+    @ patch.object(SmartDma, 'get_dataset_sys')
+    def test_compare_dma(self, mock_get_dataset_sys, mock_solution_dict, mock_names,
                          mock_solution_mus, mock_line_delays):
+        cfg = {"params": [{"name": "s1", "file": "solutions.csv",
+                           "start": 1, "end": 3, "reverse": False,
+                           "multiplier": 2.3, "line_delay": 10.0},
+                          {"name": "s2", "file": "solutions.csv", "line_delay": 20.0}]}
         mock_solution_dict.return_value = {'s1': ('abc123', 1.0),
                                            's2': ('abc456', 2.0),
                                            's3': ('abc789', 3.0),
@@ -513,22 +556,22 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
                                              's4': ('abc101112', 10.0),
                                              's3': ('def987', 3.0),
                                              's5': ('def654', 5.0)}
+        s = self._construct_dma_env(cfg)
+        print(s.trap_dc.dma_cfg._keys)
+        s.dax_init()
+        dma_cfg = s.trap_dc.dma_cfg
+        assert isinstance(dma_cfg, SmartDma)
 
-        cfg = self.env.trap_dc.create_smart_dma("config.json", cls=SmartDma)
-        assert isinstance(cfg, SmartDma)
+        self.assertSetEqual(set(dma_cfg._erase_names), {'s4', 's3', 's5'})
+        self.assertSetEqual(set(dma_cfg._record_names), {'s1', 's3', 's4'})
 
-        cfg.compare_dma_dict()
-
-        self.assertSetEqual(set(cfg._erase_names), {'s4', 's3', 's5'})
-        self.assertSetEqual(set(cfg._record_names), {'s1', 's3', 's4'})
-
-    @patch.object(SmartDma, 'line_delays')
-    @patch.object(SmartDma, 'solution_mus')
-    @patch.object(SmartDma, 'names')
-    @patch.object(SmartDma, 'solution_dict')
-    @patch.object(CoreCache, 'get')
-    @patch.object(BaseReader, 'read_config')
-    @patch.object(BaseReader, '_read_channel_map')
+    @ patch.object(SmartDma, 'line_delays')
+    @ patch.object(SmartDma, 'solution_mus')
+    @ patch.object(SmartDma, 'names')
+    @ patch.object(SmartDma, 'solution_dict')
+    @ patch.object(CoreCache, 'get')
+    @ patch.object(BaseReader, 'read_config')
+    @ patch.object(BaseReader, '_read_channel_map')
     def test_update_dma(self, _, _mock_read_config, mock_cache_get, mock_solution_dict, mock_names,
                         mock_solution_mus, mock_line_delays):
         self.env.trap_dc.init()
@@ -557,8 +600,11 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
         # The below two lines effectively mock compare_dma_dict
         cfg._erase_names = ['s4', 's3', 's5']
         cfg._record_names = ['s1', 's3', 's4']
+        cfg._recorded_names = ['s2']
+        cfg._keys = ["", "", "", ""]
 
-        keys = cfg.update_dma_dict()
+        cfg.update_dma()
+        keys = cfg._keys
         self.assertTrue('system.trap_dc.s1' in keys)
         self.assertTrue('system.trap_dc.s2' in keys)
         self.assertTrue('system.trap_dc.s3' in keys)
@@ -570,14 +616,16 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
         self.assertTrue('system.trap_dc.s4' in self.env.core_dma._dma_traces)
         self.assertTrue('system.trap_dc.s5' not in self.env.core_dma._dma_traces)
 
-        self.assertDictEqual(self.env.trap_dc.get_dataset_sys("dma_dict"), dma_dict)
+        cfg._update_dma_dataset()
 
-    @patch.object(SmartDma, 'line_delays')
-    @patch.object(SmartDma, 'solution_mus')
-    @patch.object(SmartDma, 'names')
-    @patch.object(SmartDma, 'solution_dict')
-    @patch.object(BaseReader, 'read_config')
-    @patch.object(BaseReader, '_read_channel_map')
+        self.assertDictEqual(cfg.get_dataset_sys("dma_dict"), dma_dict)
+
+    @ patch.object(SmartDma, 'line_delays')
+    @ patch.object(SmartDma, 'solution_mus')
+    @ patch.object(SmartDma, 'names')
+    @ patch.object(SmartDma, 'solution_dict')
+    @ patch.object(BaseReader, 'read_config')
+    @ patch.object(BaseReader, '_read_channel_map')
     def test_update_dma_powercycle(self, _, _mock_read_config, _mock_solution_dict, mock_names,
                                    mock_solution_mus, mock_line_delays):
         self.env.trap_dc.init()
@@ -594,8 +642,11 @@ class TrapDcTestCase(dax.sim.test_case.PeekTestCase):
         # The below two lines effectively mock compare_dma_dict
         cfg._erase_names = ['s4', 's3', 's5']
         cfg._record_names = ['s1', 's3', 's4']
+        cfg._recorded_names = ['s2']
+        cfg._keys = ["", "", "", ""]
 
-        keys = cfg.update_dma_dict()
+        cfg.update_dma()
+        keys = cfg._keys
         self.assertTrue('system.trap_dc.s1' in keys)
         self.assertTrue('system.trap_dc.s2' in keys)
         self.assertTrue('system.trap_dc.s3' in keys)
