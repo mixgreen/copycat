@@ -125,21 +125,27 @@ class SmartDma(DaxModule):
 
     @host_only
     def init(self) -> None:
+        """Init function used to compare the incoming and current dma traces
+        Also responsible for invoking the init_kernel"""
         self._erase_names, self._record_names = self.compare_dma()
         self._recorded_names = [name for name in self._names if name not in self._record_names]
         self.init_kernel()
 
     @kernel
     def init_kernel(self) -> TNone:
+        """Init kernel function used to update the dma based on the comparison"""
         self.update_dma()
 
     @host_only
     def post_init(self) -> None:
+        """Post init function used to update the dataset with the updated dma traces
+        Also responsible for invoking the post_init_kernel"""
         self._update_dma_dataset()
         self.post_init_kernel()
 
     @kernel
     def post_init_kernel(self) -> TNone:
+        """Post init kernel used to retrieve all the handles that can reference traces for playback"""
         self._handles = [self.get_dma_handle(key) for key in self._keys]
 
     def solution_dict(self) -> typing.Dict[str, typing.Any]:
@@ -185,19 +191,11 @@ class SmartDma(DaxModule):
         transpose and return them.
         This function will also check for a powercycle of the core device
         This function should be called from the kernel in the init_kernel function of the module using it
-        Whether there is a powercycle, force_record, or neither, the returned keys (i.e. the available dma traces)
+        Whether there is a powercycle, force_record, or neither, the updated keys (i.e. the available dma traces)
         should always be the same
 
-        :param record_names: List of all names that are needed in the dma trace
-        :param solutions: List of solutions. One for each recording name. If force_record enable, all will be recorded
-        :param line_delays: List of line delays. One for each shuttle solution
-        :param erase_names: List of names to erase from the dma trace
-        :param new_record_names: Names to record if force_record is not enabled
         :param force_record: False by default. If true all dma traces passed in will be recorded. Otherwise only the
             new dma traces will be recorded
-
-        :return: List of dma trace keys that are available to the user. Keys can be used to get the corresponding
-            handles
         """
 
         powercycle = len(self.core_cache.get(self.get_system_key("powercycle"))) == 0
@@ -248,9 +246,11 @@ class SmartDma(DaxModule):
         return self._trap_dc.get_dma_handle(key)
 
     @host_only
-    def get_dma_handle_host(self, key) -> typing.Tuple[np.int32, np.int64, np.int32]:
+    def get_dma_handle_host(self, key: str) -> typing.Tuple[np.int32, np.int64, np.int32]:
         """A method to return the handles retrieved during post init
         If no handle map exists yet, create it from the handles and keys
+
+        :param key: Unique key of the recording
 
         :return: A list of all the handles"""
         if not self._handle_map:
@@ -447,7 +447,6 @@ class TrapDcModule(DaxModule):
     _reader: ZotinoReader
     _min_line_delay_mu: np.int64
     _calculator: ZotinoCalculator
-    _incoming_dma_dict: typing.Dict[str, typing.Any]
 
     def build(self,  # type: ignore[override]
               *,
@@ -489,14 +488,6 @@ class TrapDcModule(DaxModule):
     @host_only
     def init(self) -> None:
         """Initialize this module."""
-        # Get profile loader
-        # # Below calculated from set_dac_mu and load functions
-        # # https://m-labs.hk/artiq/manual/_modules/artiq/coredevice/ad53xx.html#AD53xx
-        # self._min_line_delay_mu = np.int64(self.core.seconds_to_mu(1500 * ns)
-        #                                    + 2 * self._zotino.bus.ref_period_mu
-        #                                    + self._reader.num_labels()
-        #                                    * self._zotino.bus.xfer_duration_mu)
-        # self.update_kernel_invariants('_min_line_delay_mu')
         self._reader.init(self._zotino)
         self._calculator = ZotinoCalculator(np.int64(self.core.seconds_to_mu(self._DMA_STARTUP_TIME)))
 
@@ -616,6 +607,8 @@ class TrapDcModule(DaxModule):
         Note that the Zotino Path Voltages are given in **V**.
 
         :param file_name: Solution file to parse the path from
+        :param start: Start line of solution in file (inclusive)
+        :param end: End line of solution in file (inclusive)
 
         :return: Base reader solution form
         """
@@ -1263,7 +1256,7 @@ class ZotinoReader(BaseReader[_ZOTINO_SOLUTION_T]):
                                                                           artiq.coredevice.ad53xx.AD53XX_CMD_DATA) << 8
                               for v, ch in zip(vs, chs)]).astype(np.int32))
 
-    @ host_only
+    @host_only
     def solution_to_mu(self, solution: _ZOTINO_SOLUTION_T) -> _ZOTINO_SOLUTION_MU_T:
         """Pack a solution of values into a form directly writeable to the SPI bus
 
