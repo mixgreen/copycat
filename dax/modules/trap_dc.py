@@ -1258,12 +1258,12 @@ class ZotinoReader(BaseReader[_ZOTINO_SOLUTION_T]):
         """
         self._check_init("line_to_mu")
         vs, chs = line
-        return [np.int32(artiq.coredevice.ad53xx.ad53xx_cmd_write_ch(ch,
-                                                                     self._voltage_to_mu(v),
-                                                                     artiq.coredevice.ad53xx.AD53XX_CMD_DATA) << 8)
-                for v, ch in zip(vs, chs)]
+        return list(np.array([artiq.coredevice.ad53xx.ad53xx_cmd_write_ch(ch,  # type: ignore[attr-defined]
+                                                                          self._voltage_to_mu(v),
+                                                                          artiq.coredevice.ad53xx.AD53XX_CMD_DATA) << 8
+                              for v, ch in zip(vs, chs)]).astype(np.int32))
 
-    @host_only
+    @ host_only
     def solution_to_mu(self, solution: _ZOTINO_SOLUTION_T) -> _ZOTINO_SOLUTION_MU_T:
         """Pack a solution of values into a form directly writeable to the SPI bus
 
