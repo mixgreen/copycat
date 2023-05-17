@@ -100,6 +100,7 @@ class SmartDma(DaxModule):
 
     _erase_names: typing.Sequence[str]
     _record_names: typing.Sequence[str]
+    _powercycle: str
 
     def build(self,  # type: ignore[override]
               *, trap_dc: TrapDcModule, config: CONFIG_T) -> None:
@@ -122,6 +123,7 @@ class SmartDma(DaxModule):
         self._erase_names = []
         self._record_names = []
         self._keys = [""] * len(self._names)
+        self._powercycle = self.get_system_key("powercycle")
 
     @host_only
     def init(self) -> None:
@@ -129,12 +131,6 @@ class SmartDma(DaxModule):
         Also responsible for invoking the init_kernel"""
         self._erase_names, self._record_names = self.compare_dma()
         self._recorded_names = [name for name in self._names if name not in self._record_names]
-        self.init_kernel()
-
-    @kernel
-    def init_kernel(self) -> TNone:
-        """Init kernel function used to update the dma based on the comparison"""
-        self.update_dma()
 
     @host_only
     def post_init(self) -> None:
@@ -198,7 +194,7 @@ class SmartDma(DaxModule):
             new dma traces will be recorded
         """
 
-        powercycle = len(self.core_cache.get(self.get_system_key("powercycle"))) == 0
+        powercycle = len(self.core_cache.get(self._powercycle)) == 0
         if force_record or powercycle:
             if not powercycle:
                 for name in self._names:
@@ -230,18 +226,14 @@ class SmartDma(DaxModule):
 
     @kernel
     def get_dma_handle(self,
-                       key: TStr,
-                       set_powercycle: TBool = True) -> TTuple([TInt32, TInt64, TInt32]):  # type: ignore[valid-type]
+                       key: TStr) -> TTuple([TInt32, TInt64, TInt32]):  # type: ignore[valid-type]
         """Get the DMA handle associated with the name of the recording
 
         :param key: Unique key of the recording
-        :param set_powercycle: True by default. If set to True, will add an entry to the core cache which is used to
-            determine powercycles
 
         :return: Handle used to playback the DMA Recording
         """
-        if set_powercycle:
-            self.core_cache.put(self.get_system_key("powercycle"), [1])
+        self.core_cache.put(self._powercycle, [1])
 
         return self._trap_dc.get_dma_handle(key)
 
@@ -447,6 +439,7 @@ class TrapDcModule(DaxModule):
     _reader: ZotinoReader
     _min_line_delay_mu: np.int64
     _calculator: ZotinoCalculator
+    _smart_dmas: typing.List[SmartDma]
 
     def build(self,  # type: ignore[override]
               *,
@@ -477,6 +470,11 @@ class TrapDcModule(DaxModule):
         self._reader = ZotinoReader(
             self._solution_path, self._map_file)
 
+        self._smart_dmas = []
+
+    @host_only
+    def init(self) -> None:
+        """Initialize this module."""
         # Below calculated from set_dac_mu and load functions
         # https://m-labs.hk/artiq/manual/_modules/artiq/coredevice/ad53xx.html#AD53xx
         self._min_line_delay_mu = np.int64(self.core.seconds_to_mu(1500 * ns)
@@ -484,12 +482,15 @@ class TrapDcModule(DaxModule):
                                            + self._reader.num_labels()
                                            * self._zotino.bus.xfer_duration_mu)
         self.update_kernel_invariants('_min_line_delay_mu')
-
-    @host_only
-    def init(self) -> None:
-        """Initialize this module."""
         self._reader.init(self._zotino)
         self._calculator = ZotinoCalculator(np.int64(self.core.seconds_to_mu(self._DMA_STARTUP_TIME)))
+        self.init_kernel()
+
+    @kernel
+    def init_kernel(self) -> TNone:
+        """Init kernel function used to update the dma based on the comparison"""
+        for smart_dma in self._smart_dmas:
+            smart_dma.update_dma()
 
     @host_only
     def post_init(self) -> None:
@@ -531,7 +532,9 @@ class TrapDcModule(DaxModule):
         config = self._reader.read_config(config_file, schema=SMART_DMA)
         # Hard code smart_dma key to only allow a single smart dma module per trap
         # If this is changed, smart dma is not guaranteed to work for multiple instances
-        return cls(self, "smart_dma", trap_dc=self, config=config, *args, **kwargs)
+        smart_dma = cls(self, "smart_dma", trap_dc=self, config=config, *args, **kwargs)
+        self._smart_dmas.append(smart_dma)
+        return smart_dma
 
     @host_only
     def read_line(self,
