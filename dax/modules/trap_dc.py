@@ -91,10 +91,11 @@ class SmartDma(DaxModule):
 
     _incoming_dma_dict: typing.Dict[str, typing.Any]
     _keys: typing.List[str]
-    _handles: typing.Sequence[typing.Tuple[np.int32, np.int64, np.int32]]
+    _handles: typing.List[typing.Tuple[np.int32, np.int64, np.int32]]
     _handle_map: typing.Dict[str, typing.Tuple[np.int32, np.int64, np.int32]]
 
     _names: typing.Sequence[str]
+    _dma_keys: typing.Sequence[str]
     _solution_mus: typing.Sequence[_ZOTINO_SOLUTION_MU_T]
     _line_delays: typing.Sequence[float]
 
@@ -113,16 +114,18 @@ class SmartDma(DaxModule):
         self._trap_dc = trap_dc
 
         self._names = self.names()
+        self._dma_keys = [self._trap_dc.get_dma_key(name) for name in self._names]
         self._solution_mus = self.solution_mus()
         self._line_delays = self.line_delays()
 
         self._incoming_dma_dict = self.solution_dict()
         self._keys = []
-        self._handles = []
 
         self._erase_names = []
         self._record_names = []
+        # Pre-calculated array sizing with placeholders
         self._keys = [""] * len(self._names)
+        self._handles = [(np.int32(0), np.int64(0), np.int32(0))] * len(self._keys)
         self._powercycle = self.get_system_key("powercycle")
 
     @host_only
@@ -130,7 +133,14 @@ class SmartDma(DaxModule):
         """Init function used to compare the incoming and current dma traces
         Also responsible for invoking the init_kernel"""
         self._erase_names, self._record_names = self.compare_dma()
-        self._recorded_names = [name for name in self._names if name not in self._record_names]
+
+        # Below is to store the already recorded names in the list of keys
+        # Start from end of list so the names to record can be in front of list
+        i = len(self._keys) - 1
+        for name in self._dma_keys:
+            if name not in self._record_names:
+                self._keys[i] = name
+                i -= 1
 
     @host_only
     def post_init(self) -> None:
@@ -142,16 +152,17 @@ class SmartDma(DaxModule):
     @kernel
     def post_init_kernel(self) -> TNone:
         """Post init kernel used to retrieve all the handles that can reference traces for playback"""
-        self._handles = [self.get_dma_handle(key) for key in self._keys]
+        for i in range(len(self._keys)):
+            self._handles[i] = self.get_dma_handle(self._keys[i])
 
     def solution_dict(self) -> typing.Dict[str, typing.Any]:
         """A method to return all the solutions in a dictionary for comparison
 
         :return: The incoming dma dictionary of solution details for comparison"""
-        return {sol_attr.name(): (sol_attr.solution().hash,
-                                  sol_attr.line_delay(),
-                                  sol_attr.reverse(),
-                                  sol_attr.multiplier())
+        return {self._trap_dc.get_dma_key(sol_attr.name()): (sol_attr.solution().hash,
+                                                             sol_attr.line_delay(),
+                                                             sol_attr.reverse(),
+                                                             sol_attr.multiplier())
                 for sol_attr in self._config.values()}
 
     @host_only
@@ -193,15 +204,14 @@ class SmartDma(DaxModule):
         :param force_record: False by default. If true all dma traces passed in will be recorded. Otherwise only the
             new dma traces will be recorded
         """
-
         powercycle = len(self.core_cache.get(self._powercycle)) == 0
         if force_record or powercycle:
             if not powercycle:
-                for name in self._names:
+                for name in self._dma_keys:
                     self._trap_dc.erase_dma(name)
 
-            self._keys = [self._trap_dc.record_dma(name, self._solution_mus[i], self._line_delays[i])
-                          for i, name in enumerate(self._names)]
+            for i in range(len(self._dma_keys)):
+                self._keys[i] = self._trap_dc.record_dma(self._dma_keys[i], self._solution_mus[i], self._line_delays[i])
 
         else:
             for name in self._erase_names:
@@ -212,9 +222,7 @@ class SmartDma(DaxModule):
                 self.logger.debug("Recording trace %s", name)
                 self._keys[i] = self._trap_dc.record_dma(name, self._solution_mus[i], self._line_delays[i])
                 i = i + 1
-            for name in self._recorded_names:
-                self._keys[i] = self._trap_dc.get_dma_key(name)
-                i = i + 1
+        return
 
     @rpc(flags={'async'})
     def _update_dma_dataset(self):
@@ -489,8 +497,10 @@ class TrapDcModule(DaxModule):
     @kernel
     def init_kernel(self) -> TNone:
         """Init kernel function used to update the dma based on the comparison"""
-        for smart_dma in self._smart_dmas:
-            smart_dma.update_dma()
+        # Need this line to work around https://github.com/m-labs/artiq/issues/1669
+        if len(self._smart_dmas) > 0:
+            for smart_dma in self._smart_dmas:
+                smart_dma.update_dma()
 
     @host_only
     def post_init(self) -> None:
@@ -739,13 +749,12 @@ class TrapDcModule(DaxModule):
         :return: Unique key for DMA Trace
         """
         if line_delay <= self._min_line_delay_mu:
-            raise ValueError(f"Line Delay must be greater than {self._min_line_delay_mu}")
-        dma_name = self.get_dma_key(name)
-        with self.core_dma.record(dma_name):
+            raise ValueError("Line Delay must be greater than the minimum line delay")
+        with self.core_dma.record(name):
             for t in solution:
                 self.set_line(t)
                 delay_mu(line_delay)
-        return dma_name
+        return name
 
     @kernel
     def record_dma_rate(self,
@@ -772,11 +781,10 @@ class TrapDcModule(DaxModule):
 
         :param name: Name of dma trace to erase
         """
-        dma_name = self.get_dma_key(name)
         try:
-            self.core_dma.erase(dma_name)
-        except KeyError:
-            self.logger.warn("Data not found for %s when erasing", dma_name)
+            self.core_dma.erase(name)
+        except Exception:
+            self.logger.warn("Data not found for %s when erasing", name)
 
     @kernel
     def get_dma_handle(self,
@@ -831,7 +839,7 @@ class TrapDcModule(DaxModule):
             Must be greater than the SPI write time for the number of used channels
         """
         if line_delay <= self._min_line_delay_mu:
-            raise ValueError(f"Line Delay must be greater than {self._min_line_delay_mu}")
+            raise ValueError("Line Delay must be greater than the minimum line delay")
         for t in solution:
             self.set_line(t)
             delay_mu(line_delay)
@@ -901,7 +909,7 @@ class TrapDcModule(DaxModule):
 
         :return: The necessary slack (MU) to shuttle solution"""
         if line_delay < self._min_line_delay_mu:
-            raise ValueError(f"Line Delay must be greater than {self._min_line_delay_mu}")
+            raise ValueError("Line Delay must be greater than the minimum line delay")
         return self._calculator.slack_mu(self._list_num_channels(solution),
                                          line_delay,
                                          self._min_line_delay_mu)
@@ -937,7 +945,7 @@ class TrapDcModule(DaxModule):
 
         :return: The necessary slack (MU) to shuttle solution"""
         if line_delay < self._min_line_delay_mu:
-            raise ValueError(f"Line Delay must be greater than {self._min_line_delay_mu}")
+            raise ValueError("Line Delay must be greater than the minimum line delay")
         return self._calculator.slack_mu(self._list_num_channels(solution),
                                          line_delay,
                                          self._min_line_delay_mu,
