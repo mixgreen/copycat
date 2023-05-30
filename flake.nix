@@ -24,7 +24,7 @@
       pkgs = import nixpkgs { system = "x86_64-linux"; };
       # get major version from ARTIQ
       daxVersionBase = builtins.elemAt (builtins.splitVersion artiqpkgs.packages.x86_64-linux.artiq.version) 0;
-      daxVersion = daxVersionBase + "." + (builtins.toString self.sourceInfo.revCount or 0) + "." + (self.sourceInfo.shortRev or "unknown");
+      daxVersion = daxVersionBase + "." + (builtins.toString self.sourceInfo.revCount or 0) + "+" + (self.sourceInfo.shortRev or "unknown");
       dax = (with pkgs; python3Packages.buildPythonPackage rec {
         pname = "dax";
         version = daxVersion;
