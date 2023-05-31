@@ -34,14 +34,13 @@ class _DmaTestSystem(DaxSystem):
     def build(self, **kwargs) -> None:  # type: ignore[override]
         with temp_dir():
             super(_DmaTestSystem, self).build()
-            f = open("test_map.csv", "w")
-            os.makedirs(_CONFIG_PATH)
-            open(_CONFIG_PATH + "/dx.csv", "w+")
-            self.trap_dc = DmaTrapDcModule(self,
-                                           'trap_dc',
-                                           solution_path='.',
-                                           map_file=os.getcwd() + '/' + f.name,
-                                           **kwargs)
+            with open("test_map.csv", "w") as f:
+                os.makedirs(_CONFIG_PATH)
+                self.trap_dc = DmaTrapDcModule(self,
+                                               'trap_dc',
+                                               solution_path='.',
+                                               map_file=f'{os.getcwd()}/{f.name}',
+                                               **kwargs)
 
 
 class _TestSystem(DaxSystem):
@@ -53,15 +52,14 @@ class _TestSystem(DaxSystem):
     def build(self, **kwargs) -> None:  # type: ignore[override]
         with temp_dir():
             super(_TestSystem, self).build()
-            f = open("test_map.csv", "w")
-            os.makedirs(_CONFIG_PATH)
-            open(_CONFIG_PATH + "/dx.csv", "w+")
-            self.trap_dc = TrapDcModule(self,
-                                        'trap_dc',
-                                        key='zotino0',
-                                        solution_path='.',
-                                        map_file=os.getcwd() + '/' + f.name,
-                                        **kwargs)
+            with open("test_map.csv", "w") as f:
+                os.makedirs(_CONFIG_PATH)
+                self.trap_dc = TrapDcModule(self,
+                                            'trap_dc',
+                                            key='zotino0',
+                                            solution_path='.',
+                                            map_file=os.getcwd() + '/' + f.name,
+                                            **kwargs)
 
 
 class TrapDcHwTestCase(test.hw_test.HardwareTestCase):

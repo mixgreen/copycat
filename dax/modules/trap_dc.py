@@ -103,12 +103,16 @@ class SmartDma(DaxModule):
     _record_names: typing.Sequence[str]
     _powercycle: str
 
+    _post_init_kernel: bool
+
     def build(self,  # type: ignore[override]
-              *, trap_dc: TrapDcModule, config: CONFIG_T) -> None:
+              *, trap_dc: TrapDcModule, config: CONFIG_T,
+              post_init_kernel: bool = True) -> None:
         """Constructor of zotino linear combination module
 
         :param trap_dc: The trap DC module associated with this configuration
         :param config: The string name of the file where the configuration is
+        :param init_kernel: Run initialization kernel during default module initialization
         """
         self._config = {d['name']: _SolutionAttrs(d, trap_dc) for d in config['params']}
         self._trap_dc = trap_dc
@@ -125,8 +129,11 @@ class SmartDma(DaxModule):
         self._record_names = []
         # Pre-calculated array sizing with placeholders
         self._keys = [""] * len(self._names)
-        self._handles = [(np.int32(0), np.int64(0), np.int32(0))] * len(self._keys)
+        self._handles = [(np.int32(-1), np.int64(-1), np.int32(-1))] * len(self._keys)
         self._powercycle = self.get_system_key("powercycle")
+        self.update_kernel_invariants('_powercycle')
+
+        self._post_init_kernel = post_init_kernel
 
     @host_only
     def init(self) -> None:
@@ -143,11 +150,14 @@ class SmartDma(DaxModule):
                 i -= 1
 
     @host_only
-    def post_init(self) -> None:
+    def post_init(self, *, force: bool = False) -> None:
         """Post init function used to update the dataset with the updated dma traces
-        Also responsible for invoking the post_init_kernel"""
+        Also responsible for invoking the post_init_kernel
+
+        :param force: Force full post initialization"""
         self._update_dma_dataset()
-        self.post_init_kernel()
+        if self._post_init_kernel or force:
+            self.post_init_kernel()
 
     @kernel
     def post_init_kernel(self) -> TNone:
@@ -175,7 +185,7 @@ class SmartDma(DaxModule):
 
         :return: Two lists of dma trace names, the first for erasures, the second for recordings
         """
-        dma_dict = self.get_dataset_sys("dma_dict", {}, archive=False)
+        dma_dict = self.get_dataset_sys("dma_dict", {}, archive=False, data_store=False)
         old_names = set(dma_dict.keys())
         incoming_names = set(self._incoming_dma_dict.keys())
         erase_names = old_names.difference(incoming_names)
@@ -221,10 +231,10 @@ class SmartDma(DaxModule):
             for name in self._record_names:
                 self.logger.debug("Recording trace %s", name)
                 self._keys[i] = self._trap_dc.record_dma(name, self._solution_mus[i], self._line_delays[i])
-                i = i + 1
+                i += 1
         return
 
-    @rpc(flags={'async'})
+    @host_only
     def _update_dma_dataset(self):
         """Updates the datset to the incoming dataset populated by :func:`compare_dma`
         Will reset the incoming dma dictionary variable once finished
@@ -248,15 +258,11 @@ class SmartDma(DaxModule):
     @host_only
     def get_dma_handle_host(self, key: str) -> typing.Tuple[np.int32, np.int64, np.int32]:
         """A method to return the handles retrieved during post init
-        If no handle map exists yet, create it from the handles and keys
 
         :param key: Unique key of the recording
 
         :return: A list of all the handles"""
-        if not self._handle_map:
-            self._handle_map = {key: self._handles[i] for i, key in enumerate(self._keys)}
-
-        return self._handle_map[key]
+        return self._handles[self._keys.index(key)]
 
     def names(self) -> typing.Sequence[str]:
         """A method to get all of the string names
@@ -448,12 +454,14 @@ class TrapDcModule(DaxModule):
     _min_line_delay_mu: np.int64
     _calculator: ZotinoCalculator
     _smart_dmas: typing.List[SmartDma]
+    _init_kernel: bool
 
     def build(self,  # type: ignore[override]
               *,
               key: str,
               solution_path: str,
-              map_file: str) -> None:
+              map_file: str,
+              init_kernel: bool = True) -> None:
         """Build the trap DC module
 
         :param key: The key of the zotino device
@@ -480,9 +488,13 @@ class TrapDcModule(DaxModule):
 
         self._smart_dmas = []
 
+        self._init_kernel = init_kernel
+
     @host_only
-    def init(self) -> None:
-        """Initialize this module."""
+    def init(self, *, force: bool = False) -> None:
+        """Initialize this module.
+
+        :param force: Force full initialization"""
         # Below calculated from set_dac_mu and load functions
         # https://m-labs.hk/artiq/manual/_modules/artiq/coredevice/ad53xx.html#AD53xx
         self._min_line_delay_mu = np.int64(self.core.seconds_to_mu(1500 * ns)
@@ -492,7 +504,8 @@ class TrapDcModule(DaxModule):
         self.update_kernel_invariants('_min_line_delay_mu')
         self._reader.init(self._zotino)
         self._calculator = ZotinoCalculator(np.int64(self.core.seconds_to_mu(self._DMA_STARTUP_TIME)))
-        self.init_kernel()
+        if self._init_kernel or force:
+            self.init_kernel()
 
     @kernel
     def init_kernel(self) -> TNone:
@@ -1262,10 +1275,10 @@ class ZotinoReader(BaseReader[_ZOTINO_SOLUTION_T]):
         """
         self._check_init("line_to_mu")
         vs, chs = line
-        return list(np.array([artiq.coredevice.ad53xx.ad53xx_cmd_write_ch(ch,  # type: ignore[attr-defined]
-                                                                          self._voltage_to_mu(v),
-                                                                          artiq.coredevice.ad53xx.AD53XX_CMD_DATA) << 8
-                              for v, ch in zip(vs, chs)]).astype(np.int32))
+        return [np.int32(artiq.coredevice.ad53xx.ad53xx_cmd_write_ch(ch,
+                                                                     self._voltage_to_mu(v),
+                                                                     artiq.coredevice.ad53xx.AD53XX_CMD_DATA) << 8)
+                for v, ch in zip(vs, chs)]
 
     @host_only
     def solution_to_mu(self, solution: _ZOTINO_SOLUTION_T) -> _ZOTINO_SOLUTION_MU_T:
