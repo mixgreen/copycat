@@ -5,6 +5,7 @@ import math
 import typing
 import pathlib
 import numpy as np
+import warnings
 
 from dax.experiment import *
 from trap_dac_utils.reader import BaseReader
@@ -1275,10 +1276,14 @@ class ZotinoReader(BaseReader[_ZOTINO_SOLUTION_T]):
         """
         self._check_init("line_to_mu")
         vs, chs = line
-        return [np.int32(artiq.coredevice.ad53xx.ad53xx_cmd_write_ch(ch,
-                                                                     self._voltage_to_mu(v),
-                                                                     artiq.coredevice.ad53xx.AD53XX_CMD_DATA) << 8)
-                for v, ch in zip(vs, chs)]
+        # Suppress numpy warning about overflowing int32 conversion.
+        # See https://gitlab.com/duke-artiq/dax/-/issues/141#note_1416544123
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore', category=DeprecationWarning)
+            return [np.int32(artiq.coredevice.ad53xx.ad53xx_cmd_write_ch(ch,
+                                                                         self._voltage_to_mu(v),
+                                                                         artiq.coredevice.ad53xx.AD53XX_CMD_DATA) << 8)
+                    for v, ch in zip(vs, chs)]
 
     @host_only
     def solution_to_mu(self, solution: _ZOTINO_SOLUTION_T) -> _ZOTINO_SOLUTION_MU_T:
