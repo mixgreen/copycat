@@ -57,6 +57,7 @@
           "networkx"
           "sortedcontainers"
           "libffi=3.3" # Limit version to prevent broken environment
+          "llvmlite<0.40.0" # Limit version, see https://gitlab.com/duke-artiq/dax/-/issues/144
         ];
 
         meta = with lib; {
