@@ -8,7 +8,7 @@ import numpy as np
 
 from dax.experiment import *
 from trap_dac_utils.reader import BaseReader
-from trap_dac_utils.schemas import LINEAR_COMBO
+from trap_dac_utils.schemas import LINEAR_COMBO, SMART_DMA
 from trap_dac_utils.types import LABEL_FIELD, LINE_T, SpecialCharacter, SOLUTION_T, MAP_T, CONFIG_T
 
 import artiq.coredevice.zotino  # type: ignore[import]
@@ -22,7 +22,275 @@ _ZOTINO_SOLUTION_T = typing.List[_ZOTINO_LINE_T]
 _ZOTINO_LINE_MU_T = typing.List[np.int32]
 _ZOTINO_SOLUTION_MU_T = typing.List[_ZOTINO_LINE_MU_T]
 
-__all__ = ['TrapDcModule', 'ZotinoReader', 'LinearCombo']
+__all__ = ['TrapDcModule', 'ZotinoReader', 'LinearCombo', 'SmartDma']
+
+
+class _SolutionAttrs:
+    """A module to represent a single shuttling solution and it's corresponding data fields
+    """
+
+    _attrs: typing.Dict[str, typing.Any]
+    _trap_dc: TrapDcModule
+
+    def __init__(self, cfg: CONFIG_T, trap_dc: TrapDcModule) -> None:
+        self._attrs = dict(cfg)
+        self._trap_dc = trap_dc
+
+    def __getitem__(self, arg: str) -> typing.Any:
+        return self._attrs[arg]
+
+    def __setitem__(self, arg: str, newvalue: typing.Any) -> None:
+        self._attrs[arg] = newvalue
+
+    def get(self, arg: str, default: typing.Any) -> typing.Any:
+        self._attrs.get(arg, default)
+
+    def solution(self) -> SOLUTION_T:
+        file = self._attrs.get('file', f'{self._attrs["name"]}.csv')
+        start = self._attrs.get('start', 0)
+        end = self._attrs.get('end', -1)
+        return self._trap_dc.read_solution(file, start, end)
+
+    def solution_mu(self) -> _ZOTINO_SOLUTION_MU_T:
+        return self._trap_dc.solution_to_mu(self.solution(),
+                                            reverse=self.reverse(),
+                                            multiplier=self.multiplier())
+
+    def line_delay(self) -> float:
+        ld = self._attrs.get('line_delay')
+        if ld is None or not isinstance(ld, float):
+            raise ValueError("Line delay must be set to a float")
+        return ld
+
+    def reverse(self) -> bool:
+        return self._attrs.get('reverse', False)
+
+    def multiplier(self) -> float:
+        return self._attrs.get('multiplier', 1.0)
+
+    def name(self) -> str:
+        name = self._attrs.get('name')
+        if name is None or not isinstance(name, str):
+            raise ValueError("Name must be set to a str")
+        return str(name)
+
+
+_SMART_DMA_CONFIG_T = typing.Dict[str, _SolutionAttrs]
+
+
+class SmartDma(DaxModule):
+    """A module to represent smart DMA configuration files
+
+    This module can be used to get the shuttling solutions and intelligently
+    store them in DMA for low latency use
+    """
+    _config: _SMART_DMA_CONFIG_T
+    """The configuration dict that contains field names mapped to config data"""
+
+    _trap_dc: TrapDcModule
+
+    _incoming_dma_dict: typing.Dict[str, typing.Any]
+    _keys: typing.List[str]
+    _handles: typing.List[typing.Tuple[np.int32, np.int64, np.int32]]
+    _handle_map: typing.Dict[str, typing.Tuple[np.int32, np.int64, np.int32]]
+
+    _names: typing.Sequence[str]
+    _dma_keys: typing.Sequence[str]
+    _solution_mus: typing.Sequence[_ZOTINO_SOLUTION_MU_T]
+    _line_delays: typing.Sequence[float]
+
+    _erase_names: typing.Sequence[str]
+    _record_names: typing.Sequence[str]
+    _powercycle: str
+
+    _post_init_kernel: bool
+
+    def build(self,  # type: ignore[override]
+              *, trap_dc: TrapDcModule, config: CONFIG_T,
+              post_init_kernel: bool = True) -> None:
+        """Constructor of zotino linear combination module
+
+        :param trap_dc: The trap DC module associated with this configuration
+        :param config: The string name of the file where the configuration is
+        :param init_kernel: Run initialization kernel during default module initialization
+        """
+        self._config = {d['name']: _SolutionAttrs(d, trap_dc) for d in config['params']}
+        self._trap_dc = trap_dc
+
+        self._names = self.names()
+        self._dma_keys = [self._trap_dc.get_dma_key(name) for name in self._names]
+        self._solution_mus = self.solution_mus()
+        self._line_delays = self.line_delays()
+
+        self._incoming_dma_dict = self.solution_dict()
+        self._keys = []
+
+        self._erase_names = []
+        self._record_names = []
+        # Pre-calculated array sizing with placeholders
+        self._keys = [""] * len(self._names)
+        self._handles = [(np.int32(-1), np.int64(-1), np.int32(-1))] * len(self._keys)
+        self._powercycle = self.get_system_key("powercycle")
+        self.update_kernel_invariants('_powercycle')
+
+        self._post_init_kernel = post_init_kernel
+
+    @host_only
+    def init(self) -> None:
+        """Init function used to compare the incoming and current dma traces
+        Also responsible for invoking the init_kernel"""
+        self._erase_names, self._record_names = self.compare_dma()
+
+        # Below is to store the already recorded names in the list of keys
+        # Start from end of list so the names to record can be in front of list
+        i = len(self._keys) - 1
+        for name in self._dma_keys:
+            if name not in self._record_names:
+                self._keys[i] = name
+                i -= 1
+
+    @host_only
+    def post_init(self, *, force: bool = False) -> None:
+        """Post init function used to update the dataset with the updated dma traces
+        Also responsible for invoking the post_init_kernel
+
+        :param force: Force full post initialization"""
+        self._update_dma_dataset()
+        if self._post_init_kernel or force:
+            self.post_init_kernel()
+
+    @kernel
+    def post_init_kernel(self) -> TNone:
+        """Post init kernel used to retrieve all the handles that can reference traces for playback"""
+        for i in range(len(self._keys)):
+            self._handles[i] = self.get_dma_handle(self._keys[i])
+
+    def solution_dict(self) -> typing.Dict[str, typing.Any]:
+        """A method to return all the solutions in a dictionary for comparison
+
+        :return: The incoming dma dictionary of solution details for comparison"""
+        return {self._trap_dc.get_dma_key(sol_attr.name()): (sol_attr.solution().hash,
+                                                             sol_attr.line_delay(),
+                                                             sol_attr.reverse(),
+                                                             sol_attr.multiplier())
+                for sol_attr in self._config.values()}
+
+    @host_only
+    def compare_dma(self) -> typing.Tuple[typing.Sequence[str], typing.Sequence[str]]:
+        """Compare the incoming dma dictionary populated by :func:`compare_dma` to the dictionary in
+        the dataset
+        Goal is to figure out the dma trace names that need to be erased (no longer needed or overwritten
+        with a new hash or line delay) and the trace names that need to be recorded (weren't previously in
+        trace or overwritted with a new hash or line_delay)
+
+        :return: Two lists of dma trace names, the first for erasures, the second for recordings
+        """
+        dma_dict = self.get_dataset_sys("dma_dict", {}, archive=False, data_store=False)
+        old_names = set(dma_dict.keys())
+        incoming_names = set(self._incoming_dma_dict.keys())
+        erase_names = old_names.difference(incoming_names)
+        overwrite_names = old_names.intersection(incoming_names)
+        record_names = incoming_names.difference(old_names)
+
+        for name in overwrite_names:
+            assert (name in dma_dict and name in self._incoming_dma_dict)
+            if (dma_dict[name] != self._incoming_dma_dict[name]):
+                erase_names.add(name)
+                record_names.add(name)
+
+        return list(erase_names), list(record_names)
+
+    @kernel
+    def update_dma(self, force_record: TBool = False) -> TNone:
+        """Update the dma traces by erasing and recording the incoming data. The erase_names and new_record_names
+        should come from the return of :func:`compare_dma`. The record_names, solutions, and line_delay fields should
+        be the same data used as the argument to :func:`compare_dma` but transposed. The :func:`compare_dma` will
+        transpose and return them.
+        This function will also check for a powercycle of the core device
+        This function should be called from the kernel in the init_kernel function of the module using it
+        Whether there is a powercycle, force_record, or neither, the updated keys (i.e. the available dma traces)
+        should always be the same
+
+        :param force_record: False by default. If true all dma traces passed in will be recorded. Otherwise only the
+            new dma traces will be recorded
+        """
+        powercycle = len(self.core_cache.get(self._powercycle)) == 0
+        if force_record or powercycle:
+            if not powercycle:
+                for name in self._dma_keys:
+                    self._trap_dc.erase_dma(name)
+
+            for i in range(len(self._dma_keys)):
+                self._keys[i] = self._trap_dc.record_dma(self._dma_keys[i], self._solution_mus[i], self._line_delays[i])
+
+        else:
+            for name in self._erase_names:
+                self._trap_dc.erase_dma(name)
+
+            i = 0
+            for name in self._record_names:
+                self.logger.debug("Recording trace %s", name)
+                self._keys[i] = self._trap_dc.record_dma(name, self._solution_mus[i], self._line_delays[i])
+                i += 1
+        return
+
+    @host_only
+    def _update_dma_dataset(self):
+        """Updates the datset to the incoming dataset populated by :func:`compare_dma`
+        Will reset the incoming dma dictionary variable once finished
+        """
+        self.set_dataset_sys("dma_dict", self._incoming_dma_dict, archive=False, data_store=False)
+        self._incoming_dma_dict = {}
+
+    @kernel
+    def get_dma_handle(self,
+                       key: TStr) -> TTuple([TInt32, TInt64, TInt32]):  # type: ignore[valid-type]
+        """Get the DMA handle associated with the name of the recording
+
+        :param key: Unique key of the recording
+
+        :return: Handle used to playback the DMA Recording
+        """
+        self.core_cache.put(self._powercycle, [1])
+
+        return self._trap_dc.get_dma_handle(key)
+
+    @host_only
+    def get_dma_handle_host(self, key: str) -> typing.Tuple[np.int32, np.int64, np.int32]:
+        """A method to return the handles retrieved during post init
+
+        :param key: Unique key of the recording
+
+        :return: A list of all the handles"""
+        return self._handles[self._keys.index(key)]
+
+    def names(self) -> typing.Sequence[str]:
+        """A method to get all of the string names
+
+        :return: A list of string names
+        """
+        return [sol_attr.name() for sol_attr in self._config.values()]
+
+    def solution_mus(self) -> typing.Sequence[_ZOTINO_SOLUTION_MU_T]:
+        """A method to get all of the solutions in MU
+
+        :return: A list of solutions in MU
+        """
+        return [sol_attr.solution_mu() for sol_attr in self._config.values()]
+
+    def line_delays(self) -> typing.Sequence[float]:
+        """A method to get all of the line delays as a list of floats
+
+        :return: A list of floats of the line delays
+        """
+        return [sol_attr.line_delay() for sol_attr in self._config.values()]
+
+    def fields(self) -> typing.Sequence[str]:
+        """A method to get all of the config fields as a list of strings
+
+        :return: A list of strings of the config fields
+        """
+        return list(self._config.keys())
 
 
 class _LineAttrs:
@@ -62,7 +330,7 @@ class _LineAttrs:
         return mini <= val <= maxi
 
 
-_ZOTINO_CONFIG_T = typing.Dict[str, _LineAttrs]
+_LINEAR_COMBO_CONFIG_T = typing.Dict[str, _LineAttrs]
 
 
 class LinearCombo:
@@ -71,7 +339,7 @@ class LinearCombo:
     This module can be used to get solution lines and combine them with others
     Then these new lines can be fed back into the zotino module to continue processing
     """
-    _config: _ZOTINO_CONFIG_T
+    _config: _LINEAR_COMBO_CONFIG_T
     """The configuration dict that contains field names mapped to config data"""
 
     def __init__(self, trap_dc: TrapDcModule, config: CONFIG_T):
@@ -174,6 +442,7 @@ class TrapDcModule(DaxModule):
     - Everything in this module is Zotino specific. As other DC traps are needed they should be created separately.
     """
     _LC_T = typing.TypeVar('_LC_T', bound='LinearCombo')
+    _SD_T = typing.TypeVar('_SD_T', bound='SmartDma')
 
     _DMA_STARTUP_TIME: typing.ClassVar[float] = 1.728 * us
     """Startup time for DMA (s). Measured in the RTIO benchmarking tests during CI"""
@@ -184,12 +453,15 @@ class TrapDcModule(DaxModule):
     _reader: ZotinoReader
     _min_line_delay_mu: np.int64
     _calculator: ZotinoCalculator
+    _smart_dmas: typing.List[SmartDma]
+    _init_kernel: bool
 
     def build(self,  # type: ignore[override]
               *,
               key: str,
               solution_path: str,
-              map_file: str) -> None:
+              map_file: str,
+              init_kernel: bool = True) -> None:
         """Build the trap DC module
 
         :param key: The key of the zotino device
@@ -214,10 +486,15 @@ class TrapDcModule(DaxModule):
         self._reader = ZotinoReader(
             self._solution_path, self._map_file)
 
+        self._smart_dmas = []
+
+        self._init_kernel = init_kernel
+
     @host_only
-    def init(self) -> None:
-        """Initialize this module."""
-        # Get profile loader
+    def init(self, *, force: bool = False) -> None:
+        """Initialize this module.
+
+        :param force: Force full initialization"""
         # Below calculated from set_dac_mu and load functions
         # https://m-labs.hk/artiq/manual/_modules/artiq/coredevice/ad53xx.html#AD53xx
         self._min_line_delay_mu = np.int64(self.core.seconds_to_mu(1500 * ns)
@@ -227,6 +504,16 @@ class TrapDcModule(DaxModule):
         self.update_kernel_invariants('_min_line_delay_mu')
         self._reader.init(self._zotino)
         self._calculator = ZotinoCalculator(np.int64(self.core.seconds_to_mu(self._DMA_STARTUP_TIME)))
+        if self._init_kernel or force:
+            self.init_kernel()
+
+    @kernel
+    def init_kernel(self) -> TNone:
+        """Init kernel function used to update the dma based on the comparison"""
+        # Need this line to work around https://github.com/m-labs/artiq/issues/1669
+        if len(self._smart_dmas) > 0:
+            for smart_dma in self._smart_dmas:
+                smart_dma.update_dma()
 
     @host_only
     def post_init(self) -> None:
@@ -253,6 +540,24 @@ class TrapDcModule(DaxModule):
         :return: The ZotinoLinearComboModule object"""
         config = self._reader.read_config(config_file, schema=LINEAR_COMBO)
         return cls(self, config, *args, **kwargs)
+
+    @host_only
+    def create_smart_dma(self,
+                         config_file: str,
+                         *args,
+                         cls: typing.Type[_SD_T] = SmartDma,  # type: ignore[assignment]
+                         **kwargs) -> _SD_T:
+        """Factory method to encapsulate creation of SmartDma
+
+        :param config_file: Name of the config file to read into the object
+
+        :return: The SmartDma object"""
+        config = self._reader.read_config(config_file, schema=SMART_DMA)
+        # Hard code smart_dma key to only allow a single smart dma module per trap
+        # If this is changed, smart dma is not guaranteed to work for multiple instances
+        smart_dma = cls(self, "smart_dma", trap_dc=self, config=config, *args, **kwargs)
+        self._smart_dmas.append(smart_dma)
+        return smart_dma
 
     @host_only
     def read_line(self,
@@ -320,16 +625,20 @@ class TrapDcModule(DaxModule):
 
     @host_only
     def read_solution(self,
-                      file_name: str) -> SOLUTION_T:
+                      file_name: str,
+                      start: int = 0,
+                      end: int = -1) -> SOLUTION_T:
         """Read in a solutions file and return the solution in base reader form
 
         Note that the Zotino Path Voltages are given in **V**.
 
         :param file_name: Solution file to parse the path from
+        :param start: Start line of solution in file (inclusive)
+        :param end: End line of solution in file (inclusive)
 
         :return: Base reader solution form
         """
-        return self._reader.read_solution(file_name)
+        return self._reader.read_solution(file_name, start=start, end=end)
 
     @host_only
     def solution_to_mu(self,
@@ -409,6 +718,15 @@ class TrapDcModule(DaxModule):
 
         return self._reader.list_solutions()
 
+    @rpc
+    def get_dma_key(self, name: str) -> TStr:
+        """Return the dma trace key given a name
+        :param name: Name for the dma trace
+
+        :return: Key for the dma trace
+        """
+        return self.get_system_key(name)
+
     @kernel
     def record_dma(self,
                    name: TStr,
@@ -444,13 +762,12 @@ class TrapDcModule(DaxModule):
         :return: Unique key for DMA Trace
         """
         if line_delay <= self._min_line_delay_mu:
-            raise ValueError(f"Line Delay must be greater than {self._min_line_delay_mu}")
-        dma_name = self.get_system_key(name)
-        with self.core_dma.record(dma_name):
+            raise ValueError("Line Delay must be greater than the minimum line delay")
+        with self.core_dma.record(name):
             for t in solution:
                 self.set_line(t)
                 delay_mu(line_delay)
-        return dma_name
+        return name
 
     @kernel
     def record_dma_rate(self,
@@ -472,13 +789,26 @@ class TrapDcModule(DaxModule):
                                   self.core.seconds_to_mu(1.0 / line_rate))
 
     @kernel
-    def get_dma_handle(self, key: TStr) -> TTuple([TInt32, TInt64, TInt32]):  # type: ignore[valid-type]
+    def erase_dma(self, name: TStr):
+        """Erase a dma trace from the dma cache.
+
+        :param name: Name of dma trace to erase
+        """
+        try:
+            self.core_dma.erase(name)
+        except Exception:
+            self.logger.warn("Data not found for %s when erasing", name)
+
+    @kernel
+    def get_dma_handle(self,
+                       key: TStr) -> TTuple([TInt32, TInt64, TInt32]):  # type: ignore[valid-type]
         """Get the DMA handle associated with the name of the recording
 
         :param key: Unique key of the recording
 
         :return: Handle used to playback the DMA Recording
         """
+
         return self.core_dma.get_handle(key)
 
     @kernel
@@ -522,7 +852,7 @@ class TrapDcModule(DaxModule):
             Must be greater than the SPI write time for the number of used channels
         """
         if line_delay <= self._min_line_delay_mu:
-            raise ValueError(f"Line Delay must be greater than {self._min_line_delay_mu}")
+            raise ValueError("Line Delay must be greater than the minimum line delay")
         for t in solution:
             self.set_line(t)
             delay_mu(line_delay)
@@ -592,7 +922,7 @@ class TrapDcModule(DaxModule):
 
         :return: The necessary slack (MU) to shuttle solution"""
         if line_delay < self._min_line_delay_mu:
-            raise ValueError(f"Line Delay must be greater than {self._min_line_delay_mu}")
+            raise ValueError("Line Delay must be greater than the minimum line delay")
         return self._calculator.slack_mu(self._list_num_channels(solution),
                                          line_delay,
                                          self._min_line_delay_mu)
@@ -628,7 +958,7 @@ class TrapDcModule(DaxModule):
 
         :return: The necessary slack (MU) to shuttle solution"""
         if line_delay < self._min_line_delay_mu:
-            raise ValueError(f"Line Delay must be greater than {self._min_line_delay_mu}")
+            raise ValueError("Line Delay must be greater than the minimum line delay")
         return self._calculator.slack_mu(self._list_num_channels(solution),
                                          line_delay,
                                          self._min_line_delay_mu,
