@@ -1,5 +1,6 @@
 import unittest
 import numpy as np
+import warnings
 
 from dax.util.artiq import is_portable
 import dax.util.convert
@@ -35,7 +36,9 @@ class ConvertTestCase(unittest.TestCase):
             with self.subTest(measurements=measurements):
                 result = dax.util.convert.list_to_int32(measurements)
                 self.assertIsInstance(result, np.int32)
-                self.assertEqual(result, np.int32(ref))
+                with warnings.catch_warnings():
+                    warnings.simplefilter('ignore', category=DeprecationWarning)
+                    self.assertEqual(result, np.int32(ref))
 
     def test_list_to_int64(self):
         data = [

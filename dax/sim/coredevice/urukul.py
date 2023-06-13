@@ -4,6 +4,7 @@
 
 import typing
 import numpy as np
+import warnings
 
 from artiq.language.core import kernel, host_only, delay, delay_mu, portable
 from artiq.language.units import us, ms, dB
@@ -144,7 +145,11 @@ class CPLD(DaxSimDevice):
         self.set_all_att_mu(a)
 
     def _set_all_att_mu(self, att_reg: TInt32):
-        self.att_reg = np.int32(att_reg)
+        # Suppress numpy warning about overflowing int32 conversion.
+        # See https://gitlab.com/duke-artiq/dax/-/issues/141#note_1416544123
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore', category=DeprecationWarning)
+            self.att_reg = np.int32(att_reg)
         self._att_reg = [_mu_to_att(att_reg >> (i * 8)) for i in range(4)]
         self._update_att()
 
