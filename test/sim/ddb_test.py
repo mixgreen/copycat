@@ -428,7 +428,7 @@ class DdbTestCase(unittest.TestCase):
                     '_key': '"foobar"'}
             ref = {'channel': 77, 'input_prob': 0.0,
                    'float': 9.9, 'int': 1, 'str': 'foo', 'bool': True, 'None': None, 'cAsE': None,
-                   '_key': device}
+                   '_key': device, '_alias': device}
 
             args_str = '\n'.join(f'{k}={v}' for k, v in args.items())
             cfg = f"""

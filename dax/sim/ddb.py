@@ -391,7 +391,7 @@ def _start_moninj_service(*, port: int = dax.util.moninj.MonInjDummyService.DEFA
                      close_fds=True, start_new_session=True, creationflags=getattr(subprocess, 'DETACHED_PROCESS', 0))
 
 
-def get_unique_device_root_alias(self, value: str, ddb: typing.Dict[str, typing.Any]) -> str:
+def get_unique_device_root_alias(value: str, ddb: typing.Dict[str, typing.Any]) -> str:
     """Get the unique device root alias by resolving it recursively in the device DB.
 
     :param value: The value to resolve
@@ -408,7 +408,7 @@ def get_unique_device_root_alias(self, value: str, ddb: typing.Dict[str, typing.
     return _resolve_unique_device_root_alias(value, set(), ddb)
 
 
-def _resolve_unique_device_root_alias(self, value: str, trace: typing.Set[str], 
+def _resolve_unique_device_root_alias(value: str, trace: typing.Set[str],
                                       ddb: typing.Dict[str, typing.Any]) -> str:
     """Recursively resolve aliases until we find the unique device name.
 
@@ -428,7 +428,7 @@ def _resolve_unique_device_root_alias(self, value: str, trace: typing.Set[str],
     trace.add(value)
 
     # Get all possible aliases
-    keys: typing.Any = [k for k, v in _device_db.items() if v == value]
+    keys: typing.Any = [k for k, v in ddb.items() if v == value]
 
     if len(keys) == 0:
         # No keys were found, value is the root alias
@@ -438,7 +438,7 @@ def _resolve_unique_device_root_alias(self, value: str, trace: typing.Set[str],
         raise ValueError
     elif isinstance(keys[0], str):
         # Recurse if we are still dealing with an alias
-        return _resolve_unique_device_root_alias(keys[0], trace)
+        return _resolve_unique_device_root_alias(keys[0], trace, ddb)
     else:
         # We ended up with an unexpected type
         raise TypeError(f'Value "{value}" returned an unexpected type')

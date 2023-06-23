@@ -20,7 +20,8 @@ class DaxSimDevice(abc.ABC):
     __kwargs: typing.Dict[str, typing.Any]
 
     def __init__(self, dmgr: typing.Any, *,
-                 _key: str, _core: typing.Any = None, core_device: str = 'core', _alias: str = "", **kwargs: typing.Any):
+                 _key: str, _core: typing.Any = None, core_device: str = 'core', _alias: str = "",
+                 **kwargs: typing.Any):
         """Initialize a DAX simulation device.
 
         :param dmgr: The device manager, always first positional argument when ARTIQ constructs a device object
@@ -59,7 +60,7 @@ class DaxSimDevice(abc.ABC):
         :return: The unique device key as defined in the device DB
         """
         return self.__key
-    
+
     @property
     def alias(self) -> str:
         """Get the alias of this device.
