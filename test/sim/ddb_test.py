@@ -54,6 +54,8 @@ _DEVICE_DB = {
         'port': 3,
         'command': 'bar -p {port} --bind {bind}'
     },
+    'test_alias_intermediate': 'ttl0',
+    'test_alias': 'test_alias_intermediate',
 }
 
 
@@ -229,18 +231,19 @@ class DdbTestCase(unittest.TestCase):
     def test_mutate_entries(self, *, localhost='::1'):
         ddb = enable_dax_sim(copy.deepcopy(self.DEVICE_DB), enable=True, **_DEFAULT_KWARGS)
         for k, v in ddb.items():
-            type_ = v['type']
-            if type_ == 'local':
-                module = v['module']
-                self.assertTrue(module.startswith('dax.sim.coredevice.') or module == 'dax.sim.config',
-                                f'Device module was not correctly updated: {module}')
-            elif type_ == 'controller':
-                self.assertTrue(v['host'] == localhost, 'Controller host was not correctly updated')
-                command = v['command']
-                for arg in dax.sim.ddb._SIMULATION_ARGS:
-                    self.assertIn(arg, command, 'Controller command arguments were not correctly updated')
-            else:
-                self.fail('Internal exception, this statement should not have been reached')
+            if isinstance(v, dict):
+                type_ = v['type']
+                if type_ == 'local':
+                    module = v['module']
+                    self.assertTrue(module.startswith('dax.sim.coredevice.') or module == 'dax.sim.config',
+                                    f'Device module was not correctly updated: {module}')
+                elif type_ == 'controller':
+                    self.assertTrue(v['host'] == localhost, 'Controller host was not correctly updated')
+                    command = v['command']
+                    for arg in dax.sim.ddb._SIMULATION_ARGS:
+                        self.assertIn(arg, command, 'Controller command arguments were not correctly updated')
+                else:
+                    self.fail('Internal exception, this statement should not have been reached')
 
     def test_conflicting_ports(self):
         with self.assertRaises(ValueError, msg='Conflicting ports did not raise'):
@@ -423,12 +426,13 @@ class DdbTestCase(unittest.TestCase):
     def test_cfg_sim_args(self):
         with temp_dir():
             device = 'ttl0'
+            alias = 'test_alias'
             args = {'channel': '77', 'input_prob': '0.0',
                     'float': '9.9', 'int': '1', 'str': '"foo"', 'bool': 'true', 'None': 'None', 'cAsE': 'None',
                     '_key': '"foobar"'}
             ref = {'channel': 77, 'input_prob': 0.0,
                    'float': 9.9, 'int': 1, 'str': 'foo', 'bool': True, 'None': None, 'cAsE': None,
-                   '_key': device, '_alias': device}
+                   '_key': device, '_alias': alias}
 
             args_str = '\n'.join(f'{k}={v}' for k, v in args.items())
             cfg = f"""
