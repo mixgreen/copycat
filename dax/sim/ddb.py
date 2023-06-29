@@ -186,20 +186,20 @@ def enable_dax_sim(ddb: typing.Dict[str, typing.Any], *,
             if not isinstance(ddb[config_data.core_device], dict):
                 raise ValueError(f'Core device key "{config_data.core_device}" can not be an alias')
 
-            try:
-                # Set with port numbers used by controllers
-                used_ports: typing.Set[int] = set()
+            # Set with port numbers used by controllers
+            used_ports: typing.Set[int] = set()
 
-                for k, v in ddb.items():
-                    if config_data.is_excluded(k):
-                        _logger.debug(f'Excluded entry "{k}"')
-                    else:
+            for k, v in ddb.items():
+                if config_data.is_excluded(k):
+                    _logger.debug(f'Excluded entry "{k}"')
+                else:
+                    try:
                         # Mutate entry in-place
                         _mutate_ddb_entry(k, v, config=config_data, used_ports=used_ports)
-            except Exception as e:
-                # Log exception to provide more context
-                _logger.exception(e)
-                raise
+                    except Exception as e:
+                        # Log exception to provide more context
+                        _logger.exception(e)
+                        raise
         else:
             # Device DB was already converted
             _logger.debug('Device DB was already converted')
