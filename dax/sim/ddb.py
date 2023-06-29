@@ -42,6 +42,7 @@ class _ConfigData:
     """Dataclass to hold configuration."""
     coredevice_packages: typing.List[str]
     exclude: typing.Sequence[typing.Pattern[str]]
+    disable: typing.Sequence[typing.Pattern[str]]
     core_device: str
     localhost: str
     _config: dax.util.configparser.DaxConfigParser
@@ -68,9 +69,18 @@ class _ConfigData:
         """
         return any(p.fullmatch(key) for p in self.exclude)
 
+    def is_disabled(self, key: str) -> bool:
+        """Check if a device is disabled.
+
+        :param key: The key of the device
+        :return: :const:`True` if the device is disabled
+        """
+        return any(p.fullmatch(key) for p in self.disable)
+
     @classmethod
     def create(cls, config: dax.util.configparser.DaxConfigParser, *,
-               exclude: typing.Collection[str] = ()) -> _ConfigData:
+               exclude: typing.Collection[str] = (),
+               disable: typing.Collection[str] = ()) -> _ConfigData:
         """Create a configuration dataclass given a config parser."""
 
         # Get coredevice packages and append the DAX coredevice package
@@ -81,10 +91,15 @@ class _ConfigData:
         exclude = set(exclude)  # Use a set to get rid of duplicates
         exclude.update(config.get(_CONFIG_SECTION, 'exclude', fallback='').split())
 
+        # Join disable patterns
+        disable = set(disable)  # Use a set to get rid of duplicates
+        disable.update(config.get(_CONFIG_SECTION, 'disable', fallback='').split())
+
         # Create and return the dataclass object
         return cls(
             coredevice_packages=coredevice_packages,
             exclude=[re.compile(p) for p in exclude],
+            disable=[re.compile(p) for p in disable],
             core_device=config.get(_CONFIG_SECTION, 'core_device', fallback='core'),
             localhost=config.get(_CONFIG_SECTION, 'localhost', fallback='::1'),
             _config=config
@@ -96,6 +111,7 @@ def enable_dax_sim(ddb: typing.Dict[str, typing.Any], *,
                    logging_level: typing.Union[int, str] = logging.NOTSET,
                    output: str = 'vcd',
                    exclude: typing.Collection[str] = (),
+                   disable: typing.Collection[str] = (),
                    moninj_service: bool = True,
                    **signal_mgr_kwargs: typing.Any) -> typing.Dict[str, typing.Any]:
     """Enable the DAX simulation package by applying this function on your device DB.
@@ -114,6 +130,8 @@ def enable_dax_sim(ddb: typing.Dict[str, typing.Any], *,
      - ``coredevice_packages``, additional packages to search for coredevice drivers (in order of priority)
      - ``exclude``, regex patterns to match excluded keys in the device DB (full match), merged with exclude patterns
        provided through the ``exclude`` argument
+     - ``disable``, regex patterns to match disabled keys in the device DB (full match), merged with disable patterns
+       provided through the ``disable`` argument
      - ``config_module``, the module of the simulation configuration class (defaults to DAX.sim config module)
      - ``config_class``, the class of the simulation configuration object (defaults to DAX.sim config class)
      - ``core_device``, the name of the core device (defaults to ``'core'``)
@@ -126,6 +144,7 @@ def enable_dax_sim(ddb: typing.Dict[str, typing.Any], *,
     To add arguments for a device with key ``'device_key'`` add a section ``[dax.sim.device_key]``.
     Values in the section are decoded as PYON values.
     Excluded keys will not be mutated at all, and users are responsible for providing the correct arguments.
+    Disabled keys will be removed from the device DB.
 
     The DAX.sim package provides a limited list of simulated coredevice drivers.
     Additional packages with simulated coredevice drivers can be added using the configuration files.
@@ -138,6 +157,7 @@ def enable_dax_sim(ddb: typing.Dict[str, typing.Any], *,
     :param logging_level: The logging level
     :param output: Simulation output type (``'null'``, ``'vcd'``, or ``'peek'``)
     :param exclude: Regex patterns to match excluded keys in the device DB (full match)
+    :param disable: Regex patterns to match disabled keys in the device DB (full match)
     :param moninj_service: Start the dummy MonInj service for the dashboard to connect to
     :param signal_mgr_kwargs: Arguments for the signal manager if output is enabled
     :return: The updated device DB
@@ -150,6 +170,8 @@ def enable_dax_sim(ddb: typing.Dict[str, typing.Any], *,
     assert isinstance(output, str), 'Output parameter must be of type str'
     assert isinstance(exclude, collections.abc.Collection), 'Exclude must be a collection'
     assert all(isinstance(s, str) for s in exclude), 'All exclude patterns must be of type str'
+    assert isinstance(disable, collections.abc.Collection), 'Disable must be a collection'
+    assert all(isinstance(s, str) for s in disable), 'All disable patterns must be of type str'
     assert isinstance(moninj_service, bool), 'MonInj service flag must be of type bool'
 
     # Set the logging level to the given value
@@ -178,13 +200,18 @@ def enable_dax_sim(ddb: typing.Dict[str, typing.Any], *,
             _logger.debug('Converting device DB')
 
             # Construct configuration data object
-            config_data: _ConfigData = _ConfigData.create(config, exclude=exclude)
+            config_data: _ConfigData = _ConfigData.create(config, exclude=exclude, disable=disable)
 
             # Check core device in the device DB
             if config_data.core_device not in ddb:
                 raise KeyError(f'Core device key "{config_data.core_device}" not found in the device DB')
             if not isinstance(ddb[config_data.core_device], dict):
                 raise ValueError(f'Core device key "{config_data.core_device}" can not be an alias')
+
+            # Remove disabled entries
+            for k in [k for k in ddb if config_data.is_disabled(k)]:
+                _logger.debug(f'Disabled entry "{k}"')
+                ddb.pop(k)
 
             # Set with port numbers used by controllers
             used_ports: typing.Set[int] = set()
