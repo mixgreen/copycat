@@ -822,7 +822,7 @@ class DaxSystem(DaxModuleBase):
 
         :return: True if DAX simulation is enabled
         """
-        return self.__sim_enabled
+        return self.__dax_sim_enabled
 
     def build(self, *args: typing.Any, **kwargs: typing.Any) -> None:
         """Override this method to build your DAX system. (Do not forget to call ``super().build()`` first!)
@@ -846,14 +846,14 @@ class DaxSystem(DaxModuleBase):
             self.get_device(dax.sim.ddb.DAX_SIM_CONFIG_KEY)
         except KeyError:
             # Simulation disabled
-            self.__sim_enabled = False
+            self.__dax_sim_enabled = False
         except artiq.master.worker_db.DeviceError:
             # Error while initializing simulation
             self.logger.exception('Failed to initialize DAX simulation')
             raise
         else:
             # Simulation enabled
-            self.__sim_enabled = True
+            self.__dax_sim_enabled = True
         finally:
             # Add dax_sim_enabled property as a kernel invariant
             self.update_kernel_invariants('dax_sim_enabled')
