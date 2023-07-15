@@ -408,20 +408,22 @@ class AD9910(DaxSimDevice):
                      in_delay: TInt32,
                      window: TInt32,
                      en_sync_gen: TInt32 = 0):
-            raise NotImplementedError
+            pass
 
     else:  # pragma: no cover
         @kernel
         def set_sync(self, in_delay: TInt32, window: TInt32):
-            raise NotImplementedError
+            pass
 
     @kernel
     def clear_smp_err(self):
-        raise NotImplementedError
+        self.cpld.io_update.pulse(1 * us)
+        delay(10 * us)  # slack
+        self.cpld.io_update.pulse(1 * us)
 
     @kernel
     def tune_sync_delay(self, search_seed: TInt32 = 15) -> TTuple([TInt32, TInt32]):  # type: ignore[valid-type]
-        raise NotImplementedError
+        return search_seed, 0x0b
 
     @kernel
     def measure_io_update_alignment(self, delay_start: TInt64,
@@ -430,7 +432,7 @@ class AD9910(DaxSimDevice):
 
     @kernel
     def tune_io_update_delay(self) -> TInt32:
-        raise NotImplementedError
+        return 0
 
     if ARTIQ_MAJOR_VERSION >= 7:
         @kernel
