@@ -25,10 +25,34 @@ _RAM_DEST_DICT = {m: f'{m:02b}' for m in [RAM_DEST_FTW, RAM_DEST_POW, RAM_DEST_A
 """RAM destination conversion dict."""
 
 
+class SyncDataUser:
+    def __init__(self, core, sync_delay_seed, io_update_delay):
+        self.core = core
+        self.sync_delay_seed = sync_delay_seed
+        self.io_update_delay = io_update_delay
+
+    @kernel
+    def init(self):
+        pass
+
+
+class SyncDataEeprom:
+    def __init__(self, dmgr, core, eeprom_str):
+        self.core = core
+        self.sync_delay_seed = 0
+        self.io_update_delay = 0
+
+    @kernel
+    def init(self):
+        self.sync_delay_seed = -1
+        self.io_update_delay = 0
+
+
 class AD9910(DaxSimDevice):
 
     def __init__(self, dmgr, chip_select, cpld_device, sw_device=None,
-                 pll_n=40, pll_cp=7, pll_vco=5, pll_en=1, **kwargs):
+                 pll_n=40, pll_cp=7, pll_vco=5, sync_delay_seed=-1,
+                 io_update_delay=0, pll_en=1, **kwargs):
         # Call super
         super(AD9910, self).__init__(dmgr, **kwargs)
 
@@ -63,6 +87,16 @@ class AD9910(DaxSimDevice):
         self.ftw_per_hz: float = (1 << 32) / sysclk
         self.sysclk_per_mu = int(round(float(sysclk * self.core.ref_period)))
         self.sysclk = sysclk
+
+        if isinstance(sync_delay_seed, str) or isinstance(io_update_delay,
+                                                          str):
+            if sync_delay_seed != io_update_delay:
+                raise ValueError("When using EEPROM, sync_delay_seed must be "
+                                 "equal to io_update_delay")
+            self.sync_data = SyncDataEeprom(dmgr, self.core, sync_delay_seed)
+        else:
+            self.sync_data = SyncDataUser(self.core, sync_delay_seed,
+                                          io_update_delay)
 
         self.phase_mode = PHASE_MODE_CONTINUOUS
 
@@ -191,6 +225,7 @@ class AD9910(DaxSimDevice):
 
     @kernel
     def init(self, blind: TBool = False):
+        self.sync_data.init()
         # Delays from ARTIQ
         delay(50 * ms)  # slack
         self.set_cfr1()
