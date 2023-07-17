@@ -29,6 +29,30 @@ _DEVICE_DB = {
             "cpld_device": "cpld",
         }
     },
+    "dut1": {
+        "type": "local",
+        "module": "artiq.coredevice.ad9910",
+        "class": "AD9910",
+        "arguments": {
+            "chip_select": 4,
+            "cpld_device": "cpld",
+            "pll_en": 0,
+            "sync_delay_seed": 15,
+            "io_update_delay": 3
+        }
+    },
+    "dut2": {
+        "type": "local",
+        "module": "artiq.coredevice.ad9910",
+        "class": "AD9910",
+        "arguments": {
+            "chip_select": 4,
+            "cpld_device": "cpld",
+            "pll_en": 0,
+            "sync_delay_seed": "eeprom_urukul0:00",
+            "io_update_delay": "eeprom_urukul0:00"
+        }
+    },
     "cpld": {
         "type": "local",
         "module": "artiq.coredevice.urukul",
@@ -51,6 +75,8 @@ class _Environment(HasEnvironment):
     def build(self):
         self.core = self.get_device('core')
         self.dut = self.get_device('dut')
+        self.dut1 = self.get_device('dut1')
+        self.dut2 = self.get_device('dut2')
 
 
 class AD9910TestCase(dax.sim.test_case.PeekTestCase):
@@ -68,6 +94,8 @@ class AD9910TestCase(dax.sim.test_case.PeekTestCase):
         self.expect(self.env.dut, 'amp', 'x')
         self.expect(self.env.dut, 'ram_enable', 'x')
         self.expect(self.env.dut, 'ram_dest', 'x')
+        self.assertEqual(self.env.dut.sync_data.sync_delay_seed, -1)
+        self.assertEqual(self.env.dut.sync_data.io_update_delay, 0)
 
     def test_init(self):
         self._test_uninitialized()
@@ -75,6 +103,22 @@ class AD9910TestCase(dax.sim.test_case.PeekTestCase):
         self.expect(self.env.dut, 'init', 1)
         self.expect(self.env.dut, 'ram_enable', 0)
         self.expect(self.env.dut, 'ram_dest', '00')
+        self.assertEqual(self.env.dut.sync_data.sync_delay_seed, -1)
+        self.assertEqual(self.env.dut.sync_data.io_update_delay, 0)
+
+    def test_init_sync_data(self):
+        self._test_uninitialized()
+        self.env.dut1.init()
+        self.env.dut2.init()
+        for d in self.env.dut1, self.env.dut2:
+            self.expect(d, 'init', 1)
+            self.expect(d, 'ram_enable', 0)
+            self.expect(d, 'ram_dest', '00')
+
+        self.assertEqual(self.env.dut1.sync_data.sync_delay_seed, 15)
+        self.assertEqual(self.env.dut1.sync_data.io_update_delay, 3)
+        self.assertEqual(self.env.dut2.sync_data.sync_delay_seed, 0)
+        self.assertEqual(self.env.dut2.sync_data.io_update_delay, 0)
 
     def test_phase_mode_timing(self):
         self._test_uninitialized()
@@ -191,3 +235,23 @@ class CompileTestCase(compile_testcase.CoredeviceCompileTestCase):
                   'set_ftw', 'set_pow', 'set_asf', 'set_frequency', 'set_phase', 'set_amplitude',
                   'set_sync', 'measure_io_update_alignment'}
     DEVICE_DB = _DEVICE_DB
+
+
+class SyncDelayCompileTestCase(CompileTestCase):
+    DEVICE_KWARGS = {
+        "chip_select": 5,
+        'cpld_device': 'cpld',
+        "pll_en": 0,
+        "sync_delay_seed": 15,
+        "io_update_delay": 3
+    }
+
+
+class SyncDelayEEPROMCompileTestCase(SyncDelayCompileTestCase):
+    DEVICE_KWARGS = {
+        "chip_select": 5,
+        'cpld_device': 'cpld',
+        "pll_en": 0,
+        "sync_delay_seed": "eeprom_urukul0:00",
+        "io_update_delay": "eeprom_urukul0:00"
+    }
