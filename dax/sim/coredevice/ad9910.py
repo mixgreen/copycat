@@ -225,6 +225,7 @@ class AD9910(DaxSimDevice):
 
     @kernel
     def init(self, blind: TBool = False):
+        self.sync_data.init()
         # Delays from ARTIQ
         delay(50 * ms)  # slack
         self.set_cfr1()

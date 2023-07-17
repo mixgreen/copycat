@@ -94,8 +94,13 @@ class AD9910TestCase(dax.sim.test_case.PeekTestCase):
         self.expect(self.env.dut, 'amp', 'x')
         self.expect(self.env.dut, 'ram_enable', 'x')
         self.expect(self.env.dut, 'ram_dest', 'x')
+
         self.assertEqual(self.env.dut.sync_data.sync_delay_seed, -1)
         self.assertEqual(self.env.dut.sync_data.io_update_delay, 0)
+        self.assertEqual(self.env.dut1.sync_data.sync_delay_seed, 15)
+        self.assertEqual(self.env.dut1.sync_data.io_update_delay, 3)
+        self.assertEqual(self.env.dut2.sync_data.sync_delay_seed, 0)
+        self.assertEqual(self.env.dut2.sync_data.io_update_delay, 0)
 
     def test_init(self):
         self._test_uninitialized()
@@ -117,7 +122,7 @@ class AD9910TestCase(dax.sim.test_case.PeekTestCase):
 
         self.assertEqual(self.env.dut1.sync_data.sync_delay_seed, 15)
         self.assertEqual(self.env.dut1.sync_data.io_update_delay, 3)
-        self.assertEqual(self.env.dut2.sync_data.sync_delay_seed, 0)
+        self.assertEqual(self.env.dut2.sync_data.sync_delay_seed, -1)
         self.assertEqual(self.env.dut2.sync_data.io_update_delay, 0)
 
     def test_phase_mode_timing(self):
