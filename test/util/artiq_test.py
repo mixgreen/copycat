@@ -445,3 +445,70 @@ class ArtiqTestCase(unittest.TestCase):
     @host_only
     def _host_only_fn(self):
         pass
+
+
+class DelayBuildTestCase(unittest.TestCase):
+    def test_delay_build(self):
+        build_called = False
+        build_args = None
+        build_kwargs = None
+        prepare_called = False
+        run_called = False
+        analyze_called = False
+
+        @dax.util.artiq.delay_build
+        class _TestExperiment(artiq.experiment.EnvExperiment):
+            def build(self, *args, **kwargs):
+                nonlocal build_called, build_args, build_kwargs
+                build_called = True
+                build_args = args
+                build_kwargs = kwargs
+
+            def prepare(self):
+                nonlocal prepare_called
+                prepare_called = True
+
+            def run(self):
+                nonlocal run_called
+                run_called = True
+
+            def analyze(self):
+                nonlocal analyze_called
+                analyze_called = True
+
+        self.assertEqual(_TestExperiment.__doc__, '_TestExperiment')
+
+        args = (1, 2)
+        kwargs = {'foo': 3, 'bar': 4}
+
+        with dax.util.artiq.get_managers() as managers:
+            # Build the experiment
+            exp = _TestExperiment(managers, *args, **kwargs)
+            self.assertFalse(build_called)
+            self.assertIsNone(build_args)
+            self.assertIsNone(build_kwargs)
+            self.assertFalse(prepare_called)
+            self.assertFalse(run_called)
+            self.assertFalse(analyze_called)
+
+            # Prepare
+            exp.prepare()
+            self.assertFalse(build_called)
+            self.assertIsNone(build_args)
+            self.assertIsNone(build_kwargs)
+            self.assertFalse(prepare_called)
+            self.assertFalse(run_called)
+            self.assertFalse(analyze_called)
+
+            # Run
+            exp.run()
+            self.assertTrue(build_called)
+            self.assertTupleEqual(build_args, args)
+            self.assertDictEqual(build_kwargs, kwargs)
+            self.assertTrue(prepare_called)
+            self.assertTrue(run_called)
+            self.assertFalse(analyze_called)
+
+            # Analyze
+            exp.analyze()
+            self.assertTrue(analyze_called)
