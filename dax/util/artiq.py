@@ -633,13 +633,28 @@ def delay_build(cls: typing.Type[artiq.language.environment.Experiment]) \
         __doc__ = cls.__name__ if cls.__doc__ is None else cls.__doc__
         """Take name from original experiment as :attr:`__doc__`."""
 
+        __discovery: bool
         __args: typing.Sequence[typing.Any]
         __kwargs: typing.Mapping[str, typing.Any]
         __exp: artiq.language.environment.Experiment
 
+        def __init__(self, managers_or_parent: typing.Any, *args: typing.Any, **kwargs: typing.Any) -> None:
+            if isinstance(managers_or_parent, tuple):
+                _, _, argument_mgr, _ = managers_or_parent
+                self.__discovery = isinstance(argument_mgr, artiq.master.worker_impl.TraceArgumentManager)
+            else:
+                self.__discovery = False
+
+            super().__init__(managers_or_parent, *args, **kwargs)
+
         def build(self, *args: typing.Any, **kwargs: typing.Any) -> None:
+            # Store arguments
             self.__args = args
             self.__kwargs = kwargs
+
+            if self.__discovery:
+                # Build the experiment during ARTIQ master experiment discovery
+                self.__exp = cls(self, *args, **kwargs)  # type: ignore[call-arg]
 
         def run(self) -> None:
             # Build the experiment in the run phase
