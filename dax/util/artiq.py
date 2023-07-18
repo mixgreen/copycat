@@ -22,7 +22,8 @@ from dax import __version__ as _dax_version
 __all__ = ['is_kernel', 'is_portable', 'is_host_only', 'is_rpc', 'is_decorated',
            'default_enumeration_value',
            'process_arguments', 'get_managers', 'clone_managers', 'isolate_managers',
-           'pause_strict_priority', 'terminate_running_instances']
+           'pause_strict_priority', 'terminate_running_instances',
+           'delay_build']
 
 # Workaround required for Python<3.9
 if typing.TYPE_CHECKING:  # pragma: no cover
@@ -600,3 +601,70 @@ def terminate_running_instances(scheduler: typing.Any, *,
 
     except AttributeError:
         raise TypeError(f'Incorrect scheduler instance provided: {type(scheduler)}') from None
+
+
+def delay_build(cls: typing.Type[artiq.language.environment.Experiment]) \
+        -> typing.Type[artiq.language.environment.Experiment]:
+    """Decorator for experiment to delay the :func:`build` phase into the :func:`run` phase.
+
+    ARTIQ experiments are allowed to read datasets in the :func:`build` phase,
+    but this could lead to issues when running experiments pipelined.
+    A first experiment could write a calibration value to a dataset that needs to be picked up by a second experiment.
+    If the second experiment reads this dataset in the :func:`build` phase,
+    it could read the data before the first experiment has written it (i.e. read before write).
+    With this decorator, the :func:`build` phase of the second experiment can be delayed to prevent this issue.
+    As a result, pipelining will be less effective.
+
+    Note that the decorated class is not of the same type anymore as the original class.
+
+    This decorator was initially created for (legacy) experiments that read persistent dataset values in the
+    :func:`build` phase. During manual operation of the system, this could work fine if the operator submits
+    the experiments at the correct times. When using the DAX scheduler, this could still become a problem.
+    This decorator allows users to create a decorated variant of their experiments that can be used in the
+    scheduler. The decorated experiment can be a class that inherits from the original experiment class and
+    has this decorator applied. The decorated experiment can have a class name with an underscore to make sure
+    it does not show up in the ARTIQ dashboard.
+
+    :param cls: The class to decorate
+    :returns: Decorated class which causes the :func:`build` phase to be delayed
+    """
+
+    class DelayBuildExperiment(artiq.language.environment.EnvExperiment):
+        __doc__ = cls.__name__ if cls.__doc__ is None else cls.__doc__
+        """Take name from original experiment as :attr:`__doc__`."""
+
+        __discovery: bool
+        __args: typing.Sequence[typing.Any]
+        __kwargs: typing.Mapping[str, typing.Any]
+        __exp: artiq.language.environment.Experiment
+
+        def __init__(self, managers_or_parent: typing.Any, *args: typing.Any, **kwargs: typing.Any) -> None:
+            if isinstance(managers_or_parent, tuple):
+                _, _, argument_mgr, _ = managers_or_parent
+                self.__discovery = isinstance(argument_mgr, artiq.master.worker_impl.TraceArgumentManager)
+            else:
+                self.__discovery = False
+
+            super().__init__(managers_or_parent, *args, **kwargs)
+
+        def build(self, *args: typing.Any, **kwargs: typing.Any) -> None:
+            # Store arguments
+            self.__args = args
+            self.__kwargs = kwargs
+
+            if self.__discovery:
+                # Build the experiment during ARTIQ master experiment discovery
+                self.__exp = cls(self, *args, **kwargs)  # type: ignore[call-arg]
+
+        def run(self) -> None:
+            # Build the experiment in the run phase
+            self.__exp = cls(self, *self.__args, **self.__kwargs)  # type: ignore[call-arg]
+            # Prepare and run the experiment
+            self.__exp.prepare()
+            self.__exp.run()
+
+        def analyze(self) -> None:
+            # Analyze the experiment
+            self.__exp.analyze()
+
+    return DelayBuildExperiment
