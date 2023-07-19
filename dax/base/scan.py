@@ -191,6 +191,7 @@ class DaxScan(dax.base.control_flow.DaxControlFlow, abc.ABC):
     """:func:`build` keyword argument for keyword arguments passed to :func:`build_scan`."""
 
     __in_build: bool
+    __scan_elements_initialized: bool
     _dax_scan_scannables: _SD_T
     _dax_scan_infinite: bool
     _dax_scan_elements: typing.List[typing.Any]
@@ -222,6 +223,10 @@ class DaxScan(dax.base.control_flow.DaxControlFlow, abc.ABC):
         assert isinstance(scan_args, collections.abc.Sequence), 'Scan args must be a sequence'
         assert isinstance(scan_kwargs, dict), 'Scan kwargs must be a dict'
         assert all(isinstance(k, str) for k in scan_kwargs), 'All scan kwarg keys must be of type str'
+
+        # Initialize variables
+        self.__in_build = False
+        self.__scan_elements_initialized = False
 
         # Make properties kernel invariant
         self.update_kernel_invariants('is_infinite_scan', 'is_terminated_scan')
@@ -442,17 +447,14 @@ class DaxScan(dax.base.control_flow.DaxControlFlow, abc.ABC):
 
         To get the values without applying the product, see :func:`get_scannables`.
 
-        This function can only be used after the :func:`run` function was called
-        which normally means it is not available during the build and prepare phase.
-        See also :func:`init_scan_elements`.
+        This function will call :func:`init_scan_elements`. Normally, it means this
+        function can be safely called in the prepare phase or later.
 
         :return: A dict containing all the scan points on a per-key basis
         """
-        if hasattr(self, '_dax_scan_elements'):
-            return {key: [getattr(point, key) for point, _ in self._dax_scan_elements]
-                    for key in self._dax_scan_scannables}
-        else:
-            raise AttributeError('Scan points can only be obtained after scan elements are initialized')
+        self.init_scan_elements()
+        return {key: [getattr(point, key) for point, _ in self._dax_scan_elements]
+                for key in self._dax_scan_scannables}
 
     @host_only
     def get_scannables(self) -> typing.Dict[str, typing.List[typing.Any]]:
@@ -473,19 +475,26 @@ class DaxScan(dax.base.control_flow.DaxControlFlow, abc.ABC):
 
         By default, this is called at the beginning of :func:`run`, however it may be called in :func:`prepare` if the
         user desires the ability to call :func:`get_scan_points` before :func:`run`.
+        It is safe to call this function multiple times.
         """
-        # Check if build() was called
-        assert hasattr(self, '_dax_scan_scannables'), 'DaxScan.build() was not called'
+        if not self.__scan_elements_initialized:
+            # Check if build() was called
+            if not hasattr(self, '_dax_scan_scannables'):
+                raise AttributeError('DaxScan.build() was not called')
+            # Check we are not in build right now
+            if self.__in_build:
+                raise RuntimeError('init_scan_elements() cannot be called in the build_scan() method')
 
-        # Make the scan elements
-        if self._dax_scan_scannables:
-            self._dax_scan_elements = list(_ScanProductGenerator(self._dax_scan_scannables,
-                                                                 enable_index=self.ENABLE_SCAN_INDEX))
-        else:
-            self._dax_scan_elements = []
-        self.update_kernel_invariants('_dax_scan_elements')
-        self.logger.debug(f'Prepared {len(self._dax_scan_elements)} scan point(s) '
-                          f'with {len(self._dax_scan_scannables)} scan parameter(s)')
+            # Make the scan elements
+            if self._dax_scan_scannables:
+                self._dax_scan_elements = list(_ScanProductGenerator(self._dax_scan_scannables,
+                                                                     enable_index=self.ENABLE_SCAN_INDEX))
+            else:
+                self._dax_scan_elements = []
+            self.__scan_elements_initialized = True
+            self.update_kernel_invariants('_dax_scan_elements')
+            self.logger.debug(f'Prepared {len(self._dax_scan_elements)} scan point(s) '
+                              f'with {len(self._dax_scan_scannables)} scan parameter(s)')
 
     """Internal control flow functions"""
 
@@ -513,9 +522,8 @@ class DaxScan(dax.base.control_flow.DaxControlFlow, abc.ABC):
 
     @host_only
     def run(self) -> None:
-        # Initialize scan elements if not already done
-        if not hasattr(self, '_dax_scan_elements'):
-            self.init_scan_elements()
+        # Initialize scan elements
+        self.init_scan_elements()
 
         if not self._dax_scan_elements:
             # There are no scan points

@@ -307,10 +307,14 @@ class Scan1TestCase(unittest.TestCase):
     def test_early_scan_element_init(self):
         # Call element init before run
         self.scan.init_scan_elements()
+        scan_elements = self.scan._dax_scan_elements
+        self.scan.init_scan_elements()  # Can be safely called multiple times
+        self.assertIs(self.scan._dax_scan_elements, scan_elements)
         # Run the scan
         self.scan.run()
-        # Verify init was only called once
-        self.assertEqual(self.scan.counter['init_scan_elements'], 1,
+        self.assertIs(self.scan._dax_scan_elements, scan_elements)
+        # Verify init was called the expected number of times
+        self.assertEqual(self.scan.counter['init_scan_elements'], 3,
                          'init_scan_elements counter did not match expected value')
 
     def test_raise_add_scan(self):
@@ -325,9 +329,8 @@ class Scan1TestCase(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             self.scan.add_static_scan('bar', [])
 
-    def test_get_scan_points_too_early(self):
-        with self.assertRaises(AttributeError, msg='Scan point request before run did not raise'):
-            self.scan.get_scan_points()
+    def test_get_scan_points_early(self):
+        self.scan.get_scan_points()
         self.scan.run()
         self.scan.get_scan_points()
 
@@ -882,7 +885,7 @@ class DisableIndexScanTestCase(unittest.TestCase):
 
         # Verify counters
         counter_ref = {
-            'init_scan_elements': 1,
+            'init_scan_elements': 2,
             'host_enter': 1,
             'host_setup': 1,
             '_dax_control_flow_setup': 1,
