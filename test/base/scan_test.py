@@ -331,6 +331,26 @@ class Scan1TestCase(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             self.scan.add_static_scan('bar', [])
 
+    @staticmethod
+    def _map_fn(v):
+        return v + 1
+
+    def test_map_scan(self):
+        original = self.scan.get_scannables()[self.scan.SCAN_KEY]
+        self.assertEqual(len(original), self.scan.FOO)
+        self.scan.map_scan(self.scan.SCAN_KEY, self._map_fn)
+        mapped = self.scan.get_scannables()[self.scan.SCAN_KEY]
+        self.assertEqual(len(mapped), self.scan.FOO)
+
+        for o, m in zip(original, mapped):
+            self.assertEqual(self._map_fn(o), m)
+
+    def test_map_scan_scan_elements_initialized(self):
+        self.scan.map_scan(self.scan.SCAN_KEY, self._map_fn)
+        self.scan.init_scan_elements()
+        with self.assertRaises(RuntimeError):
+            self.scan.map_scan(self.scan.SCAN_KEY, self._map_fn)
+
     def test_get_scan_points_early(self):
         self.scan.get_scan_points()
         self.scan.run()
@@ -424,6 +444,10 @@ class ZipScanTestCase(Scan1TestCase):
     # Run all the same tests as before to ensure that nothing breaks
     # Note: zip was created with two of the same scannable
     SCAN_CLASS = _MockScanZip
+
+    @staticmethod
+    def _map_fn(v):
+        return tuple(e + 1 for e in v)
 
     def test_get_scannables(self):
         scannables = self.scan.get_scannables()

@@ -21,6 +21,7 @@ import dax.util.artiq
 __all__ = ['DaxScan', 'DaxScanReader', 'DaxScanChain', 'DaxScanZip']
 
 _S_T = typing.Union[ScanObject, typing.Sequence[typing.Any]]  # Scan object type
+_M_T = typing.Callable[[typing.Any], typing.Any]  # Map function for keys in points
 
 # Workaround required for Python<3.9
 if typing.TYPE_CHECKING:  # pragma: no cover
@@ -436,6 +437,36 @@ class DaxScan(dax.base.control_flow.DaxControlFlow, abc.ABC):
         for k in keys:
             # Move key to the end of the list
             self._dax_scan_scannables.move_to_end(k)
+
+    @host_only
+    def map_scan(self, key: str, map_fn: _M_T) -> None:
+        """Map values of a scan.
+
+        Given a key and a map function, map all values of a scan.
+        For example, this function can be used to convert the values of a scan to machine units.
+
+        This function can only be used before :func:`initialize_scan_elements` and after :func:`build_scan`
+        was called. In practice, this means that this function will normally be used in the :func:`prepare`
+        phase of the experiment.
+
+        :param key: The scan key of interest
+        :param map_fn: The function that maps the values of the given scan
+        """
+        assert isinstance(key, str), 'Key must be of type str'
+        assert callable(map_fn), 'Map function must be callable'
+
+        # Verify the key is valid and existing
+        if not key.isidentifier():
+            raise ValueError(f'Provided key "{key}" is not valid')
+        if key not in self._dax_scan_scannables:
+            raise LookupError(f'Provided key "{key}" does not exist')
+
+        # Check that scan elements are not initialized yet
+        if self.__scan_elements_initialized:
+            raise RuntimeError('Cannot map scans after scan elements are initialized')
+
+        # Map scan
+        self._dax_scan_scannables[key] = [map_fn(v) for v in self._dax_scan_scannables[key]]
 
     @host_only
     def get_scan_points(self) -> typing.Dict[str, typing.List[typing.Any]]:
