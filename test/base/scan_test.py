@@ -24,13 +24,15 @@ class _MockSystem(DaxSystem):
 
 class _MockScan1(DaxScan, _MockSystem):
     FOO = 20
+    assert FOO // 2 == FOO / 2
+    SCAN_KEY = 'foo'
 
     def build_scan(self) -> None:
         # Counter
         self.counter: typing.Counter[str] = collections.Counter()
 
         # Scan
-        self.add_scan('foo', 'foo', Scannable(RangeScan(1, self.FOO, self.FOO, randomize=False)))
+        self.add_scan(self.SCAN_KEY, self.SCAN_KEY, Scannable(RangeScan(1, self.FOO, self.FOO, randomize=False)))
 
     def init_scan_elements(self) -> None:
         super(_MockScan1, self).init_scan_elements()
@@ -154,16 +156,16 @@ class _MockScanChain(_MockScan1):
         self.counter: typing.Counter[str] = collections.Counter()
 
         # Scan
-        with DaxScanChain(self, 'foo', group='bar') as chain:
-            chain.add_scan('1', Scannable(RangeScan(1, self.FOO, self.FOO, randomize=False)))
-            chain.add_scan('2', Scannable(RangeScan(1, self.FOO, self.FOO, randomize=False)))
+        with DaxScanChain(self, self.SCAN_KEY, group='bar') as chain:
+            chain.add_scan('1', Scannable(RangeScan(1, self.FOO // 2, self.FOO // 2, randomize=False)))
+            chain.add_scan('2', Scannable(RangeScan(1, self.FOO // 2, self.FOO // 2, randomize=False)))
 
 
 class _MockScanZip(_MockScan1):
     def build_scan(self) -> None:
         self.counter: typing.Counter[str] = collections.Counter()
 
-        with DaxScanZip(self, 'foo', group='bar') as scan_zip:
+        with DaxScanZip(self, self.SCAN_KEY, group='bar') as scan_zip:
             scan_zip.add_scan('1', Scannable(RangeScan(1, self.FOO, self.FOO, randomize=False)))
             scan_zip.add_scan('2', Scannable(RangeScan(1, self.FOO, self.FOO, randomize=False)))
 
@@ -209,7 +211,7 @@ class _MockScan2ValueCheck(_MockScan2):
         # Iterators to check the values
         scan_values = self.get_scannables()
         self.scan_foo: typing.Iterator[typing.Any] = itertools.chain(
-            *[itertools.repeat(v, self.BAR) for v in scan_values['foo']])
+            *[itertools.repeat(v, self.BAR) for v in scan_values[self.SCAN_KEY]])
         self.scan_bar: typing.Iterator[typing.Any] = itertools.cycle(scan_values['bar'])
 
         # Iterators to check indices
@@ -238,12 +240,12 @@ class _MockScan2ValueCheckReordered(_MockScan2ValueCheck):
         super(_MockScan2ValueCheckReordered, self).build_scan()
 
         # Change the scan order
-        self.set_scan_order('bar', 'foo')
+        self.set_scan_order('bar', self.SCAN_KEY)
 
         # Iterators to check the values
         scan_values = self.get_scannables()
         self.scan_bar = itertools.chain(*[itertools.repeat(v, self.FOO) for v in scan_values['bar']])
-        self.scan_foo = itertools.cycle(scan_values['foo'])
+        self.scan_foo = itertools.cycle(scan_values[self.SCAN_KEY])
 
         # Iterators to check indices
         self.index_bar = itertools.chain(*[itertools.repeat(v, self.FOO) for v in range(self.BAR)])
@@ -337,12 +339,12 @@ class Scan1TestCase(unittest.TestCase):
     def test_get_scan_points(self):
         self.scan.run()
         points = self.scan.get_scan_points()
-        self.assertIn('foo', points)
+        self.assertIn(self.scan.SCAN_KEY, points)
 
     def test_get_scannables(self):
         scannables = self.scan.get_scannables()
-        self.assertIn('foo', scannables)
-        self.assertEqual(len(scannables['foo']), self.scan.FOO)
+        self.assertIn(self.scan.SCAN_KEY, scannables)
+        self.assertEqual(len(scannables[self.scan.SCAN_KEY]), self.scan.FOO)
 
     def test_scan_reader(self):
         self.scan.run()
@@ -382,35 +384,10 @@ class ChainScanTestCase(Scan1TestCase):
     # Note: chain was created with two of the same scannable
     SCAN_CLASS = _MockScanChain
 
-    def test_get_scannables(self):
-        scannables = self.scan.get_scannables()
-        self.assertIn('foo', scannables)
-        self.assertEqual(len(scannables['foo']), self.scan.FOO * 2)
-
-    def test_call_counters(self):
-        # Run the scan
-        self.scan.run()
-
-        # Verify counters
-        counter_ref = {
-            'init_scan_elements': 1,
-            'host_enter': 1,
-            'host_setup': 1,
-            '_dax_control_flow_setup': 1,
-            'device_setup': 1,
-            'run_point': self.scan.FOO * 2,
-            'device_cleanup': 1,
-            '_dax_control_flow_cleanup': 1,
-            'host_cleanup': 1,
-            'host_exit': 1,
-        }
-
-        self.assertDictEqual(self.scan.counter, counter_ref, 'Function counters did not match expected values')
-
     def test_raise_reentrant_context_in_order(self):
         class MockChainScan(_MockScanCallback):
             def callback(self_scan):
-                with DaxScanChain(self_scan, key='foo') as chain:
+                with DaxScanChain(self_scan, key=self.scan.SCAN_KEY) as chain:
                     chain.add_scan('bar', Scannable(NoScan(1)))
                 with self.assertRaises(RuntimeError, msg='Reentering scan context after exit did not raise'):
                     with chain:
@@ -421,7 +398,7 @@ class ChainScanTestCase(Scan1TestCase):
     def test_raise_reentrant_context_in_context(self):
         class MockChainScan(_MockScanCallback):
             def callback(self_scan):
-                with DaxScanChain(self_scan, key='foo') as chain:
+                with DaxScanChain(self_scan, key=self.scan.SCAN_KEY) as chain:
                     chain.add_scan('bar', Scannable(NoScan(1)))
                     with self.assertRaises(RuntimeError, msg='Reentering scan context in context did not raise'):
                         with chain:
@@ -432,13 +409,13 @@ class ChainScanTestCase(Scan1TestCase):
     def test_raise_duplicate_scan_key(self):
         class MockChainScan(_MockScanCallback):
             def callback(self_scan):
-                self_scan.add_scan('foo', 'foo', Scannable(NoScan(1)))
+                self_scan.add_scan(self.scan.SCAN_KEY, self.scan.SCAN_KEY, Scannable(NoScan(1)))
                 with self.assertRaises(LookupError):
-                    self_scan.add_scan('foo', 'foo', Scannable(NoScan(1)))
+                    self_scan.add_scan(self.scan.SCAN_KEY, self.scan.SCAN_KEY, Scannable(NoScan(1)))
                 with self.assertRaises(LookupError):
-                    self_scan.add_iterator('foo', 'foo', 1)
+                    self_scan.add_iterator(self.scan.SCAN_KEY, self.scan.SCAN_KEY, 1)
                 with self.assertRaises(LookupError):
-                    self_scan.add_static_scan('foo', [1])
+                    self_scan.add_static_scan(self.scan.SCAN_KEY, [1])
 
         MockChainScan(self.managers)
 
@@ -450,8 +427,8 @@ class ZipScanTestCase(Scan1TestCase):
 
     def test_get_scannables(self):
         scannables = self.scan.get_scannables()
-        self.assertIn('foo', scannables)
-        self.assertEqual(len(scannables['foo']), self.scan.FOO)
+        self.assertIn(self.scan.SCAN_KEY, scannables)
+        self.assertEqual(len(scannables[self.scan.SCAN_KEY]), self.scan.FOO)
 
     def test_call_counters(self):
         # Run the scan
@@ -476,7 +453,7 @@ class ZipScanTestCase(Scan1TestCase):
     def test_raise_reentrant_context_in_order(self):
         class MockZipScan(_MockScanCallback):
             def callback(self_scan):
-                with DaxScanZip(self_scan, key='foo') as scan_zip:
+                with DaxScanZip(self_scan, key=self.scan.SCAN_KEY) as scan_zip:
                     scan_zip.add_scan('bar', Scannable(NoScan(1)))
                 with self.assertRaises(RuntimeError, msg='Reentering scan context after exit did not raise'):
                     with scan_zip:
@@ -487,7 +464,7 @@ class ZipScanTestCase(Scan1TestCase):
     def test_raise_reentrant_context_in_context(self):
         class MockZipScan(_MockScanCallback):
             def callback(self_scan):
-                with DaxScanZip(self_scan, key='foo') as chain:
+                with DaxScanZip(self_scan, key=self.scan.SCAN_KEY) as chain:
                     chain.add_scan('bar', Scannable(NoScan(1)))
                     with self.assertRaises(RuntimeError, msg='Reentering scan context in context did not raise'):
                         with chain:
@@ -498,13 +475,13 @@ class ZipScanTestCase(Scan1TestCase):
     def test_raise_duplicate_scan_key(self):
         class MockZipScan(_MockScanCallback):
             def callback(self_scan):
-                self_scan.add_scan('foo', 'foo', Scannable(NoScan(1)))
+                self_scan.add_scan(self.scan.SCAN_KEY, self.scan.SCAN_KEY, Scannable(NoScan(1)))
                 with self.assertRaises(LookupError):
-                    self_scan.add_scan('foo', 'foo', Scannable(NoScan(1)))
+                    self_scan.add_scan(self.scan.SCAN_KEY, self.scan.SCAN_KEY, Scannable(NoScan(1)))
                 with self.assertRaises(LookupError):
-                    self_scan.add_iterator('foo', 'foo', 1)
+                    self_scan.add_iterator(self.scan.SCAN_KEY, self.scan.SCAN_KEY, 1)
                 with self.assertRaises(LookupError):
-                    self_scan.add_static_scan('foo', [1])
+                    self_scan.add_static_scan(self.scan.SCAN_KEY, [1])
 
         MockZipScan(self.managers)
 
@@ -738,16 +715,16 @@ class Scan2TestCase(Scan1TestCase):
     def test_get_scan_points(self):
         self.scan.run()
         points = self.scan.get_scan_points()
-        self.assertIn('foo', points)
+        self.assertIn(self.scan.SCAN_KEY, points)
         self.assertIn('bar', points)
-        self.assertEqual(len(points['foo']), self.scan.FOO * self.scan.BAR)
+        self.assertEqual(len(points[self.scan.SCAN_KEY]), self.scan.FOO * self.scan.BAR)
         self.assertEqual(len(points['bar']), self.scan.FOO * self.scan.BAR)
 
     def test_get_scannables(self):
         scannables = self.scan.get_scannables()
-        self.assertIn('foo', scannables)
+        self.assertIn(self.scan.SCAN_KEY, scannables)
         self.assertIn('bar', scannables)
-        self.assertEqual(len(scannables['foo']), self.scan.FOO)
+        self.assertEqual(len(scannables[self.scan.SCAN_KEY]), self.scan.FOO)
         self.assertEqual(len(scannables['bar']), self.scan.BAR)
 
 
