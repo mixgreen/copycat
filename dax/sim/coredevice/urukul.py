@@ -104,7 +104,7 @@ class CPLD(DaxSimDevice):
 
     @kernel
     def sta_read(self) -> TInt32:
-        raise NotImplementedError
+        return 0
 
     # noinspection PyUnusedLocal
     @kernel
