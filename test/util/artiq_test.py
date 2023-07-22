@@ -456,8 +456,9 @@ class DelayBuildTestCase(unittest.TestCase):
         run_called = False
         analyze_called = False
 
-        @dax.util.artiq.delay_build
-        class _TestExperiment(artiq.experiment.EnvExperiment):
+        class _OriginalTestExperiment(artiq.experiment.EnvExperiment):
+            CLS_VAR = 1
+
             def build(self, *args, **kwargs):
                 nonlocal build_called, build_args, build_kwargs
                 build_called = True
@@ -476,7 +477,13 @@ class DelayBuildTestCase(unittest.TestCase):
                 nonlocal analyze_called
                 analyze_called = True
 
+        @dax.util.artiq.delay_build
+        class _TestExperiment(_OriginalTestExperiment):
+            pass
+
         self.assertEqual(_TestExperiment.__doc__, '_TestExperiment')
+        self.assertTrue(issubclass(_TestExperiment, _OriginalTestExperiment))
+        self.assertIs(_TestExperiment.CLS_VAR, _OriginalTestExperiment.CLS_VAR)
 
         args = (1, 2)
         kwargs = {'foo': 3, 'bar': 4}

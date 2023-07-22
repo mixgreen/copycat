@@ -603,8 +603,10 @@ def terminate_running_instances(scheduler: typing.Any, *,
         raise TypeError(f'Incorrect scheduler instance provided: {type(scheduler)}') from None
 
 
-def delay_build(cls: typing.Type[artiq.language.environment.Experiment]) \
-        -> typing.Type[artiq.language.environment.Experiment]:
+_E_T = typing.TypeVar('_E_T', bound=artiq.language.environment.Experiment)  # Experiment class type variable
+
+
+def delay_build(cls: typing.Type[_E_T]) -> typing.Type[_E_T]:
     """Decorator for experiment to delay the :func:`build` phase into the :func:`run` phase.
 
     ARTIQ experiments are allowed to read datasets in the :func:`build` phase,
@@ -615,7 +617,7 @@ def delay_build(cls: typing.Type[artiq.language.environment.Experiment]) \
     With this decorator, the :func:`build` phase of the second experiment can be delayed to prevent this issue.
     As a result, pipelining will be less effective.
 
-    Note that the decorated class is not of the same type anymore as the original class.
+    Note that the decorated class is a subclass of the original class.
 
     This decorator was initially created for (legacy) experiments that read persistent dataset values in the
     :func:`build` phase. During manual operation of the system, this could work fine if the operator submits
@@ -628,43 +630,45 @@ def delay_build(cls: typing.Type[artiq.language.environment.Experiment]) \
     :param cls: The class to decorate
     :returns: Decorated class which causes the :func:`build` phase to be delayed
     """
+    assert issubclass(cls, artiq.language.environment.Experiment), 'Given class must inherit from Experiment'
+    assert issubclass(cls, artiq.language.environment.HasEnvironment), 'Given class must inherit from HasEnvironment'
 
-    class DelayBuildExperiment(artiq.language.environment.EnvExperiment):
+    class DelayBuildExperiment(cls):  # type: ignore[valid-type,misc]
         __doc__ = cls.__name__ if cls.__doc__ is None else cls.__doc__
         """Take name from original experiment as :attr:`__doc__`."""
 
-        __discovery: bool
         __args: typing.Sequence[typing.Any]
         __kwargs: typing.Mapping[str, typing.Any]
-        __exp: artiq.language.environment.Experiment
+        __discovery: bool
 
         def __init__(self, managers_or_parent: typing.Any, *args: typing.Any, **kwargs: typing.Any) -> None:
+            # Store arguments
+            self.__args = args
+            self.__kwargs = kwargs
+
+            # Set discovery flag
             if isinstance(managers_or_parent, tuple):
                 _, _, argument_mgr, _ = managers_or_parent
                 self.__discovery = isinstance(argument_mgr, artiq.master.worker_impl.TraceArgumentManager)
             else:
                 self.__discovery = False
 
+            # Call super
             super().__init__(managers_or_parent, *args, **kwargs)
 
         def build(self, *args: typing.Any, **kwargs: typing.Any) -> None:
-            # Store arguments
-            self.__args = args
-            self.__kwargs = kwargs
-
             if self.__discovery:
                 # Build the experiment during ARTIQ master experiment discovery
-                self.__exp = cls(self, *args, **kwargs)  # type: ignore[call-arg]
+                super().build(*args, **kwargs)
+
+        def prepare(self) -> None:
+            pass
 
         def run(self) -> None:
             # Build the experiment in the run phase
-            self.__exp = cls(self, *self.__args, **self.__kwargs)  # type: ignore[call-arg]
+            super().build(*self.__args, **self.__kwargs)
             # Prepare and run the experiment
-            self.__exp.prepare()
-            self.__exp.run()
-
-        def analyze(self) -> None:
-            # Analyze the experiment
-            self.__exp.analyze()
+            super().prepare()
+            super().run()
 
     return DelayBuildExperiment
