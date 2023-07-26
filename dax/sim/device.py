@@ -90,6 +90,6 @@ class DaxSimDevice(abc.ABC):
     def __repr__(self) -> str:
         """Representation is the key of this device (if available)."""
         try:
-            return self.alias
+            return self.key
         except AttributeError:
             return super(DaxSimDevice, self).__repr__()

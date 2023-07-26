@@ -431,11 +431,10 @@ def _resolve_unique_device_root_alias(value: str, trace: typing.Set[str],
     keys: typing.Any = [k for k, v in ddb.items() if v == value]
 
     if len(keys) == 0:
-        # No keys were found, value is the root alias
-        return value
+        return value  # No keys were found, value is the root alias
     elif not len(keys) == 1:
-        # Multiple keys found for the same value
-        raise ValueError
+        logging.error(f"Found Keys {keys} for Value {value}")
+        raise ValueError(f"Multiple alias keys: {keys} found for the same device value: {value}")
     elif isinstance(keys[0], str):
         # Recurse if we are still dealing with an alias
         return _resolve_unique_device_root_alias(keys[0], trace, ddb)
