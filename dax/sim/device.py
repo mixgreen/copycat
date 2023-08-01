@@ -20,25 +20,25 @@ class DaxSimDevice(abc.ABC):
     __kwargs: typing.Dict[str, typing.Any]
 
     def __init__(self, dmgr: typing.Any, *,
-                 _key: str, _core: typing.Any = None, core_device: str = 'core', _alias: str = "",
+                 _key: str, _core: typing.Any = None, core_device: str = 'core', _aliases: set = set(),
                  **kwargs: typing.Any):
         """Initialize a DAX simulation device.
 
         :param dmgr: The device manager, always first positional argument when ARTIQ constructs a device object
         :param core_device: ARTIQ default argument to change the device DB key of the core device
         :param _key: The key of this device, will be injected in the **kwargs arguments by DAX.sim
-        :param _alias: The alias of this device, will be injected in the **kwargs arguments by Dax.sim
+        :param _aliases: The alias of this device, will be injected in the **kwargs arguments by Dax.sim
         :param _core: Used by DAX.sim to construct and pass the core object
         """
 
         assert isinstance(_key, str), 'Internal argument _key is expected to be type str'
         assert isinstance(core_device, str), 'Core device argument must be of type str'
-        assert isinstance(_alias, str), 'Internal argument _alias is expected to be type str'
+        assert all(isinstance(a, str) for a in _aliases), 'Internal argument _alias is expected to be type set{str}'
 
         # Store device key
         self.__key = _key
         # Store device alias
-        self.__alias = _alias
+        self.__aliases = _aliases
         # Store core device (this will actually be a simulated core device, but we type it as an ARTIQ core device)
         self.__core = dmgr.get(core_device) if _core is None else _core
 
@@ -62,15 +62,15 @@ class DaxSimDevice(abc.ABC):
         return self.__key
 
     @property
-    def alias(self) -> str:
+    def aliases(self) -> str:
         """Get the alias of this device.
 
-        :return: The unique device alias as defined in the device DB
+        :return: The set of aliases as defined in the device DB
         """
-        if self.__alias == "":
-            return self.key
+        if self.__aliases == {}:
+            return {self.key}
         else:
-            return self.__alias
+            return self.__aliases
 
     def core_reset(self) -> None:
         """Called when ``core.reset()`` is used.

@@ -217,13 +217,13 @@ def enable_dax_sim(ddb: typing.Dict[str, typing.Any], *,
             used_ports: typing.Set[int] = set()
 
             for k, v in ddb.items():
-                alias = get_unique_device_root_alias(k, ddb)
+                aliases = _get_aliases(k, ddb)
                 if config_data.is_excluded(k):
                     _logger.debug(f'Excluded entry "{k}"')
                 else:
                     try:
                         # Mutate entry in-place
-                        _mutate_ddb_entry(k, v, config=config_data, used_ports=used_ports, alias=alias)
+                        _mutate_ddb_entry(k, v, config=config_data, used_ports=used_ports, aliases=aliases)
                     except Exception as e:
                         # Log exception to provide more context
                         _logger.exception(e)
@@ -262,7 +262,7 @@ def enable_dax_sim(ddb: typing.Dict[str, typing.Any], *,
 
 def _mutate_ddb_entry(key: str, value: typing.Any, *,
                       config: _ConfigData,
-                      used_ports: typing.Set[int], alias: str) -> typing.Any:
+                      used_ports: typing.Set[int], aliases: str) -> typing.Any:
     """Mutate a device DB entry to use it for simulation."""
 
     assert isinstance(key, str), 'The key must be of type str'
@@ -275,7 +275,7 @@ def _mutate_ddb_entry(key: str, value: typing.Any, *,
 
         # Mutate entry
         if type_ == 'local':
-            _mutate_local(key, value, config=config, alias=alias)
+            _mutate_local(key, value, config=config, aliases=aliases)
         elif type_ == 'controller':
             _mutate_controller(key, value, config=config, used_ports=used_ports)
         else:
@@ -285,7 +285,7 @@ def _mutate_ddb_entry(key: str, value: typing.Any, *,
     return value
 
 
-def _mutate_local(key: str, value: typing.Dict[str, typing.Any], *, config: _ConfigData, alias: str) -> None:
+def _mutate_local(key: str, value: typing.Dict[str, typing.Any], *, config: _ConfigData, aliases: str) -> None:
     """Mutate a device DB local entry to use it for simulation."""
 
     # Add simulation arguments to normal arguments
@@ -304,7 +304,7 @@ def _mutate_local(key: str, value: typing.Dict[str, typing.Any], *, config: _Con
     arguments['_key'] = key
 
     # Add alias of the device to the device arguments
-    arguments['_alias'] = alias
+    arguments['_aliases'] = aliases
 
     if key == config.core_device:
         # Set the host of the core device to localhost
@@ -418,53 +418,56 @@ def _start_moninj_service(*, port: int = dax.util.moninj.MonInjDummyService.DEFA
                      close_fds=True, start_new_session=True, creationflags=getattr(subprocess, 'DETACHED_PROCESS', 0))
 
 
-def get_unique_device_root_alias(value: str, ddb: typing.Dict[str, typing.Any]) -> str:
-    """Get the unique device root alias by resolving it recursively in the device DB.
-
-    :param value: The value to resolve
-    :param ddb: The device.db to resolve with
-    :return: The resolved unique device root alias
-    :raises LookupError: Raised if an alias loop was detected in the trace while resolving
-    :raises TypeError: Raised if a value returned an unexpected type
-    :raises ValueError: Raised if multiple aliases are found for the same value
-    """
-
-    assert isinstance(value, str), 'Value must be of type str'
-    assert isinstance(ddb, dict), 'The device DB argument must be a dict'
-
-    return _resolve_unique_device_root_alias(value, set(), ddb)
-
-
-def _resolve_unique_device_root_alias(value: str, trace: typing.Set[str],
-                                      ddb: typing.Dict[str, typing.Any]) -> str:
+def _get_aliases(key: str, ddb: typing.Dict[str, typing.Any]) -> str:
     """Recursively resolve aliases until we find the unique device name.
 
-    :param value: The value to resolve
+    :param key: The value to resolve
     :param ddb: The device.db to resolve with
-    :return: The resolved unique device root alias
+    :return: The list of aliases pointing to the provided key
     :raises LookupError: Raised if an alias loop was detected in the trace while resolving
     :raises TypeError: Raised if a value returned an unexpected type
     :raises ValueError: Raised if multiple aliases are found for the same value
     """
 
+    assert isinstance(key, str), 'Value must be of type str'
+    assert isinstance(ddb, dict), 'The device DB argument must be a dict'
+
+    aliases = __get_aliases(key, ddb, set())
+
+    return aliases
+
+
+def __get_aliases(key: str, ddb: typing.Dict[str, typing.Any], trace: typing.Set[str] = set()) -> str:
+    """Recursively resolve aliases until we find the unique device name.
+
+    :param key: The value to resolve
+    :param ddb: The device.db to resolve with
+    :param trace: The set of previously searched keys
+    :return: The list of aliases pointing to the provided key
+    :raises LookupError: Raised if an alias loop was detected in the trace while resolving
+    :raises TypeError: Raised if a value returned an unexpected type
+    :raises ValueError: Raised if multiple aliases are found for the same value
+    """
+
+    assert isinstance(key, str), 'Value must be of type str'
+    assert isinstance(ddb, dict), 'The device DB argument must be a dict'
+    assert isinstance(trace, set), 'The trace argument must be a set'
     # Check if we are not stuck in a loop
-    if value in trace:
+    if key in trace:
         # We are in an alias loop
-        raise LookupError(f'Key "{value}" caused an alias loop')
+        raise LookupError(f'Key "{key}" caused an alias loop')
     # Add key to the trace
-    trace.add(value)
+    trace.add(key)
 
-    # Get all possible aliases
-    keys: typing.Any = [k for k, v in ddb.items() if v == value]
+    # Get all aliases for given key
+    keys: typing.Any = [k for k, v in ddb.items() if v == key]
 
-    if len(keys) == 0:
-        return value  # No keys were found, value is the root alias
-    elif not len(keys) == 1:
-        logging.error(f"Found Keys {keys} for Value {value}")
-        raise ValueError(f"Multiple alias keys: {keys} found for the same device value: {value}")
-    elif isinstance(keys[0], str):
-        # Recurse if we are still dealing with an alias
-        return _resolve_unique_device_root_alias(keys[0], trace, ddb)
-    else:
-        # We ended up with an unexpected type
-        raise TypeError(f'Value "{value}" returned an unexpected type')
+    # Get aliases pointing to the key by building trace
+    for k in keys:
+        if isinstance(k, str):
+            __get_aliases(k, ddb, trace)
+        else:
+            # We ended up with an unexpected type
+            raise TypeError(f'Value "{k}" returned an unexpected type')
+
+    return trace

@@ -461,8 +461,12 @@ class VcdSignal(ConstantSignal):
             init = ''
 
         # Register this variable with the VCD writer
-        self._vcd = vcd_.register_var(scope.alias, f"{scope.alias}-{name}",
+        self._vcd = vcd_.register_var(scope.key, name,
                                       var_type=self._VCD_TYPE[type_], size=size, init=init)
+
+        for alias in scope.aliases:
+            # Register the alias to the variable
+            vcd_.register_alias(alias, f"{alias}-{name}", self._vcd)
 
     def push(self, value: typing.Any, *,
              time: typing.Optional[_T_T] = None, offset: _O_T = 0) -> None:

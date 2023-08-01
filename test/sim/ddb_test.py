@@ -54,8 +54,10 @@ _DEVICE_DB = {
         'port': 3,
         'command': 'bar -p {port} --bind {bind}'
     },
-    'test_alias_intermediate': 'ttl0',
-    'test_alias': 'test_alias_intermediate',
+    'A0': 'ttl0',
+    'A1A': 'A0',
+    'A1B': 'A0',
+    'A2': 'A1A'
 }
 
 
@@ -467,13 +469,13 @@ class DdbTestCase(unittest.TestCase):
     def test_cfg_sim_args(self):
         with temp_dir():
             device = 'ttl0'
-            alias = 'test_alias'
+            aliases = {'A0', 'A1A', 'A1B', 'A2', device}
             args = {'channel': '77', 'input_prob': '0.0',
                     'float': '9.9', 'int': '1', 'str': '"foo"', 'bool': 'true', 'None': 'None', 'cAsE': 'None',
                     '_key': '"foobar"'}
             ref = {'channel': 77, 'input_prob': 0.0,
                    'float': 9.9, 'int': 1, 'str': 'foo', 'bool': True, 'None': None, 'cAsE': None,
-                   '_key': device, '_alias': alias}
+                   '_key': device, '_aliases': aliases}
 
             args_str = '\n'.join(f'{k}={v}' for k, v in args.items())
             cfg = f"""
