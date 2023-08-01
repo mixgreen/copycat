@@ -262,10 +262,11 @@ def enable_dax_sim(ddb: typing.Dict[str, typing.Any], *,
 
 def _mutate_ddb_entry(key: str, value: typing.Any, *,
                       config: _ConfigData,
-                      used_ports: typing.Set[int], aliases: str) -> typing.Any:
+                      used_ports: typing.Set[int], aliases: typing.Set[str]) -> typing.Any:
     """Mutate a device DB entry to use it for simulation."""
 
     assert isinstance(key, str), 'The key must be of type str'
+    assert all(isinstance(a, str) for a in aliases), 'The aliases mus all be of type str'
 
     if isinstance(value, dict):  # If value is a dict, further processing is needed
         # Get the type entry of this value
@@ -285,7 +286,8 @@ def _mutate_ddb_entry(key: str, value: typing.Any, *,
     return value
 
 
-def _mutate_local(key: str, value: typing.Dict[str, typing.Any], *, config: _ConfigData, aliases: str) -> None:
+def _mutate_local(key: str, value: typing.Dict[str, typing.Any], *,
+                  config: _ConfigData, aliases: typing.Set[str]) -> None:
     """Mutate a device DB local entry to use it for simulation."""
 
     # Add simulation arguments to normal arguments
@@ -418,7 +420,7 @@ def _start_moninj_service(*, port: int = dax.util.moninj.MonInjDummyService.DEFA
                      close_fds=True, start_new_session=True, creationflags=getattr(subprocess, 'DETACHED_PROCESS', 0))
 
 
-def _get_aliases(key: str, ddb: typing.Dict[str, typing.Any]) -> str:
+def _get_aliases(key: str, ddb: typing.Dict[str, typing.Any]) -> typing.Set[str]:
     """Recursively resolve aliases until we find the unique device name.
 
     :param key: The value to resolve
@@ -437,7 +439,7 @@ def _get_aliases(key: str, ddb: typing.Dict[str, typing.Any]) -> str:
     return aliases
 
 
-def __get_aliases(key: str, ddb: typing.Dict[str, typing.Any], trace: typing.Set[str] = set()) -> str:
+def __get_aliases(key: str, ddb: typing.Dict[str, typing.Any], trace: typing.Set[str] = set()) -> typing.Set[str]:
     """Recursively resolve aliases until we find the unique device name.
 
     :param key: The value to resolve

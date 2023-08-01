@@ -20,7 +20,7 @@ class DaxSimDevice(abc.ABC):
     __kwargs: typing.Dict[str, typing.Any]
 
     def __init__(self, dmgr: typing.Any, *,
-                 _key: str, _core: typing.Any = None, core_device: str = 'core', _aliases: set = set(),
+                 _key: str, _core: typing.Any = None, core_device: str = 'core', _aliases: typing.Set[str] = set(),
                  **kwargs: typing.Any):
         """Initialize a DAX simulation device.
 
@@ -62,7 +62,7 @@ class DaxSimDevice(abc.ABC):
         return self.__key
 
     @property
-    def aliases(self) -> str:
+    def aliases(self) -> typing.Set[str]:
         """Get the alias of this device.
 
         :return: The set of aliases as defined in the device DB
