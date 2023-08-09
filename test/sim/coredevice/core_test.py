@@ -4,7 +4,7 @@ import logging
 import copy
 import numpy as np
 
-from artiq.language.core import kernel, rpc, portable, host_only, now_mu
+from artiq.language.core import kernel, rpc, portable, host_only, now_mu, kernel_from_string
 from artiq.language.types import TInt32, TFloat
 from artiq.coredevice.core import CompileError
 
@@ -135,7 +135,9 @@ class CoreTestCase(_BaseTestCase):
     @kernel
     def _kernel_fn(self):
         self._other_kernel_fn()
+        self._kernel_str_fn()
         self._portable_fn()
+        self._portable_str_fn()
         self._rpc_fn()
         self._async_rpc_fn()
 
@@ -174,6 +176,10 @@ class CoreTestCase(_BaseTestCase):
     @host_only
     def _host_only_fn(self):
         pass
+
+    _kernel_str_fn = kernel_from_string(['self'], "pass", kernel)
+
+    _portable_str_fn = kernel_from_string(['self'], "pass", portable)
 
 
 class CoreCompileTestCase(CoreTestCase):

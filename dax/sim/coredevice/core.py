@@ -100,10 +100,19 @@ class BaseCore(DaxSimDevice):
 
     def run(self, function: typing.Any,
             args: typing.Tuple[typing.Any, ...], kwargs: typing.Dict[str, typing.Any]) -> typing.Any:
+        embedded_function = function.artiq_embedded.function
+
+        # If kernel function defined via `kernel_from_string`, use `exec` to obtain the function
+        # named `kernel_from_string_fn` (name fixed by `kernel_from_string`).
+        if isinstance(embedded_function, str):
+            ctxt = {}  # type: ignore
+            exec(embedded_function, ctxt)
+            embedded_function = ctxt['kernel_from_string_fn']
+
         # Every function is called in a sequential context for deep parallel behavior with sequential function entry
         with sequential:
             # Call the kernel function
-            result = function.artiq_embedded.function(*args, **kwargs)
+            result = embedded_function(*args, **kwargs)
 
         # Return the result
         return result
