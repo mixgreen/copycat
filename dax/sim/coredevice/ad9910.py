@@ -15,7 +15,7 @@ from dax.sim.device import DaxSimDevice
 from dax.sim.signal import get_signal_manager
 from dax.sim.coredevice.urukul import CPLD, DEFAULT_PROFILE, NUM_PROFILES
 
-_DEFAULT_PROFILE_RAM = 0
+_DEFAULT_PROFILE_RAM = 0 if ARTIQ_MAJOR_VERSION < 7 else 7
 
 _PHASE_MODE_DEFAULT = -1
 _PHASE_MODE_DICT = {m: f'{m:02b}' for m in [PHASE_MODE_CONTINUOUS, PHASE_MODE_ABSOLUTE, PHASE_MODE_TRACKING]}
