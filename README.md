@@ -1,4 +1,4 @@
-# Duke ARTIQ Extensions (DAX)
+# copy Duke ARTIQ Extensions (DAX) for self learning
 
 DAX is a library that extends the capabilities of [ARTIQ](https://github.com/m-labs/artiq)
 while maintaining a vanilla ARTIQ experience. This project was initially created as a framework to develop modular
